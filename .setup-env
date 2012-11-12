@@ -1,0 +1,11 @@
+# Must be run from the directory containing this file, which is assumed to be
+# $PWD
+
+BUILD=$PWD/build
+
+BOOTSTRAP=$BUILD/bootstrap
+export PATH=$BOOTSTRAP/bin:$PATH
+
+# Put bootstrap/live-bin ahead of bootstrap/bin if present
+LIVE_BIN=$BOOTSTRAP/live-bin
+if [ -e $LIVE_BIN ]; then export PATH=$LIVE_BIN:$PATH; fi
