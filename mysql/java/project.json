@@ -1,0 +1,14 @@
+{
+    "$type": "bitgirder:ops:build:java@v1/JavaProject",
+    
+    "direct-deps": [ "core", "io", "sql" ],
+
+    "maven-deps": 
+    [
+        { 
+            "group-id": "mysql",
+            "artifact-id": "mysql-connector-java",
+            "version": "5.1.16"
+        }
+    ]
+}

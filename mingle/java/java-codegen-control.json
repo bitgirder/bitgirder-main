@@ -1,0 +1,9 @@
+{
+    "$type": "mingle:codegen:java@v1/CodegenControl",
+
+    "namespace-mappings": 
+    [
+        { "java": "com.bitgirder", "mingle": "bitgirder@v1" },
+        { "java": "com.bitgirder.mingle", "mingle": "mingle@v1" }
+    ]
+}

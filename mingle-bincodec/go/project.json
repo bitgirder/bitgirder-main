@@ -1,0 +1,5 @@
+{
+    "$type": "bitgirder:ops:build:go@v1/GoProject",
+    "packages": [ "mingle/codec/bincodec" ],
+    "direct-deps": [ "mingle-codec", "mingle" ]
+}

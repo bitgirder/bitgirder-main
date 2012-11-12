@@ -1,0 +1,10 @@
+{
+    "$type": "bitgirder:ops:build:go@v1/GoProject",
+    "direct-deps": [ "testing" ],
+    "packages": [ 
+        "bitgirder/io",
+        "bitgirder/iotests", 
+        "bitgirder/hashes", 
+        "bitgirder/filerecv" 
+    ]
+}

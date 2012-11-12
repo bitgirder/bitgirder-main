@@ -1,0 +1,375 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+include BitGirder::Core
+
+require 'bitgirder/io'
+
+require 'bitgirder/mysql'
+
+module BitGirder
+module MySql
+
+class App < BitGirderClass
+
+    LOCALHOST = "127.0.0.1"
+
+    require 'erb'
+    require 'socket'
+
+    include BitGirder::Io
+
+    bg_attr :mysql_distro, validation: :file_exists
+
+    bg_attr :install_to
+
+    bg_attr :wipe_install_dir, processor: :boolean, default: false
+    bg_attr :skip_install, processor: :boolean, default: false
+    bg_attr :skip_init_db, processor: :boolean, default: false
+
+    bg_attr :port, processor: :integer, validation: :positive
+
+    bg_attr :root_pass
+    bg_attr :root_user, default: "root"
+
+    private
+    def sock_file
+        "#@install_to/mysql.sock"
+    end
+
+    private
+    def my_cnf
+        "#@install_to/my.cnf"
+    end
+
+    private
+    def base_dir
+        @mysql_distro
+    end
+
+    private
+    def data_dir
+        "#@install_to/data"
+    end
+
+    private
+    def log_dir
+        "#@install_to/log"
+    end
+
+    private
+    def mysql_binary( f )
+        file_exists( "#{base_dir()}/bin/#{f}" )
+    end
+
+    private
+    def mysqladmin
+        mysql_binary( "mysqladmin" )
+    end
+
+    private
+    def mysqld
+        mysql_binary( "mysqld" )
+    end
+
+    private
+    def mysql
+        mysql_binary( "mysql" )
+    end
+
+    private
+    def bash
+        which( "bash" ) or raise "Can't find: bash"
+    end
+
+    private
+    def do_wipe_install
+        
+        if File.exist?( f = sock_file() )
+            raise "Socket #{f} exists; will not wipe installation"
+        else
+            fu().rm_rf( install_to() )
+        end
+    end
+
+    private
+    def init_install_to
+        
+        if File.exist?( @install_to )
+            
+            if @wipe_install_dir 
+                do_wipe_install
+            else
+                raise "#@install_to already exists"
+            end
+        end
+    end
+
+    private
+    def write_my_cnf
+        
+        File.open( cnf = ensure_parent( my_cnf() ), "w" ) do |io|
+
+            code( "Writing conf file #{cnf}" )
+            io.print ERB.new( MY_CNF_TEMPLATE ).result( binding )
+        end
+    end
+
+    private
+    def ensure_dirs
+        [ data_dir(), log_dir() ].each { |d| fu().mkdir_p( d ) }
+    end
+
+    private
+    def run_install_script( verbose )
+
+        cmd = file_exists( "#{base_dir()}/scripts/mysql_install_db" )
+
+        argv = [ "--basedir=#{base_dir()}",
+                 "--datadir=#{data_dir()}",
+                 "--defaults-file=#{my_cnf()}",
+                 "--skip-name-resolve" ]
+        
+        argv << "--verbose" if verbose
+        
+        UnixProcessBuilder.new( cmd: cmd, argv: argv ).system
+    end
+
+    private
+    def install_db( run_ctx )
+
+        init_install_to
+        write_my_cnf
+        ensure_dirs
+        run_install_script( run_ctx[ :verbose ] )
+    end    
+
+    private
+    def start_db
+ 
+        argv = [ "--defaults-file=#{my_cnf()}" ]
+
+        UnixProcessBuilder.new( cmd: mysqld(), argv: argv ).spawn
+    end
+
+    private
+    def await_sock( tries_remain = 3, stall = 2 )
+        
+        code( "Attempting connect to #@port" )
+
+        begin
+            TCPSocket.new( LOCALHOST, @port ).close
+            code( "Connected" )
+
+        rescue Errno::ECONNREFUSED => e
+
+            if tries_remain > 0 
+
+                code( "No connection, will retry in #{stall}s" )
+                sleep( stall )
+                await_sock( tries_remain - 1, stall * 2 )
+            else
+                raise "Could not connect to #@port"
+            end
+        end
+    end
+
+    private
+    def update_root_accounts( db )
+ 
+        sql = <<-SQL
+            update mysql.user 
+            set password = password( '#{db.escape_string( root_pass() )}' )
+            where user = 'root'
+        SQL
+
+        db.query( sql )
+        db.query( "flush privileges" )
+    end
+
+    private
+    def set_root_pass( opts )
+        MySql.open( opts ) { |db| update_root_accounts( db ) }
+    end
+
+    private
+    def remove_anon_accounts( db )
+        db.query( "delete from mysql.user where user = '' or user is null" )
+    end
+
+    private
+    def remove_test_db( db )
+        
+        db.query( "delete from mysql.db where db like 'test%'" )
+        db.query( "drop database test" )
+    end
+
+    private
+    def secure_db_install( opts )
+        
+        MySql.open( opts ) do |db|
+            
+            remove_anon_accounts( db )
+            remove_test_db( db )
+
+            db.query( "flush privileges" )
+        end
+    end
+
+    private
+    def run_db_init
+
+        # Initially we have an empty pass
+        opts = { user: "root", socket: sock_file(), db: "mysql" }
+        set_root_pass( opts )
+
+        # Now re-connect with pass (to verify that previous step worked)
+        opts.merge!( password: root_pass() )
+        secure_db_install( opts )
+    end
+
+    private
+    def stop_db( pid, with_pass )
+        
+        argv = [ "--defaults-file=#{my_cnf()}", "-u", "root" ]
+        argv << "--password=#{root_pass()}" if with_pass
+        argv << "shutdown" 
+
+        UnixProcessBuilder.new( cmd: mysqladmin(), argv: argv ).system
+
+        debug_wait2( name: "mysqld", pid: pid )
+    end
+
+    private
+    def init_db
+
+        init_done = false
+        pid = start_db
+        code( "Started mysqld as #{pid}" )
+
+        begin
+            await_sock
+            run_db_init
+            init_done = true
+        ensure
+            stop_db( pid, init_done )
+        end
+    end
+
+    private
+    def write_script( f )
+        
+        script = ensure_parent( "#{install_to()}/#{f}" )
+        code( "Writing #{script}" )
+
+        File.open( script, "w" ) do |io|
+            
+            io.chmod( 0755 )
+            yield( io )
+        end
+    end
+
+    private
+    def write_start_db_wrapper
+        
+        mysqld = file_exists( "#{base_dir()}/bin/mysqld" )
+        mysqld_out = "#{log_dir()}/mysqld.out"
+
+        write_script( "bin/start-db" ) do |io|
+            
+            io.print <<-END
+#!#{bash()}
+
+( ( ( exec #{mysqld} --defaults-file=#{my_cnf()} ) 2>&1 ) >> #{mysqld_out} ) &
+            END
+        end
+    end
+
+    private
+    def write_mysqladmin_wrapper
+        
+        write_script( "bin/mysqladmin" ) do |io|
+            
+            io.print <<-END
+#!#{bash()}
+
+exec #{mysqladmin()} --defaults-file=#{my_cnf()} -u #{root_user()} "$@"
+            END
+        end
+    end
+
+    private
+    def write_mysql_wrapper
+        
+        write_script( "bin/mysql" ) do |io|
+            
+            io.print <<-END
+#!#{bash()}
+
+exec #{mysql()} --defaults-file=#{my_cnf()} "$@"
+            END
+        end
+    end
+
+    private
+    def write_script_wrappers
+        
+        write_start_db_wrapper
+        write_mysqladmin_wrapper
+        write_mysql_wrapper
+    end
+
+    def run( run_ctx )
+ 
+        install_db( run_ctx ) unless @skip_install
+        init_db unless @skip_init_db
+        write_script_wrappers
+    end
+
+    MY_CNF_TEMPLATE = <<-END_CNF
+[client]
+port		= <%= @port %>
+socket		= <%= sock_file() %>
+
+[mysqld]
+port		= <%= @port %>
+socket		= <%= sock_file %>
+skip-external-locking
+key_buffer_size = 16M
+max_allowed_packet = 1M
+table_open_cache = 64
+sort_buffer_size = 512K
+net_buffer_length = 8K
+read_buffer_size = 256K
+read_rnd_buffer_size = 512K
+myisam_sort_buffer_size = 8M
+
+log_error = <%= log_dir() %>/error.log
+general_log_file = <%= log_dir() %>/general.log
+general_log = 0
+datadir = <%= data_dir() %>
+basedir = <%= base_dir() %>
+default_storage_engine = innodb
+
+log-bin=mysql-bin
+binlog_format=mixed
+server-id	= 1
+
+[mysql]
+no-auto-rehash
+
+[myisamchk]
+key_buffer_size = 20M
+sort_buffer_size = 20M
+read_buffer = 2M
+write_buffer = 2M
+
+[mysqlhotcopy]
+interactive-timeout
+    END_CNF
+end
+
+BitGirder::Core::BitGirderCliApplication.run( App )
+
+end
+end

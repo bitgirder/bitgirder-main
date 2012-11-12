@@ -1,0 +1,6 @@
+:description: 
+    Contains core classes and interfaces for building event logger
+    implementations. Also includes helper classes for incorporating assertions
+    about event logging into unit and functional test code.
+
+:summary: "BitGirder Platform"

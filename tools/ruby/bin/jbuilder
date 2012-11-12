@@ -1,0 +1,120 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+require 'bitgirder/io'
+
+require 'set'
+require 'pathname'
+
+include BitGirder::Core
+
+class App < BitGirder::Core::BitGirderClass
+    
+    OPS = 
+        Set.new( %w{ 
+            build build-bin test run-app mg-run dist-test dist-doc clean 
+        })
+
+    NEEDS_PROJECT = Set.new( %w{ build build-bin test run-app mg-run clean } )
+
+    include BitGirder::Io
+
+    # Strip any leading slash(es) from project that may show up from caller's
+    # use of tab completion
+    bg_attr :project,
+            required: false,
+            processor: lambda { |s| s.sub( /\/*$/, "" ) }
+
+    bg_attr :operation,
+            required: false,
+            validation: lambda { |op| 
+                OPS.include?( op ) or raise "Unknown op: #{op}"
+            }
+    
+    bg_attr :filter_pattern, required: false
+
+    bg_attr :with_proj,
+            required: false,
+            processor: lambda { |s| s.sub( /\/*$/, "" ) }
+
+    bg_attr :dry_run, processor: :boolean, required: false
+
+    bg_attr :runtime, default: [], is_list: true
+
+    bg_attr :cp_includes_test, processor: :boolean, required: false
+
+    bg_attr :log_to_console, processor: :boolean, required: false
+
+    def initialize( *argv )
+        
+        super( *argv )
+
+        if NEEDS_PROJECT.include?( @operation )
+            @project or raise "Need a project"
+        end
+    end
+
+    private
+    def make_target
+ 
+        case @operation
+            
+            when "clean" then [ :java, :clean, @project ]
+            when "build" then [ :java, :build, @project, :lib ]
+            when "test" then [ :java, :test, @project, :test ]
+            when "mg-run" then [ :java, :"run-mingle-app", @project ]
+            when "run-app" then [ :java, :run_app, @project ]
+            when "build-bin" then [ :java, :build, @project, :bin ]
+            when "dist-test" then [ :java, :dist, :test, @project ]
+            when "dist-doc" then [ :java, :dist, :javadoc, @project ]
+
+            else raise "Unhandled op: #@operation"
+        end
+    end
+
+    private
+    def get_extra_opts
+        
+        res = []
+
+        if @log_to_console
+            res << "--runtime" << "log-to-console=true"
+        end
+
+        if @with_proj
+            res << "--runtime" << "with-proj=#@with_proj"
+        end
+
+        if @cp_includes_test
+            res << "--runtime" << "cp-includes-test=true"
+        end
+
+        res
+    end
+
+    public
+    def run( run_ctx )
+ 
+        cmd = which( "bg-builder" ) or raise "No bg-builder"
+
+        argv = []
+        argv << "-t" << make_target.join( "/" )
+        argv += get_extra_opts
+        argv += @runtime.map { |arg| [ "--runtime", arg ] }.flatten
+        argv << "-v" if run_ctx[ :verbose ]
+        argv << "--dry-run" if @dry_run
+
+        if @filter_pattern 
+            argv << "--runtime" << "filter-pattern=#@filter_pattern"
+        end
+
+        unless ( rem = run_ctx[ :argv_remain ] ).empty?
+            argv << "--"
+            argv += rem
+        end
+
+        UnixProcessBuilder.new( cmd: cmd, argv: argv ).exec
+    end
+end
+
+BitGirder::Core::BitGirderCliApplication.run( App )

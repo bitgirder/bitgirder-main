@@ -1,0 +1,14 @@
+{
+    "$type": "bitgirder:ops:build:go@v1/GoProject",
+    "direct-deps": [
+        "core",
+        "mingle",
+        "mingle-codec",
+        "mingle-json",
+        "mingle-bincodec",
+        "mingle-io"
+    ],
+    "test-commands": { 
+        "codec-tester": {}
+    }
+}

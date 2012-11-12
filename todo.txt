@@ -1,0 +1,18 @@
+Ruby:
+
+    - add DataUnit.to_s and DataSize.to_s
+
+    - add DataSize.<=>
+
+Go:
+    - check bad codec reactor sequences against json, bincodec
+
+    - check that mingle.BinReader.ReadIdentifier() fails if an id part has
+      length 0
+
+    - add float(32|64) inf and NaN coverage to bincodec test vals
+
+Java:
+    
+    - add and test utils like Lang.compareUint(32|64) and
+      Lang.asUint(32|64)String() and build MingleUint(32|64) on top of them.

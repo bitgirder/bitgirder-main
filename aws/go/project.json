@@ -1,0 +1,6 @@
+{
+    "$type": "bitgirder:ops:build:go@v1/GoProject",
+    "direct-deps": [ "core", "testing", "io" ],
+    "packages": [ "aws/s3" ],
+    "commands": { "s3-sync-dir" : {} }
+}

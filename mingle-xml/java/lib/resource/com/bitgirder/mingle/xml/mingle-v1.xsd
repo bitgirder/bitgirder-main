@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:mg="http://bitgirder.com/mingle/xml"
+           targetNamespace="http://bitgirder.com/mingle/xml">
+
+    <xs:complexType name="FieldType">
+        <xs:choice>
+            <xs:simpleContent>
+                <xs:extension base="xs:string">
+                    <xs:attribute name="name" type="xs:string"/>
+                </xs:extension>
+            </xs:simpleContent>
+            <xs:simpleContent>
+                <xs:extension base="xs:int">
+                    <xs:attribute name="name" type="xs:string"/>
+                </xs:extension>
+            </xs:simpleContent>
+        </xs:choice>
+    </xs:complexType>
+
+    <xs:complexType name="StructType">
+        <xs:sequence>
+            <xs:element name="field" 
+                        minOccurs="0" 
+                        maxOccurs="unbounded"
+                        type="mg:FieldType"/>
+        </xs:sequence>
+        <xs:attribute name="type" type="xs:string" use="required"/>
+    </xs:complexType>
+
+</xs:schema>

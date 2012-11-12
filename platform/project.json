@@ -1,0 +1,11 @@
+{ 
+    "direct-deps": 
+    [ 
+        "core", 
+        "log", 
+        "io", 
+        "process", 
+        "mingle",
+        "mingle-service"
+    ]
+}

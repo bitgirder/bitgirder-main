@@ -1,0 +1,34 @@
+{ 
+    "$type": "bitgirder:ops:build:java@v1/JavaProject",
+
+    "direct-deps": 
+    [ 
+        "core",
+        "process",
+        "mingle",
+        "mingle-json",
+        "mingle-service",
+        "mingle-tck",
+        "mingle-http",
+        "mingle-http-json",
+        "mingle-http-test",
+        "json",
+        "io",
+        "http",
+        "log" 
+    ],
+
+    "maven-deps": 
+    [
+        { 
+            "group-id": "org.eclipse.jetty",
+            "artifact-id": "jetty-webapp",
+            "version": "7.2.2.v20101205"
+        }, 
+        { 
+            "group-id": "org.eclipse.jetty",
+            "artifact-id": "jetty-client",
+            "version": "7.2.2.v20101205"
+        }
+    ]
+}

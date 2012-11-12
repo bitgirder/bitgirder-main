@@ -1,0 +1,4 @@
+{
+    "$type": "bitgirder:ops:build:go@v1/GoProject",
+    "packages": [ "bitgirder/uuid", "bitgirder/objpath" ]
+}

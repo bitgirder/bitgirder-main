@@ -1,0 +1,498 @@
+This document is a crash course overview for developers new to Mingle. It lacks
+in formality and is meant to be a quick way to get started using Mingle, but
+isn't meant to be a guide to developing its internals. Some of the discussion
+below will get into internals, but generally only where doing so informs
+practice. In its current state Mingle is akin to a very sharp and effective tool
+but somewhat lacking in creature comforts and protective coatings -- you need to
+understand enough about how it works to ensure that you don't cut yourself while
+using it.
+
+
+--------------------------------------------------------------------------------
+Design Space and Rationale
+--------------------------------------------------------------------------------
+
+Mingle is the tip of a larger iceberg -- a full-fledged internet services
+programming language focused on correct and easy development of networked
+concurrent systems. The language itself is in no way ready to use, but its type
+system and serialization profiles are.
+
+The types and serialized values of those types are designed to be portable
+across programming languages used in current internet programming. The abstract
+types are those found either built into or easily coded as libraries of common
+programming languages: numbers, unicode strings, booleans, buffers (byte
+arrays), enums, timestamps, null, lists, free symbol maps, exceptions and
+structures containing these values. All of these values may be serialized in a
+number of ways: JSON, XML, or custom binary formats (as of this writing only
+JSON is in place, binary will likely follow shortly).
+
+Serialized values are meant to be used in a number of places making radically
+different tradeoffs between parsing speed, space efficiency, and human
+readability. For instance, when used to populate an event log for a high
+throughput service, serialization speed and space efficiency would suggest the
+use of a fast and compact binary format. When used to represent application
+configuration data speed and text size are not as important as human readability
+and the ability to edit and view objects in a text editor, suggesting the use of
+a JSON or XML representation. There are even encodings that map Mingle values to
+and from query string pairs and command-line arguments, meaning that a
+programmer can encode an object as part of a request URL or write a program that
+parses ARGV as a Mingle structure.
+
+There are many technologies already around for defining interchangeable types
+and services/rpc. Here is a brief list of some of the most well-known ones as
+well as comments as to how Mingle differs from each:
+
+    - Facebook Thrift & Google Protocol Buffers
+
+        These are closely linked historically and in their implementation. They
+        offer binding compilers and some community-based tools to do code
+        generation in various languages and have a binary serialization model
+        focused on fast and compact binary serialization. Unlike these, Mingle
+        offers primitive types for timestamps and binary types as well as makes
+        a binary serialization one option but not the only one. While Mingle
+        will develop to include a binding compiler, it does not require one and
+        allows Java devs to adapt and add operations to existing code using
+        annotations.
+    
+    - ASN.1
+
+        ASN.1 theoretically provides all of the same pieces as Mingle, but is
+        largely outdated and matured before much of the environments in which
+        Mingle is intended to live (the web, mobile devices, REST-based
+        services). While it does have rules for XML, Binary, and String based
+        interchanges, the latter is not largely used, nor does ASN.1 directly
+        address JSON, which is now the emerging default textual interchange for
+        the web.
+    
+    - XMLRPC, WSDL, SOAP, RelaxNG
+
+        The various forms of XML RPC define many useful types and have some of
+        the same primitives as Mingle and powerful validation expressions, but
+        are necessarily bound to the XML format. While XML is readily parseable
+        in most modern languages, its cost can be prohibitive at high throughput
+
+    - Java RMI, YAML, Erlang Terms and networked processes, JSON, Perl Dumper
+      format, and other language specific object encodings and RPC mechanisms
+
+        While these are effective for applications written entirely in the
+        language in questions, each has its drawbacks when an attempt is made to
+        use it outside of its language of origin. Some versions simply won't
+        work at all with any reasonable effort (Java RMI, Erlang RPC) and others
+        ultimately reduce to doing as much work to port as to build Mingle but
+        without the benefits of flexible serial options (YAML, JSON, Perl
+        Dumper).
+
+Ultimately none of these covers the broad range of requirements for Mingle, and
+so it exists.
+
+
+--------------------------------------------------------------------------------
+Core Data Types and Declaration Elements
+--------------------------------------------------------------------------------
+
+This section will provide a quick overview of Mingle types in their abstract
+sense.  Before listing the core types we define some concepts used in their
+definition.  Two of the most important of these are Mingle identifiers and
+namespaces. The latter is built from the former, and the former is used in many
+places throughout Mingle, including as field names in structs, service names,
+and operation names, to name a few. The third concept in this class is a type
+name.
+
+A Mingle identifier is a list of identifier tokens where, in the canonical form,
+each token matches the pattern /^[a-z][a-z0-9]*$/. This is a fairly restrictive
+set of values, and may one day be expanded, but has the nice property that
+nearly all English-language programs stick to the use of identifiers which map
+naturally to Mingle identifiers (see following discussion of representations)
+and for which the natural mapping is legal in all programming languages which
+would work with Mingle values (important for code generation).
+
+While conceptually an identifier is an array of tokens matching the pattern
+above, in practice it will be represented as a string. Mingle provides 3
+canonical styles to represent an identifier as a string: underscore ('_')
+separated, hyphen ('-') separated, and camel-capped join, in which the first
+character of all but the first token is capitalized and the resulting segments
+are concatenated. Examples:
+
+    [ "ident1" ] --> "ident1" # Single token looks the same in every rep
+
+    [ "some", "ident" ] --> "some-ident", "some_ident", or "someIdent"
+
+The version using the hyphen is the default and is known as the "external form."
+Mingle runtimes are required to accept identifiers in any of the 3 forms above,
+although they will typically convert them to some internal format represented by
+an object in the native programming language thereafter. Mingle runtimes should
+make their native representation such that identifiers created from different
+representations of the same sequence of tokens compare as equal according to
+whatever notion the host language has of equality for purposes of comparison and
+hashtable key identity (equals()/hashCode() in Java, the '=='/eql/hash function
+in ruby, etc)
+
+The following are all invalid identifiers:
+
+    "ABadOne" # starts with a cap
+    "123AlsoNoGood" # starts with a number
+    "this$wont_work" # contains '$'
+    "empty__token" # adjacent separators imply empty/missing token
+    "trailing_badness_" # trails a separator (implied trailing empty token)
+    "this-9is-wrong" # second token begins with '9'
+    "this-is_alsoBad" # mixed join forms
+
+Note that identifiers which include acronyms, such as "toJSON" or "mySQLDBName",
+are legal but maybe are not what the programmer expected:
+
+    "toJSON"
+        parses as [ "to", "j", "s", "o", "n" ] and would be externalized as
+        "to-j-s-o-n". Better: "toJson" (external: "to-json")
+
+    "mySQLDBName"
+        parses as [ "my", "s", "q", "l", "d", "b", "name" ]
+        ("my-s-q-l-d-b-name"). Better: "mysqlDbName" (external: "mysql-db-name")
+
+All Mingle types are members of some Mingle namespace (the core types are part
+of the implicit namespace). A Mingle namespace is a list of Mingle identifiers,
+and has as its external form of its component identifiers joined by a colon,
+with leftmost identifiers representing the most general scope of the namespace,
+as is done in languages such as java, ruby, perl, etc. Examples:
+
+    core
+    bitgirder:monitoring
+    some_org:some_app:some_module
+
+Note that the first two are the recommended forms (single-token identifiers)
+since the third type can lead to strange looking forms when bound to common
+languages without some custom work.
+
+The final piece to address before turning to actual types qualifications. At the
+base of type qualifications is the type name token itself, which is analagous to
+an identifier in its internal form but having all tokens beginning with a
+capital letter (match the regex /^[A-Z][a-z0-9]*$/) and for which the external
+and only acceptable string form is to simply concatenate pieces:
+
+    Foo # [ "Foo" ]
+    SomeType # [ "Some", "Type" ]
+    Another1 # [ "Another1" ]
+    MyFunType2 # [ "My", "Fun", "Type2" ]
+
+Similarly, the following are all illegal Mingle type names:
+
+    $Foo # illegal '$' char
+    Foo_Bar # illegal '_' char
+    2LiveTypes # illegal beginning with '2'
+
+And the following is perhaps not what the programmer expects:
+
+    MySQLConnection 
+        parses as [ "My", "S", "Q", "L", "Connection" ]; better as
+        "MysqlConnection"
+
+As most programming languages allow nested types (nested classes in java and
+ruby, arbitrary nesting of prototype objects in JavaScript, etc) so does Mingle
+. A type 'Bar' nested within 'Foo' would be expressed externally as "Foo/Bar";
+the enclosing type is written to the left of the closest type it encloses,
+separated by a slash ('/').
+
+Most Mingle types that a programmer is likely to encounter at this time are
+simple combinations of a namespace and one or more type names (more when the
+type referenced is a nested type). Such combinations are called "qualified type
+names" and are written in external form as the external form of the namespace
+joined with the external form of the type name, with the namespace and type name
+separated by a '/':
+
+    core/SomeType 
+        The type 'SomeType' in namespace 'core'
+    
+    bitgirder:monitoring/Host 
+        The type 'Host' in namespace 'bitgirder:monitoring'
+
+    someorg:someapp:somens/OuterType/NestedType1/NestedType2
+        The nested type sequence 'OuterType' containing 'NestedType1' containing
+        'NestedType2' in the namespace 'someorg:someapp:somens'
+
+With these definitions we turn to the core types for Mingle -- primitive,
+collection, and qualified types. 
+
+Primitive types are what one might expect:
+
+    integral
+        Arbitrary precision integer
+
+    decimal
+        Arbitrary precision decimal
+
+    string
+        Unicode string
+
+    boolean
+        true,false
+
+    null
+        the absence of any other value
+
+    timestamp
+        a timestamp of arbitrary precision. In practice the precision won't be
+        more than microsecond-level.
+
+    buffer
+        a series of uninterpreted octets
+
+There are not yet fixed-width integral or floating point types corresponding to
+the C-types uint, ushort, int, short, or to the Java types int, double, long,
+etc. These will be added as the system evolves, but there has been no driving
+force as of yet to add these types. The addition of the binary encoding will
+likely drive the addition of these specialized numeric types, which will be
+assignable to and coercible to each other as might be expected.
+
+Collection types are of two variants:
+
+    list:
+        A sequence of values. The type of elements in the list, as well as
+        whether or not list values may take on the null value, is currently left
+        to service providers and consumers to coordinate and validate manually.
+        Future versions of the runtime will include ways for service providers
+        to express and check the type of list elements.
+
+    symbol map:
+        A dictionary keyed by Mingle identifiers and having values being any
+        Mingle value (primitive, collection, or qualified)
+
+Note that there is no map keyed by strings or by arbitrary objects. This is out
+of a desire to keep the serial model as simple as possible and not to force
+runtimes to in each language to end up definining possibly incorrect or
+differing notions of key equality (while natural for primitives, it is less so
+for structures-as-keys), as well as to avoid further ambiguity in text encodings
+such as JSON. This may change in the future, but for now string maps or maps
+keyed by some other Mingle type are best expressed as a list of two-element
+lists in which the first element of each two-element list is the  key and the
+second its value.
+
+Qualified types are associated with some qualified name in addition to a
+type-specific set of attributes:
+
+    enum
+        A qualified name plus some accepted set of values expressed as Mingle
+        identifiers. Example: bitgirder:example/Color{ red, blue, dark_blue }.
+        In most cases the serial form may be simply a string containing a valid
+        identifier representation of the constant ("red", "blue", "dark_blue",
+        "dark-blue", etc). See the section on coercions. Mingle runtimes must
+        also accept all capped versions of what would otherwise be a legal
+        identifier in its underscore-separated form ("DARK_BLUE") for
+        compatibility with the convention in most languages to represent enum
+        constants in this way.
+
+    struct, exception
+        A qualified name along with a list of fields, where a field is uniquely
+        identified by its Mingle identifier and has a value of some type. As
+        with list element types, the type of a field is currently communicated
+        informally between service developer and consumer. Future versions will
+        include tools to auto-generate code and descriptions in a standard way.
+
+        There is no structural difference between an exception and a struct, but
+        the distinction is made for the same reason as it is in other
+        programming languages which support the notion that exceptions are
+        classes/structs which have a special place in a program's flow of
+        control.
+
+        Structs and Exceptions may extend each other but only single-inheritance
+        is allowed. A field of a name 'foo' may not be overridden or shadowed by
+        a field of the same name in any substructure.
+
+
+--------------------------------------------------------------------------------
+Mingle Codecs (Serialization and Deserialization)
+--------------------------------------------------------------------------------
+
+The principle design of the Mingle type system is that values be dependably
+encoded and decoded for the purposes of file or network IO. There are various
+possible ways to encode the Mingle type system. One of them is JSON (discussed
+below in more detail), another is XML, and yet another is a binary encoding
+designed for speed and space efficiency at the cost of human readability (for
+most humans at least).
+
+Regardless of the encoding used, Mingle applications need to be prepared to
+receive values in an encoded type that is different from what the application
+expects. In many cases, this mismatch will be the result of an encoding which
+doesn't preserve some distinctions (JSON does not distinguish between integral
+or decimal types) or which doesn't support a given type at all natively (JSON
+and XML have no native binary type). In other cases it could be the result of a
+type evolving, for instance for an id field which was originally typed as an
+unsigned 64 bit int being changed over time to a string type with old ids being
+converted to their numeric string form (1234 --> "1234").
+
+Mingle seeks at its core to allow developers to follow Postel's law, "be
+conservative in what you do, be liberal in what you accept from others,"
+(http://tools.ietf.org/html/rfc793, sec. 2.10) but also to assert and place an
+emphasis on conformity where it matters and to check and stop errors as close to
+the serial layer as possible.
+
+To do this Mingle defines a set of coercions as follows, and Mingle libraries in
+Java and Ruby provide methods to coerce values as follows (or raise an exception
+that it can't be done):
+
+    string --> integral, decimal
+        create the arbitrary precision integral or decimal corresponding to the
+        string for ("1234" --> 1234, "1234.56" --> 1234.56)
+
+    string --> boolean
+        convert "true" to true, "false" to false, and fail for any other string
+        or value
+
+    string --> buffer
+        Assume that the string is a base64 encoded binary value and return the
+        base64 decoded raw binary object
+
+    string --> timestamp
+        Assume the string is an rfc3339 timestamp and parse it as such
+
+    buffer --> string
+        Reverse of string --> buffer (base64 encode)
+
+    integral, decimal, boolean, enum, timestamp --> string
+        what one would expect ("123", "123.45", "true", "some-enum-val",
+        "2007-08-24T13:15:43.123450000-08:00")
+
+    struct --> exception, exception --> struct
+        in many encodings, such as JSON, a struct and exception are
+        indistinguishable. The coercion is simply to take the input type from
+        the encoder and recast it as the appropriate structure type.
+
+Some other coercions (integral <--> boolean) may be added as they become
+necessary later.
+
+
+--------------------------------------------------------------------------------
+Services
+--------------------------------------------------------------------------------
+
+Besides the data types themselves, Mingle has a notion of services and
+operations, where an operation takes as inputs a set of Mingle values as
+parameters, which may individually be required or optional, and return a single
+Mingle value (which may itself be a collection or structure of values or the
+null value for void operations) and possibly throwing some sort of exception. 
+
+A service request is the combination of a namespace, a service identifier (a
+Mingle identifier distinguishing the service from others in the same namespace),
+an operation name, and a symbol map of parameters for that operation (given
+abstractly):
+
+    {
+        namespace: bitgirder:example
+        service: sample-service
+        operation: do-some-cool-stuff
+        parameters:
+            param1: 1
+            param2: "hello"
+            param3: [ "list", "of", "strings" ]
+    }
+
+Service results contain either a result or an exception:
+
+    { result: 12 } # success
+
+    { result: null } # void operation success
+
+    { result: [ 1, 2, 3 ] } # results can be lists
+
+    # a struct result using a pseudo-syntax
+    { result: bitgirder:example/Struct1{ field1: 1, field2: "hi" } } 
+
+    { exception: service/NoSuchNamespaceException{ namespace: "bad:ns" } }
+
+In practice serialized versions of results may appear to contain both fields,
+such as this JSON version of the first example above:
+    
+    { "result": 12, "exception": null }
+
+In such cases only one of 'result' or 'exception' should be non-null. If both
+are null then this is assumed to mean that the operation completed successfully
+and returned null (or was of void return type).
+ 
+Operations are uniquely identified at the serial level by their namespace,
+service id, operation name, and set of required parameters. This last piece
+allows service authors to take advantage of a simple but practical way to
+overload operations so long as no two overloadings have an identical collection
+of required parameters. 
+
+For those with knowledge of only statically typed languages such as Java this
+may seem a bizarre choice, but it stems from Mingle's focus on accepting values
+from callers in types that may be different from their target types at the
+serial layer but easily coercible at runtime. That is, a Java-style override:
+
+    public
+    void
+    foo( String arg1,
+         int arg2 );
+
+    public
+    void
+    foo( String arg1,
+         String arg2 );
+
+in which both args are required would be ambiguous in Mingle since both have the
+same set of required arguments (arg1, arg2) but the parameters
+
+    { arg1: "hello", arg2: "23" }
+
+could, with type coercion, be a reasonable input to either invocation (is arg2
+meant to be a string or an int?). 
+
+Since Mingle, unlike java and many other programming languages, has the formal
+notion of optional parameters, we can uniquely associate overloaded invocations
+by their set of required parameters, on the assumption that the service
+developer defines such overloads correctly and uniquely (the Java runtime checks
+this at runtime). For overloads in which one set of required parameters is a
+proper subset of another, the runtime will match the request to the overload
+having the most parameter matches. This is good since that is almost always what
+a programmer would expect.
+
+
+--------------------------------------------------------------------------------
+Mingle <--> JSON
+--------------------------------------------------------------------------------
+
+As of this writing the only encoding provided is that from Mingle value to JSON.
+
+More formally, since encodings only operate in terms of octet streams, we would
+say that the JSON encoding is an encoding between Mingle and a binary encoding
+of a JSON text in one of the valid JSON character sets according to rfc4627
+(utf-8, utf-16be, utf-16le, and utf-32). Since that's a mouthful to say all the
+time though, we just talk about "the JSON encoding."
+
+There are a few things to be aware of with the JSON encoding. As mentioned
+already, some Mingle primitives have ambiguous (numeric) or unsupported (buffer)
+forms in JSON. In most cases the consumer doesn't care, such as when the
+consumer is javascript running on a browser (which does many of its own
+coercions which are already consistent with the Mingle coercions) or when the
+consumer is another Mingle programmer capable of coercing values according to
+his or her needs (or allowing a binding framework to do so on his or her
+behalf).
+
+Because JSON doesn't have a notion of types or namespaces or modules, the Mingle
+JSON encoding uses the JSON object key "$type" to specify that a JSON object
+should be interpreted as a structure type having the given set of fields. Thus,
+the Mingle struct:
+
+    bitgirder:example/Struct1{
+        foo1: "hello",
+        bar2: -1
+    }
+
+would be serialized as the JSON text:
+
+    { "$type": "bitgirder:example/Struct1", "foo1": "hello", "bar2": -1 }
+
+which works since the '$' clearly disambiguates the type value from the other
+fields of the structure which are identifiers and may not begin with '$'.
+Consumers can of course ignore the type entirely, or may choose to continue to
+simply treat it as a string even if the language doesn't readily support the
+notion of modules or types (again, think browser-based JS).
+
+In most cases callers of services using JSON will not need to include explicit
+type information since they'll be calling services for which the Mingle runtime
+can infer the type. That is, the example struct above could be passed as the
+parameter 'param1' to some operation expecting param1 to be of type Struct1
+simply as:
+
+    { "param1": { "foo1": "hello", "bar2": -1 } }
+
+Note the absence of the "$type" field. The case with structures as field values
+is similar.

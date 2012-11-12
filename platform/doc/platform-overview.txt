@@ -1,0 +1,1447 @@
+BitGirder Platform Overview
+===========================
+Jonathan Gold <jgold@bitgirder.com>
+:toc:
+:toclevels: 4
+
+This document gives an overview of programming with or using the BitGirder
+platform. The contents of this document are proprietary and intended only for
+the direct recipients of this document. No portions of this document may be
+divulged, shared, reproduced, or retransmitted. All contents (C) BitGirder
+Technologies, Inc, 2007 -
+sys::[ date +'%Y' ]
+
+Guide to this Document
+----------------------
+
+This document attempts to convey a fairly intense amount of information in as
+compact a form as possible. For many developers not familiar with building large
+distributed web systems in large distributed development teams and
+organizations, the rationale for much of what follows will not be intuitive.
+
+Ultimately the goals of the BitGirder platform are to address software
+development at scale, where the term 'scale' is taken to mean both the volume of
+requests or size of datasets addressed by the software in the system, but also
+to mean the size and interconnectedness of the teams and organizations building
+it. What may work for small numbers of users and a handful of developers will
+rarely work for large numbers of users and multiple teams of developers. The
+BitGirder platform will appear overly complex when applied to the notions of the
+former, but should make more sense when envisioned as a tool of the latter.
+
+Two of the most significant examples of this are what comprise the majority of
+the sections below: Mingle and the asynchronous Java platform. Mingle is meant
+to address the problem that most developers ignore up front to their and their
+applications' and developers' dismay later, which is data serialization,
+interchange, and remote processing. BitGirder's asynchronous Java platform is
+built to facilitate high concurrency and throughput for internet services. The
+Java platform is fundamentally built to address the question of how to handle
+tens or hundreds of thousands of simultaneous requests in a way that allows for
+intelligent processing prioritization, amortization, and, under stress,
+degradation.
+
+Readers familiar with these topics may find a single quick scan through this
+document sufficient to allow them to get started. Developers unfamiliar to
+either or one of these areas should prepare to move carefully and repeatedly
+through this document. An effective strategy for such developers is to use this
+document in a first pass as an overview of what will ultimately make sense after
+the developer's first few programming tasks but not to have the expectation that
+everything will be perfectly clear. 
+
+Mingle
+------
+
+This section gives a quick overview for developers new to Mingle. It lacks
+in formality and is meant to be a quick way to get started using Mingle, but
+isn't meant to be a guide to developing its internals. Some of the discussion
+below will get into internals, but generally only where doing so informs
+practice. In its current state Mingle is akin to a very sharp and effective tool
+but somewhat lacking in creature comforts and protective coatings -- you need to
+understand enough about how it works to ensure that you don't cut yourself while
+using it.
+
+Design Space and Rationale
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Mingle is the tip of a larger iceberg -- a full-fledged internet services
+programming language focused on correct and easy development of networked
+concurrent systems. The language itself is in no way ready to use, but its type
+system and serialization profiles are.
+
+The types and serialized values of those types are designed to be portable
+across programming languages used in current internet programming. The abstract
+types are those found either built into or easily coded as libraries of common
+programming languages: numbers, unicode strings, booleans, buffers (byte
+arrays), enums, timestamps, null, lists, free symbol maps, exceptions and
+structures containing these values. All of these values may be serialized in a
+number of ways: JSON, XML, or custom binary formats (as of this writing only
+JSON is in place, binary will likely follow shortly).
+
+Serialized values are meant to be used in a number of places making radically
+different tradeoffs between parsing speed, space efficiency, and human
+readability. For instance, when used to populate an event log for a high
+throughput service, serialization speed and space efficiency would suggest the
+use of a fast and compact binary format. When used to represent application
+configuration data speed and text size are not as important as human readability
+and the ability to edit and view objects in a text editor, suggesting the use of
+a JSON or XML representation. There are even encodings that map Mingle values to
+and from query string pairs and command-line arguments, meaning that a
+programmer can encode an object as part of a request URL or write a program that
+parses ARGV as a Mingle structure.
+
+There are many technologies already around for defining interchangeable types
+and services/rpc. Here is a brief list of some of the most well-known ones as
+well as comments as to how Mingle differs from each:
+
+Facebook's <<Thrift,Thrift>> and Google's <<GoogProtoBuf,Protocol Buffers>>::
+
+    These are closely linked historically and in their implementation. They
+    offer binding compilers and some community-based tools to do code
+    generation in various languages and have a binary serialization model
+    focused on fast and compact binary serialization. Unlike these, Mingle
+    offers primitive types for timestamps and binary types as well as makes
+    a binary serialization one option but not the only one. While Mingle
+    will develop to include a binding compiler, it does not require one and
+    allows Java devs to adapt and add operations to existing code using
+    annotations.
+    
+<<ASN.1,ASN.1>>::
+
+    ASN.1 theoretically provides all of the same pieces as Mingle, but is
+    largely outdated and matured before much of the environments in which
+    Mingle is intended to live (the web, mobile devices, REST-based
+    services). While it does have rules for XML, Binary, and String based
+    interchanges, the latter is not largely used, nor does ASN.1 directly
+    address JSON, which is now the emerging default textual interchange for
+    the web.
+
+<<XMLRPC,XMLRPC>>, <<WSDL,WSDL>>, <<SOAP,SOAP>>, <<RelaxNG,RelaxNG>>::
+
+    The various forms of XML RPC define many useful types and have some of
+    the same primitives as Mingle and powerful validation expressions, but
+    are necessarily bound to the XML format. While XML is readily parseable
+    in most modern languages, its cost can be prohibitive at high throughput
+
+<<JavaRMI, Java RMI>> and <<JavaSerialization, Java Serialization>>, <<YAML,YAML>>, <<UBF,UBF>>, <<RFC4627,JSON>>, <<PerlDumperFormat,Perl Dumper format>>, and other language specific object encodings and RPC mechanisms::
+
+    While these are effective for applications written entirely in the
+    language in questions, each has its drawbacks when an attempt is made to
+    use it outside of its language of origin. Some versions simply won't
+    work at all with any reasonable effort (Java RMI, Erlang RPC) and others
+    ultimately reduce to doing as much work to port as to build Mingle but
+    without the benefits of flexible serial options (YAML, JSON, Perl
+    Dumper).
+
+Ultimately none of these covers the broad range of requirements for Mingle, and
+so it exists.
+
+
+Core Declaration Elements and Data Types
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This section will provide a quick overview of Mingle types in their abstract
+sense.  Before listing the core types we define some concepts used in their
+definition.  Two of the most important of these are Mingle identifiers and
+namespaces. The latter is built from the former, and the former is used in many
+places throughout Mingle, including as field names in structs, service names,
+and operation names, to name a few. The third concept in this class is a type
+name.
+
+Mingle Identifiers
+^^^^^^^^^^^^^^^^^^
+
+A Mingle identifier is a list of identifier tokens where, in the canonical form,
+each token matches the pattern +^[a-z][a-z0-9]*$+. This is a fairly restrictive
+set of values, and may one day be expanded, but has the nice property that
+nearly all English-language programs stick to the use of identifiers which map
+naturally to Mingle identifiers (see following discussion of representations)
+and for which the natural mapping is legal in all programming languages which
+would work with Mingle values (important for code generation).
+
+While conceptually an identifier is an array of tokens matching the pattern
+above, in practice it will be represented as a string. Mingle provides 3
+canonical styles to represent an identifier as a string: underscore ('_')
+separated, hyphen ('-') separated, and camel-capped join, in which the first
+character of all but the first token is capitalized and the resulting segments
+are concatenated. Examples:
+
++[ ident1 ]+ -> +ident1+::
+        Single token looks the same in every representation
+
++[ some, ident ]+ -> +some-ident+, +some_ident+, or +someIdent+::
+        The lower case hyphen, lower case underscore, and lower case
+        camel-capped versions, respectively
+
+The version using the hyphen is the default and is known as the 'external form'.
+Mingle runtimes are required to accept identifiers in any of the 3 forms above,
+although they will typically convert them to some internal format represented by
+an object in the native programming language thereafter. Mingle runtimes should
+make their native representation such that identifiers created from different
+representations of the same sequence of tokens compare as equal according to
+whatever notion the host language has of equality for purposes of comparison and
+hashtable key identity (+equals()+/+hashCode()+ in Java, the +==+/+eql+/+hash+
+function in ruby, etc)
+
+The following are all invalid identifiers:
+.....................................
+    ABadOne               # starts with a cap
+    123AlsoNoGood         # starts with a number
+    this$wont_work        # contains '$'
+    empty__token          # adjacent separators imply empty/missing token
+    trailing_badness_     # trails a separator (implied trailing empty token)
+    this-9is-wrong        # second token begins with '9'
+    this-is_alsoBad       # mixed join forms
+.....................................
+
+Note that identifiers which include acronyms, such as +toJSON+ or +mySQLDBName+,
+are legal but maybe are not what the programmer expected:
+    
+    - +toJSON+ parses as [ +to+, +j+, +s+, +o+, +n+ ] and would be externalized
+      as +to-j-s-o-n+. Better would be +toJson+, which externalizes as +to-json+
+
+    - +mySQLDBName+ parses as [ +my+, +s+, +q+, +l+, +d+, +b+, +name+ ]
+      and externalizes as +my-s-q-l-d-b-name+. Better would be +mysqlDbName+,
+      which externalizes as +mysql-db-name+
+
+Mingle Namespaces
+^^^^^^^^^^^^^^^^^
+
+All Mingle types are members of some Mingle namespace (the core types are part
+of the implicit namespace). A Mingle namespace is a list of Mingle identifiers,
+and has as its external form of its component identifiers in their external form
+joined by a colon, with leftmost identifiers representing the most general scope
+of the namespace, as is done in languages such as java, ruby, perl, etc.
+Examples:
+.................
+    core
+    bitgirder:monitoring
+    some_org:some_app:some_module
+.................
+Note that the first two are the recommended forms (single-token identifiers)
+since the third type can lead to strange looking forms when bound to common
+languages without some custom work.
+
+Mingle Type Names and References
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Basic Type Name
++++++++++++++++
+
+The Mingle type name is formed in a way analagous to an identifier, but having
+all tokens beginning with a capital letter. That is, all tokens match the regex
++^[A-Z][a-z0-9]*$+. 
+
+The external and only acceptable string form is to simply concatenate the tokens
+directly:
+
+    - +[ Foo ]+ -> +Foo+
+    - +[ Some, Type ]+ -> +SomeType+
+    - +[ Another1 ]+ -> +Another1+
+    - +[ My, Fun, Type2 ]+ -> +MyFunType2+
+
+Similarly, the following are all illegal Mingle type names:
+............
+    $Foo            # illegal '$' char
+    Foo_Bar         # illegal '_' char
+    2LiveTypes      # illegal beginning with '2'
+............
+
+Further, the type name +MySQLConnection+ may not be handled the way a programmer
+expects; it would be parsed as the tokens +[ My, S, Q, L, Connection ]+. A
+better alternative would be +MysqlConnection+.
+
+Referring to a Nested Type
+++++++++++++++++++++++++++
+
+As most programming languages allow nested types (nested classes in java and
+ruby, arbitrary nesting of prototype objects in JavaScript, etc) so does Mingle.
+A type +Bar+ nested within +Foo+ would be expressed externally as +Foo/Bar+;
+the enclosing type is written to the left of the closest type it encloses,
+separated by a slash (`/').
+
+Fully Qualified Type References
++++++++++++++++++++++++++++++++
+
+Most Mingle types that a programmer is likely to encounter at this time are
+simple combinations of a namespace and one or more type names (more when the
+type referenced is a nested type). Such combinations are called 'qualified type
+names' and are written in external form as the external form of the namespace
+joined with the external form of the type name, with the namespace and type name
+separated by a `/':
+
++core/SomeType+::
+    The type +SomeType+ in namespace +core+
+
++bitgirder:monitoring/Host+:: 
+    The type +Host+ in namespace +bitgirder:monitoring+
+
++someorg:someapp:somens/OuterType/NestedType1/NestedType2+::
+    The nested type sequence +OuterType+ containing +NestedType1+ containing
+    +NestedType2+ in the namespace +someorg:someapp:somens+
+
+
+Mingle Types
+~~~~~~~~~~~~
+
+With these definitions we turn to the core types for Mingle -- primitive,
+collection, and qualified types. 
+
+Primitive Types
+^^^^^^^^^^^^^^^
+
+Primitive types are what one might expect:
+
++MingleIntegral+::
+    Arbitrary precision integer
+
++MingleDecimal+::
+    Arbitrary precision decimal
+
++MingleString+::
+    Unicode string
+
++MingleBoolean+::
+    The values +true+ and +false+
+
++MingleNull+::
+    The absence of any other value
+
++MingleTimestamp+::
+    A timestamp of arbitrary precision. In practice the precision won't be
+    more than microsecond-level.
+
++MingleBuffer+::
+    a series of uninterpreted octets
+
+There are not yet fixed-width integral or floating point types corresponding to
+the C-style types uint, ushort, int, short, or to the Java types int, double,
+long, etc. These will be added as the system evolves, but there has been no
+driving force as of yet to add these types. The coming addition of a binary
+encoding (see the section on encodings) will likely drive the addition of these
+specialized numeric types, which will be assignable to and coercible to each
+other as might be expected.
+
+Collection Types
+^^^^^^^^^^^^^^^^
+
+Collection types are of two variants:
+
++MingleList+::
+    A sequence of values. The type of elements in the list, as well as
+    whether or not list values may take on the null value, is currently left
+    to service providers and consumers to coordinate and validate manually.
+    Future versions of the runtime may include ways for service providers
+    to express and check the type of list elements.
+
++MingleSymbolMap+::
+    A dictionary keyed by Mingle identifiers and having values being any
+    Mingle value (primitive, collection, enum, or structural).
+
+Note that there is no map keyed by strings or by arbitrary objects. This is out
+of a desire to keep the serial model as simple as possible and not to force
+runtimes in each language to end up definining possibly incorrect or
+differing notions of key equality (while natural for primitives, it is less so
+for structures-as-keys), as well as to avoid further ambiguity in text encodings
+such as JSON. This may change in the future, but for now string maps or maps
+keyed by some other Mingle type are best expressed as a list of two-element
+lists in which the first element of each two-element list is the  key and the
+second its value.
+
+Enum Types
+^^^^^^^^^^
+
+An MingleEnum consists of a qualified name plus some accepted set of values
+expressed as Mingle identifiers. An example compact definition might be
++bitgirder:example/Color{ red, blue, dark_blue }+.
+
+In most cases the serial form may be simply a string containing a valid
+identifier representation of the constant (+red+, +blue+, +dark_blue+,
++dark-blue+, etc). See the section on coercions. Mingle runtimes must also
+accept all capped versions of what would otherwise be a legal identifier in its
+underscore-separated form (+DARK_BLUE+) for compatibility with the convention in
+most languages to represent enum constants in this way.
+
+Struct and Exception Types
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A MingleStruct or MingleException consists of a qualified name along with a list
+of fields, where a field is uniquely identified by its Mingle identifier and has
+a value of some type. As with list element types, the type of a field is
+currently communicated informally between service developer and consumer. Future
+versions will include tools to auto-generate code and descriptions in a standard
+way that leaves little room for ambiguity in the type of a field. The good news
+is that dealing gracefully with this ambiguity is a prinicipal principle of
+Mingle (see the section on coercions).
+
+There is no structural difference between an exception and a struct, but the
+distinction is made for the same reason as it is in other programming languages
+which support the notion that exceptions are classes/structs which have a
+special place in a program's flow of control.
+
+Structs and Exceptions may extend each other but only single-inheritance is
+allowed. A field of a name +foo+ may not be overridden or shadowed by a field of
+the same name in any substructure.
+
+Type Coercions
+^^^^^^^^^^^^^^
+
+Mingle applications need to be prepared to receive values which are of a
+different type than that expected but for which there is a natural transform
+into the expected type, such as when the string +"1234"+ is received where an
+integral value was expected.  In some cases this mismatch will be the result of
+an encoding which doesn't preserve some distinctions (JSON does not distinguish
+between integral or decimal types) or which doesn't support a given type at all
+natively (JSON and XML have no native binary type). In other cases it could be
+the result of an application evolving, for instance when an id field which was
+originally typed as an unsigned 64 bit int is later changed to be of type
+string. In this case old data containing integral ids can still be understood by
+newer application code with the transform from number (+1234+) to string
+(+"1234"+).
+
+Mingle seeks at its core to allow developers to follow Postel's law, which is to
+"be conservative in what you do, be liberal in what you accept from others,"
+(sec. 2.10 of <<RFC793, RFC 793>>) while placing an emphasis on data validation
+where it matters to the application and to stopping errors as close to the
+serial layer as possible.
+
+To do this Mingle defines a set of coercions as follows, and Mingle libraries in
+Java and Ruby provide methods to coerce values as follows (or raise an exception
+that it can't be done):
+
++MingleString+ -> +MingleIntegral, MingleDecimal+::
+    Create the arbitrary precision integral or decimal corresponding to the
+    string for (+1234+ -> +1234+, +1234.56+ -> +1234.56+)
+
++MingleString+ -> +MingleBoolean+::
+    Convert +"true"+ to +true+, +"false"+ to +false+, and fail for any other
+    string or value
+
++MingleString+ -> +MingleBuffer+::
+    Assume that the string is a base64 encoded binary value and return the
+    base64 decoded raw binary object
+
++MingleString+ -> +MingleTimestamp+::
+    Assume the string is an <<RFC3339, RFC 3339>> timestamp and parse it as such
+
++MingleBuffer+ -> +MingleString+::
+    Reverse of +MingleString+ -> +MingleBuffer+ (base64 encode)
+
++MingleIntegral, MingleDecimal, MingleBoolean, MingleEnum, MingleTimestamp+ -> +MingleString+::
+    Does what one would expect, converting values to their string representation
+    ("123", "123.45", "true", "some-enum-val",
+    "2007-08-24T13:15:43.123450000-08:00")
+
++MingleStruct+ -> +MingleException+ or +MingleException+ -> +MingleStruct+::
+    In many encodings, such as JSON, a struct and exception are
+    indistinguishable. The coercion is simply to take the input type from
+    the encoder and recast it as the appropriate structure type.
+
+Some other coercions may be added as they become necessary later.
+
+Mingle Services
+~~~~~~~~~~~~~~~
+
+Besides the data types themselves, Mingle has a notion of services and
+operations, where an operation takes as inputs a set of Mingle values as
+parameters, which may individually be required or optional, and return a single
+Mingle value (which may itself be a collection or structure of values or the
+null value for void operations) and possibly throwing some sort of exception. 
+
+Basic Request and Response Structure
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A service request is the combination of a namespace, a service identifier (a
+Mingle identifier distinguishing the service from others in the same namespace),
+an operation name, and a symbol map of parameters for that operation. Using a
+suggestive syntax, an example request might be:
+.................
+namespace: bitgirder:example
+service: sample-service
+operation: do-some-cool-stuff
+parameters:
+    param1: 1
+    param2: "hello"
+    param3: [ "list", "of", "strings" ]
+..................
+
+Service results contain either a result or an exception:
+..................
+result: 12                  # success
+result: null                # success from a void operation
+result: [ 1, 2, 3 ]         # results can be lists or any other value
+
+# An exception response. The exception is of type NoSuchNamespaceException
+# in the 'service' namespace. It contains a single field indicating the
+# offending unknown namespace ("bad:ns")
+#
+exception: service/NoSuchNamespaceException{ namespace: "bad:ns" }
+..................
+
+In practice serialized versions of results may appear to contain both fields,
+such as this JSON version of the first example above:
+.................
+{ "result": 12, "exception": null }
+.................
+
+In such cases only one of +result+ or +exception+ should be non-null. If both
+are null then this is assumed to mean that the operation completed successfully
+and returned null (or was of void return type).
+
+Operation Overloading
+^^^^^^^^^^^^^^^^^^^^^
+ 
+Operations are uniquely identified at the serial level by their namespace,
+service id, operation name, and set of required parameters. This last piece
+allows service authors to take advantage of a simple but practical way to
+overload operations so long as no two overloadings have an identical collection
+of required parameters. 
+
+For those with knowledge of only statically typed languages such as Java this
+may seem a bizarre choice, but it stems from Mingle's focus on accepting values
+from callers in types that may be different from their target types at the
+serial layer but easily coercible at runtime. That is, this Java-style override,
+.....................
+public
+void
+foo( String arg1,
+     int arg2 );
+
+public
+void
+foo( String arg1,
+     String arg2 );
+.....................
+in which both args are required, would be ambiguous in Mingle since both have
+the same set of required arguments (arg1, arg2) but the parameters
+.....................
+{ arg1: "hello", arg2: "23" }
+.....................
+could, with type coercion, be a reasonable input to either invocation (is +arg2+
+meant to be a string or an int?). 
+
+Since Mingle, unlike Java and many other programming languages, has the notion
+of optional parameters, we can uniquely associate overloaded invocations by
+their set of required parameters, on the assumption that the service developer
+defines such overloads correctly and uniquely (the Java runtime checks this at
+runtime). For overloads in which one set of required parameters is a proper
+subset of another, the runtime will match the request to the overload having the
+most parameter matches. This is good since that is almost always what a
+programmer would expect.
+
+Mingle Codecs for Serialization and Deserialization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The principle design of the Mingle type system is that values be dependably
+encoded and decoded for the purposes of file or network IO. There are various
+possible ways to encode the Mingle type system. One of them is JSON (discussed
+below in more detail), another is XML, and yet another is a binary encoding
+designed for speed and space efficiency at the cost of human readability (for
+most humans at least).
+
+The JSON Codec
+^^^^^^^^^^^^^^
+
+As of this writing the only encoding provided is that from Mingle value to JSON.
+
+More formally, since encodings only operate in terms of octet streams, we would
+say that the JSON encoding is ``an encoding between Mingle and a binary encoding
+of a JSON text in one of the valid JSON character sets according to
+<<RFC4627,RFC 4627>> (utf-8, utf-16be, utf-16le, and utf-32).'' Since that's a
+mouthful to say all the time though, we just talk about ``the JSON encoding.''
+
+There are a few things to be aware of with the JSON encoding. As mentioned
+already, some Mingle primitives have ambiguous (numeric) or unsupported (buffer)
+forms in JSON. In most cases the consumer doesn't care, such as when the
+consumer is javascript running on a browser, which does many of its own
+coercions which are already consistent with the Mingle coercions, or when the
+consumer is another Mingle programmer capable of coercing values according to
+his or her needs, or allowing a binding framework to do so on his or her
+behalf.
+
+Because JSON doesn't have a notion of types or namespaces or modules, the Mingle
+JSON encoding uses the JSON object key +$type+ to specify that a JSON object
+should be interpreted as a structure type having the given set of fields. Thus,
+the Mingle struct:
+..................
+bitgirder:example/Struct1
+    foo1: "hello"
+    bar2: -1
+..................
+would be serialized as the JSON text:
+..................
+{ "$type": "bitgirder:example/Struct1", "foo1": "hello", "bar2": -1 }
+..................
+which works since the `$' clearly disambiguates the type value from the other
+fields of the structure which are identifiers and may not begin with `$'.
+Consumers can of course ignore the type field entirely, or may choose to
+continue to simply treat it as a string even if the language doesn't readily
+support the notion of modules or types (again, think browser-based JS).
+
+In most cases callers of services using JSON will not need to include explicit
+type information since they'll be calling services for which the Mingle runtime
+can infer the type. That is, the example struct above could be passed as the
+parameter 'param1' to some operation expecting param1 to be of type Struct1
+simply as:
+..................
+{ "param1": { "foo1": "hello", "bar2": -1 } }
+..................
+Note the absence of the +$type+ field. The case with structures as field values
+is similar.
+
+Java Platform
+-------------
+
+The majority of the work that most developers will do in the Java platform
+will consist of building on top of the core event libraries
+(+com.bitgirder.process+) and on top of the Mingle Java implementation
+(+com.bitgirder.mingle+). Beyond these two package roots there are various
+utilities in +com.bitgirder.lang+, +com.bitgirder.io+, and
++com.bitgirder.validation+, which the reader is encouraged to explore directly
+on his or her own.
+
+Event Driven Processing: +com.bitgirder.process+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+At the core of the BitGirder Java codebase is the process package, which
+provides the foundation for building event driven Java code. At the heart of the
+package is the 'process' metaphor, which is based somewhat on the notion of a
+POSIX process, but also draws some influence from the <<Erlang-thesis, Erlang
+programming language>> and from Matt Welsh's work (<<SEDA, SEDA overview>>,
+<<Welsh-hcs, paper on highly concurrent systems>>). While focused more on the IO
+level, Dan Kegel's <<kegel-C10K,page about the C10K>> problem is rich in
+information and background on the relationship between event driven systems and
+scalable systems.
+
+Basic Abstractions and Concepts
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This section will discuss the process library at a high level. See the following
+sections for more detailed discussions of particular Java classes.
+
+At the core of the process library is the process itself. Conceptually, a
+process is an individual entity that has a lifetime beginning with its 'start'
+and ending with its 'exit'. Exits can be normal, in which case the exit carries
+with it an optional exit value which can be any Java object, or can be failures,
+in which case the exit will have an associated +Throwable+. During a process's
+lifetime it may do many things, including communicating with other processes
+using the process RPC mechanism, scheduling and executing tasks, and
+communicating over the network with external services (including such things as
+SQL databases).
+
+The process library takes a serial approach to concurrency. That is, instead of
+using locks for guarding access to shared data, the process library provides for
+concurrency via serialization of tasks acting on that data. This is accomplished
+with an abstraction we call the 'process thread'. In fact there will only be a
+few actual instances of +java.lang.Thread+ executing process events, but one can
+logically think of each process object having its own Java thread. With a few
+exceptions, all activity taken by a process which reads from or writes to its
+internal state must occur on the process thread. Most events that are built in
+to the library, including the +startImpl()+ callback which an +AbstractProcess+
+subclass uses to begin its processing, occur on the process thread. In order to
+introduce tasks onto the process thread from any other thread (which includes
+the process thread of another process), the +submit()+ method should be used.
+
+While process objects can share data by exposing that data directly via normal
+Java methods, doing so can be cumbersome and tricky since the access must be
+performed on the target process's process thread while the result must be
+returned on the calling process's process thread. Instead of expecting
+programmers to manually instrument this for every process-to-process
+interaction, the process libraries provide an rpc abstraction. Using process
+rpc, processes have a known way to send a request to and receive a response from
+another process in a way that confines request processing and response receiving
+to its proper process thread(s). Additionally, use of the rpc mechanism allows
+for developers to take advantage of current and planned advanced functionality,
+including request prioritization, logging, metrics, suspension/resumption, and
+automatic restart management. The process library also provides a mechanism to
+allow non-process-based, traditional blocking code (such as that found in most
+application servers or Java Servlet implementations) to act as server or client
+in process rpc.
+
+Core Java Building Blocks
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This section takes a closer and more detailed look at some of the classes and
+facilities most often used when building process applications. This includes
++AbstractProcess+ and some of its inner classes, process activities and
+behaviors, rpc servers and clients, and the compute pool.
+
+AbstractProcess
++++++++++++++++
+
+The only way to create a process is to create a subclass of 
++AbstractProcess< V >+ or its commonly used descendant +AbtractVoidProcess+. The
+type parameter +V+ refers to the type of the expected exit value of the process.
+Once instantiated, a process is inactive and may not be interacted with until it
+is 'spawned'. For all but the root process, a process is spawned by some other
+process with a call to +AbstractProcess.spawn()+. 
+
+At some point after spawn completes, the spawned process will be 'started'.
+Subclasses must override the abstract method +AbstractProcess.startImpl()+ to
+begin their processing. This method is executed on the process's process thread,
+and so represents the first and most natural entry point for code to begin
+working with process state.
+
+Some processes have nothing to do once started other than sit and wait for rpc
+calls to arrive. In such cases the implementation can be as simple as:
+...................
+protected void startImpl() {}
+...................
+In other cases the process can submit tasks to be executed later, contact other
+processes as an rpc client, or generally do whatever else it has as its mission
+on earth (or wherever else the JVM resides).
+
+As a process runs, it may want to print information about what it is doing.
+While most logging packages have various levels (+warn+, +info+, +debug+,
++fatal+, etc), the process logging framework has only two levels: +code+ and
++warn+. Anything that is believed to warrant operator attention should be logged
+as a warning. Anything that may be relevant to a developer or operator but which
+is not necessarily cause for concern should be logged as code. Each of the
++code()+ and +warn()+ methods take an array of objects which will be joined with
+a space to create the result message. Optionally the first parameter can be a
++Throwable+, in which case the stack trace of that throwable will be formatted
+along with the message. The +code+ and +warn+ methods may be called from any
+thread.
+
+When a process has completed its processing it must call one of the +exit()+ or
++fail()+ methods. The former is used to exit with a success value (+null+ is
+allowed to represent success without any particular object); the latter is used
+to indicate that the process failed in an unexpected way. Only the first call to
+one of these methods will take effect, and any subsequent calls will be ignored.
+Having multiple calls like this will be rare, but is possible. These methods may
+be called from any thread.
+Once an exit has been successfully processed on the process thread, no further
+actions will take place on the process object and it may not be restarted.  the 
+
+As an example of the situation mentioned above in which multiple +exit,
+consider the case of a process which performs some activity which will call
++exit()+ when it completes normally, but which also has a timer scheduled to
+call +fail()+ with a +TimeoutException+ after some period elapses. It could be
+the case that both sections of code will execute, for instance if the activity
+completes at approximately the same time as the timeout would occur. In such
+cases there is no guarantee as to which will ultimately be processed first --
+only that one will be processed and the other ignored. 
+
+Code in the form of a +java.lang.Runnable+ can be submitted for future
+processing on the process thread using the +submit()+ method. The version of
+this method taking a single parameter schedules its argument to be run as soon
+as possible (more on what that means below) The version of this method taking a
++com.bitgirder.concurrent.Duration+ will schedule the given runnable to be run
+at some point no sooner than the represented duration. These methods may be
+called from any thread. Indeed, the 'only' way to get code to run on the process
+thread is via a call to +submit()+. It will often be the case that process tasks
+do things which could throw checked exceptions, which are not allowed by
++java.lang.Runnable+ interface. To simplify error handling, processes can create
+subclasses of +AbstractProcess.AbstractTask+, which provides the method
++runImpl()+ as an alternative to +Runanble.run()+ that allows checked exceptions
+and which ensures that any uncaught throwable is used to fail the process.
+
+If runnable +r1+ and +r2+ are submitted using the +submit( Runnable )+ method,
+in that order, then it is guaranteed that +r1+ will run and complete before +r2+
+begins. Note that this only applies to calls that have a 'happens-before'
+relationship to each other (See section 17.4.5 of the <<JLS,JLS>>). This
+ordering does not have any relationship to runnables submitted with a duration.
+This is, if runnable +r3+ is submitted to run after some delay, it could be the
+case that +r3+ will execute before or after either of +r1+ or +r2+ regardless of
+the order in which they were submitted relative to each other. 
+
+Regardless of the runtime ordering discussed above, it will always be the case
+that no more than one runnable will be executing on the process thread at a
+time. That is, the caller never has to provide any special locking to ensure
+that two submitted runnables are running in exclusion of each other. Indeed, the
+opposite is true and is one of the most fundamental rules of this system:
+'callers should never attempt to acquire a lock or do anything that blocks while
+in the process thread.' Doing so can bring the entire application, including all
+other processes in the system, to a complete halt. To perform such blocking
+operations processes should use an external thread pool (See the
+<<ComputePool,ComputePool discussion>> for one way to do this). One corollary to
+the rule above is that internal process state does not need to be decorated with
+any special synchronization or guards.
+
+Finally, processes can spawn other processes by using the +spawn()+ method, and
+can receive the exit value of these processes by overriding the +childExited()+
+method. We call the process which invokes +spawn()+ the 'parent' and the process
+which is spawned the 'child'. A child has its own private process state and
+performs all actions on its own process thread, and all rules concerning process
+to process interaction apply to interaction between a parent and child process.
+Note that, even though it relates to a child process, the +childExited()+
+callback, which is invoked by the underlying framework, is associated with the
+parent and runs on the parent's process thread. The +spawn()+ method must only
+be called from the process thread.
+
+The following example demonstrates some basic elements of +AbstractProcess+:
+___________________
+...................
+include::doc-include/source/com/bitgirder/demo/process/AbstractProcessBasics.java[]
+...................
+___________________
+which results in the output:
+___________________
+...................
+include::doc-include/demo-output/com/bitgirder/demo/process/AbstractProcessBasics.out[]
+...................
+___________________
+Notice the pids in the output above in the log statements on the lefthand side.
+The parent process has pid +0+, the first child has pid +0/0+, and the second
+child has pid +0/1+. Knowing this can often be helpful when sifting through logs
+to find output from just a particular process or group of processes.
+
+AbstractPulse
++++++++++++++
+
+Oftentimes a process will, in addition to its other activites, be responsible
+for performing some activity periodically. At the most basic level, this could
+be accomplished by simply submitting the action as a task and having that task
+ensure that at its conclusion it resubmits itself after the pulse duration.
+Error cases and corner conditions make this a bit more complicated though: 
+
+- How to handle actions that are not simple tasks but require asynchronous
+  processing, such as rpc calls internally or over a network?
+
+- What should happen if the action takes longer to complete than the pulse
+  itself?
+
+- What should be the behavior if the action fails?
+
++AbstractPulse+ addresses these as part of its implementation, requiring
+developers to implement only +beginPulse()+ to start the next activity and
++pulseDone()+ to signal that the activity is complete and the pulse should be
+rescheduled.
+
+This code:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/AbstractPulseDemo.java[]
+.......................
+_______________________
+results in:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/process/AbstractPulseDemo.out[]
+.......................
+_______________________
+
+Process Communication via RPC: ProcessRpcServer and ProcessRpcClient
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+As described in the opening section, the constraints of the process thread, both
+in terms of the requirement that tasks never block and in terms of the fact that
+all access to process state data must occur on a process's process thread, lead
+to the need for a way other than direct method calls by which one process can
+perform an action for another and return the result of that action to the
+caller. The +ProcessRpcServer+ and +ProcessRpcClient+ behaviors are a common way
+to address this need.
+
+The RPC model can be described as the following sequence of events:
+
+- The client process initiates an rpc request object to the server process and
+  registers a callback that will receive the response (which may be a result
+  object or a Throwable). 
+
+- The request object is queued for delivery to the server on the server's
+  process thread, where it will begin to be processed (perhaps resulting in an
+  immediate result).
+
+- When the result is ready the server signals that the response is ready,
+  leading to the response being queued for processing by the client's callback
+  on the client's process thread.
+
+Clients may also set timeouts after which the client-side portion of the request
+will be canceled and the client will receive a +TimeoutException+.
+
+Implementing the server-side of process rpc involves implementing and annotating
+various methods or inner AbstractProcess classes with the
++@ProcessRpcServer.Responder+ annotation. Incoming requests are dispatched to
+handlers based on the type of the request object. In cases where there could be
+conflicts, for instance when a handler exists for interface +Foo+ and another
+exists for an implementation +FooImpl+, the most specific non-interface will be
+chosen. In cases in which clients would want to submit a +FooImpl+ to be handled
+as a +Foo+, it is up to clients to specify in the call that the signature class
+is +Foo+. This is a rare need, as the majority of process rpc requests will be
+unambiguous.
+
+There are currently three ways to respond to a request. The first is to
+implement an 'immediate responder', which is effectively just a method which
+takes its request object as a parameter and which returns the rpc response. This
+is deemed ``immediate'' since the response is generated directly from the
+handler method without any delay or intervening asynchronous operations.
+
+The second is to implement a 'child responder', which is a responder built as an
+inner class that descends from +AbstractProcess< V >+, where +V+ is the type of
+the rpc result and in which the constructor argument is the request object. In
+this form, the process libraries will spawn a new instance of this class as a
+child of the server for each request. Once spawned the child can do anything it
+wants to ultimately come up with its result. When the child exits, the exit
+value will be sent back to the caller as the rpc result.
+
+The third way is to implement an 'async responder' using a method that takes two
+parameters -- the rpc request object and additionally a
++ProcessRpcServer.ResponderContext+. The handler is at that point responsible
+for, at some point, calling either +ResponderContext.fail()+ or
++ResponderContext.respond()+ to complete the rpc. There is not yet a way to
+create a nested async responder class as there is with a child responder, but
+adding that to the libraries is planned.
+
+The main difference between choosing a child responder vs. an async responder is
+in terms of desired level of isolation versus per-request overhead. Using a
+child responder gives each request a very clear separation from anything else
+happening in the system, including things happening in the parent (rpc server)
+process. This can help in sifting through logs (each request has its own pid).
+Additionally, if for some reason a request generates a large number of its own
+tasks, and if a large number of these requests can be operating concurrently,
+having each request in its own child process can allow the underlying scheduler
+to balance fairly across all requests as well as traffic in the parent process's
+process thread.
+
+On the other hand, while processes are still very lightweight compared to
+something like a unix process or a java thread, they are not free. Each process
+carries with it a certain nontrivial object size as well as represents another
+item for the underlying process libraries event scheduler to process. So, using
+child responders to handle rpc can lead to undesired overhead if request volume
+is high and request processing is itself relatively simple and short-lived.
+
+Additionally, because child processes operate in their own process thread, if a
+request also needs to interact with parent process state as part of fulfilling
+its request, it needs to use rpc or some other mechanism to access the parent
+data. Given this, rpc handlers which perform some short asynchronous action or
+need to interact with the server process's state are generally best implemented
+directly in the rpc server process thread using the +ResponderContext+ directly.
+
+The example below shows some of the basic ways to implement a server and make
+calls. The demo +ProcessRpcDemo.java+ below uses the +EchoServer.java+, shown
+here first:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/EchoServer.java[]
+.......................
+_______________________
+The actual demo to create and call the server:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/ProcessRpcDemo.java[]
+.......................
+_______________________
+and produces the following when run:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/process/ProcessRpcDemo.out[]
+.......................
+_______________________
+
+
+Modular Extensibility -- Activities and Behaviors
++++++++++++++++++++++++++++++++++++++++++++++++++
+
+One of the fundamental tradeoffs involved in designing the process library was
+that between simplicity and compactness of the fundamental building block
+(+AbstractProcess+) and between adding utility methods and additional
+functionality to make it simple for developers to do repetitive or common things
+with processes. Because Java only allows single inheritance footnote:[The author
+is not complaining about this, just pointing it out.] it is difficult to allow
+subclasses to mix in only the additional features they want. 
+
+To solve this problem the process libraries offer two mixin facilities:
+'activities' and 'behaviors'. Once associated with a process each of these has
+access to nearly all of the methods and facilities in +AbstractProcess+ directly
+available to the associate process, including versions of methods such as
++code()+, +warn()+, +submit()+, +spawn()+, +fail()+ and +exit()+. The prinicpal
+difference between the two is that activities are possibly transient and not
+inherently tied in to the lifecycle of the associated process, whereas behaviors
+generally have specific actions to perform when the associated process is
+started or stopped (indeed, a process will not complete its exit until all
+behaviors have signalled that their shutdowns are complete).
+
+Many of the most used parts of the process libraries are themselves built on top
+of activities and behaviors, including +ProcessRpcServer+, +ProcessRpcClient+,
++ComputePool+, and +AbstractPulse+.
+
+The following demonstrates how to build a behavior and an accompanying activity.
+The core behavior and activity are built into +SimpleRestarter.java+ and used in
++SimpleRestartDemo.java+.
+
+The core class:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/SimpleRestarter.java[]
+.......................
+_______________________
+And the demo to use it:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/SimpleRestartDemo.java[]
+.......................
+_______________________
+which results in the output:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/process/SimpleRestartDemo.out[]
+.......................
+_______________________
+
+[[ComputePool]]
+ComputePool
++++++++++++
+
+Ideally everything an real-life application did would be non-blocking and
+suitable for execution from within some process thread. However, there are a
+number of situations in which a process needs to interact with blocking code,
+particularly when it comes to third-party libraries. Image processing libraries,
+database drivers, XMPP clients, system calls, blocking file IO (the only kind
+available to Java until 1.7) and many other activities and libraries do things
+that block.
+
+The solution in these cases is to run the blocking parts of the code in a
+dedicated thread pool, such as those provided in the +java.util.concurrent+
+package. To simplify some of the logic around managing thread pools that are
+associated with a process, developers can take advantage of a +ComputePool+
+instance. A compute pool is a behavior which manages a thread pool,
+instantiating it at process start, shutting it down and draining its tasks at
+shutdown, and handling a bit of other bookkeeping. There is also the utility
+class +ComputePool.AbstractCall+ which makes it easy to provide process rpc
+services that are backed directly by tasks executed in the compute pool.
+
+As an example consider this demo which mimics how one could use a compute pool
+to interact with a sql database using the blocking operations in <<JDBC,the JDBC
+framework>>.
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/ComputePoolDemo.java[]
+.......................
+_______________________
+which prints:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/process/ComputePoolDemo.out[]
+.......................
+_______________________
+
+Events 
+++++++
+
+In addition to communicating directly with each other in a one-to-one fashion
+via rpc, it is also useful for processes to be able to communicate en masse via
+events. The classes in +com.bitgirder.event+ provide a basic publish/subscribe
+event publishing framework built on top of the process behavior +EventBehavior+
+and the event router +EventManager+. Processes (or any java code with a
+reference to an +EventManager+) can publish events to an +EventTopic+ and may
+also subscribe to a topic to receive events via an +EventReceiver+. 
+
+Typically an application will predetermine the event topics to which it is
+interested in publishing or subscribing and will also create an +EventManager+
+instance through which to coordinate those events. For most applications a
+single +EventManager+ instance will be sufficient for all application event
+traffic. In special circumstances in which there will be an extremely large
+number of topics or receivers, it may make sense to partition high-traffic or
+highly-subscribed topics off into their own event managers. If doing this though
+it is incumbent on the application to keep track of which topics are handled by
+which event managers. Doing so incorrectly could lead to a subscriber
+subscribing to a topic via a manager to which events for that topic will never
+be published.
+
+Event publishing provides little in terms of timing guarantees for delivery. In
+particular, there is no guarantee as to when a published event will be received
+by its various subscribers -- only that it eventually will be. It will always be
+the case that if publisher +p+ publishes events +e1+ and +e2+ in that order,
+then all receivers that receive both +e1+ and +e2+ will receive +e1+ before
++e2+. Events from other publishers may be interspersed, and there are no
+guarantees to how quickly after +e1+ +e2+ will arrive. 
+
+Additionally, there is no relationship, in terms of the java memory model (See
+section 17.4, ``Memory Model'' in <<JLS, the JLS>>), between an event publish to
+a given topic and a subscription to that topic by a receiver. If process +x+
+publishes event +e+ to topic +t+ at approximately the same time as process +y+
+registers a subscription to +t+, it may or may not be the case that +y+ will
+ever receive +e+.
+
+The following is an example of how to publish and receive events:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/event/EventDemo.java[]
+.......................
+_______________________
+and outputs:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/event/EventDemo.out[]
+.......................
+_______________________
+
+Process Management
+++++++++++++++++++
+
+In long-running applications it can be the case that certain infrequently
+traveled code paths could lead a process to exit abnormally. In many cases the
+application would ideally log the failure but otherwise continue to function. To
+do this the +com.bitgirder.process.management+ package provides some facilities
+to manage and restart processes based on certain conditions. The functionality
+and error-handling approach is similar in many ways to 'supervision trees' in
+<<Erlang-thesis, Erlang>> or to the process management performed by <<launchd,
+launchd>>.
+
+The core of the functionality in this package is provided by the process
+behavior +ProcessManager+. On behalf of its including process, a process manager
+spawns a managed process associated with some abstract management id and awaits
+its untimely completion.  The process manager is tied in to its including
+process's lifecycle, stopping all managed processes as part of the including
+process's own shutdown phase.
+
+Each managed process is associated with a +ProcessControl+ which provides a
+factory for creating new processes, for stopping a previously started process,
+and for determining whether, after a process's unexpected exit, a new one should
+be restarted in its place. The process manager manages each of its processes via
+its associated control. A standard control strategy is to monitor the rate at
+which a process (here we use the term "process" as shorthand for the more formal
+"process associated with a management id") is being restarted and to refuse to
+restart it if it exceeds some number of restarts in some fixed amount of time.
+The goal is to differentiate between truly rare and transient failures versus
+truly flawed code which will not function correctly in any forseeable amount of
+time.
+
+Basic process management is useful for processes which aren't meant to be
+reached by other processes, but often it will be the case that a managed process
+needs to be the recipient of rpc calls. This raises the question of how to
+communicate to potential callers that the process to which they would send rpc
+requests has crashed and been replaced with another. The process management
+libraries provide two mechanisms to deal with this.
+
+One involves the use of the events mechanism. If the process including the
+process manager also include the +EventBehavior+ behavior, then the process
+manager will broadcast lifecycle events (managed process start, stop, restart
+exhaustion). Potential clients can then listen to these events to keep their
+local table of potential rpc endpoints up to date. Future versions of the
+platform will likely encapsulate this specific use case in a specialized class.
+For now though it is up to callers wishing to take this approach to code their
+own implementation.
+
+A second mechanism to deal with the rpc-to-managed-process problem is to have
+a process manager create a +ManagerProxy+. This is a thin shell class that is
+tied to the process manager that created it and to a specific management id
+managed by that process manager. RPC clients can send all requests to the
+manager proxy instance, which internally keeps an up to date reference to the
+currently active managed process and proxies the rpc request to it. This
+insulates clients from needing to implement this logic at the expense of the
+overhead of an extra rpc call for the proxy.
+
+Note that in either of these cases there is still the possibility that an rpc
+request will be directed towards a process that has crashed, since the request
+could be sent before or as the destination is crashing. Similarly, it could also
+appear that no process is active when in fact one is, since the start
+notification may be en route to the client or manager proxy when the request is
+attempted. In the former case this is no different than what can happen with
+unmanaged processes. In the latter case, clients can fail quickly or decide to
+wait some small amount of time to see if a new process shows is restarted.
+
+The following example shows some basic uses of the process management
+facilities:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/process/management/ProcessManagementDemo.java[]
+.......................
+_______________________
+and outputs:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/process/management/ProcessManagementDemo.out[]
+.......................
+_______________________
+
+
+Mingle and Java
+~~~~~~~~~~~~~~~
+
+This section turns to the Java implementation of Mingle. In particular, it
+covers the core model implementation, the binding layer which provides
+facilities for creating and working with Java objects which may also be viewed
+as Mingle values, and a mingle services implementation, which is built upon the
+facilities in the process library.
+
+Core Implementation: +com.bitgirder.mingle.model+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The core model package contains implementations of the basic MingleTypes
+described in the Mingle overview section of this document, as well as methods
+for creating various validation exceptions and for performing Mingle type
+coercions.
+
+Most developers will rarely deal with more than a handful of classes in this
+package if they use the binding framework, which hides most of the actual Mingle
+details. Knowledge of the model package is most useful when building Mingle
+framework code or Mingle codecs. 
+
+There also will come a time in many applications in which clients or logs or
+database files will contain old versions of serial Mingle values which are no
+longer maintained by the application or recognized by the binding layer. In
+those cases developers can directly work with the serial values as Mingle values
+by using the classes in +com.bitgirder.mingle.model+.
+
+Additionally there may be times when the overhead of the Java bindings are
+prohibitive to performance. Also in those cases it may benefit the application
+to bypass the binding layer and to work directly with the Mingle values using
+the classes in this package.
+
+The following example can serve to illustrate how this package can be used:
+
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/mingle/MingleModelsDemo.java[]
+.......................
+_______________________
+which prints:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/mingle/MingleModelsDemo.out[]
+.......................
+_______________________
+
+Binding Mingle Values to Java Classes: +com.bitgirder.mingle.model.bind+
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Often it will be more convenient and natural to work with Mingle values via a
+Java binding. The Java-Mingle binding in its current form is driven only by Java
+reflection. Future versions of the platform will include tools to allow
+developers to code types directly in Mingle and have a code generator emit the
+corresponding bound Java code and factories.
+
+Most types map in a natural way
+
+- +MingleString+ is bound to (and is-a) +java.lang.CharSequence+
+- +MingleIntegral+ binds to +java.math.BigInteger+ or to the primitive types
+  +byte+, +short+, +int+, and +long+
+- +MingleDecimal+ binds to +java.math.BigDecimal+ or to the primitive types
+  +float+ and +double+
+- +MingleBoolean+ binds to +java.lang.Boolean+
+- +MingleNull+ is java +null+
+- +MingleTimestamp+ binds to itself as
+  +com.bitgirder.mingle.model.MingleTimestamp+
+- +MingleBuffer+ binds to +java.nio.ByteBuffer+ (currently, +byte[]+ could be
+  added later)
+- +MingleList+ binds to +java.util.List+, where the components are either bound
+  to a programmer-specified Java type or to whatever the inbound mingle values
+  appear most to be
+- +MingleSymbolMap+ binds to +java.util.Map< String, Object >+, where the values
+  are bound in a fashion similar to those of the lists
+- +MingleEnum+ binds to a Java enum
+- +MingleStruct+ and +MingleException+ are bound to some developer-supplied Java
+  class or Java exception type as specified by either the default type mapping
+  or by a custom type mapper.
+
+In most cases the defaults will be the best choice, and developers are
+encouraged to try and use them whenever possible. In addition to the default
+bindings, developers can also subclass from +AbstractBoundString+ to create
+typed java strings that are externalized as plain Mingle strings. This can be
+particularly useful for Java developers wanting to take advantage of Java's
+strong typing and prefer to use typed string types, such as +UserName+ or
++PhotoCaption+ instead of simply +java.lang.String+. Similarly there are the
+bound base classes +AbstractBoundDouble+ and +AbstractBoundInt64+, both of which
+extend +java.lang.Number+, allowing developers to create typed numeric Java
+types that are externalized as simple Mingle numbers.
+
+Sometimes developers will want to create a Mingle binding for a Java type that
+can't be annotated and made directly into a Mingle type, either for reasons of
+code organization or internal or external code ownership issues. It is possible
+to create an arbitrary +MingleBinding+ instance, most often by subclassing
++AbstractMingleBinding+, and handcoding the transformation from Java to Mingle
+and vice-versa.
+
+All binding operations are accessed via the public methods in a
++MingleBindingContext+. The current platform has +MingleBindingContext+ as a
+class which uses lazy initialization to reflect upon bound classes and build up
+type info. Generally an application will initialize an instance at application
+startup, set up type mappings for the application, install any custom bindings
+(or use +MingleBindingContexts.loadExplicitBindings()+ to discover and load
+them), and use that binding context throughout the rest of the application.
+There is no rule that there must be only one though, so applications that have
+some need could create and manage multiple contexts.
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/mingle/MingleBindingDemo.java[]
+.......................
+_______________________
+which prints:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/mingle/MingleBindingDemo.out[]
+.......................
+_______________________
+
+Building Mingle Services
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The +com.bitgirder.mingle.service+ package contains classes to help build
+Java-backed Mingle services. Using this package isn't the only way to build
+services, but the base implementations take a lot of the headache out of it and
+are built on top of the process libraries to allow developers to build scalable,
+event-driven mingle service implementations in Java. The base class
++AbstractMingleService+ can be used to directly receive a +MingleServiceRequest+
+instance (wrapped in a +MingleServiceCallContext+ with some other request
+metadata) and respond at some point with a +MingleServiceResponse+. For services
+implementations that want to respond directly using bound Java inputs and
+outputs, developers can subclass +AbstractBoundMingleService+.
++AbstractBoundMingleService+ is itself a subclass of +AbstractMingleService+,
+and developers subclassing the bound service base class can mix their responders
+-- some may use bound inputs and outputs, and others may work directly on the
+mingle service objects.
+
+One other heavily used class in this package is the +MingleServiceEndpoint+.
+It's purpose is to serve as a single process rpc endpoint for incoming mingle
+service requests and to route those request internally based on their namespace
+and service identifier to the appropriate backing service instance. Generally
+speaking, an application will create and start many services each associated
+with a specific namespace and service id, and then build up a service endpoint
+instance with a route table pointing at the various instances. This endpoint
+instance then gets associated with the IO gateways, such as an HTTP server or
+even an internal Java service client that skips IO and uses direct process RPC,
+which send all requests to and receive all responses from the endpoint rather
+than the backing services. 
+
+This does involve some extra process RPC overhead, since the endpoint is now a
+proxy for all traffic, so advanced applications might choose instead to maintain
+their own routing tables directly at the point of IO ingress and dispatch
+directly to the active service instances.
+
+The following shows some service implementations and a program to put them
+behind an endpoint and make some calls.  +NativeDemoService.java+ shows a
+service implementation using the "native" mingle classes in
++com.bitgirder.mingle.model+ without any bindings:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/mingle/NativeDemoService.java[]
+.......................
+_______________________
+The same service is implemented using mingle bindings too:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/mingle/BoundDemoService.java[]
+.......................
+_______________________
+The service demo instantiates them, puts them behind an endpoint, and starts
+some children to make some calls:
+_______________________
+.......................
+include::doc-include/source/com/bitgirder/demo/mingle/MingleServiceDemo.java[]
+.......................
+_______________________
+which output:
+_______________________
+.......................
+include::doc-include/demo-output/com/bitgirder/demo/mingle/MingleServiceDemo.out[]
+.......................
+_______________________
+
+Putting it all Together: Deploying an Event-Driven, Mingle-based JSON/HTTP Service
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+This section gives just a brief overview of how to combine everything and build
+and deploy a mingle-backed Java service using the Mingle JSON encoding and HTTP
+transport, powered by <<Jetty7,Jetty>>. The setup for a standalone Jetty
+application, which isn't shown in an example at this time, would be as follows:
+
+- Instantiate some Mingle services and place them behind a +MingleEndpoint+ at
+  the desired routing addresses.
+
+- Instantiate a +com.bitgirder.jetty7.Jetty7MingleConnector+ around that
+  endpoint. The +Jetty7MingleConnector+ has a method +getHandler()+ which
+  returns a Jetty +Handler+ instance necessary to receive requests from and send
+  responses to HTTP clients via Jetty. Callers can add the returned +Handler+ to
+  a jetty +Server+ instance and let the fun begin.
+
+- Alternatively, callers can construct a
+  +com.bitgirder.jetty7.Jetty7HttpMingleServer+ around the
+  +Jetty7MingleConnector+ and start it. Internally the +Jetty7HttpMingleServer+
+  creates the Jetty server objects and begins to process requests.
+
+Currently there is no support for implementing a standard Java servlet that
+connects to Mingle, although doing so isn't inconceivable in the future.
+
+[bibliography]
+References and Useful Reading
+-----------------------------
+
+- [[[Erlang-thesis]]] Joe Armstrong.
+  http://www.sics.se/~joe/thesis/armstrong_thesis_2003.pdf[Making reliable
+  distributed systems in the presence of software errors] 
+
+- [[[SEDA]]] Matt Welsh.
+  http://www.eecs.harvard.edu/~mdw/papers/seda-sosp01.pdf[SEDA: An Architecture
+  for Well-Conditioned, Scalable Internet Services]
+
+- [[[Welsh-hcs]]] Matt Welsh, Steven D. Gribble, Eric A. Brewer, and David
+  Culler. http://www.eecs.harvard.edu/~mdw/papers/events.pdf[A Design Framework
+  for Highly Concurrent Systems]
+
+- [[[RFC793]]] Jon Postel. http://tools.ietf.org/html/rfc793[Transmission
+  Control Protocol]
+
+- [[[RFC3339]]] Chris Newman, Graham Klyne.
+  http://www.ietf.org/rfc/rfc3339.txt[Date and Time on the Internet: Timestamps]
+
+- [[[RFC4627]]] Douglas Crockford. http://tools.ietf.org/rfc/rfc4627.txt[The
+  application/json Media Type for JavaScript Object Notation (JSON)]
+
+- [[[JLS]]] James Gosling, Bill Joy, Guy Steele.
+  http://java.sun.com/docs/books/jls/third_edition/html/j3TOC.html[The Java
+  Language Specification, Third Edition]
+
+- [[[kegel-C10K]]] Dan Kegel, http://www.kegel.com/c10k.html[The C10K problem]
+
+- [[[goetz]]] Brian Goetz, Tim Peierls, Joshua Bloch, Joseph Bowbeer, David
+  Holmes, Doug Lea.
+  http://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601/ref=sr_1_3?ie=UTF8&s=books&qid=1290121675&sr=8-3[Java
+  Concurrency in Practice]
+
+- [[[bloch-puzz]]] Joshua Bloch, Neal Gafter.
+  http://www.amazon.com/Java-TM-Puzzlers-Pitfalls-Corner/dp/032133678X/ref=sr_1_1?ie=UTF8&s=books&qid=1290121675&sr=8-1[Java(TM)
+  Puzzlers: Traps, Pitfalls, and Corner Cases]
+
+- [[[bloch-effective]]] Joshua Bloch.
+  http://www.amazon.com/Effective-Java-2nd-Joshua-Bloch/dp/0321356683/ref=sr_1_1?ie=UTF8&qid=1290121645&sr=8-1[Effective
+  Java (2nd Edition)]
+
+- [[[ASN.1]]] International Telecommunications Union.
+  http://www.itu.int/ITU-T/asn1/introduction/index.htm[Introduction to ASN.1]
+
+- [[[XMLRPC]]] Dave Winer. http://www.xmlrpc.com/spec[XML-RPC Specification]
+
+- [[[WSDL]]] Erik Christensen, Francisco Curbera, Greg Meredith, Sanjiva
+  Weerawarana. http://www.w3.org/TR/wsdl[Web Services Description Language
+  (WSDL) 1.1]
+
+- [[[SOAP]]] Martin Gudgin, Marc Hadley, Noah Mendelsohn, Jean-Jacques Moreau,
+  Henrik Frystyk Nielsen, Anish Karmarkar, Yves Lafon.
+  http://www.w3.org/TR/soap12-part1/[SOAP Version 1.2 Part 1: Messaging
+  Framework (Second Edition)]
+
+- [[[RelaxNG]]] James Clark, MURATA Makoto.
+  http://www.relaxng.org/spec-20011203.html[RELAX NG Specification]
+
+- [[[JavaRMI]]] Oracle
+  http://download.oracle.com/javase/6/docs/platform/rmi/spec/rmiTOC.html[Java
+  Remote Method Invocation]
+
+- [[[JavaSerialization]]] Oracle.
+  http://download.oracle.com/javase/6/docs/platform/serialization/spec/serialTOC.html[Java
+  Object Serialization Specification]
+
+- [[[YAML]]] Oren Ben-Kiki, Clark Evans, Ingy döt Net.
+  http://www.yaml.org/spec/1.2/spec.html[ YAML Ain't Markup Language (YAML(TM))
+  Version 1.2]
+
+- [[[UBF]]] Joe Armstrong.
+  http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.11.6448&rep=rep1&type=pdf[Getting
+  Erlang to talk to the outside world]
+
+- [[[PerlDumperFormat]]] Gurusamy Sarathy.
+  http://perldoc.perl.org/Data/Dumper.html[Data::Dumper]
+
+- [[[Thrift]]] Mark Slee, Aditya Agarwal and Marc Kwiatkowski.
+  http://incubator.apache.org/thrift/static/thrift-20070401.pdf[Thrift: Scalable
+  Cross-Language Services Implementation]
+
+- [[[ThriftHome]]] http://thrift.apache.org/[Thrift Project Homepage]
+
+- [[[GoogProtoBuf]]] Google Inc. http://code.google.com/p/protobuf/[protobuf]
+
+- [[[JDBC]]] Sun Microsystems.
+  http://www.oracle.com/technetwork/java/overview-141217.html[JDBC Overview]
+
+- [[[Jetty7]]] The Eclipse Foundation. http://www.eclipse.org/jetty/[Jetty]
+
+- [[[launchd]]] Apple Inc.
+  http://developer.apple.com/macosx/launchd.html[Getting Started with launchd]

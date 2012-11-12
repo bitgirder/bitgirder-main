@@ -1,0 +1,18 @@
+{
+    "$type": "bitgirder:ops:build:ruby@v1/RubyProject",
+
+    "direct-deps": 
+    [ 
+        "core",
+        "io",
+        "mingle",
+        "mingle-io",
+        "ops-java",
+        "testing"
+    ],
+
+    "test": 
+    { 
+        "dep-targets": [ "go/build-bin/systest/test" ]
+    }
+}

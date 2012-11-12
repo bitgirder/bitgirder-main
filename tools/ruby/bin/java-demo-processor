@@ -1,0 +1,191 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+require 'bitgirder/io'
+
+class App < BitGirder::Core::BitGirderClass
+
+    include BitGirder::Io
+
+    # Parses a ctl pat, which is a '//' style comment like:
+    #
+    #   // {@demo some_name} # open the demo
+    #   // {@demo >>some_name} # append to the demo
+    #   // {@demo some_name$} # close the demo
+    #
+    # The pattern below allows some invalid things too, lik:
+    #
+    #   // {@demo >>some_name$} # attempt to append and close at same time
+    #
+    # We check for the above situations in code but allow them in the regex
+    #
+    # Groups:
+    #
+    #   1. Optional append directive
+    #
+    #   2. Demo name (which is in the form of an lc_underscore mingle
+    #   identifier)
+    #
+    #   3. Optional close directive
+    #
+    DEMO_CTL_PAT =
+        %r{^\s*//\s*\{\s*@demo\s+(>>)?([a-z][a-z\d]*(?:_[a-z][a-z\d]*)*)(\$)?\s*\}}
+
+    CTL_MODE_OPEN = :open
+    CTL_MODE_CLOSE = :close
+    CTL_MODE_APPEND = :append
+
+    bg_attr identifier: :src_dir, validation: :file_exists
+    bg_attr :dest_dir
+
+    def initialize( opts )
+
+        super( opts )
+
+        # Reset this to an abs path if not already
+        @dest_dir = File.expand_path( @dest_dir )
+    end
+
+    private
+    def make_err( line_no, msg )
+        "[Line #{line_no}] #{msg}"
+    end
+
+    private
+    def create_demo
+        { open: true, lines: [] }
+    end
+
+    private
+    def make_name( base_path, nm )
+        "#{base_path}-#{nm}"
+    end
+
+    private
+    def get_demo_ctl( line_no, md, base_path )
+        
+        apnd = md[ 1 ]
+        nm = md[ 2 ]
+        close = md[ 3 ]
+
+        if apnd && close
+            raise make_err( 
+                line_no, "Combination of append and close for demo: #{nm}" )
+        else
+            mode = 
+                if apnd then CTL_MODE_APPEND
+                elsif close then CTL_MODE_CLOSE
+                else CTL_MODE_OPEN
+                end
+            
+            { name: make_name( base_path, nm ), mode: mode }
+        end
+    end
+
+    private
+    def open_demo( line_no, nm, acc, prev, base_path )
+
+        if prev
+            raise make_err( line_no, "Attempt to redefine demo #{nm}" )
+        else
+            acc[ nm ] = create_demo
+        end
+    end
+
+    private
+    def set_append_demo( line_no, nm, acc, prev )
+ 
+        if prev
+            if prev[ :open ]
+                raise make_err( line_no, "Demo #{nm} is already open" )
+            else
+                prev[ :open ] = true
+            end
+        else
+            raise make_err( 
+                line_no, "Attempt to append to nonexistent demo: #{nm}" )
+        end
+    end
+
+    private
+    def close_demo( line_no, nm, prev )
+        
+        if prev
+            prev[ :open ] = false
+        else
+            raise make_err( line_no, "Got close for unknown demo: #{nm}" )
+        end
+    end
+
+    private
+    def process_demo_ctl( md, line_no, acc, base_path )
+        
+        ctl = get_demo_ctl( line_no, md, base_path )
+        nm = ctl[ :name ]
+
+        prev = acc[ ctl[ :name ] ]
+
+        case ctl[ :mode ]
+            
+            when CTL_MODE_OPEN 
+                open_demo( line_no, nm, acc, prev, base_path )
+
+            when CTL_MODE_APPEND then set_append_demo( line_no, nm, acc, prev )
+            when CTL_MODE_CLOSE then close_demo( line_no, nm, prev )
+        end
+    end
+
+    private
+    def accumulate_line( line, line_no, acc, base_path )
+ 
+        if md = DEMO_CTL_PAT.match( line )
+            process_demo_ctl( md, line_no, acc, base_path )
+        else
+            acc.values.each { |demo| demo[ :lines ] << line if demo[ :open ] }
+        end
+    end
+
+    private
+    def write_demo_parts( acc )
+        
+        acc.each_pair do |nm, demo|
+            
+            dest_file = "#@dest_dir/#{nm}.java"
+            code( "Writing demo #{dest_file}" )
+
+            File.open( ensure_parent( dest_file ), "w" ) do |io|
+                demo[ :lines ].each { |l| io.puts( l ) }
+            end
+        end
+    end
+
+    private
+    def process_demo( f )
+        
+        code( "Processing demos in #{f}" )
+        base_path = f.sub( /\.java$/, "" )
+
+        acc = { base_path => create_demo }
+
+        File.open( f ) do |io| 
+ 
+            num = 0
+
+            io.each_line do |line| 
+                accumulate_line( line.chomp, num += 1, acc, base_path )
+            end
+        end
+
+        write_demo_parts( acc )
+    end
+    
+    private
+    def run
+
+        Dir.chdir( @src_dir ) do
+            Dir.glob( "**/*.java" ).each { |f| process_demo( f ) }
+        end
+    end
+end
+
+BitGirder::Core::BitGirderCliApplication.run( App )

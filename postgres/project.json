@@ -1,0 +1,12 @@
+{
+    "direct-deps": [ "core", "io", "sql" ],
+
+    "external-deps": 
+    [
+        { 
+            "!groupId": "postgresql",
+            "!artifactId": "postgresql",
+            "!version": "9.0-801.jdbc4"
+        }
+    ]
+}

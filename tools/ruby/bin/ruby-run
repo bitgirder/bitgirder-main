@@ -1,0 +1,33 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+include BitGirder::Core
+
+require 'bitgirder/io'
+include BitGirder::Io
+
+class App < BitGirderClass
+    
+    bg_attr :ruby_context, :required => false
+
+    bg_attr :runtime, is_list: true, default: []
+
+    public
+    def run( run_ctx )
+
+        argv = []
+        argv << "-v" if run_ctx[ :verbose ]
+        argv += [ "-t", "util/ruby-env/run" ]
+
+        rt = Array.new( @runtime )
+        rt << "ruby-context=#@ruby_context" if @ruby_context
+        argv += rt.map { |s| [ "--runtime", s ] }.flatten
+
+        argv << "--"
+        argv += run_ctx[ :argv_remain ]
+
+        UnixProcessBuilder.new( cmd: "bg-builder", argv: argv ).exec
+    end
+end
+
+BitGirderCliApplication.run( App )

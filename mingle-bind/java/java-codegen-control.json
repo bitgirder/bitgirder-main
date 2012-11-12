@@ -1,0 +1,16 @@
+{
+    "$type": "mingle:codegen:java@v1/CodegenControl",
+
+    "typeMappings":
+    [
+        {
+            "mingle": "mingle:core@v1/StandardException",
+            "java": "com.bitgirder.mingle.bind.StandardException"
+        }
+    ],
+
+    "namespace-mappings": 
+    [
+        { "java": "com.bitgirder.mingle.bind", "mingle": "mingle:core@v1" }
+    ]
+}

@@ -1,0 +1,317 @@
+#!/usr/bin/env ruby
+
+require 'pathname'
+
+ENV_ENV_CFG = "BITGIRDER_ENV_CONFIG"
+
+TYPE_ENV_CFG = :"bitgirder:ops:build@v1/BuildEnvironment"
+        
+lambda {
+
+    ws_root = Pathname.new( "#{__FILE__}/../../../.." ).realpath
+
+    %w{ core io mingle ops-ruby tools }.each do |dir| 
+        $: << "#{ws_root}/#{dir}/ruby/lib"
+    end
+
+}.call
+
+require 'bitgirder/core'
+
+require 'set'
+require 'time'
+
+module BitGirder
+module Ops
+module Build
+
+require 'mingle'
+require 'bitgirder/ops/build'
+
+class App < BitGirder::Core::BitGirderClass
+
+    include BitGirder::Core
+
+    bg_attr :target
+
+    bg_attr :workspace, validation: :opt_file_exists
+
+    bg_attr :runtime,
+            is_list: true,
+            default: [],
+            processor: 
+                lambda { |pair| 
+                    if /^(?<key>[^=]+)=(?<val>.*)/ =~ pair
+                        [ MingleIdentifier.get( key ), val.to_s ]
+                    else
+                        raise "Invalid runtime option: #{pair}"
+                    end
+                }
+    
+    bg_attr :env_cfg, validation: :opt_file_exists, default: ENV[ ENV_ENV_CFG ]
+ 
+    bg_attr :dry_run, processor: :boolean, default: false
+
+    include Mingle
+
+    class TaskContext < BitGirderClass
+        
+        bg_attr :closure
+        bg_attr :order
+    end
+
+    private
+    def is_bootstrap_run?
+        %w{ clean bootstrap }.include?( @target )
+    end
+
+    private
+    def load_libs
+        require 'bitgirder/ops/build/jbuilder'
+        require 'bitgirder/ops/build/mg-builder'
+        require 'bitgirder/ops/build/rbuilder'
+        require 'bitgirder/ops/build/go-builder'
+        require 'bitgirder/ops/build/distro'
+        require 'bitgirder/ops/build/package'
+        require 'bitgirder/ops/build/integ'
+        require 'bitgirder/ops/build/util'
+    end
+
+    private
+    def create_workspace
+        
+        ws_root = @workspace || File.expand_path( Dir.pwd )
+        build_dir = @build_dir || "#{ws_root}/build"
+
+        Workspace.new( root: ws_root, build_dir: build_dir )
+    end
+
+    private
+    def parse_target
+        TaskTarget.parse( @target )
+    end
+
+    private
+    def get_run_opts
+        
+        res = @runtime.inject( {} ) do |h, elt|
+            h[ elt[ 0 ] ] = elt[ 1 ]
+            h
+        end
+
+        MingleSymbolMap.create( res )
+    end
+
+    private
+    def create_task( targ, create_opts )
+        
+        opts = create_opts.merge( run_opts: get_run_opts )
+        res = TaskRegistry.instance.create_task( targ, opts )
+        res.init if res.respond_to?( :init )
+
+        res
+    end
+
+    private
+    def get_task_closure( targ, create_opts, res = {} )
+ 
+        unless res.key?( targ )
+
+            task = create_task( targ, create_opts )
+            deps = task.get_direct_dependencies
+
+            res[ targ ] = { task: task, deps: deps }
+
+            deps.each do |dep_targ|
+                get_task_closure( dep_targ, create_opts, res )
+            end
+        end
+
+        res
+    end
+
+    # Returns true if all deps (which may be empty) have been resolved
+    private
+    def can_build?( deps, resolved )
+        deps.find { |targ| ! resolved.include?( targ ) } == nil
+    end
+
+    private
+    def dump_toposort( closure, resolved )
+        
+        msg = "Toposort state:\n"
+
+        msg << "Closure:\n"
+        closure.each_pair do |targ, ctx|
+            msg << "\t#{targ} --> #{ctx[ :deps ]}\n"
+        end
+
+        msg << "Resolved:\n"
+        resolved.each { |targ| msg << "\t#{targ}\n" }
+
+        code( msg )
+    end
+
+    # mutates all of its args, ultimately storing a build-ordered list of
+    # tasks in res
+    private
+    def toposort( closure, res = [], resolved = Set.new )
+        
+        orig_size = res.size
+#        dump_toposort( closure, resolved )
+
+        closure.each_pair do |targ, ctx|
+
+            if can_build?( ctx[ :deps ], resolved )
+                res << ctx[ :task ]
+                resolved << targ
+                closure.delete( targ )
+            end
+        end
+
+        if res.size == orig_size
+            raise "One or more circular deps in closure set: " +
+                  closure.keys.map { |targ| targ.to_s }.to_s
+        else
+            closure.empty? ? res : toposort( closure, res, resolved )
+        end
+    end
+
+    private
+    def get_task_context( create_opts )
+
+        closure = get_task_closure( parse_target, create_opts )
+        
+        TaskContext.new( 
+            closure: closure, 
+            order: toposort( closure.dup ) 
+        )
+    end
+
+    private
+    def print_build_order( tasks )
+        
+        strs = tasks.map { |task| task.target.to_s }
+        code( "Task order:\n#{strs.map{ |s| "    #{s}" }.join( "\n" )}" )
+    end
+
+    private
+    def dump_closures( targ, task_ctx )
+        
+        msg = "closure/order for #{targ}:\n"
+        msg << "closure:\n"
+        msg << "    " << task_ctx.closure.keys.join( ", " )
+        msg << "order:\n"
+        msg << "    " << task_ctx.order.map { |tsk| tsk.target }.join( ", " )
+
+        code( msg )
+    end
+
+    private
+    def add_dep_closure!( targ, task_ctx, acc )
+
+        task_ctx.closure[ targ ][ :deps ].each do |dep|
+ 
+            unless acc.include?( dep )
+                acc << dep
+                add_dep_closure!( dep, task_ctx, acc )
+            end
+        end
+
+        acc
+    end
+
+    # That the alg below terminates is based on the fact that we've already
+    # established that dep orders have no cycles
+    #
+    # Returned array is in toposort order
+    private
+    def dep_closure_of( targ, task_ctx )
+        
+        clos = add_dep_closure!( targ, task_ctx, Set.new )
+
+        task_ctx.order.inject( [] ) do |arr, dep|
+            dep_targ = dep.target
+            arr << dep_targ if clos.include?( dep_targ )
+            arr
+        end
+    end
+
+    private
+    def build_chain_for( targ, task_ctx, results )
+        
+        dep_closure_of( targ, task_ctx ).inject( [] ) do |chain, dep|
+
+            task = has_key( task_ctx.closure, dep )[ :task ]
+
+            # Use key?() since the result may well be nil -- we only care that
+            # there is something at all
+            results.key?( dep ) or raise "No build result for #{dep}"
+            res = results[ dep ][ :build_result ]
+
+            chain << { task: task, result: res }
+        end
+    end
+
+    private
+    def run_chain( task_ctx )
+        
+        results = {}
+
+        task_ctx.order.each do |t| 
+
+            code( "Calling #{t.target}" )
+            chain = build_chain_for( t.target, task_ctx, results )
+            
+            start_t = Time.now
+            build_res = t.execute( chain )
+            build_t = Time.now - start_t
+
+            results[ t.target ] = { 
+                build_result: build_res, 
+                build_time: build_t
+            }
+        end
+        
+        results
+    end
+
+    private
+    def dump_build_res( build_res )
+        
+        # Will be nil on dry run
+        if build_res
+
+            build_res.
+                sort { |a, b| a[ 1 ][ :build_time ] <=> b[ 1 ][ :build_time ] }.
+                each do |targ, info|
+                    
+                    fmt = "Called %s in %0.3fs"
+                    code( sprintf( fmt, targ, info[ :build_time ] ) )
+                end
+        end
+    end
+
+    public
+    def run( run_ctx )
+ 
+        start_t = Time.now
+        load_libs unless is_bootstrap_run?
+        create_opts = { 
+            workspace: create_workspace, 
+            run_ctx: run_ctx,
+            env_cfg: @env_cfg,
+        }
+        task_ctx = get_task_context( create_opts )
+        print_build_order( task_ctx.order )
+        build_res = run_chain( task_ctx ) unless @dry_run
+        dump_build_res( build_res )
+        code( sprintf( "Total exec time was %0.3fs", ( Time.now - start_t ) ) )
+    end
+end
+
+BitGirder::Core::BitGirderCliApplication.run( App )
+
+end
+end
+end

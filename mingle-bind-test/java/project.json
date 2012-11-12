@@ -1,0 +1,12 @@
+{
+    "$type": "bitgirder:ops:build:java@v1/JavaBuildProject",
+
+    "direct-deps":
+    [
+        "core",
+        "io",
+        "process",
+        "mingle-bind",
+        "mingle-json"
+    ]
+}

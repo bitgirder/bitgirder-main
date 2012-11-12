@@ -1,0 +1,13 @@
+{
+    "$type": "bitgirder:ops:build:java@v1/JavaProject",
+
+    "direct-deps": 
+    [ 
+        "http", 
+        "process",
+        "testing",
+        "mingle-http", 
+        "mingle-http-bincodec",
+        "mingle-http-json"
+    ]
+}

@@ -1,0 +1,66 @@
+{
+    "$type": "mingle:codegen:java@v1/CodegenControl",
+
+    "excludes": [ 
+        "^bitgirder:io@v1/Data(Unit|Size)$",
+        "^bitgirder:concurrent@v1/Duration$",
+        "^mingle:model@v1/.*"
+    ],
+
+    "typeMappings":
+    [
+        {
+            "mingle": "bitgirder:concurrent@v1/TimeUnit",
+            "java": "com.bitgirder.mglib.v1.TimeUnitImpl"
+        },
+
+        {
+            "mingle": "bitgirder:concurrent@v1/Duration",
+            "java": "com.bitgirder.concurrent.Duration"
+        },
+
+        {
+            "mingle": "bitgirder:io@v1/DataSize",
+            "java": "com.bitgirder.io.DataSize"
+        },
+
+        {
+            "mingle": "bitgirder:io@v1/DataUnit",
+            "java": "com.bitgirder.io.DataUnit"
+        },
+
+        {
+            "mingle": "mingle:model@v1/MingleIdentifier",
+            "java": "com.bitgirder.mingle.model.MingleIdentifier"
+        },
+
+        {
+            "mingle": "mingle:model@v1/MingleNamespace",
+            "java": "com.bitgirder.mingle.model.MingleNamespace"
+        },
+
+        {
+            "mingle": "mingle:model@v1/MingleTypeReference",
+            "java": "com.bitgirder.mingle.model.MingleTypeReference"
+        },
+
+        {
+            "mingle": "mingle:model@v1/MingleIdentifiedName",
+            "java": "com.bitgirder.mingle.model.MingleIdentifiedName"
+        },
+
+        {
+            "mingle": "mingle:model@v1/QualifiedTypeName",
+            "java": "com.bitgirder.mingle.model.QualifiedTypeName"
+        }
+    ],
+
+    "generatorParams": [
+        
+        {
+            "$type": "mingle:codegen:java@v1/StructGeneratorParameters",
+            "typeMask": "^bitgirder:concurrent@v1/TimeUnit$",
+            "visibility": "package"
+        }
+    ]
+}

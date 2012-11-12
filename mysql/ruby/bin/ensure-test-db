@@ -1,0 +1,117 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+include BitGirder::Core
+
+require 'bitgirder/mysql'
+
+module BitGirder
+module MySql
+
+class App < BitGirderClass
+    
+    class TestUser < BitGirderClass
+        
+        bg_attr :user
+        bg_attr :pass
+
+        def self.parse( str )
+            
+            if /^(?<user>[^:]+):(?<pass>.+)$/ =~ str
+                TestUser.new( user: user, pass: pass )
+            else
+                raise "Invalid user:pass string: #{str}"
+            end
+        end
+    end
+    
+    bg_attr :connect_user
+    bg_attr :connect_pass
+    bg_attr :connect_socket, validation: :file_exists
+
+    bg_attr :db
+
+    bg_attr :user, 
+            is_list: true,
+            processor: lambda { |elt| TestUser.parse( elt ) }
+    
+    private
+    def get_connect_opts
+        
+        {
+           user: connect_user(),
+           password: connect_pass(),
+           socket: connect_socket(),
+           db: "mysql"
+        }
+    end
+    
+    private
+    def create_db( db )
+        
+        db.query( <<-SQL
+            create database if not exists #{db.escape_string( db() )} 
+            default character set = utf8
+            SQL
+        )
+    end
+
+    # Returns quoted [ user, host ] strings as side effect
+    private
+    def ensure_account( db, tu, host )
+        
+        usr_nm = db.escape_string( tu.user )
+        ps_str = db.escape_string( tu.pass )
+        host_nm = db.escape_string( host )
+
+        has_user_sql = <<-SQL
+            select user from user 
+            where user = '#{usr_nm}' and host = '#{host_nm}'
+        SQL
+        
+        has_user = db.query( has_user_sql ).size == 1
+
+        create_user_sql = 
+            "create user '#{usr_nm}'@'#{host_nm}' identified by '#{ps_str}'" 
+        
+        db.query( create_user_sql ) unless has_user
+
+        [ usr_nm, host_nm ]
+    end
+
+    private
+    def init_user( db, tu, host )
+        
+        usr_nm, host_nm = ensure_account( db, tu, host )
+        db_nm = db.escape_string( db() )
+
+        db.query( "grant all on `#{db_nm}`.* to '#{usr_nm}'@'#{host_nm}'" )
+    end 
+
+    private
+    def init_users( db )
+        
+        @user.each do |tu|
+            %w{ localhost 127.0.0.1 ::1 }.each do |host|
+                init_user( db, tu, host )
+            end    
+        end
+    end
+
+    public
+    def run( run_ctx )
+        
+        MySql.open( get_connect_opts ) do |db|
+            
+            create_db( db )
+            init_users( db )
+            MySql.flush_privileges( db )
+        end
+    end
+
+end
+
+BitGirderCliApplication.run( App )
+
+end
+end

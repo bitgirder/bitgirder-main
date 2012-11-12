@@ -1,0 +1,132 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+require 'bitgirder/io'
+
+include BitGirder::Core
+include BitGirder::Io
+
+require 'set'
+
+OPS = 
+    Set.new( [ 
+        :test, 
+        :integ, 
+        :run, 
+        :dist_test, 
+        :dist_integ,
+        :dist_gem,
+        :dist_validate,
+        :test_testing 
+    ] )
+
+class App < BitGirderClass
+    
+    bg_attr :operation,
+            processor: 
+                proc { |s| 
+                    s = s.gsub( /-/, "_" ).to_sym
+                    OPS.include?( s ) or raise "Unknown op: #{s}" 
+                    s
+                }
+    
+    bg_attr :project
+
+    bg_attr :bg_builder, validation: :opt_file_exists
+
+    bg_attr :filter_pattern, required: false
+
+    bg_attr :filter_string, required: false
+
+    bg_attr :ruby_context, required: false
+
+    bg_attr :runtime, default: [], is_list: true
+
+    def check_proj
+        
+        unless @operation == :test_testing
+            raise "Operation requires a project" unless @project
+        end
+    end
+
+    def get_target
+        
+        case @operation
+            when :test, :integ then "ruby/#@operation/#@project"
+            when /dist_(.+)/ then "ruby/dist/#$1/#@project"
+            when :run then "ruby/run-command/#@project"
+            when :test_testing then "ruby/test-runner/self-check"
+            else raise "Unhandled op: #@operation"
+        end
+    end
+
+    def get_base_argv
+        
+        rt = Array.new( @runtime )
+
+        ( rt << "ruby-context=#@ruby_context" ) if @ruby_context
+        
+        rt.map { |opt| [ "--runtime", opt ] }.flatten
+    end
+
+    def get_filter_pattern_argv
+        
+        if @filter_pattern || @filter_string
+            if @filter_pattern && @filter_string
+                raise "Can't have both filter pattern and filter string"
+            elsif @filter_pattern
+                pat = @filter_pattern
+            else
+                pat = Regexp.quote( @filter_string )
+            end
+            
+            [ "--runtime", "filter-pattern=#{pat}" ]
+        else
+            []
+        end
+    end
+
+    def extra_test_argv
+        
+        res = []
+
+        res += get_filter_pattern_argv
+
+        unless @operation == :dist_validate
+            res << "--runtime" << "log-to-console=true"
+        end
+
+        res
+    end
+
+    def extra_argv( run_ctx )
+        
+        case @operation
+
+            when :test, :integ, :dist_test, :dist_integ, :dist_validate
+                extra_test_argv
+
+            when :run 
+                ( arr = run_ctx[ :argv_remain ] ) ? [ "--" ] + arr : []
+
+            else []
+        end
+    end
+
+    def run( run_ctx )
+        
+        check_proj
+
+        cmd = ( @bg_builder or which( "bg-builder" ) or raise "No bg-builder" )
+
+        argv = get_base_argv
+
+        argv << "-v" if run_ctx[ :verbose ]
+        argv << "-t" << get_target
+        argv += extra_argv( run_ctx )
+
+        UnixProcessBuilder.new( cmd: cmd, argv: argv ).exec
+    end
+end
+
+BitGirderCliApplication.run( App )

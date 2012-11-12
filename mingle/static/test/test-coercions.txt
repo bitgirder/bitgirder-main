@@ -1,0 +1,71 @@
+* All identity coercions 
+    - simple (String --> String, Int32 --> Int32, etc)
+    - list: String* --> String*, String++ --> String++
+    - nullable with and without val: String --> String?
+
+* Coercions:
+    - "true/false" --> true/false
+    - buffer <--> base64 string
+    - timestamp <--> string
+    - enum --> string (just enum val)
+    - List< mixed nums > --> Int64*, Int32*, etc, applies element-wise coercion
+    - [ [ Integral( 1 ), Int32( 1 ), Float( 1f ) ],
+        [ Int64( 2 ), Int32( 2 ) ] ] --> Int64**
+    - [ Int64( 1 ), null, "hi" ] --> String?*
+    - [] --> Int64*, Int64**, Int64***
+    - [ [], [] ] --> Int64**, Int64*+
+    - null --> nullable types
+    - "abbbc" --> String~"^ab+c$"
+    - "" --> String~"a*"?
+    - "aaa" --> String~"a*"?
+    - null --> String~"a*"?
+    - [ "a", "aaaaaa" ] --> String~"a+"*, String~"a+"?*, String~"a+"*?
+    - [ "123", 129 ] --> String~"\d+"*
+    - "1" --> Integral~[-1, 1]
+    - Int64( 1 ) --> Integral~(,2)
+    - "1" --> Integral~[1,1]
+    - Int64( -1 ) --> Int64~[-2,32)
+    - Int32( -1 ) --> Int32~[-2,32)
+    - Decimal( -1.1 ) --> Decimal~[-2.0,32)
+    - Double( -1.1 ) --> Double~[-2.0,32)
+    - Float( 1.1 ) --> Float~[-2.0,32)
+
+    - "2006-01-01T12:01:02.0-00:00" -->
+            Timestamp~[
+                "2005-01-01T12:01:02.0-00:00", "2007-01-01T12:01:02.0-00:00"
+            ]
+
+* TypeCastExceptions:
+    - Anything non-null to Void
+    - Struct <--> String, Int, Bool, List
+    - List <--> anything non-list
+    - String* containing something non-Stringy (Struct or List)
+    - Nullable T containing non-null but non-coercible-to-T val
+    - "not-a-bool" --> Bool
+    - "not-a-num" --> num types
+    - [] --> String+
+    - [ [ "s1" ], [] ] --> String+*
+    - null --> non-nullable types
+    - [] --> String?
+    - 12 --> ns1@v1/SomeStruct
+    - "ac" --> String~"ab+c$"
+    - null --> String~"a*"?
+    - "ab" --> String~"a*"?
+    - [ "a", "b" ] --> String~"a*"*
+    - Int32( 12 ) --> Int32~[0,10)
+    - Int32( -12 ) --> Int32~[0, 10)
+    - Int32( 10 ) --> Int32~[0, 10)
+    - Int32( 0 ) --> Int32~(0,10]
+    
+    - "2009-01-01T12:01:02.0-00:00" -->
+        Timestamp~[ 
+            "2005-01-01T12:01:02.0-00:00", "2007-01-01T12:01:02.0-00:00"
+        ]
+
+* All number coercions to each other and to string:
+    for numType in [ Int32, Int64, Integral, Float, Double, Decimal ]:
+    for val in [ all number representations of "1" ]:
+        numStr = <expected num string for val as numType>
+        assert: val --> numType
+        assert: val --> String ( == numStr)
+        assert: numStr --> numType ( == val )

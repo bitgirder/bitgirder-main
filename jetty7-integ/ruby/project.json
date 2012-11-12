@@ -1,0 +1,5 @@
+{
+    "$type": "bitgirder:ops:build:ruby@v1/RubyProject",
+
+    "direct-deps": [ "mingle-http" ]
+}

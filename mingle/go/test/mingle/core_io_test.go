@@ -1,0 +1,107 @@
+package mingle
+
+import (
+    "testing"
+    "bitgirder/assert"
+    "bytes"
+)
+
+func TestCoreIo( t *testing.T ) {
+    la := assert.NewPathAsserter( t ).StartList()
+    for _, obj := range []interface{} {
+        nil,
+        NullVal,
+        String( "hello" ),
+        Boolean( true ),
+        Boolean( false ),
+        Buffer( []byte{} ),
+        Buffer( []byte( "hello" ) ),
+        Int32( int32( 1 ) ),
+        Int64( int64( 1 ) ),
+        Uint32( uint32( 1 ) ),
+        Uint64( uint64( 1 ) ),
+        Float32( float32( 1 ) ),
+        Float64( float64( 1 ) ),
+        Now(),
+        &Enum{ 
+            Type: MustTypeReference( "ns1@v1/E1" ),
+            Value: MustIdentifier( "val1" ),
+        },
+        MustSymbolMap(),
+        MustSymbolMap( "k1", int32( 1 ) ),
+        MustStruct( "ns1@v1/T1" ),
+        MustStruct( "ns1@v1/T1", "k1", int32( 1 ) ),
+        MustList(),
+        MustList( int32( 1 ), "hello" ),
+        MustIdentifier( "id1" ),
+        MustIdentifier( "id1-id2" ),
+        MustNamespace( "ns1@v1" ),
+        MustNamespace( "ns1:ns2@v1" ),
+        MustDeclaredTypeName( "T1" ),
+        MustQualifiedTypeName( "ns1:ns2@v1/T1" ),
+        MustTypeReference( "T1" ),
+        MustTypeReference( `String~"a"` ),
+        MustTypeReference( `String~["a","b"]` ),
+        MustTypeReference( 
+            `Timestamp~["2012-01-01T00:00:00Z","2012-02-01T00:00:00Z"]` ),
+        MustTypeReference( "Int32~(0,10)" ),
+        MustTypeReference( "Int64~[0,10]" ),
+        MustTypeReference( "Uint32~(0,10)" ),
+        MustTypeReference( "Uint64~[0,10]" ),
+        MustTypeReference( "Float32~(0.0,1.0]" ),
+        MustTypeReference( "Float64~[0.0,1.0)" ),
+        MustTypeReference( "Float64~(,)" ),
+        MustTypeReference( "T1*" ),
+        MustTypeReference( "T1+" ),
+        MustTypeReference( "T1*?" ),
+        MustTypeReference( "ns1@v1/T1" ),
+        MustTypeReference( "ns1@v1/T1*" ),
+        MustTypeReference( "ns1@v1/T1?" ),
+    } {
+        bb := &bytes.Buffer{}
+        rd := NewReader( bb )
+        wr := NewWriter( bb )
+        var err error
+        switch v := obj.( type ) {
+        case nil, *Null, Buffer, String, Int32, Int64, Uint32, Uint64, Float32,
+             Float64, Boolean, Timestamp, *Enum, *SymbolMap, *Struct, *List:
+            err = wr.WriteValue( Value( obj ) )
+        case *Identifier: err = wr.WriteIdentifier( v )
+        case *Namespace: err = wr.WriteNamespace( v )
+        case TypeName: err = wr.WriteTypeName( v )
+        case TypeReference: err = wr.WriteTypeReference( v )
+        default: t.Fatalf( "Unhandled expct obj: %T", obj )
+        }
+        if err != nil { la.Fatal( err ) }
+        trailExpct := "this-should-be-left-after-read"
+        bb.WriteString( trailExpct )
+        switch v := obj.( type ) {
+        case nil, *Null, Boolean, Buffer, String, Int32, Int64, Uint32, Uint64,
+             Float32, Float64, Timestamp, *Enum, *SymbolMap, *Struct, *List:
+            if val, err := rd.ReadValue(); err == nil {
+                obj2 := obj
+                if obj == nil { obj2 = NullVal }
+                la.Equal( obj2, val )
+            } else { la.Fatal( err ) }
+        case *Identifier:
+            if id, err := rd.ReadIdentifier(); err == nil { 
+                la.True( v.Equals( id ) )
+            } else { la.Fatal( err ) }
+        case *Namespace:
+            if ns, err := rd.ReadNamespace(); err == nil {
+                la.True( v.Equals( ns ) )
+            } else { la.Fatal( err ) }
+        case TypeName:
+            if nm, err := rd.ReadTypeName(); err == nil {
+                la.True( v.Equals( nm ) )
+            } else { la.Fatal( err ) }
+        case TypeReference:
+            if typ, err := rd.ReadTypeReference(); err == nil {
+                la.Truef( v.Equals( typ ), "expct (%v) != act (%v)", v, typ )
+            } else { la.Fatal( err ) }
+        default: t.Fatalf( "Unhandled expct obj: %T", obj )
+        }
+        la.Equal( trailExpct, bb.String() )
+        la = la.Next()
+    }
+}

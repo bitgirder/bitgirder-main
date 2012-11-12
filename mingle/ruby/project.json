@@ -1,0 +1,5 @@
+{ 
+    "$type": "bitgirder:ops:build:ruby@v1/RubyProject",
+    "direct-deps": [ "core", "io", "testing" ],
+    "test": { "dep-targets": [ "go/gen-test-data/mingle" ] }
+}

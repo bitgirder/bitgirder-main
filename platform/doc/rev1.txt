@@ -1,0 +1,189 @@
+-------------------------------------------------------------------------------
+Use cases
+-------------------------------------------------------------------------------
+
+- SocialBomb
+    - UI Logger
+    - Log Source Manager
+    - S3 FileService
+    - Common Log Formats
+
+- WiseStamp
+    - GoogleAppEngine import
+    - Common Log Formats
+    - JS ETL processing
+    - S3 File Service
+
+- Ncover
+    - Real time analytics (for alarming, others)
+    - Hadoop backend
+    - S3 FileService
+    - UI Logger service (possibly but maybe needs to be .NET)
+    - Common Log Formats
+    - JS ETL processing
+    - Ruby logging APIs
+    - First setup should be < 30min
+
+- Enole
+    - standalone UI logger service daemons
+    - S3 FileService
+    - JS ETL proc to load MSSQL server
+    - Reports as CSV
+
+- Waterfall
+    - UI Logger service
+    - Java logging APIs (with stacktrace compression)
+    - Mingle struct generation
+    - Real time analytics
+    - log source manager
+    - S3 File Service
+    - Hadoop backend
+    - Servers are in rackspace, might host dw/etl in AWS
+    - Reports not certain; something basic like CSV may suffice. Needs to set up
+      regular cron-style reports for clients
+
+- Twilio
+    - 10K log source managers
+    - 5-10 TB day of log data with ~60% occurring within a 5hr window (peak is
+      then 3-6TB/5hr or 600G-1.2TB/hr)
+    - log source manager for various text-based log formats, some multiline
+    - logs rotate and get loaded into HDFS for processing
+    - realtime logging for ad-hoc investigations (incidents, tickets) or for
+      standing jobs
+    - see corp/focus-interview/twilio.txt for more deployment setups
+
+- Meebo
+    - text logs rotated normally
+    - 3p logs from doubleclick via ftp
+    - log source manager to feed HDFS
+    - hadoop ETL backend
+    - ~15G a day compressed; guessing 5mil log recs a day
+    - log puller infra should provide insight into precinct reporting (which
+      logs from which hosts may be missing)
+    - distrib tail
+    - nice to be able to specify that some logs are batch logs, others are
+      realtime
+    - would like to see high-perf built-in java logging APIs
+
+- DigHealth
+    - Two main configs, both for UI Logger service workloads:
+        - UI logger service runs on-prem for user and clients log over SSL, data
+          is stored locally encrypted or not
+        - UI logger service runs BG-hosted but clients encrypt before logging
+          (recs are opaque bin blobs to BG) and users decrypt during processing
+
+-------------------------------------------------------------------------------
+Pieces
+-------------------------------------------------------------------------------
+
+- java logging APIs for logging text record, json record, xml document (maybe
+  not in first rev)
+
+- stack trace compression: good to have algs that work with both binary mingle
+  logs and with more standard text formats
+
+- standalone UI Logger service
+
+- servlet plug-in UI Logger service
+
+- S3 File service
+
+- Log Source manager
+
+- Common Log format parsers
+
+- Log Importer
+    - GoogleAppEngine import
+    - DoubleClick/FTP
+
+- JS ETL processor
+
+- Real time analytics
+    - Log source manager stream-log service
+
+- HDFS loader
+
+- Ruby logging APIs that are rails-ready
+
+- Quick tutorials for setups
+
+- SQL --> CSV report generator
+
+- mingle source --> Java code generator
+
+- real-time log aggregator which supports installed processors/transformers that
+  can themselves be plugged into
+
+- services which partition the log sources in some way and pull and expose an
+  aggregated set of their real time logs for further distillation and
+  processing. This reduces the load on the log sources and also allows for a
+  firewall security model where only privileged processes can access log sources
+  directly.
+
+- for a given log source, where is it in terms of its logs (are they up to date,
+  is a given service behind, etc)
+
+- distributated tail
+
+- ObjC and other client APIs for logging directly plaintext and for doing
+  cli-side encryption
+
+
+-------------------------------------------------------------------------------
+Services
+-------------------------------------------------------------------------------
+
+service LogSourceManager
+{
+    List< Identifier >
+    getManagedStreamIds();
+}
+
+service LogFileReader
+{
+    struct LogStreamIdentifier
+    {
+        streamId: Identifier;
+        processorId: Identifier;
+    }
+
+    struct LogFileReadPosition
+    {
+        selector: LogStreamIdentifier;
+        position: Value?;
+    }
+
+    LogFileReadPosition
+    openTail( streamId: LogStreamIdentifier )
+        throws NoSuchStreamException;
+    
+    LogFileReadPosition
+    openHead( streamId: LogStreamIdentifier )
+        throws NoSuchStreamException;
+ 
+    struct LogFileReadResult
+    {
+        data: Value?;
+        nextPos: LogFileReadPosition;
+    }
+
+    FileReadResult
+    read( position: LogFileReadPosition,
+          maxSize: Natural )
+        throws NoSuchPositionException,
+               PositionUnavailableException;
+}
+
+service LogFileService
+{
+    # Returns an HTTP PUT request description that the client can use to PUT the
+    # specified file
+    HttpFileStoreTicket
+    getHttpFileStoreTicket( sourceId: LogSourceId,
+                            streamId: Identifier,
+                            fileSize: Natural,
+                            metadata: Value? )
+        throws NoSuchStreamException,
+               UnrecognizedSourceException,
+               MetadataException;
+}

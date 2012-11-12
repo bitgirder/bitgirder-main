@@ -1,0 +1,144 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+require 'bitgirder/io'
+
+include BitGirder::Core
+
+class App < BitGirderClass
+
+    OPS = %w{ 
+        clean 
+        clean_all 
+        build 
+        build_bin 
+        test 
+        run 
+        dist_test
+        errorf_gen
+    }.map do |s| 
+        s.to_sym 
+    end
+
+    REQUIRES_PROJ = 
+        %w{ clean build build_bin, test run dist_test errorf_gen }.map do |s| 
+            s.to_sym 
+        end
+
+    bg_attr :operation,
+            validation: lambda { |op| 
+                op or raise "Missing op"
+                OPS.include?( op ) or raise "Unrecognized op: #{op}"
+            },
+            processor: lambda { |s| s.gsub( /-/, "_" ).to_sym }
+    
+    bg_attr :project,
+            processor: lambda { |s| s.sub( %r{/*$}, "" ).to_sym }
+    
+    bg_attr :filter_pattern, required: false
+
+    bg_attr :command, required: false
+
+    bg_attr :test_package, is_list: true, default: []
+
+    bg_attr :go_package, required: false
+
+    private
+    def validate
+        
+        if REQUIRES_PROJ.include?( @operation )
+            @project or raise "No project is set"
+        end
+
+        case @operation
+            when :run then raise "Need a command" unless @command
+        end
+    end
+
+    private
+    def get_task_path
+        
+        case @operation
+            when :clean then "go/clean/#@project"
+            when :clean_all then "go/clean-all"
+            when :test then "go/test/#@project/test"
+            when :build then "go/build/#@project/lib"
+            when :run then "go/run-command/#@project"
+            when :dist_test then "go/dist/test/#@project"
+            when :build_bin then "go/build-bin/#@project/bin"
+            when :errorf_gen then "go/errorf-gen/#@project"
+            else raise "Unhandled op: #@operation"
+        end
+    end
+
+    private
+    def get_test_run_opts
+ 
+        res = []
+
+        if @filter_pattern 
+            res << "--runtime" << "filter-pattern=#@filter_pattern"
+        end
+
+        unless @test_package.empty?
+            res << "--runtime" << "test-packages=#{@test_package.join( "," )}"
+        end
+
+        res
+    end
+
+    private
+    def get_run_command_opts( run_ctx )
+        
+        res = [ "--runtime", "command=#@command" ]
+
+        if remain = run_ctx[ :argv_remain ]
+            res << "--"
+            res += remain
+        end
+
+        res
+    end
+
+    private
+    def get_errorf_gen_opts
+        
+        if @go_package
+            [ "--runtime", "go-package=#@go_package" ]
+        else
+            raise "No package specified"
+        end
+    end
+
+    private
+    def get_run_opts( run_ctx )
+
+        res = []
+        
+        case @operation
+            when :test then get_test_run_opts
+            when :run then get_run_command_opts( run_ctx )
+            when :errorf_gen then get_errorf_gen_opts
+            else []
+        end
+    end
+
+    public 
+    def run( run_ctx )
+        
+        validate
+
+        cmd = "bg-builder"
+
+        argv = [ "-t" ]
+        argv << get_task_path
+
+        argv << "--verbose" if run_ctx[ :verbose ]
+        argv += get_run_opts( run_ctx )
+
+        BitGirder::Io::UnixProcessBuilder.new( cmd: cmd, argv: argv ).system
+    end
+
+end
+
+BitGirderCliApplication.run( App )

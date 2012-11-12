@@ -1,0 +1,252 @@
+#!/usr/bin/env ruby
+
+require 'tools'
+require 'bitgirder/io'
+
+include BitGirder::Core
+
+class ShellRecorder < BitGirderClass
+
+    include BitGirder::Io
+
+    private
+    def make_pipe
+        IO::pipe.map { |io| io.sync = true; io }
+    end
+
+    private
+    def initialize
+
+        @in_rd, @in_wr = make_pipe
+        @out_rd, @out_wr = make_pipe
+        @err_rd, @err_wr = make_pipe
+        @ctl_rd, @ctl_wr = make_pipe
+
+        # We assign this here since we'll be closing @ctl_wr in the parent but
+        # will still need to access this value
+        @ctl_wr_fd = @ctl_wr.fileno
+ 
+        if @shell_pid = fork
+            [ @in_rd, @out_wr, @err_wr, @ctl_wr ].each { |io| io.close }
+        else
+            [ @in_wr, @out_rd, @err_rd, @ctl_rd ].each { |io| io.close }
+            STDIN.reopen( @in_rd )
+            STDOUT.reopen( @out_wr )
+            STDERR.reopen( @err_wr )
+            Kernel.exec( "/bin/bash" )
+        end
+    end
+
+    # Basically a placeholder at this point
+    public
+    def close
+ 
+        @in_wr.close
+        debug_wait2( :pid => @shell_pid, :name => "shell" )
+    end
+
+    private
+    def drain( io )
+        
+        str = ""
+
+        do_loop = true
+
+        while do_loop
+            begin
+                str << io.read_nonblock( 1024 )
+            rescue Errno::EAGAIN
+                do_loop = false
+            end
+        end
+
+        str
+    end
+
+    private
+    def update_command_status( ctl_hash )
+        
+        begin
+            ctl_hash[ :status ] = @ctl_rd.read_nonblock( 1 )
+        rescue Errno::EAGAIN; end
+    end
+
+    private
+    def drain_pipes( ctx )
+ 
+        ctx.values_at( :out, :err ).each { |h|
+            while true
+                begin
+                    h[ :str ] << h[ :io ].read_nonblock( 1024 )
+                rescue Errno::EAGAIN 
+                    break
+                end
+            end
+        }
+    end
+
+    private
+    def drain_command
+ 
+        ctx = {
+            :out => { :str => "", :io => @out_rd },
+            :err => { :str => "", :io => @err_rd },
+            :ctl => {}
+        }
+
+        until ctx[ :ctl ].key?( :status )
+            
+            update_command_status( ctx[ :ctl ] )
+            drain_pipes( ctx ) 
+        end
+
+        drain_pipes( ctx ) # get final outputs
+
+        ctx
+    end
+
+    public
+    def issue( cmd_str )
+ 
+        @in_wr.puts( cmd_str )
+        @in_wr.puts( "printf $? 1>&#@ctl_wr_fd" )
+
+        drain_ctx = drain_command
+
+        {
+            :status => drain_ctx[ :ctl ][ :status ] == "0",
+            :out => drain_ctx[ :out ][ :str ],
+            :err => drain_ctx[ :err ][ :str ]
+        }
+    end
+ 
+    def ShellRecorder.record
+
+        rec = ShellRecorder.new
+
+        begin
+            yield( rec )
+        ensure
+            rec.close
+        end
+    end
+end
+
+class ShellHelper < BitGirderClass
+    
+    bg_attr( :rec )
+
+    private
+    def get_prompt
+        "$ "
+    end
+
+    private
+    def format( cmd_res, cmd, opts )
+        
+        lines = [ "" ]
+
+        lines << "#{get_prompt}#{opts[ :display_cmd ] || cmd}" << ""
+
+        lines += cmd_res[ :out ].split( /\r?\n/ )
+
+        lines.map { |l| "    #{l}" }.join( "\n" )
+    end
+
+    public
+    def issue( cmd, opts = {} )
+ 
+        not_nil( cmd, "cmd" )
+        not_nil( opts, "opts" )
+
+        cmd_res = @rec.issue( cmd )
+
+        if cmd_res[ :status ]
+            format( cmd_res, cmd, opts )
+        else
+            raise "Command #{cmd} failed (err:\n #{cmd_res[ :err ]})"
+        end
+    end
+
+    public
+    def export( var, val, opts = {} )
+ 
+        not_nil( var, "var" )
+        not_nil( val, "val" )
+        not_nil( opts, "opts" )
+
+        cmd_base = "export #{var}="
+        
+        cmd = "#{cmd_base}#{val}"
+        
+        issue_opts = {}
+
+        if opts[ :display_val ]
+            issue_opts[ :display_cmd ] = "#{cmd_base}#{opts[ :display_val ]}"
+        end
+
+        issue( cmd, issue_opts )
+    end
+end
+
+class ShellDoc < BitGirderClass
+
+    include BitGirder::Io
+
+    require 'erb'
+    
+    bg_attr(
+        :identifier => :input,
+        :description => "Shell doc file to execute",
+        :default => STDIN,
+        :processor => lambda { |str| BitGirder::Io.file_exists( str ) }
+    )
+
+    bg_attr(
+        :identifier => :output,
+        :description => "Output file",
+        :default => STDOUT
+    )
+
+    private
+    def load_template
+        
+        lines =
+            case @input
+                when IO then @input.readlines
+                else File.open( @input ) { |io| io.readlines }
+            end
+        
+        ERB.new( lines.join( "" ) )
+    end
+
+    private
+    def run_template( templ )
+        
+        ShellRecorder.record { |rec|
+            
+            sh = ShellHelper.new( rec )
+
+            templ.result( binding )
+        }
+    end
+
+    private
+    def write_result( result )
+ 
+        case @output
+            when IO then @output.print( result )
+            else File.open( @output, "w" ) { |io| io.print( result ) }
+        end
+    end
+
+    public
+    def main
+
+        templ = load_template
+        result = run_template( templ )
+        write_result( result )
+    end
+end
+
+BitGirderCliApplication.new( :app_class => ShellDoc ).main

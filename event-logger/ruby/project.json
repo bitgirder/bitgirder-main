@@ -1,0 +1,7 @@
+{
+    "$type": "bitgirder:ops:build:ruby@v1/RubyProject",
+    "direct-deps": [ "core", "testing", "event" ],
+    "lib": {
+        "doc-gen-mask": "^BitGirder::EventLogger($|::)"
+    }
+}

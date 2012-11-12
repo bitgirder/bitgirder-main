@@ -1,0 +1,68 @@
+{
+    "$type": "bitgirder:ops:build:distro@v1/DistroDefinition",
+
+    "distributor": "bitgirder",
+    "name": "platform",
+
+    "java": 
+    {
+        "maven-group-id": "com.bitgirder",
+
+        "direct-deps": 
+        [
+            "core",
+            "concurrent",
+            "log",
+            "application",
+            "io",
+            "sql",
+            "mysql",
+            "testing"
+        ]
+    },
+
+    "ruby":
+    {
+        "direct-deps":
+        [
+            "concurrent",
+            "core",
+            "etl",
+            "http",
+            "event",
+            "event-logger",
+            "event-file",
+            "event-file-integ",
+            "mingle",
+            "mingle-bincodec",
+            "mingle-json",
+            "mingle-codec",
+            "mingle-http",
+            "mingle-service",
+            "mingle-io",
+            "mysql",
+            "systest",
+            "testing"
+        ]
+    },
+
+    "go": 
+    {
+        "direct-deps": 
+        [
+            "core",
+            "testing",
+            "aws",
+            "io",
+            "mingle",
+            "mingle-codec",
+            "mingle-json",
+            "mingle-bincodec",
+            "mingle-io",
+            "mingle-parser-tree",
+            "mingle-code",
+            "mingle-interpreter",
+            "mingle-compiler"
+        ]
+    }
+}

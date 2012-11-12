@@ -1,0 +1,26 @@
+{ 
+    "$type": "bitgirder:ops:build:java@v1/JavaProject",
+
+    "direct-deps": [
+        "core",
+        "log",
+        "io",
+        "http",
+        "process",
+        "application",
+        "crypto",
+        "testing",
+        "net",
+        "net-ssl",
+        "mingle",
+        "mingle-application",
+        "mingle-bind",
+        "std-mglib",
+        "xml"
+    ],
+    
+    "codegen": 
+    { 
+        "lib": { "ws-import": [ "xml/lib/AmazonS3.wsdl", "xml/lib/ec2.wsdl" ] }
+    }
+}

@@ -1,0 +1,736 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+require 'bitgirder/io'
+require 'bitgirder/development'
+require 'optparse'
+require 'logger'
+require 'fileutils'
+require 'rexml/xpath'
+require 'rexml/document'
+require 'yaml'
+
+include BitGirder::Core
+include BitGirder::Io
+include BitGirder::Core::BitGirderMethods
+include BitGirder::Development
+
+ENV_BITGIRDER_VERBOSE = "BITGIRDER_VERBOSE"
+ENV_JAVA_HOME = "JAVA_HOME"
+
+OP_BUILD = "build"
+OP_JUNIT = "junit"
+OPS = [ OP_BUILD, OP_JUNIT ]
+
+def verbose?
+    $verbose || ( ( ENV[ ENV_BITGIRDER_VERBOSE ] || "" ) == "true" )
+end
+
+$log = BitGirderLogger.get_logger
+$log.level = verbose? ? BitGirderLogger::CODE : BitGirderLogger::DEFAULT
+
+$poms = {}
+
+def fail_app( excpt )
+    
+    STDERR.puts( excpt )
+    STDERR.puts( excpt.backtrace.join( "\n" ) ) if verbose?
+    
+    yield if block_given?
+
+    exit!( -1 )
+end
+
+def ws_exists( ws_dir )
+    
+    file_exists( ws_dir )
+
+    if File.exist?( "#{ws_dir}/pom.xml" )
+        ws_dir
+    else
+        raise "#{ws_dir} does not appear to be a workspace (no pom.xml)"
+    end
+end
+
+def create_opt_parser
+    
+    p = OptionParser.new
+
+    p.on( "-o", "--operation OP", "Build operation" ) { |op| $op = op }
+
+    p.on( "-p", "--project PROJ", "Project to build" ) { |proj| 
+        $proj = proj.sub( /\/+$/, "" )
+    }
+
+    p.on( "--help", "-h", "Show this help" ) {
+        puts p
+        exit! 0
+    }
+
+    p.on( "-v", "--verbose", "Be verbose" ) { |flag| $verbose = flag }
+    
+    p.on( "-w", "--workspace DIR", "Workspace root" ) { |dir|
+        $ws_root = ws_exists( dir )
+    }
+
+    p.on( "--cp-append-str STR", "Append the following to the classpath" ) { |s|
+        $cp_append_str = s
+    }
+
+    p.on( "--java-home DIR", "Use specified java" ) { |dir|
+        $java_home = file_exists( dir )
+    }
+
+    p.on( "--junit-test-glob PAT", "Select classes to test using glob" ) { |g|
+        $junit_test_glob = g
+    }
+
+    p
+end
+
+def process_opts
+    
+    $fu = verbose? ? FileUtils::Verbose : FileUtils
+    $log.level = BitGirderLogger::CODE if verbose?
+
+    $ws_root ||= ws_exists( Dir.pwd )
+    
+    raise "No such project: #$proj" unless File.exist?( "#$ws_root/#$proj" )
+
+    unless $java_home
+        if $java_home = ENV[ ENV_JAVA_HOME ]
+            file_exists( $java_home )
+        end
+    end
+end
+
+def check_opts
+    raise "No project was given" unless $proj
+end
+
+def init_app( argv )
+
+    p = create_opt_parser
+
+    begin
+        p.parse( argv )
+        check_opts
+    rescue Exception => e
+        fail_app( e ) { STDERR.puts( "Usage: #{p.to_s}" ) }
+    end
+
+    process_opts
+end
+
+def load_pom( pom_file )
+    File.open( file_exists( pom_file ) ) { |io| REXML::Document.new( io ) }
+end
+
+def get_root_pom
+    $root_pom ||= load_pom( "#$ws_root/pom.xml" )
+end
+
+def get_proj_pom( proj )
+    $poms[ proj ] ||= load_pom( "#$ws_root/#{proj}/pom.xml" )
+end
+
+def expect_first( doc, xpath )
+    REXML::XPath.first( doc, xpath ) or raise "No value found for #{xpath}"
+end
+
+def get_proj_key( pom )
+    
+    key = {}
+
+    %w{ groupId version }.each { |elt|
+        key[ elt ] = expect_first( pom, "/project/#{elt}/text()" ).to_s
+    }
+
+    key
+end
+
+def is_jar_package?( proj )
+    
+    pom = get_proj_pom( proj )
+
+    packaging = REXML::XPath.first( pom, "/project/packaging/text()" )
+
+    ( ! packaging ) || ( packaging.to_s == "jar" )
+end
+
+def get_dep_mods( proj, root_key )
+    
+    res = []
+
+    pom = get_proj_pom( proj )
+
+    xpath =
+        "/project/dependencies/dependency[ " +
+            "./version = '#{root_key[ "version" ]}' && " +
+            "./groupId = '#{root_key[ "groupId" ]}' ]/" +
+        "artifactId/text()"
+    
+    REXML::XPath.each( pom, xpath ) { |dep_mod| res << dep_mod.to_s }
+ 
+    res
+end
+
+def compute_direct_deps
+    
+    root_pom = get_root_pom
+    proj_key = get_proj_key( root_pom )
+
+    res = {}
+
+    REXML::XPath.each( root_pom, "/project/modules/module/text()" ) { |mod|
+        
+        mod = mod.to_s
+
+        if is_jar_package?( mod )
+            res[ mod ] = get_dep_mods( mod, proj_key )
+        end
+    }
+
+    res
+end
+
+def gather_closure( direct_deps, visited, remain )
+ 
+    visit = remain.shift
+
+    visited << visit
+    
+    direct_deps[ visit ].each { |mod|
+        unless visited.include?( mod )
+            remain << mod unless remain.include?( mod )
+        end
+    }
+
+    if remain.empty?
+        visited
+    else
+        gather_closure( direct_deps, visited, remain )
+    end
+end
+
+def compute_closures( direct_deps )
+    
+    res = {}
+
+    direct_deps.each_pair { |mod, deps|
+
+        res[ mod ] = 
+            if deps.empty?
+                []
+            else
+                gather_closure( direct_deps, [], Array.new( deps ) )
+            end
+    }
+
+    res
+end
+
+def compute_dep_order( err_id, order, unresolved, direct_deps )
+ 
+    resolved = Set.new( order )
+
+    start_sz = unresolved.length
+
+    unresolved.each { |proj|
+        if Set.new( direct_deps[ proj ] ).subset?( resolved )
+            order << proj
+            unresolved.delete( proj )
+        end
+    }
+    
+    raise "Circularity in deps for #{err_id}" if unresolved.length == start_sz
+
+    if unresolved.empty?
+        order 
+    else
+        compute_dep_order( err_id, order, unresolved, direct_deps )
+    end
+end
+
+def compute_dep_orders
+    
+    direct_deps = compute_direct_deps
+
+    closures = compute_closures( direct_deps )
+    $dep_orders = {}
+
+    closures.each_pair { |proj, closure|
+        
+        $dep_orders[ proj ] = 
+
+            if closure.empty?
+                [ proj ]
+            else
+                compute_dep_order( 
+                    proj, [], Array.new( closure ) << proj, direct_deps )
+            end
+    }
+end
+
+def get_dep_order( proj )
+ 
+    compute_dep_orders unless $dep_orders
+    has_key( $dep_orders, proj )
+end
+
+def get_targ_dir( proj )
+    "#$ws_root/#{proj}/target"
+end
+
+def get_src_dir( proj, sub )
+    "#{get_proj_dir( proj )}/src/#{sub}/java"
+end
+
+def get_src_base_name( sub )
+    sub == "test" ? "test-" : ""
+end
+
+def get_gen_src_dirs( proj, sub )
+
+    gen_dir =
+        "#{get_targ_dir( proj )}/#{get_src_base_name( sub )}generated-sources"
+
+    if File.exist?( gen_dir )
+        Dir.glob( "#{gen_dir}/*" ).select { |f| File.directory?( f ) }
+    else
+        []
+    end
+end
+
+def get_classes_dir( proj, sub )
+    "#{get_targ_dir( proj )}/#{get_src_base_name( sub )}classes"
+end
+
+def get_project_ctx_file( proj )
+    "#{get_targ_dir( proj )}/mvn-builder-ctx.yaml"
+end
+
+def load_project_ctx( proj )
+    
+    ctx_file = get_project_ctx_file( proj )
+
+    if File.exist?( ctx_file )
+        File.open( ctx_file ) { |io| YAML.load( io ) }
+    else
+        {}
+    end
+end
+
+def save_project_ctx( proj, ctx )
+    
+    ctx_file = get_project_ctx_file( proj )
+    File.open( ctx_file, "w" ) { |io| YAML.dump( ctx, io ) }
+end
+
+def load_build_ctx( projects )
+    
+    projects.inject( {} ) { |res, proj|
+        res.merge( proj => load_project_ctx( proj ) )
+    }
+end
+
+def get_proj_dir( proj )
+    "#$ws_root/#{proj}"
+end
+
+def get_sub_proj_dir( proj, sub )
+    "#{get_proj_dir( proj )}/src/#{sub}"
+end
+
+def reject_svn_files( list )
+    list.reject { |f| /\/?\.svn\//.match( f ) }
+end
+
+def get_source_change_sig( proj, sub )
+    
+    files = []
+
+    if ( File.exist?( dir = get_sub_proj_dir( proj, sub ) ) )
+
+        Dir.chdir( dir ) { |dir|
+            
+            files += Dir.glob( "#{dir}/java/**/*.java" )
+    
+            rsrcs = 
+                Dir.glob( "#{dir}/resources/**/*" ).
+                    select { |f| File.file?( f ) }
+
+            files += reject_svn_files( rsrcs )
+        }
+    end
+
+    str = files.sort.map { |f| "#{f}:#{File.mtime( f )}" }.join( "" )
+    Digest::MD5.hexdigest( str )
+end
+
+def proj_self_changed( proj, sub, build_ctx )
+    
+    res = true
+
+    if proj_ctx = ( build_ctx[ proj ] ||= {} )
+        if sub_ctx = ( proj_ctx[ sub ] ||= {} )
+
+            new_sig = get_source_change_sig( proj, sub )
+
+            if sub_ctx[ :source_sig ] == new_sig
+                res = false
+            else
+                sub_ctx[ :source_sig ] = new_sig
+            end
+        end
+    end
+
+    res
+end
+
+def get_api_sig( proj, sub, build_ctx )
+    
+    res = nil
+
+    if proj_ctx = build_ctx[ proj ]
+        if sub_ctx = proj_ctx[ sub ]
+            res = sub_ctx[ :api_sig ]
+        end
+    end
+
+    res
+end
+
+def get_built_with_sig( proj, sub, dep_proj, dep_sub, build_ctx )
+
+    res = nil
+    
+    if proj_ctx = build_ctx[ proj ]
+        if sub_ctx = proj_ctx[ sub ]
+            if built_with = sub_ctx[ :built_with ]
+                if built_with_dep = built_with[ dep_proj ]
+                    res = built_with_dep[ dep_sub ]
+                end
+            end
+        end
+    end
+
+    res
+end
+
+def upstream_api_changed?( proj, sub, upstream, build_ctx )
+    
+    upstream.find { |up_proj|
+ 
+        cur_main_sig = get_api_sig( up_proj, "main", build_ctx )
+        cur_test_sig = get_api_sig( up_proj, "test", build_ctx )
+
+        built_with_main = 
+            get_built_with_sig( proj, sub, up_proj, "main", build_ctx )
+
+        built_with_test = 
+            get_built_with_sig( proj, sub, up_proj, "test", build_ctx )
+
+        # Return true if the upstream proj did not exist before (such as when a
+        # module adds a new internal dep) or when it did but has a different sig
+        # than the last one used to build proj; we don't check the test sigs
+        # unless sub is 'test', and in that case don't necessarily equate
+        # cur_test_sig being nil with meaning that the upstream project is new,
+        # since it could be that it is old but has no test classes of its own.
+        ( ( ! cur_main_sig ) || ( built_with_main != cur_main_sig ) ) ||
+        ( sub == "test" && built_with_test != cur_test_sig )
+    }
+end
+
+def should_build?( proj, sub, build_ctx )
+ 
+    unless res = proj_self_changed( proj, sub, build_ctx )
+
+        upstream = get_dep_order( proj )
+        res = upstream_api_changed?( proj, sub, upstream, build_ctx )
+    end
+
+    res
+end
+
+# Currently just looks at whether this is a module jar and, if so, returns the
+# corresponding classes dir; later we may return other elements (resources) if
+# we expect that resources may be kept separately from the built classes dir
+# (for now we link them in there, but that could change)
+def resolve_cp_elt( elt )
+    
+    if ( elt.end_with?( ".jar" ) && elt.start_with?( $ws_root ) )
+        file_exists( "#{File.dirname( elt )}/classes" )
+    else
+        elt
+    end
+end
+
+def get_classpath( proj, sub, upstream )
+
+    cp = 
+        first_line( file_exists( "#{get_targ_dir( proj )}/classpath.txt" ) ).
+        split( /:/ ).
+        map { |elt| resolve_cp_elt( elt ) }.
+        flatten # Since resolve_cp_elt could return a list at some point
+
+    if sub == "test"
+
+        cp +=
+            upstream.map { |up_proj| get_classes_dir( up_proj, sub ) }.
+                     select { |dir| File.exist?( dir ) }
+
+        cp << get_classes_dir( proj, "main" )
+    end
+
+    cp.join( ":" )
+end
+
+def jcmd( cmd )
+    file_exists( "#$java_home/bin/#{cmd}" )
+end
+
+def set_built_with_sigs( proj, sub, upstream, build_ctx )
+    
+    built_with = upstream.inject( {} ) { |h, up_proj|
+        
+        h[ up_proj ] = {}
+
+        h[ up_proj ][ "main" ] = get_api_sig( up_proj, "main", build_ctx )
+
+        if sub == "test"
+            if sig = get_api_sig( up_proj, "test", build_ctx )
+                h[ up_proj ][ "test" ] = sig
+            end
+        end
+
+        h
+    }
+
+    build_ctx[ proj ][ sub ][ :built_with ] = built_with
+end
+
+def save_build_ctx( dest, proj, sub, build_ctx )
+ 
+    proj_ctx = has_key( build_ctx, proj )
+
+    proj_ctx[ sub ][ :api_sig ] = 
+        JavaDev.get_public_api_sig( jcmd( "javap" ), dest )
+    
+    set_built_with_sigs( proj, sub, get_dep_order( proj ), build_ctx )
+
+    save_project_ctx( proj, proj_ctx )
+end
+
+def copy_resources( sub_proj_dir, dest )
+    
+    if File.exist?( rsrc_dir = "#{sub_proj_dir}/resources" )
+    
+        Dir.chdir( rsrc_dir ) { |dir|
+            
+            reject_svn_files( Dir.glob( "**/*" ) ).
+                select { |f| File.file?( f ) }.
+                each { |rsrc|
+    
+                    targ = "#{dest}/#{rsrc}"
+                    ensure_dir( File.dirname( targ ) )
+                    $fu.cp( "#{rsrc_dir}/#{rsrc}", targ )
+                }
+        }
+    end
+end
+
+# Mutates map it is given and returns it as well (for chaining)
+def add_to_file_map( map, dir, ext )
+
+    Dir.chdir( dir ) { |dir|
+
+        Dir.glob( "**/*.#{ext}" ).
+            each { |f| 
+                map[ f.sub( /\.#{ext}$/, "" ) ] = 
+                    { file: "#{dir}/#{f}", mtime: File.mtime( f ) }
+            }
+    }
+
+    map
+end
+
+def get_src_file_map( proj, sub )
+    
+    res = {}
+
+    ext = "java"
+
+    if File.exist?( src_dir = get_src_dir( proj, sub ) )
+        add_to_file_map( res, src_dir, ext )
+    end
+
+    get_gen_src_dirs( proj, sub ).each { |dir|
+        add_to_file_map( res, dir, ext ) 
+    }
+
+    res
+end
+
+def get_classes_file_map( proj, sub )
+
+    res = {}
+
+    if File.exist?( dir = get_classes_dir( proj, sub ) )
+
+        all_classes = add_to_file_map( {}, dir, "class" )
+    
+        # all_classes will contain separate entries for any inner classes
+        # (Foo$1.class, Foo$Inner.class, etc) and we just consolidate those
+        # entries here as needed, keeping the most recently modified as our
+        # representative
+        all_classes.each_pair { |nm, info|
+            
+            # Drop anything after an initial '$' if there is one
+            root_nm = nm.sub( /^([^\$]+).*/, '\1' )
+    
+            prev_time = ( prev = res[ root_nm ] and prev[ :mtime ] )
+            res[ root_nm ] = info unless prev_time && prev_time > info[ :mtime ]
+        }
+    end
+
+    res
+end
+
+def get_build_java_src( proj, sub )
+    
+    src_map = get_src_file_map( proj, sub )
+    class_map = get_classes_file_map( proj, sub )
+
+    res = []
+
+    src_map.each_pair { |nm, info|
+        
+        src_time = info[ :mtime ]
+        cls_time = ( i = class_map[ nm ] and i[ :mtime ] )
+
+        res << info[ :file ] unless cls_time && cls_time > src_time
+
+        class_map.delete( nm ) # may not have been there
+    }
+
+    # If there are class files for which the source has been removed then we
+    # just recompile all of the source files; otherwise just the new ones
+    class_map.empty? ? res : src_map.values.map { |v| v[ :file ] }
+end
+
+def build_sub_project( proj, sub, upstream, build_ctx )
+
+    sub_proj_dir = get_sub_proj_dir( proj, sub )
+
+    dest = get_classes_dir( proj, sub )
+    
+    # Do this regardless of whether or not we end up running javac
+    copy_resources( sub_proj_dir, dest )
+
+    unless ( src = get_build_java_src( proj, sub ) ).empty?
+
+    
+        puts( "Building #{proj}:#{sub}" )
+
+#        $fu.rm_rf( dest ) if File.exist?( dest )
+        ensure_dir( dest )
+ 
+        cp = get_classpath( proj, sub, upstream ) + ":" +
+             get_classes_dir( proj, sub )
+
+        argv = [ "-classpath", cp, "-d", dest ] + src
+        argv << "-Xlint:unchecked"
+ 
+        UnixProcessBuilder.new( cmd: jcmd( "javac" ), argv: argv ).system
+
+        save_build_ctx( dest, proj, sub, build_ctx )
+    end
+end
+
+def build_project( proj, upstream, build_ctx )
+
+    built_main = false
+
+    [ "main", "test" ].each { |sub|
+        
+        do_build =
+            should_build?( proj, sub, build_ctx ) ||
+            ( built_main && sub == "test" )
+
+        if do_build
+            build_sub_project( proj, sub, upstream, build_ctx )
+            built_main = sub == "main"
+        else
+            $log.debug( "Skipping build of #{proj}:#{sub}" )
+        end
+    }
+end
+
+# Note: returns the list of projects involved in the build in a dependency order
+def do_build
+ 
+    dep_order = get_dep_order( $proj )
+    build_ctx = load_build_ctx( dep_order )
+
+    upstream = []
+
+    dep_order.each { |proj| 
+
+        build_project( proj, upstream, build_ctx ) 
+        upstream << proj
+    }
+end
+
+def get_junit_test_classes
+    
+    res = Dir.chdir( get_classes_dir( $proj, "test" ) ) { |dir|
+        Dir.glob( $junit_test_glob || "**/*Test.class" ).
+            map { |f| f.gsub( /\.class$/, "" ) }.
+            map { |f| f.gsub( /\//, "." ) }
+    }
+
+    # Remove any nested or inner classes on the assumption that those are not
+    # tests
+    res.delete_if { |nm| /\$/.match( nm ) }
+end
+
+def get_java_run_properties( argv )
+    ( argv || [] ).select { |arg| arg[ 0 .. 1 ] == "-D" }
+end
+
+def do_junit( extra )
+ 
+    dep_order = do_build
+    
+    cp = get_classpath( $proj, "test", dep_order )
+    cp += ":#$cp_append_str" if $cp_append_str
+    
+    argv = []
+
+    argv += get_java_run_properties( extra )
+
+    argv += [ "-classpath", cp, "org.junit.runner.JUnitCore" ]
+    argv += get_junit_test_classes
+
+    UnixProcessBuilder.new( cmd: jcmd( "java" ), argv: argv ).exec
+end
+
+def run_app( extra )
+
+    case $op
+        when OP_BUILD then do_build
+        when OP_JUNIT then do_junit( extra )
+        else raise "Unkown op: #$op"
+    end
+end
+
+argv, extra = split_argv( ARGV )
+
+init_app( argv )
+
+begin
+    run_app( extra )
+rescue Exception => e
+    fail_app( e )
+end

@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+
+# Collects results from all surefire reports somewhere underneat pwd.
+
+require 'bitgirder/core'
+include BitGirder::Core::BitGirderMethods
+
+require 'rexml/document'
+require 'rexml/xpath'
+
+class Summary
+    
+    attr_reader :failures, :successes
+
+    def initialize()
+        
+        @failures = []
+        @successes = []
+    end
+end    
+
+def update_summary( summary, doc )
+    
+    REXML::XPath.each( doc, "/testsuite/testcase" ) do |tc|
+        
+        name = "#{tc.attribute( "classname" )}.#{tc.attribute( "name" )}"
+
+        err = REXML::XPath.first( tc, "error/text()" ) ||
+              REXML::XPath.first( tc, "failure/text()" )
+
+        if err
+            summary.failures << [ name, err.to_s ]
+        else
+            summary.successes << name
+        end
+    end
+end
+
+def print_summary( s )
+
+    s.successes.sort.each { |name| puts "#{name} succeeded" }
+
+    s.failures.sort { |p1, p2| p1[ 0 ] <=> p2[ 0 ] }.each do |pair|
+        puts "#{pair[ 0 ]} failed:\n#{pair[ 1 ]}"
+    end
+
+    puts "#{s.successes.size} tests passed; #{s.failures.size} did not"
+end
+
+res = Summary.new
+
+Dir.glob( "**/target/**/TEST-*.xml" ).each do |f|
+    
+    debug( "Summarizing tests in #{f}" )
+    
+    doc = File.open( f ) { |io| REXML::Document.new( io ) }
+    update_summary( res, doc )
+end
+
+print_summary( res )
