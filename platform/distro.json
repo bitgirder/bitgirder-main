@@ -12,6 +12,7 @@
         [
             "core",
             "concurrent",
+            "crypto",
             "log",
             "application",
             "io",

@@ -16,6 +16,7 @@ import java.io.Serializable;
 // the desire to trade additional function call overhead for reduced memory size
 // of the object. In any event, this decision is also an implementation detail,
 // and the isEqualString method and constructor are package visible only.
+public
 abstract
 class AbstractTypedString< T extends AbstractTypedString >
 implements CharSequence,

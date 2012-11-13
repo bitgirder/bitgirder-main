@@ -9,6 +9,8 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
 import com.bitgirder.lang.ObjectReceiver;
 import com.bitgirder.lang.TestSums;
+import com.bitgirder.lang.TypedString;
+import com.bitgirder.lang.CaseInsensitiveTypedString;
 
 import com.bitgirder.io.IoTestFactory;
 
@@ -819,6 +821,54 @@ extends AbstractSqlTests
         state.isTrue( expctCols.isEmpty() );
     }
 
+    private
+    void
+    assertSqlImpl4Data( long id,
+                        String data,
+                        Connection conn )
+        throws Exception
+    {
+        String data2 = 
+            Sql.expectString( conn,
+                "select data from sql_impl4 where id = ?", id );
+
+        state.equalString( data, data2 );
+    }
+
+    @TestWithConn
+    private
+    void
+    testInsertAndGetKeys( Connection conn )
+        throws Exception
+    {
+        String data = Lang.randomUuid();
+
+        Map< String, Object > keys = 
+            Sql.insertAndGetKeys( conn, 
+                "insert into sql_impl4 ( data ) values ( ? )", data );
+        
+        long id = state.cast( 
+            Long.class, 
+            state.get( keys, Sql.COL_GENERATED_KEY, "keys" ) 
+        );
+
+        assertSqlImpl4Data( id, data, conn );
+    }
+
+    @TestWithConn
+    private
+    void
+    testInsertAndGetKey( Connection conn )
+        throws Exception
+    {
+        String data = Lang.randomUuid();
+
+        long id = Sql.insertAndGetKey( conn, Long.class,
+            "insert into sql_impl4 ( data ) values ( ? )", data );
+
+        assertSqlImpl4Data( id, data, conn );
+    }
+    
     private
     abstract
     class Sql1StatementsTest
@@ -1666,6 +1716,113 @@ extends AbstractSqlTests
             try { Sql.setValue( "hello", SqlType.NULL, ps, 1 ); }
             finally { ps.close(); }
         }
+    }
+
+    private
+    final
+    static
+    class StringType1
+    extends TypedString< StringType1 >
+    {
+        private StringType1( String s ) { super( s ); }
+    }
+
+    private
+    final
+    static
+    class StringType2
+    extends CaseInsensitiveTypedString< StringType2 >
+    {
+        private StringType2( String s ) { super( s ); }
+    }
+
+    @TestWithConn
+    private
+    void
+    testDefaultBindTypedString( Connection conn )
+        throws Exception
+    {
+        String uid1 = Lang.randomUuid();
+        String uid2 = Lang.randomUuid();
+
+        Sql.executeUpdate( conn,
+            "insert into sql_impl1 ( uid, data1 ) values ( ?, ? ), ( ?, ? )",
+            uid1, new StringType1( "hello" ),
+            uid2, new StringType2( "hello" )
+        );
+        
+        for ( String uid : new String[] { uid1, uid2 } )
+        {
+            state.equalString( "hello",
+                Sql.expectString( conn,
+                    "select data1 from sql_impl1 where uid = ?", uid ) );
+        }
+    }
+
+    @TestWithConn
+    private
+    void
+    testTransactionUserBasic( Connection conn )
+        throws Exception
+    {
+        conn.setAutoCommit( true );
+
+        state.equalInt(
+            1,
+            Sql.useConnection(
+                conn,
+                Sql.asTransactionUser( 
+                    new ConnectionUser< Integer >() {
+                        public Integer useConnection( Connection conn ) 
+                            throws Exception 
+                        {
+                            state.isFalse( conn.getAutoCommit() );
+                            return Sql.expectInt( conn, "select 1" );
+                        }
+                    }
+                )
+            )
+        );
+
+        state.isTrue( conn.getAutoCommit() );
+    }
+
+    private
+    final
+    static
+    class RollbackTestUser
+    extends VoidOp
+    {
+        private final String uid = Lang.randomUuid();
+        private boolean didFirstUpdate;
+
+        public 
+        void 
+        execute( Connection conn ) 
+            throws Exception 
+        {
+            String sql = "insert into sql_impl1 ( uid, data1 ) values ( ?, ? )";
+
+            Sql.executeUpdate( conn, sql, uid, "test" );
+            didFirstUpdate = true;
+            Sql.executeUpdate( conn, sql, uid, "test" ); // should fail: dupKey
+        }
+    }
+
+    @TestWithConn
+    private
+    void
+    testTransactionUserRollback( Connection conn )
+        throws Exception
+    {
+        RollbackTestUser u = new RollbackTestUser();
+
+        try { Sql.asTransactionUser( u ).useConnection( conn ); }
+        catch ( SQLIntegrityConstraintViolationException okay ) {}
+
+        state.isTrue( u.didFirstUpdate );
+        String sel = "select data1 from sql_impl1 where uid = ?";
+        state.isTrue( Sql.selectOne( conn, sel, u.uid ) == null );
     }
 
     @TestFactory

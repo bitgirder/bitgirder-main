@@ -82,7 +82,7 @@ extends AbstractLabeledTestObject
     useConnection( ConnectionUser< ? > u )
         throws Exception
     {
-        Sql.useConnection( u, sqlCtx.getDataSource() );
+        Sql.useConnection( sqlCtx.getDataSource(), u );
     }
 
     // see doInit() below
@@ -236,6 +236,25 @@ extends AbstractLabeledTestObject
         );
     }
 
+    // should create:
+    //
+    //  table: sql_impl4
+    //  cols:
+    //      id: bigint( 64 ) unsigned primary key auto_increment
+    //      data: varchar( 255 ) not null
+    //
+    private
+    void
+    initTableSqlImpl4( Connection conn )
+        throws Exception
+    {
+        initTable( conn,
+            "sql_impl4",
+            "id bigint( 64 ) unsigned primary key auto_increment, " +
+            "data varchar( 255 ) not null"
+        );
+    }
+
     @Before
     private
     void
@@ -249,6 +268,7 @@ extends AbstractLabeledTestObject
             initTableSqlImpl1( conn ); 
             initTableSqlImpl2( conn ); 
             initTableSqlImpl3( conn ); 
+            initTableSqlImpl4( conn ); 
         }
         finally { conn.close(); }
     }
@@ -492,18 +512,15 @@ extends AbstractLabeledTestObject
         startSql()
             throws Exception
         {
-            Sql.useConnection(
+            Sql.useConnection( sqlCtx.getDataSource(),
                 new ConnectionUser< Void >() {
-                    public 
-                    Void 
-                    useConnection( Connection conn )
+                    public Void useConnection( Connection conn )
                         throws Exception 
                     {
                         AbstractSqlTest.this.useConnection( conn );
                         return null;
                     }
-                },
-                sqlCtx.getDataSource()
+                }
             );
         }
     }

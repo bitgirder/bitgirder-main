@@ -49,9 +49,9 @@ extends AbstractKeyStoreApplication
         for ( String alias : aliases ) System.out.println( alias );
     }
 
-    protected
-    void
-    startImpl()
+    public
+    int
+    execute()
         throws Exception
     {
         KeyStoreLoad ksl = loadKeyStore( true ).clearKeyStorePassword();
@@ -61,7 +61,7 @@ extends AbstractKeyStoreApplication
             case LIST_KEY_ALIASES: listKeyAliases( ksl.getKeyStore() ); break;
         }
 
-        exit();
+        return 0;
     }
 
     private

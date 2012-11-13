@@ -108,7 +108,7 @@ class SqlUpdateExecutor< I, M >
         state.isFalse( started, "start() already called" );
         started = true;
 
-        Sql.useConnection( new UpdateOp(), ds );
+        Sql.useConnection( ds, new UpdateOp() );
     }
 
     public

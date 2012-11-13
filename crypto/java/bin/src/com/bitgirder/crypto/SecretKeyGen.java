@@ -138,9 +138,9 @@ extends ApplicationProcess
         try { ks.store( fos, keyStorePass ); } finally { fos.close(); }
     }
 
-    protected
-    void
-    startImpl()
+    public
+    int
+    execute()
         throws Exception
     {
         char[] keyStorePass = getPassword( "Keystore password: " );
@@ -154,7 +154,7 @@ extends ApplicationProcess
 
         saveKeyStore( ks, keyStorePass );
 
-        exit();
+        return 0;
     }
 
     private
