@@ -510,12 +510,6 @@ class UnitTestEngine
                     inv.invoke( invTarg );
                 }
                 catch ( Throwable th ) { failure = th; }
-//                {
-//                    TestFailureExpectation fe = inv.getFailureExpectation();
-//
-//                    if ( fe == null ) failure = th;
-//                    else failure = TestUtils.getFinalThrowable( fe, th );
-//                }
  
                 TestFailureExpectation fe = inv.getFailureExpectation();
                 failure = TestUtils.getFinalThrowable( fe, failure );
