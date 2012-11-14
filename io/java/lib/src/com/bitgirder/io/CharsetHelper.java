@@ -81,6 +81,14 @@ class CharsetHelper
     }
 
     public
+    byte[]
+    asByteArray( CharSequence s )
+        throws CharacterCodingException
+    {
+        return IoUtils.toByteArray( asByteBuffer( s ) );
+    }
+
+    public
     ByteBuffer
     asByteBufferUnchecked( CharSequence s )
     {

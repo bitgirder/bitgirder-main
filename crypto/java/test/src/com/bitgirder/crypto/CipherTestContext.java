@@ -23,8 +23,8 @@ class CipherTestContext
         this.keyLen = keyLen;
     }
 
-    final String transformation() { return trans; }
-    final int keyLen() { return keyLen; }
+    public final String transformation() { return trans; }
+    public final int keyLen() { return keyLen; }
 
     public
     CharSequence
@@ -36,6 +36,8 @@ class CipherTestContext
                 "keyLen", keyLen
             );
     }
+
+    @Override public String toString() { return getLabel().toString(); }
 
     public
     static

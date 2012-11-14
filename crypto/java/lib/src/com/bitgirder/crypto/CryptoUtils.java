@@ -227,6 +227,55 @@ class CryptoUtils
 
     public
     static
+    int
+    blockLengthOf( String trans )
+    {
+        inputs.notNull( trans, "trans" );
+
+        String alg = getAlgorithm( trans );
+
+        if ( alg.equalsIgnoreCase( "AES" ) ) return 16;
+        else if ( alg.equalsIgnoreCase( "DESede" ) ) return 8;
+        else if ( alg.equalsIgnoreCase( "Blowfish" ) ) return 8;
+        else if ( alg.equalsIgnoreCase( "RC4" ) ) return 0;
+        else if ( alg.equalsIgnoreCase( "ARCFOUR" ) ) return 0;
+        else return -1;
+    }
+
+    public
+    static
+    int
+    expectBlockLengthOf( String trans )
+    {
+        int res = blockLengthOf( trans );
+        
+        if ( res >= 0 ) return res;
+
+        throw state.createFail( "Unrecognized transformation:", trans );
+    }
+
+    public
+    static
+    int
+    ivLengthOf( String trans )
+    {
+        inputs.notNull( trans, "trans" );
+
+        int res = blockLengthOf( trans );
+
+        if ( res <= 0 ) return res;
+
+        String[] parts = trans.split( "/" );
+        if ( parts.length <= 1 ) return 0;
+
+        String mode = parts[ 1 ];
+        if ( mode == null || mode.equalsIgnoreCase( "ECB" ) ) return 0;
+
+        return res;
+    }
+
+    public
+    static
     KeyGenerator
     createKeyGenerator( String alg,
                         int keyLen )

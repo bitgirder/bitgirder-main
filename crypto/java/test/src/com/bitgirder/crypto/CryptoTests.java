@@ -3,12 +3,16 @@ package com.bitgirder.crypto;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.io.IoUtils;
 import com.bitgirder.io.Charsets;
 
 import com.bitgirder.test.Test;
+
+import java.util.Map;
 
 import java.nio.ByteBuffer;
 
@@ -135,6 +139,54 @@ class CryptoTests
     testGetAlgorithmWithMissingAlgNameFails()
     {
         CryptoUtils.getAlgorithm( "/CBC/NoPadding" );
+    }
+
+    @Test( expected = IllegalStateException.class,
+           expectedPattern = 
+            "\\QUnrecognized transformation: NotACipher/Blah/Blah\\E" )
+    private
+    void
+    testBlockLenOf()
+    {
+        Map< String, Integer > expct = Lang.newMap( String.class, Integer.class,
+            "AES/CBC/Blah", 16,
+            "DESEDE/Blah/Blah", 8,
+            "Blowfish/Blah/Blah", 8,
+            "RC4/Blah/Blah", 0,
+            "ARCFOUR/Blah/Blah", 0,
+            "NotACipher/Blah/Blah", -1
+        );
+
+        for ( Map.Entry< String, Integer > e : expct.entrySet() )
+        {
+            state.equalInt( 
+                e.getValue(), CryptoUtils.blockLengthOf( e.getKey() ) );
+        }
+
+        // Now also check failure of expectBlockLengthOf()
+        CryptoUtils.expectBlockLengthOf( "NotACipher/Blah/Blah" );
+    }
+
+    @Test
+    private
+    void
+    testIvLenOf()
+    {
+        Map< String, Integer > expct = Lang.newMap( String.class, Integer.class,
+            "AES/CBC/Blah", 16,
+            "DESede/CBC/Blah", 8,
+            "DESede/ECB/Blah", 0,
+            "DESede", 0,
+            "Blowfish/CBC/Blah", 8,
+            "RC4/Blah/Blah", 0,
+            "NotACipher/Blah/Blah", -1
+        );
+
+        for ( Map.Entry< String, Integer > e : expct.entrySet() )
+        {
+            state.equalInt( 
+                e.getValue(), CryptoUtils.ivLengthOf( e.getKey() ) );
+        }
     }
 
     public

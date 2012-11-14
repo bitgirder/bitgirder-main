@@ -509,13 +509,16 @@ class UnitTestEngine
                     invocationStarted( desc );
                     inv.invoke( invTarg );
                 }
-                catch ( Throwable th )
-                {
-                    TestFailureExpectation fe = inv.getFailureExpectation();
-
-                    if ( fe == null ) failure = th;
-                    else failure = TestUtils.getFinalThrowable( fe, th );
-                }
+                catch ( Throwable th ) { failure = th; }
+//                {
+//                    TestFailureExpectation fe = inv.getFailureExpectation();
+//
+//                    if ( fe == null ) failure = th;
+//                    else failure = TestUtils.getFinalThrowable( fe, th );
+//                }
+ 
+                TestFailureExpectation fe = inv.getFailureExpectation();
+                failure = TestUtils.getFinalThrowable( fe, failure );
  
                 sendCompletion( failure );
             }

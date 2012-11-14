@@ -9,6 +9,7 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.PatternHelper;
 
 import com.bitgirder.test.Test;
+import com.bitgirder.test.TestCall;
 import com.bitgirder.test.Before;
 import com.bitgirder.test.After;
 import com.bitgirder.test.TestPhase;
@@ -54,6 +55,8 @@ class UnitTestEngineTests
         "com.bitgirder.testing.Filterable/static2/test1",
         "com.bitgirder.testing.Filterable/static2/test2"
     };
+
+    private boolean doFailRegression1 = true;
 
     private
     final
@@ -152,6 +155,18 @@ class UnitTestEngineTests
         {
             results.put( desc, th );
         }
+
+        private
+        Object
+        expectOne( TestPhase expct )
+        {
+            state.equalInt( 1, results.size() );
+
+            InvocationDescriptor desc = results.keySet().iterator().next();
+            state.equal( expct, desc.getPhase() );
+
+            return results.get( desc );
+        }
     }
 
     private
@@ -192,5 +207,65 @@ class UnitTestEngineTests
             execute();
  
         assertBeforeAbortedRun( acc );
+    }
+
+    private final static class MarkerException extends Exception {}
+
+    // Used as part of a regression that caused tests which should have thrown
+    // an exception but didn't to incorrectly qualify as having passed
+    @Test( expected = MarkerException.class )
+    private
+    void
+    testFailureExpectationRegression1()
+        throws Exception
+    {
+        if ( doFailRegression1 ) throw new MarkerException();
+    }
+    
+    private
+    void
+    assertFailureExpectationRegression1( ResultAccumulator acc )
+    {
+        IllegalStateException ise = 
+            state.cast( 
+                IllegalStateException.class, acc.expectOne( TestPhase.TEST ) );
+        
+        state.equalString(
+            "Expected exception of type " +
+            "com.bitgirder.testing.UnitTestEngineTests$MarkerException " +
+            "to be thrown",
+            ise.getMessage()
+        );
+    }
+
+    // Note that we set the filterPattern below to avoid infinitely recursing
+    // into this very method in our asserted test run
+    @Test
+    private
+    void
+    testFailureExpectationFailure()
+        throws Exception
+    {
+        ResultAccumulator acc = new ResultAccumulator();
+
+        new UnitTestEngine.Builder().
+            setClassNames( Lang.asList( UnitTestEngineTests.class.getName() ) ).
+            setEventHandler( acc ).
+            setFilterPattern( ".*testFailureExpectationRegression1" ).
+            setPoolSize( 1 ).
+            setInstantiationHandler( 
+                new UnitTestEngine.InstantiationHandler() {
+                    public void instantiated( Object obj ) {
+                        if ( obj instanceof UnitTestEngineTests ) {
+                            ( (UnitTestEngineTests) obj ).doFailRegression1 = 
+                                false;
+                        }
+                    }
+                }
+            ).
+            build().
+            execute();
+ 
+        assertFailureExpectationRegression1( acc );
     }
 }

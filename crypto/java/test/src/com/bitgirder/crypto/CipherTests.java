@@ -43,12 +43,13 @@ class CipherTests
         return CryptoUtils.createDigester( "md5" );
     }
 
-    private
     static
     SecretKey
     generateKey( CipherTestContext ctx )
         throws Exception
     {
+        state.notNull( ctx, "ctx" );
+
         KeyGenerator kg = 
             CryptoUtils.createKeyGenerator( 
                 CryptoUtils.getAlgorithm( ctx.transformation() ), 
@@ -210,6 +211,7 @@ class CipherTests
     }
 
     private
+    static
     void
     addBlockContexts( List< CipherTestContext > res,
                       String alg,
@@ -232,6 +234,7 @@ class CipherTests
     }
 
     private
+    static
     void
     addStreamContexts( List< CipherTestContext > res,
                        String alg,
@@ -243,7 +246,7 @@ class CipherTests
         }
     }
 
-    private
+    static
     List< CipherTestContext >
     getBaseTestContexts()
     {

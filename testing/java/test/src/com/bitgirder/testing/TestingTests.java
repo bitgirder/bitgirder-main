@@ -42,8 +42,6 @@ class TestingTests
 
     private boolean beforeRan;
 
-    private final List< LabeledTestObject > expectorFailures = Lang.newList();
-
     private final static List< FailContext > failContexts;
 
     private
