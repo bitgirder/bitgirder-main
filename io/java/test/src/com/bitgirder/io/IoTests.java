@@ -37,6 +37,7 @@ import java.io.FileFilter;
 import java.io.FilenameFilter;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
+import java.io.Serializable;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -1020,6 +1021,41 @@ class IoTests
         state.equal( 2L, ccr.position() );
     }
 
+    private
+    final
+    static
+    class SerialTester
+    implements Serializable
+    {
+        private final String s;
+
+        private SerialTester( String s ) { this.s = s; }
+    }
+
+    private
+    < V extends Serializable >
+    V
+    runSerialRoundtrip( V obj,
+                        Class< V > cls )
+        throws Exception
+    {
+        byte[] arr = IoUtils.toSerialByteArray( obj );
+
+        return cls.cast( IoUtils.fromSerialByteArray( arr ) );
+    }
+
+    @Test
+    private
+    void
+    testByteArraySerialization()
+        throws Exception
+    {
+        SerialTester t1 = new SerialTester( "hello" );
+        SerialTester t2 = runSerialRoundtrip( t1, SerialTester.class );
+
+        state.equalString( t1.s, t2.s );
+    }
+
     // Static util methods for tests doing IO stuff
 
     public
@@ -1074,7 +1110,6 @@ class IoTests
     {
         return concatenateBuffers( Lang.asList( bufs ) );
     }
-        
 
     public
     static

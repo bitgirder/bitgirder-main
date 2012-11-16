@@ -19,6 +19,9 @@ import java.util.regex.Pattern;
 
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ObjectInputStream;
 import java.io.IOException;
 import java.io.EOFException;
 import java.io.File;
@@ -28,6 +31,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.Reader;
+import java.io.Serializable;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -883,5 +887,40 @@ class IoUtils
         inputs.notNull( cs, "cs" );
 
         return new CharReaderImpl( new StringReader( cs.toString() ) );
+    }
+
+    public
+    static
+    byte[]
+    toSerialByteArray( Serializable ser )
+        throws IOException
+    {
+        inputs.notNull( ser, "ser" );
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream( bos );
+        oos.writeObject( ser );
+        oos.close();
+
+        return bos.toByteArray();
+    }
+
+    public
+    static
+    Object
+    fromSerialByteArray( byte[] arr )
+        throws IOException,
+               ClassNotFoundException
+    {
+        inputs.notNull( arr, "arr" );
+
+        ByteArrayInputStream bis = new ByteArrayInputStream( arr );
+
+        try
+        {
+            ObjectInputStream ois = new ObjectInputStream( bis );
+            return ois.readObject();
+        }
+        finally { bis.close(); }
     }
 }
