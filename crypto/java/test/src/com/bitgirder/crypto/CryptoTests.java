@@ -14,10 +14,13 @@ import com.bitgirder.test.Test;
 
 import java.util.Map;
 
+import java.security.KeyStore;
+
 import java.nio.ByteBuffer;
 
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
+import javax.crypto.KeyGenerator;
 
 @Test
 public
@@ -186,6 +189,64 @@ class CryptoTests
         {
             state.equalInt( 
                 e.getValue(), CryptoUtils.ivLengthOf( e.getKey() ) );
+        }
+    }
+
+    private
+    KeyStore
+    newKeyStore( char[] pass )
+        throws Exception
+    {
+        KeyStore res = 
+            KeyStore.getInstance( CryptoConstants.KEY_STORE_TYPE_JCEKS );
+
+        res.load( null, pass );
+
+        return res;
+    }
+
+    private
+    void
+    addKeys( KeyStore ks,
+             char[] pass,
+             int keyCount,
+             KeyGenerator kg,
+             String tmpl )
+        throws Exception
+    {
+        for ( int i = 0; i < keyCount; ++i )
+        {
+            ks.setEntry( 
+                String.format( tmpl, i ),
+                new KeyStore.SecretKeyEntry( kg.generateKey() ),
+                new KeyStore.PasswordProtection( pass )
+            );
+        }
+    }
+
+    @Test
+    private
+    void
+    testGetKeyMap()
+        throws Exception
+    {
+        char[] pass = "test".toCharArray();
+        KeyStore ks = newKeyStore( pass );
+
+        KeyGenerator kg = CryptoUtils.createKeyGenerator( "AES", 192 );
+        addKeys( ks, pass, 2, kg, "accept-%016x" );
+        addKeys( ks, pass, 2, kg, "reject-%016x" );
+
+        Map< String, SecretKey > m = 
+            CryptoUtils.getSecretKeys( ks, pass, "^accept-.*" );
+        
+        state.equalInt( 2, m.size() );
+        state.noneNull( m, "m" );
+        
+        for ( int i = 0; i < 2; ++i )
+        {
+            String k = String.format( "accept-%016x", i );
+            state.isTrue( m.containsKey( k ) );
         }
     }
 

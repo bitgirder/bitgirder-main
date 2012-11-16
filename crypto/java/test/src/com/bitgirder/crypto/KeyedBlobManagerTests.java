@@ -10,14 +10,18 @@ import com.bitgirder.lang.Strings;
 
 import com.bitgirder.io.IoUtils;
 import com.bitgirder.io.IoTests;
+import com.bitgirder.io.IoTestFactory;
 import com.bitgirder.io.Charsets;
 
 import com.bitgirder.test.Test;
 import com.bitgirder.test.TestCall;
 
 import java.util.List;
+import java.util.Map;
 
-import java.security.KeyStore;
+import javax.crypto.SecretKey;
+
+import javax.crypto.spec.IvParameterSpec;
 
 @Test
 final
@@ -32,22 +36,36 @@ class KeyedBlobManagerTests
         CipherTestContext.create( "AES/CBC/PKCS5Padding", 192 );
 
     private
+    KeyedBlobManager
+    createManager( Map< String, SecretKey > keys,
+                   CipherTestContext ctx )
+    {
+        return
+            new KeyedBlobManager.Builder().
+                setTransformation( ctx.transformation() ).
+                setKeys( keys ).
+                build();
+    }
+
+    // We do the encrypt with both keys and the decrypt with only the
+    // lexicographically greatest in order to assert that the encrypt chooses
+    // the lex largest by default
+    private
     void
     runBasicRoundtrip( CipherTestContext ctx )
         throws Exception
     {
-        KeyedBlobManager km =
-            new KeyedBlobManager.Builder().
-                setTransformation( ctx.transformation() ).
-                setKey( "key1", CipherTests.generateKey( ctx ) ).
-                setKey( "key2", CipherTests.generateKey( ctx ) ).
-                build();
+        Map< String, SecretKey > keys = Lang.newMap();
+        keys.put( "key1", CipherTests.generateKey( ctx ) );
+        keys.put( "key2", CipherTests.generateKey( ctx ) );
+
+        KeyedBlobManager km = createManager( keys, ctx );
  
         byte[] plain = Charsets.UTF_8.asByteArray( "hello" );
-        String blob = km.encrypt( plain );
+        byte[] blob = km.encrypt( plain );
 
-        // check that key2 was selected by default
-        state.isFalse( blob.indexOf( "key=key2" ) < 0 );
+        state.remove( keys, "key1", "keys" );
+        km = createManager( keys, ctx );
 
         byte[] plain2 = km.decrypt( blob );
         IoTests.assertEqual( plain, plain2 );
@@ -91,80 +109,20 @@ class KeyedBlobManagerTests
         }
     }
 
-    @Test( expected = KeyedBlobManager.InvalidKeyException.class,
-           expectedPattern = "\\QInvalid key id: bad\\E" )
-    private
-    final
-    class UnrecognizedKeyIdFailsTest
-    extends TestImpl
-    {
-        void
-        implCall()
-            throws Exception
-        {
-            km.decrypt( "key=bad,data=" );
-        }
-    }
-
-    private
-    KeyStore
-    newKeyStore( char[] pass )
-        throws Exception
-    {
-        KeyStore res = 
-            KeyStore.getInstance( CryptoConstants.KEY_STORE_TYPE_JCEKS );
-
-        res.load( null, pass );
-
-        return res;
-    }
-
-    private
-    void
-    addKeys( KeyStore ks,
-             char[] pass,
-             int keyCount,
-             CipherTestContext ctx,
-             String tmpl )
-        throws Exception
-    {
-        for ( int i = 0; i < keyCount; ++i )
-        {
-            ks.setEntry( 
-                String.format( tmpl, i ),
-                new KeyStore.SecretKeyEntry( CipherTests.generateKey( ctx ) ),
-                new KeyStore.PasswordProtection( pass )
-            );
-        }
-    }
-
-    @Test
-    private
-    void
-    testBuildFromKeyStore()
-        throws Exception
-    {
-        char[] pass = "test".toCharArray();
-        KeyStore ks = newKeyStore( pass );
-
-        addKeys( ks, pass, 2, CTX_DEFAULT, "accept-%016x" );
-        addKeys( ks, pass, 2, CTX_DEFAULT, "reject-%016x" );
-
-        KeyedBlobManager.Builder b = new KeyedBlobManager.Builder().
-            setTransformation( CTX_DEFAULT.transformation() ).
-            setKeysFrom( ks, pass, "^accept-.*" );
-
-        state.equalString(
-            "accept-0000000000000000|accept-0000000000000001",
-            Strings.join( "|", b.keys.keySet() )
-        );
- 
-        KeyedBlobManager km = b.build();
-        byte[] plain = Charsets.UTF_8.asByteArray( "hello" );
-        String blob = km.encrypt( plain );
-        state.isFalse( blob.indexOf( "key=accept-0000000000000001" ) < 0 );
-        IoTests.assertEqual( plain, km.decrypt( blob ) );
-    }
+//    @Test( expected = KeyedBlobManager.InvalidKeyException.class,
+//           expectedPattern = "\\QInvalid key id: bad\\E" )
+//    private
+//    final
+//    class UnrecognizedKeyIdFailsTest
+//    extends TestImpl
+//    {
+//        void
+//        implCall()
+//            throws Exception
+//        {
+//            km.decrypt( "key=bad,data=" );
+//        }
+//    }
 
     @Test( expected = IllegalArgumentException.class,
            expectedPattern = "\\QNo keys set\\E" )
@@ -177,70 +135,109 @@ class KeyedBlobManagerTests
             build();
     }
 
-    private
-    abstract
-    class TamperTest
-    extends TestImpl
-    {
-        private final String toAlter;
-
-        private TamperTest( String toAlter ) { this.toAlter = toAlter; }
-    
-        private
-        String
-        alterBlob( String blob,
-                   String toAlter )
-        {
-            // Our search string relies on the fact that the key starting with
-            // toAlter is preceded by a comma, which we assert here as a sanity
-            // check
-            state.isTrue( 
-                blob.startsWith( "key=" ) && ( ! toAlter.equals( "key" ) ) );
-    
-            int idx = blob.indexOf( "," + toAlter + "=" );
-            int chIdx = idx + toAlter.length() + 2;
-            char ch = blob.charAt( chIdx );
-            code( "blob:", blob, "; ch:", ch );
-            char[] chars = blob.toCharArray();
-            chars[ chIdx ] = ch == 'x' ? 'y' : 'x'; // change the char
-            blob = new String( chars );
-            code( "blob:", blob );
-    
-            return blob;
-        }
-    
-        void
-        implCall()
-            throws Exception
-        {
-            byte[] plain = Charsets.UTF_8.asByteArray( "hello" );
-            String blob = km.encrypt( plain );
-            blob = alterBlob( blob, toAlter );
-
-            km.decrypt( blob );
-        }
-    }
+//    private
+//    abstract
+//    class TamperTest
+//    extends TestImpl
+//    {
+//        private final String toAlter;
+//
+//        private TamperTest( String toAlter ) { this.toAlter = toAlter; }
+//    
+//        private
+//        String
+//        alterBlob( String blob,
+//                   String toAlter )
+//        {
+//            // Our search string relies on the fact that the key starting with
+//            // toAlter is preceded by a comma, which we assert here as a sanity
+//            // check
+//            state.isTrue( 
+//                blob.startsWith( "key=" ) && ( ! toAlter.equals( "key" ) ) );
+//    
+//            int idx = blob.indexOf( "," + toAlter + "=" );
+//            int chIdx = idx + toAlter.length() + 2;
+//            char ch = blob.charAt( chIdx );
+//            code( "blob:", blob, "; ch:", ch );
+//            char[] chars = blob.toCharArray();
+//            chars[ chIdx ] = ch == 'x' ? 'y' : 'x'; // change the char
+//            blob = new String( chars );
+//            code( "blob:", blob );
+//    
+//            return blob;
+//        }
+//    
+//        void
+//        implCall()
+//            throws Exception
+//        {
+//            byte[] plain = Charsets.UTF_8.asByteArray( "hello" );
+//            String blob = km.encrypt( plain );
+//            blob = alterBlob( blob, toAlter );
+//
+//            km.decrypt( blob );
+//        }
+//    }
 
     @Test( expected = KeyedBlobManager.CorruptBlobException.class )
     private
     final
     class TamperedIvDetectedTest
-    extends TamperTest
+    extends TestImpl
     {
-        private TamperedIvDetectedTest() { super( "iv" ); }
+        void
+        implCall()
+            throws Exception
+        {
+            byte[] blob = km.encrypt( new byte[] { 0 } );
+            KeyedBlobManager.Message msg = km.readMessage( blob );
+
+            byte[] iv = msg.iv.getIV();
+            iv[ 0 ]++;
+            msg.iv = new IvParameterSpec( iv );
+
+            km.decrypt( km.makeBlob( msg ) );
+        }
     }
 
     @Test( expected = KeyedBlobManager.CorruptBlobException.class )
     private
     final
-    class TamperedDataDetectedTest
-    extends TamperTest
+    class TamperedDataChangedDetectedTest
+    extends TestImpl
     {
-        private TamperedDataDetectedTest() { super( "data" ); }
+        void
+        implCall()
+            throws Exception
+        {
+            KeyedBlobManager.Message msg =
+                km.readMessage( km.encrypt( new byte[] { 0 } ) );
+            
+            msg.data[ 0 ]++;
+
+            km.decrypt( km.makeBlob( msg ) );
+        }
     }
 
-    // To test:
-    //
-    //  - exception when decrypt called with corrupted cipher data (iv or
-    //  ciphertext)
+    @Test( expected = KeyedBlobManager.CorruptBlobException.class )
+    private
+    final
+    class TamperedDataDataTruncatedTest
+    extends TestImpl
+    {
+        void
+        implCall()
+            throws Exception
+        {
+            KeyedBlobManager.Message msg =
+                km.readMessage( 
+                    km.encrypt( IoTestFactory.nextByteArray( 100 ) ) );
+            
+            byte[] arr = new byte[ msg.data.length - 1 ];
+            System.arraycopy( msg.data, 0, arr, 0, arr.length );
+            msg.data = arr;
+
+            km.decrypt( km.makeBlob( msg ) );
+        }
+    }
 }

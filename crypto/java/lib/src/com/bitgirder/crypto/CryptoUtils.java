@@ -3,10 +3,20 @@ package com.bitgirder.crypto;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.PatternHelper;
+
 import com.bitgirder.io.Charsets;
 import com.bitgirder.io.IoUtils;
 
+import java.util.Map;
+import java.util.List;
+import java.util.Enumeration;
+
+import java.util.regex.Pattern;
+
 import java.security.Key;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -406,4 +416,72 @@ class CryptoUtils
 
         return res;
     }
+
+    private
+    static
+    List< String >
+    getMatchingAliases( KeyStore ks,
+                        String selectPat )
+        throws GeneralSecurityException
+    {
+        Pattern pat = PatternHelper.compile( selectPat );
+
+        List< String > res = Lang.newList();
+
+        for ( Enumeration< String > e = ks.aliases(); e.hasMoreElements(); )
+        {
+            String id = e.nextElement();
+
+            if ( pat.matcher( id ).matches() ) res.add( id );
+        }
+
+        return res;
+    }
+
+    private
+    static
+    SecretKey
+    getSecretKey( KeyStore ks,
+                  String id,
+                  KeyStore.ProtectionParameter pp )
+        throws GeneralSecurityException
+    {
+        KeyStore.Entry e = ks.getEntry( id, pp );
+
+        if ( ! ( e instanceof KeyStore.SecretKeyEntry ) )
+        {
+            throw inputs.createFail( "Not a secret key:", id );
+        }
+        else return ( (KeyStore.SecretKeyEntry) e ).getSecretKey();
+    }
+
+    // This is very simplistic at the moment and assumes a fixed way to match
+    // aliases (regex), that all keys are protected with the given password, and
+    // that the type of key to be extracted is SecretKey.  We can generalize
+    // these assumptions going forward as needed, rewriting this method on top
+    // of the more generalized versions
+    public
+    static
+    Map< String, SecretKey >
+    getSecretKeys( KeyStore ks,
+                   char[] pass,
+                   String selectPat )
+        throws GeneralSecurityException
+    {
+        inputs.notNull( ks, "ks" );
+        // pass could be null
+        inputs.notNull( selectPat, "selectPat" );
+
+        KeyStore.ProtectionParameter pp = 
+            new KeyStore.PasswordProtection( pass );
+
+        Map< String, SecretKey > res = Lang.newMap();
+
+        for ( String id : getMatchingAliases( ks, selectPat ) )
+        {
+            res.put( id, getSecretKey( ks, id, pp ) );
+        }
+
+        return res;
+    } 
 }

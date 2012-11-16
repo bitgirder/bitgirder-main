@@ -6,25 +6,22 @@ import com.bitgirder.validation.State;
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
-import com.bitgirder.lang.Strings;
-import com.bitgirder.lang.PatternHelper;
 
-import com.bitgirder.io.Base64Encoder;
 import com.bitgirder.io.IoUtils;
+import com.bitgirder.io.BinReader;
+import com.bitgirder.io.BinWriter;
 
 import java.util.SortedMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Enumeration;
-
-import java.util.regex.Pattern;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 
 import java.nio.ByteBuffer;
 
 import java.security.GeneralSecurityException;
-import java.security.KeyStore;
 
 import javax.crypto.SecretKey;
 import javax.crypto.Cipher;
@@ -33,6 +30,8 @@ import javax.crypto.spec.IvParameterSpec;
 
 // Currently always uses lexicographically highest key for encrypt; we can allow
 // callers later to set a different behavior
+//
+// Message and its associated IO methods are pkg accessible to aid in testing
 public
 final
 class KeyedBlobManager
@@ -42,11 +41,13 @@ class KeyedBlobManager
 
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
-    private final static Base64Encoder b64 = new Base64Encoder();
-    
-    private final static String KEY_KEY = "key";
-    private final static String KEY_IV = "iv";
-    private final static String KEY_DATA = "data";
+//    private final static String KEY_KEY = "key";
+//    private final static String KEY_IV = "iv";
+//    private final static String KEY_DATA = "data";
+    private final static byte FLD_END = (byte) 0x00;
+    private final static byte FLD_KEY = (byte) 0x01;
+    private final static byte FLD_DATA = (byte) 0x02;
+    private final static byte FLD_IV = (byte) 0x03;
 
     private final String trans;
     private final int ivLen; // only used when > 0
@@ -63,6 +64,15 @@ class KeyedBlobManager
         inputs.isFalse( b.keys.isEmpty(), "No keys set" );
         this.keys = Lang.newSortedMap();
         this.keys.putAll( b.keys );
+    }
+
+    final
+    static
+    class Message
+    {
+        String keyId;
+        byte[] data;
+        IvParameterSpec iv;
     }
 
     private
@@ -84,25 +94,42 @@ class KeyedBlobManager
     }
 
     private
-    String
-    makeString( String keyId,
-                IvParameterSpec ivSpec,
-                byte[] data )
+    void
+    writeBlob( Message msg,
+               BinWriter wr )
+        throws IOException
     {
-        List< CharSequence > toks = Lang.newList( 6 );
+        wr.writeByte( FLD_KEY );
+        wr.writeUtf8( msg.keyId );
+        wr.writeByte( FLD_DATA );
+        wr.writeByteArray( msg.data );
 
-        toks.add( KEY_KEY );
-        toks.add( keyId );
-        toks.add( KEY_DATA );
-        toks.add( b64.encode( data ) );
-
-        if ( ivSpec != null )
+        if ( msg.iv != null )
         {
-            toks.add( KEY_IV );
-            toks.add( b64.encode( ivSpec.getIV() ) );
+            wr.writeByte( FLD_IV );
+            wr.writeByteArray( msg.iv.getIV() );
         }
 
-        return Strings.crossJoin( "=", ",", toks ).toString();
+        wr.writeByte( FLD_END );
+    }
+
+    byte[]
+    makeBlob( Message msg )
+    {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        BinWriter wr = BinWriter.asWriterLe( bos );
+
+        try 
+        { 
+            writeBlob( msg, wr ); 
+            bos.close();
+
+            return bos.toByteArray();
+        }
+        catch ( Exception ex ) 
+        {
+            throw new RuntimeException( "Failed to write blob", ex );
+        }
     }
 
     // Currently creates a new Cipher each time; may be better later to use a
@@ -111,7 +138,7 @@ class KeyedBlobManager
     // Written to be public later, but holding back on exposing it so until
     // needed.
     private
-    String
+    byte[]
     encrypt( byte[] plain,
              String keyId )
         throws GeneralSecurityException
@@ -121,22 +148,24 @@ class KeyedBlobManager
 
         SecretKey key = inputs.get( keys, keyId, "keys" );
         Cipher c = CryptoUtils.createCipher( trans );
-        IvParameterSpec ivSpec = null;
+
+        Message msg = new Message();
+        msg.keyId = keyId;
 
         if ( ivLen > 0 )
         {
-            ivSpec = CryptoUtils.createRandomIvSpec( ivLen );
-            CryptoUtils.initEncrypt( c, key, ivSpec );
+            msg.iv = CryptoUtils.createRandomIvSpec( ivLen );
+            CryptoUtils.initEncrypt( c, key, msg.iv );
         }
         else CryptoUtils.initEncrypt( c, key );
 
-        byte[] data = c.doFinal( prependHash( plain ) );
+        msg.data = c.doFinal( prependHash( plain ) );
 
-        return makeString( keyId, ivSpec, data );
+        return makeBlob( msg );
     }
 
     public
-    String
+    byte[]
     encrypt( byte[] plain )
         throws GeneralSecurityException
     {
@@ -150,97 +179,104 @@ class KeyedBlobManager
     extends Exception
     {
         private BlobFormatException( String msg ) { super( msg ); }
-    }
 
-    private
-    Map< String, String >
-    parseBlob( String blob )
-        throws BlobFormatException
-    {
-        Map< String, String > res = Lang.newMap();
-
-        String[] pairStrs = blob.split( "," );
-
-        for ( String pairStr : pairStrs )
+        private
+        BlobFormatException( String msg,
+                             Throwable th )
         {
-            int eqIdx = pairStr.indexOf( '=' );
-
-            if ( eqIdx < 0 )
-            {
-                throw new BlobFormatException( "Bad pair: " + pairStr );
-            }
-
-            // for now we will accept an empty value from a pair like 'key='
-            res.put( 
-                pairStr.substring( 0, eqIdx ), pairStr.substring( eqIdx + 1 ) );
-        }
-
-        return res;
-    }
-
-    private
-    final
-    static
-    class DecryptParts
-    {
-        private String keyId;
-        private IvParameterSpec ivSpec;
-        private byte[] data;
-    }
-
-    private
-    < V >
-    V
-    getPair( Map< String, String > pairs,
-             Class< V > cls,
-             String key )
-        throws BlobFormatException
-    {
-        String val = pairs.get( key );
-        if ( val == null ) return null;
-
-        if ( cls.equals( String.class ) ) return cls.cast( val );
-        
-        state.isTrue( cls.equals( byte[].class ) );
-
-        try { return cls.cast( b64.decode( val ) ); }
-        catch ( IOException ioe )
-        {
-            throw new BlobFormatException( 
-                "Bad base64 data for key " + key + ": " + ioe.getMessage() );
+            super( msg, th );
         }
     }
 
-    private
-    < V >
-    V
-    expectPair( Map< String, String > pairs,
-                Class< V > cls,
-                String key )
-        throws BlobFormatException
-    {
-        V res = getPair( pairs, cls, key );
-        
-        if ( res != null ) return res;
-        throw new BlobFormatException( "No value for key: " + key );
-    }
-
-    private
-    DecryptParts
-    getDecryptParts( String blob )
-        throws BlobFormatException
-    {
-        DecryptParts res = new DecryptParts();
-
-        Map< String, String > pairs = parseBlob( blob );
-        res.keyId = expectPair( pairs, String.class, KEY_KEY );
-        res.data = expectPair( pairs, byte[].class, KEY_DATA );
-
-        byte[] iv = getPair( pairs, byte[].class, KEY_IV );
-        if ( iv != null ) res.ivSpec = new IvParameterSpec( iv );
-        
-        return res;
-    }
+//    private
+//    Map< String, String >
+//    parseBlob( String blob )
+//        throws BlobFormatException
+//    {
+//        Map< String, String > res = Lang.newMap();
+//
+//        String[] pairStrs = blob.split( "," );
+//
+//        for ( String pairStr : pairStrs )
+//        {
+//            int eqIdx = pairStr.indexOf( '=' );
+//
+//            if ( eqIdx < 0 )
+//            {
+//                throw new BlobFormatException( "Bad pair: " + pairStr );
+//            }
+//
+//            // for now we will accept an empty value from a pair like 'key='
+//            res.put( 
+//                pairStr.substring( 0, eqIdx ), pairStr.substring( eqIdx + 1 ) );
+//        }
+//
+//        return res;
+//    }
+//
+//    private
+//    final
+//    static
+//    class DecryptParts
+//    {
+//        private String keyId;
+//        private IvParameterSpec ivSpec;
+//        private byte[] data;
+//    }
+//
+//    private
+//    < V >
+//    V
+//    getPair( Map< String, String > pairs,
+//             Class< V > cls,
+//             String key )
+//        throws BlobFormatException
+//    {
+//        String val = pairs.get( key );
+//        if ( val == null ) return null;
+//
+//        if ( cls.equals( String.class ) ) return cls.cast( val );
+//        
+//        state.isTrue( cls.equals( byte[].class ) );
+//
+//        try { return cls.cast( b64.decode( val ) ); }
+//        catch ( IOException ioe )
+//        {
+//            throw new BlobFormatException( 
+//                "Bad base64 data for key " + key + ": " + ioe.getMessage() );
+//        }
+//    }
+//
+//    private
+//    < V >
+//    V
+//    expectPair( Map< String, String > pairs,
+//                Class< V > cls,
+//                String key )
+//        throws BlobFormatException
+//    {
+//        V res = getPair( pairs, cls, key );
+//        
+//        if ( res != null ) return res;
+//        throw new BlobFormatException( "No value for key: " + key );
+//    }
+//
+//    private
+//    DecryptParts
+//    getDecryptParts( String blob )
+//        throws BlobFormatException
+//    {
+//        DecryptParts res = new DecryptParts();
+//
+//        Map< String, String > pairs = parseBlob( blob );
+//        res.keyId = expectPair( pairs, String.class, KEY_KEY );
+//        res.data = expectPair( pairs, byte[].class, KEY_DATA );
+//
+//        byte[] iv = getPair( pairs, byte[].class, KEY_IV );
+//        if ( iv != null ) res.ivSpec = new IvParameterSpec( iv );
+//        
+//        return res;
+//    }
 
     public
     final
@@ -274,7 +310,73 @@ class KeyedBlobManager
     extends Exception
     {
         private CorruptBlobException( Throwable th ) { super( th ); }
+        private CorruptBlobException( String msg ) { super( msg ); }
         private CorruptBlobException() {}
+
+        private
+        CorruptBlobException( String msg,
+                              Throwable th )
+        {
+            super( msg, th );
+        }
+    }
+
+    private
+    void
+    readMessage( Message msg,
+                 BinReader rd )
+        throws IOException,
+               BlobFormatException
+    {
+        while ( true )
+        {
+            byte b = rd.readByte();
+
+            switch ( b )
+            {
+                case FLD_END: return;
+                case FLD_KEY: msg.keyId = rd.readUtf8(); break;
+                case FLD_DATA: msg.data = rd.readByteArray(); break;
+
+                case FLD_IV: 
+                    msg.iv = new IvParameterSpec( rd.readByteArray() ); break;
+
+                default:
+                    throw new BlobFormatException(
+                        String.format( "Unrecognized field: 0x%02x", b ) );
+            }
+        }
+    }
+
+    private
+    Message
+    validate( Message msg )
+        throws BlobFormatException
+    {
+        String err = null;
+
+        if ( msg.keyId == null ) err = "Missing key id";
+        else if ( msg.data == null ) err = "Missing data";
+
+        if ( err == null ) return msg;
+        throw new BlobFormatException( err );
+    }
+
+    Message
+    readMessage( byte[] blob )
+        throws BlobFormatException
+    {
+        Message res = new Message();
+
+        BinReader rd = BinReader.asReaderLe( new ByteArrayInputStream( blob ) );
+
+        try { readMessage( res, rd ); }
+        catch ( IOException ioe )
+        {
+            throw new BlobFormatException( "Couldn't read blob", ioe );
+        }
+
+        return validate( res );
     }
 
     private
@@ -300,7 +402,7 @@ class KeyedBlobManager
 
     public
     byte[]
-    decrypt( String blob )
+    decrypt( byte[] blob )
         throws GeneralSecurityException,
                BlobFormatException,
                InvalidKeyException,
@@ -308,15 +410,17 @@ class KeyedBlobManager
     {
         inputs.notNull( blob, "blob" );
 
-        DecryptParts dp = getDecryptParts( blob );
-        SecretKey key = keyFor( dp.keyId );
+        Message msg = readMessage( blob );
+
+//        DecryptParts dp = getDecryptParts( blob );
+        SecretKey key = keyFor( msg.keyId );
 
         Cipher c = CryptoUtils.createCipher( trans );
 
-        if ( dp.ivSpec == null ) CryptoUtils.initDecrypt( c, key );
-        else CryptoUtils.initDecrypt( c, key, dp.ivSpec );
+        if ( msg.iv == null ) CryptoUtils.initDecrypt( c, key );
+        else CryptoUtils.initDecrypt( c, key, msg.iv );
 
-        try { return checkHash( c.doFinal( dp.data ) ); }
+        try { return checkHash( c.doFinal( msg.data ) ); }
         catch ( GeneralSecurityException gse ) 
         { 
             throw new CorruptBlobException( gse );
@@ -357,67 +461,15 @@ class KeyedBlobManager
             return this;
         }
 
-        private
-        List< String >
-        getMatchingAliases( KeyStore ks,
-                            String selectPat )
-            throws GeneralSecurityException
-        {
-            Pattern pat = PatternHelper.compile( selectPat );
-
-            List< String > res = Lang.newList();
-
-            for ( Enumeration< String > e = ks.aliases(); e.hasMoreElements(); )
-            {
-                String id = e.nextElement();
-
-                if ( pat.matcher( id ).matches() ) res.add( id );
-            }
-
-            return res;
-        }
-
-        private
-        void
-        setSecretKey( KeyStore ks,
-                      String id,
-                      KeyStore.ProtectionParameter pp )
-            throws GeneralSecurityException
-        {
-            KeyStore.Entry e = ks.getEntry( id, pp );
-
-            if ( ! ( e instanceof KeyStore.SecretKeyEntry ) )
-            {
-                inputs.fail( "Not a secret key:", id );
-            }
-            else 
-            {
-                SecretKey key = ( (KeyStore.SecretKeyEntry) e ).getSecretKey();
-                setKey( id, key );
-            }
-        }
-
-        // This is very simplistic at the moment and assumes a fixed way to
-        // match aliases (regex) and that all keys are protected with the given
-        // password. We can generalize these assumptions going forward as
-        // needed, rewriting this method on top of the more generalized versions
         public
         Builder
-        setKeysFrom( KeyStore ks,
-                     char[] pass,
-                     String selectPat )
-            throws GeneralSecurityException
+        setKeys( Map< String, SecretKey > keys )
         {
-            inputs.notNull( ks, "ks" );
-            // pass could be null
-            inputs.notNull( selectPat, "selectPat" );
+            inputs.noneNull( keys, "keys" );
 
-            KeyStore.ProtectionParameter pp = 
-                new KeyStore.PasswordProtection( pass );
-
-            for ( String id : getMatchingAliases( ks, selectPat ) )
+            for ( Map.Entry< String, SecretKey > e : keys.entrySet() )
             {
-                setSecretKey( ks, id, pp );
+                setKey( e.getKey(), e.getValue() );
             }
 
             return this;

@@ -40,7 +40,7 @@ extends ApplicationProcess
     {
         super( c );
 
-        this.ksFile = inputs.notNull( c.ksFile, "ksFile" );
+        this.ksFile = new FileWrapper( inputs.notNull( c.ksFile, "ksFile" ) );
         this.ksType = inputs.notNull( c.ksType, "ksType" );
         this.alias = inputs.notNull( c.alias, "alias" ).toLowerCase();
         this.keyLen = inputs.positiveI( c.keyLen, "keyLen" );
@@ -163,7 +163,7 @@ extends ApplicationProcess
     class Configurator
     extends ApplicationProcess.Configurator
     {
-        private FileWrapper ksFile;
+        private String ksFile;
         private String ksType = CryptoConstants.KEY_STORE_TYPE_JCEKS;
         private String alias;
         private int keyLen;
@@ -172,7 +172,7 @@ extends ApplicationProcess
         @Argument
         private
         void
-        setKeyStoreFile( FileWrapper ksFile )
+        setKeyStoreFile( String ksFile )
         {
             this.ksFile = ksFile;
         }

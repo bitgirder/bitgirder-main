@@ -15,6 +15,11 @@ import java.util.List;
 import java.util.Arrays;
 import java.util.Iterator;
 
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
 @Test
 public
 final
@@ -712,5 +717,26 @@ class LangTests
         assertStartsWith( "", "a", false );
         assertStartsWith( "a", "ab", false );
         assertStartsWith( "abc", "abd", false );
+    }
+
+    @Test
+    private
+    void
+    testTypedStringSerializable()
+        throws Exception
+    {
+        TypedStringImpl t1 = new TypedStringImpl( "hello" );
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream( bos );
+        oos.writeObject( t1 );
+
+        ByteArrayInputStream bis = 
+            new ByteArrayInputStream( bos.toByteArray() );
+        
+        ObjectInputStream ois = new ObjectInputStream( bis );
+
+        TypedStringImpl t2 = (TypedStringImpl) ois.readObject();
+        state.equalString( t1, t2 );
     }
 }
