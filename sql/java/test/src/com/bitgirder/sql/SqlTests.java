@@ -9,6 +9,8 @@ import com.bitgirder.lang.reflect.ReflectUtils;
 
 import com.bitgirder.io.IoUtils;
 
+import com.bitgirder.test.Test;
+
 import java.lang.reflect.Constructor;
 
 import java.util.List;
@@ -16,6 +18,9 @@ import java.util.Properties;
 
 import java.net.URL;
 
+import java.sql.SQLException;
+
+@Test
 public
 final
 class SqlTests
@@ -32,6 +37,19 @@ class SqlTests
     private static List< SqlTestContext > sqlCtxs;
 
     private SqlTests() {}
+
+    @Test
+    private
+    void
+    testIsDuplicateKeyException()
+    {
+        state.isFalse(
+            Sql.isDuplicateKeyException( new SQLException( "", "1" ) ) );
+
+        state.isTrue(
+            Sql.isDuplicateKeyException(
+                new SQLException( "", Sql.SQL_STATE_DUP_KEY ) ) );
+    }
 
     private
     static

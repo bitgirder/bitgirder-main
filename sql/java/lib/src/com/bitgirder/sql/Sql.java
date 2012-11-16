@@ -49,7 +49,19 @@ class Sql
 
     final static String COL_GENERATED_KEY = "GENERATED_KEY";
 
+    public final static String SQL_STATE_DUP_KEY = "23000";
+
     private Sql() {}
+
+    public
+    static
+    boolean
+    isDuplicateKeyException( SQLException ex )
+    {
+        inputs.notNull( ex, "ex" );
+
+        return SQL_STATE_DUP_KEY.equals( ex.getSQLState() );
+    }
 
     // does null checks for public frontends
     private
