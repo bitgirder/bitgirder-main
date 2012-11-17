@@ -5,6 +5,8 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.xml.XmlDocuments;
 
+import java.io.OutputStream;
+import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 
@@ -50,22 +52,30 @@ class XmlBindingContext
     }
 
     public
+    void
+    writeObject( Object obj,
+                 OutputStream os )
+    {
+        inputs.notNull( obj, "obj" );
+        inputs.notNull( os, "os" );
+        
+        try { getMarshaller().marshal( obj, os ); }
+        catch ( Throwable th )
+        { 
+            throw createRethrow( "Couldn't marshal object", th );
+        }
+    }
+
+    public
     byte[]
     toByteArray( Object obj )
     {
         inputs.notNull( obj, "obj" );
 
-        try
-        {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            getMarshaller().marshal( obj, bos );
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        writeObject( obj, bos );
 
-            return bos.toByteArray();
-        }
-        catch ( Throwable th )
-        { 
-            throw createRethrow( "Couldn't marshal object", th );
-        }
+        return bos.toByteArray();
     }
 
     public
@@ -101,23 +111,34 @@ class XmlBindingContext
     public
     < V >
     V
-    fromByteArray( byte[] arr,
-                   Class< V > cls )
+    readObject( InputStream is,
+                Class< V > cls )
     {
-        inputs.notNull( arr, "arr" );
+        inputs.notNull( is, "is" );
         inputs.notNull( cls, "cls" );
 
         try
         {
-            ByteArrayInputStream bis = new ByteArrayInputStream( arr );
-            StreamSource src = new StreamSource( bis );
-
+            StreamSource src = new StreamSource( is );
             return getUnmarshaller().unmarshal( src, cls ).getValue();
         }
         catch ( Throwable th ) 
         {
             throw createRethrow( "Couldn't unmarshal input", th );
         }
+    }
+
+    public
+    < V >
+    V
+    fromByteArray( byte[] arr,
+                   Class< V > cls )
+    {
+        inputs.notNull( arr, "arr" );
+        inputs.notNull( cls, "cls" );
+
+        ByteArrayInputStream bis = new ByteArrayInputStream( arr );
+        return readObject( bis, cls );
     }
 
     public

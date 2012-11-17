@@ -713,6 +713,50 @@ class IoTests
             "098f6bcd4621d373cade4e832627b4f6", IoUtils.asHexString( sig ) );
     }
 
+    private
+    void
+    assertHexRoundtrip( byte[] arr )
+        throws Exception
+    {
+        String hex = IoUtils.asHexString( arr ).toString();
+        assertEqual( arr, IoUtils.hexToByteArray( hex.toLowerCase() ) );
+        assertEqual( arr, IoUtils.hexToByteArray( hex.toUpperCase() ) );
+    }
+
+    @Test
+    private
+    void
+    testHexStringRoundtrips()
+        throws Exception
+    {
+        assertHexRoundtrip( new byte[] {} );
+
+        assertHexRoundtrip( 
+            new byte[] { (byte) 0xff, (byte) 0x00, (byte) 0x02 } );
+
+        assertHexRoundtrip( IoTestFactory.nextByteArray( 100 ) );
+    }
+
+    @Test( expected = IOException.class,
+           expectedPattern = "\\QInvalid odd length for hex string: 3\\E" )
+    private
+    void
+    testFromHexFailsOddInputLength()
+        throws Exception
+    {
+        IoUtils.hexToByteArray( "a01" );
+    }
+
+    @Test( expected = IOException.class,
+           expectedPattern = "\\QNot a hex char at index 4: '$' (0x24)\\E" )
+    private
+    void
+    testFromHexFailsBadHexChar()
+        throws Exception
+    {
+        IoUtils.hexToByteArray( "0a1b$c" );
+    }
+
     // Regression put in upon discovering that obtaining a FileChannel from a
     // FileOutputStream opened for append does not necessarily mean that the
     // position will be at the end. FileWrapper.openAppendChannel() now ensures

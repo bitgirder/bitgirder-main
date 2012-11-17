@@ -7,14 +7,9 @@ import com.bitgirder.lang.Lang;
 
 import com.bitgirder.log.CodeLoggers;
 
-import com.bitgirder.io.ProtocolProcessors;
 import com.bitgirder.io.Charsets;
 
 import com.bitgirder.test.Test;
-
-import java.util.List;
-
-import java.nio.ByteBuffer;
 
 import org.w3c.dom.Document;
 
@@ -64,55 +59,6 @@ class XmlTests
         throws Exception
     {
         assertDoc1( XmlIo.parseDocument( getDoc1Bytes() ) );
-    }
-
-    @Test
-    private
-    void
-    testXmlIoParseDocFromBufferList()
-        throws Exception
-    {
-        ByteBuffer bb = ByteBuffer.wrap( getDoc1Bytes() );
-        List< ByteBuffer > l = Lang.newList();
-        
-        for ( int i = 0, e = bb.limit(); i < e; i += 3 )
-        {
-            ByteBuffer bb2 = bb.duplicate();
-            bb2.position( i );
-            bb2.limit( Math.min( i + 3, bb.limit() ) );
-
-            l.add( bb2 );
-        }
-
-        state.isTrue( l.size() > 1 ); // sanity check that test is interesting
-        assertDoc1( XmlIo.parseDocument( l ) );
-    }
-
-    @Test
-    private
-    void
-    testXmlDocumentProcessorBasic()
-        throws Exception
-    {
-        XmlDocumentProcessor proc = XmlDocumentProcessor.create();
-
-        ProtocolProcessors.
-            processImmediate( 
-                proc, 
-                ByteBuffer.wrap( getDoc1Bytes() ), 
-                true 
-            );
-
-        assertDoc1( proc.getDocument() );
-    }
-
-    @Test( expected = IllegalStateException.class,
-           expectedPattern = "Attempt to access document before completion" )
-    private
-    void
-    testPrematureDocumentAccessFails()
-    {
-        XmlDocumentProcessor.create().getDocument();
     }
 
     @Test

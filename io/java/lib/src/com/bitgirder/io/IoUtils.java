@@ -505,6 +505,64 @@ class IoUtils
         return asHexString( ByteBuffer.wrap( inputs.notNull( arr, "arr" ) ) );
     }
 
+    // could make this public at some point
+    private
+    static
+    boolean
+    isHexChar( char ch )
+    {
+        return ( ch >= '0' && ch <= '9' ) ||
+               ( ch >= 'a' && ch <= 'f' ) ||
+               ( ch >= 'A' && ch <= 'F' );
+    }
+
+    private
+    static
+    void
+    validateHexString( CharSequence hex )
+        throws IOException
+    {
+        int i = 0;
+
+        for ( int e = hex.length(); i < e; ++i )
+        {
+            char ch = hex.charAt( i );
+
+            if ( ! isHexChar( ch ) )
+            {
+                String tmpl = "Not a hex char at index %d: '%c' (0x%02x)";
+                String msg = String.format( tmpl, i, ch, (int) ch );
+                throw new IOException( msg );
+            }
+        }
+
+        if ( i % 2 == 1 ) 
+        {
+            throw new IOException( "Invalid odd length for hex string: " + i );
+        }
+    }
+
+    public
+    static
+    byte[]
+    hexToByteArray( CharSequence hex )
+        throws IOException
+    {
+        inputs.notNull( hex, "hex" );
+
+        validateHexString( hex );
+
+        byte[] res = new byte[ hex.length() / 2 ];
+
+        for ( int i = 0, e = hex.length(); i < e; i += 2 )
+        {
+            String s = hex.subSequence( i, i + 2 ).toString();
+            res[ i / 2 ] = (byte) Integer.parseInt( s, 16 );
+        }
+
+        return res;
+    }
+
     public
     static
     int

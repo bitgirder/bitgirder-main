@@ -3,8 +3,6 @@ package com.bitgirder.xml;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
-import com.bitgirder.io.ProtocolProcessors;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 
@@ -60,32 +58,6 @@ class XmlIo
     {
         inputs.notNull( arr, "arr" );
         return parseDocument( arr, 0, arr.length );
-    }
-
-    public
-    static
-    Document
-    parseDocument( Iterable< ? extends ByteBuffer > bufs )
-        throws Exception
-    {
-        inputs.notNull( bufs, "bufs" );
-
-        XmlDocumentProcessor proc = XmlDocumentProcessor.create();
-
-        int indx = 0;
-
-        for ( Iterator< ? extends ByteBuffer > it = bufs.iterator();
-                it.hasNext(); )
-        {
-            ByteBuffer bb = it.next();
-
-            inputs.isFalse( 
-                bb == null, "Buffer", ++indx, "in iterator is null" );
-            
-            ProtocolProcessors.processImmediate( proc, bb, ! it.hasNext() );
-        }
-
-        return proc.getDocument();
     }
 
     public

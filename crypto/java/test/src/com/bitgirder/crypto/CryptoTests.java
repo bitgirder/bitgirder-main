@@ -8,6 +8,7 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.io.IoUtils;
+import com.bitgirder.io.IoTests;
 import com.bitgirder.io.Charsets;
 
 import com.bitgirder.test.Test;
@@ -21,6 +22,8 @@ import java.nio.ByteBuffer;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.KeyGenerator;
+
+import javax.crypto.spec.IvParameterSpec;
 
 @Test
 public
@@ -248,6 +251,36 @@ class CryptoTests
             String k = String.format( "accept-%016x", i );
             state.isTrue( m.containsKey( k ) );
         }
+    }
+
+    @Test
+    private
+    void
+    testSecretKeyFromHex()
+        throws Exception
+    {
+        SecretKey k = 
+            CryptoUtils.createKeyGenerator( "AES", 256 ).generateKey();
+
+        CharSequence hex = IoUtils.asHexString( k.getEncoded() );
+        state.equalInt( 64, hex.length() );
+        state.equal( "AES", k.getAlgorithm() );
+
+        SecretKey k2 = CryptoUtils.secretKeyFromHex( hex, "AES" );
+        state.equal( k, k2 );
+    }
+
+    @Test
+    private
+    void
+    testIvFromHex()
+        throws Exception
+    {
+        IvParameterSpec iv = CryptoUtils.createRandomIvSpec( 16 );
+
+        CharSequence hex = IoUtils.asHexString( iv.getIV() );
+
+        IoTests.assertEqual( iv.getIV(), CryptoUtils.ivFromHex( hex ).getIV() );
     }
 
     public

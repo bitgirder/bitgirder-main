@@ -9,6 +9,9 @@ import com.bitgirder.xml.XmlIo;
 
 import com.bitgirder.test.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
 import org.w3c.dom.Document;
 
 @Test
@@ -59,8 +62,27 @@ class XmlBindTests
         Struct1 s1 = createStruct1Inst1();
 
         byte[] docArr = context().toByteArray( s1 );
+        code( "doc:", new String( docArr, "UTF-8" ) );
 
         Struct1 s2 = context().fromByteArray( docArr, Struct1.class );
+        assertEqual( s1, s2 );
+    }
+
+    @Test
+    private
+    void
+    testStreamRoundtrip()
+        throws Exception
+    {
+        Struct1 s1 = createStruct1Inst1();
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        context().writeObject( s1, bos );
+
+        ByteArrayInputStream bis = 
+            new ByteArrayInputStream( bos.toByteArray() );
+        
+        Struct1 s2 = context().readObject( bis, Struct1.class );
         assertEqual( s1, s2 );
     }
 

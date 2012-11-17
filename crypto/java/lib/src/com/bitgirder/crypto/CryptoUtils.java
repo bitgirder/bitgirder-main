@@ -26,6 +26,7 @@ import java.security.GeneralSecurityException;
 import java.security.spec.AlgorithmParameterSpec;
 
 import java.io.Console;
+import java.io.IOException;
 
 import java.nio.ByteBuffer;
 
@@ -33,6 +34,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.Mac;
 import javax.crypto.KeyGenerator;
 import javax.crypto.Cipher;
+import javax.crypto.NullCipher;
 
 import javax.crypto.spec.SecretKeySpec;
 import javax.crypto.spec.IvParameterSpec;
@@ -484,4 +486,29 @@ class CryptoUtils
 
         return res;
     } 
+
+    public
+    static
+    SecretKey
+    secretKeyFromHex( CharSequence hex,
+                      String alg )
+        throws IOException
+    {
+        inputs.notNull( hex, "hex" );
+        inputs.notNull( alg, "alg" );
+
+        return new SecretKeySpec( IoUtils.hexToByteArray( hex ), alg );
+    }
+
+    public
+    static
+    IvParameterSpec
+    ivFromHex( CharSequence hex )
+        throws IOException
+    {
+        inputs.notNull( hex, "hex" );
+        return new IvParameterSpec( IoUtils.hexToByteArray( hex ) );
+    }
+
+    public static Cipher nullCipher() { return new NullCipher(); }
 }

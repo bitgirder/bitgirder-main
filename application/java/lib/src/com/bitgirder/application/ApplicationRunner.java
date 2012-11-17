@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 
 import java.util.concurrent.TimeoutException;
 
+public
 final
 class ApplicationRunner
 {
