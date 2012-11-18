@@ -41,9 +41,6 @@ class KeyedBlobManager
 
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
-//    private final static String KEY_KEY = "key";
-//    private final static String KEY_IV = "iv";
-//    private final static String KEY_DATA = "data";
     private final static byte FLD_END = (byte) 0x00;
     private final static byte FLD_KEY = (byte) 0x01;
     private final static byte FLD_DATA = (byte) 0x02;
@@ -188,96 +185,6 @@ class KeyedBlobManager
         }
     }
 
-//    private
-//    Map< String, String >
-//    parseBlob( String blob )
-//        throws BlobFormatException
-//    {
-//        Map< String, String > res = Lang.newMap();
-//
-//        String[] pairStrs = blob.split( "," );
-//
-//        for ( String pairStr : pairStrs )
-//        {
-//            int eqIdx = pairStr.indexOf( '=' );
-//
-//            if ( eqIdx < 0 )
-//            {
-//                throw new BlobFormatException( "Bad pair: " + pairStr );
-//            }
-//
-//            // for now we will accept an empty value from a pair like 'key='
-//            res.put( 
-//                pairStr.substring( 0, eqIdx ), pairStr.substring( eqIdx + 1 ) );
-//        }
-//
-//        return res;
-//    }
-//
-//    private
-//    final
-//    static
-//    class DecryptParts
-//    {
-//        private String keyId;
-//        private IvParameterSpec ivSpec;
-//        private byte[] data;
-//    }
-//
-//    private
-//    < V >
-//    V
-//    getPair( Map< String, String > pairs,
-//             Class< V > cls,
-//             String key )
-//        throws BlobFormatException
-//    {
-//        String val = pairs.get( key );
-//        if ( val == null ) return null;
-//
-//        if ( cls.equals( String.class ) ) return cls.cast( val );
-//        
-//        state.isTrue( cls.equals( byte[].class ) );
-//
-//        try { return cls.cast( b64.decode( val ) ); }
-//        catch ( IOException ioe )
-//        {
-//            throw new BlobFormatException( 
-//                "Bad base64 data for key " + key + ": " + ioe.getMessage() );
-//        }
-//    }
-//
-//    private
-//    < V >
-//    V
-//    expectPair( Map< String, String > pairs,
-//                Class< V > cls,
-//                String key )
-//        throws BlobFormatException
-//    {
-//        V res = getPair( pairs, cls, key );
-//        
-//        if ( res != null ) return res;
-//        throw new BlobFormatException( "No value for key: " + key );
-//    }
-//
-//    private
-//    DecryptParts
-//    getDecryptParts( String blob )
-//        throws BlobFormatException
-//    {
-//        DecryptParts res = new DecryptParts();
-//
-//        Map< String, String > pairs = parseBlob( blob );
-//        res.keyId = expectPair( pairs, String.class, KEY_KEY );
-//        res.data = expectPair( pairs, byte[].class, KEY_DATA );
-//
-//        byte[] iv = getPair( pairs, byte[].class, KEY_IV );
-//        if ( iv != null ) res.ivSpec = new IvParameterSpec( iv );
-//        
-//        return res;
-//    }
-
     public
     final
     static
@@ -412,7 +319,6 @@ class KeyedBlobManager
 
         Message msg = readMessage( blob );
 
-//        DecryptParts dp = getDecryptParts( blob );
         SecretKey key = keyFor( msg.keyId );
 
         Cipher c = CryptoUtils.createCipher( trans );

@@ -5,12 +5,21 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.io.Charsets;
+import com.bitgirder.io.IoUtils;
+
 import com.bitgirder.xml.XmlIo;
+import com.bitgirder.xml.XmlDocuments;
 
 import com.bitgirder.test.Test;
 
+import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+
+import javax.xml.bind.UnmarshalException;
+
+import org.xml.sax.SAXException;
 
 import org.w3c.dom.Document;
 
@@ -62,7 +71,6 @@ class XmlBindTests
         Struct1 s1 = createStruct1Inst1();
 
         byte[] docArr = context().toByteArray( s1 );
-        code( "doc:", new String( docArr, "UTF-8" ) );
 
         Struct1 s2 = context().fromByteArray( docArr, Struct1.class );
         assertEqual( s1, s2 );
@@ -98,5 +106,48 @@ class XmlBindTests
 
         Struct1 s2 = context().fromDocument( doc, Struct1.class );
         assertEqual( s1, s2 );
+    }
+
+    private
+    void
+    assertValidationException( UnmarshalException ue )
+    {
+        SAXException se = state.cast( SAXException.class, ue.getCause() );
+
+        state.equalString( 
+            "cvc-complex-type.2.4.a: Invalid content was found starting with " +
+            "element 'aString'. One of '{string1}' is expected.",
+            se.getMessage()
+        );
+    }
+
+    @Test
+    private
+    void
+    testValidatingWithSchema()
+        throws Exception
+    {
+        byte[] xml = 
+            Charsets.UTF_8.asByteArray( 
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" " +
+                "standalone=\"yes\"?>" +
+                "<Struct2 xmlns=\"http://bitgirder.com/xml/bind\">" +
+                "<aString>hello</aString>" +
+                "<Struct2>"
+            );
+
+        XmlBindingContext ctx = context();
+
+        InputStream is = 
+            IoUtils.expectSingleResourceAsStream( "xsd/test1.xsd" );
+
+        ctx.setSchema( XmlDocuments.loadSchema( is ) );
+ 
+        try 
+        { 
+            ctx.fromByteArray( xml, Struct2.class );
+            state.fail();
+        }
+        catch ( UnmarshalException ue ) { assertValidationException( ue ); }
     }
 }

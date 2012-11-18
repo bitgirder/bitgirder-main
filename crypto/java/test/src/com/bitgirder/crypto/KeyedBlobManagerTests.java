@@ -109,21 +109,6 @@ class KeyedBlobManagerTests
         }
     }
 
-//    @Test( expected = KeyedBlobManager.InvalidKeyException.class,
-//           expectedPattern = "\\QInvalid key id: bad\\E" )
-//    private
-//    final
-//    class UnrecognizedKeyIdFailsTest
-//    extends TestImpl
-//    {
-//        void
-//        implCall()
-//            throws Exception
-//        {
-//            km.decrypt( "key=bad,data=" );
-//        }
-//    }
-
     @Test( expected = IllegalArgumentException.class,
            expectedPattern = "\\QNo keys set\\E" )
     private
@@ -134,50 +119,6 @@ class KeyedBlobManagerTests
             setTransformation( CTX_DEFAULT.transformation() ).
             build();
     }
-
-//    private
-//    abstract
-//    class TamperTest
-//    extends TestImpl
-//    {
-//        private final String toAlter;
-//
-//        private TamperTest( String toAlter ) { this.toAlter = toAlter; }
-//    
-//        private
-//        String
-//        alterBlob( String blob,
-//                   String toAlter )
-//        {
-//            // Our search string relies on the fact that the key starting with
-//            // toAlter is preceded by a comma, which we assert here as a sanity
-//            // check
-//            state.isTrue( 
-//                blob.startsWith( "key=" ) && ( ! toAlter.equals( "key" ) ) );
-//    
-//            int idx = blob.indexOf( "," + toAlter + "=" );
-//            int chIdx = idx + toAlter.length() + 2;
-//            char ch = blob.charAt( chIdx );
-//            code( "blob:", blob, "; ch:", ch );
-//            char[] chars = blob.toCharArray();
-//            chars[ chIdx ] = ch == 'x' ? 'y' : 'x'; // change the char
-//            blob = new String( chars );
-//            code( "blob:", blob );
-//    
-//            return blob;
-//        }
-//    
-//        void
-//        implCall()
-//            throws Exception
-//        {
-//            byte[] plain = Charsets.UTF_8.asByteArray( "hello" );
-//            String blob = km.encrypt( plain );
-//            blob = alterBlob( blob, toAlter );
-//
-//            km.decrypt( blob );
-//        }
-//    }
 
     @Test( expected = KeyedBlobManager.CorruptBlobException.class )
     private

@@ -9,6 +9,7 @@ require 'digest/md5'
 require 'digest/sha1'
 require 'erb'
 require 'rexml/document'
+require 'pathname'
 
 module BitGirder
 module Ops
@@ -62,6 +63,14 @@ module JavaTaskMixin
 
     def gen_classes_dir( opts = {} )
         "#{gen_build_dir( opts )}/classes"
+    end
+
+    def mod_resource
+        "#{ws_ctx.mod_dir}/resource"
+    end
+
+    def mod_classes
+        "#{ws_ctx.mod_build_dir}/classes"
     end
 
     def get_extra_projs
@@ -127,16 +136,6 @@ class AbstractJavaModuleTask < StandardModTask
     public
     def is_test?
         mod.to_sym == :test
-    end
-
-    public
-    def mod_resource
-        "#{ws_ctx.mod_dir}/resource"
-    end
-
-    public
-    def mod_classes
-        "#{ws_ctx.mod_build_dir}/classes"
     end
 
     private
@@ -850,6 +849,19 @@ class XjcExecutor < AbstractCodegenTask
         argv += srcs
 
         UnixProcessBuilder.new( cmd: jcmd( "xjc" ), argv: argv ).system
+    end
+    
+    def install_generated_resources( chain )
+        
+        root = Pathname.new( ws_ctx.mod_dir( code_type: :xml ) )
+
+        get_generator_inputs( chain ).map do |s| 
+            
+            rel = Pathname.new( s ).relative_path_from( root ).to_s
+            dest = "#{gen_classes_dir}/xsd/#{rel}"
+
+            fu().ln_s( s, ensure_parent( dest ) )
+        end
     end
 end
 
