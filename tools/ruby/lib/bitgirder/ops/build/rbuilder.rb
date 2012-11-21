@@ -971,7 +971,7 @@ class RubyDistGem < RubyDistTask
         spec.authors = ["BitGirder Technologies, Inc"]
         spec.email = "dev-support@bitgirder.com"
         spec.homepage = "http://www.bitgirder.com"
-        spec.licenses = ["BitGirder Master Software License"]
+        spec.licenses = ["Apache 2.0"]
         spec.require_paths = ["lib"]
         spec.executables.push( *( get_gem_executables ) )
 
