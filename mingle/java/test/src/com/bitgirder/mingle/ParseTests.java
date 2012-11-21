@@ -133,7 +133,16 @@ class ParseTests
                 "Unexpected char in fractional part: \".\" (U+002E)",
             
             errMsgKey( TestType.NUMBER, "0.x3" ),
-                "Number has empty or invalid fractional part"
+                "Number has empty or invalid fractional part",
+            
+            errMsgKey( TestType.IDENTIFIER, "trailing-input/x" ),
+                "Unexpected trailing data \"/\" (U+002F)",
+            
+            errMsgKey( TestType.IDENTIFIER, "giving-mixedMessages" ),
+                "Unexpected identifier character: \"M\" (U+004D)",
+            
+            errMsgKey( TestType.IDENTIFIER, "a-bad-ch@r" ),
+                "Unexpected trailing data \"@\" (U+0040)"
         );
 
     private
@@ -278,6 +287,7 @@ class ParseTests
             {
                 case STRING: return expectOneTok( MingleString.class );
                 case NUMBER: return expectOneTok( MingleLexer.Number.class );
+                case IDENTIFIER: return MingleParser.parseIdentifier( in );
 
                 default: 
                     throw state.createFailf( "Unhandled test type: %s", tt );
@@ -291,6 +301,9 @@ class ParseTests
             switch ( tt )
             {
                 case STRING: return ( (MingleString) val ).getExternalForm();
+
+                case IDENTIFIER: 
+                    return ( (MingleIdentifier) val ).getExternalForm();
 
                 default: 
                     throw state.createFailf( 
