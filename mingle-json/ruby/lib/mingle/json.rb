@@ -59,7 +59,7 @@ class JsonMingleCodec < BitGirderClass
     end
 
     private
-    def from_mingle_structure( val )
+    def from_mingle_struct( val )
         
         res = from_mingle_symbol_map( val.fields, {} )
         res[ KEY_TYPE ] = val.type.external_form unless @omit_type_fields
@@ -90,7 +90,7 @@ class JsonMingleCodec < BitGirderClass
         case val
             when MingleString then val.to_s
             when MingleSymbolMap then from_mingle_symbol_map( val )
-            when MingleStructure then from_mingle_structure( val )
+            when MingleStruct then from_mingle_struct( val )
             when MingleBoolean then val.as_boolean
 
             when MingleInt64, MingleInt32, MingleFloat64, MingleFloat32 
@@ -203,7 +203,8 @@ class JsonMingleCodec < BitGirderClass
             end
         else
             flds = as_symbol_map( h, path )
-            type_ref ? MingleStruct.new( :type => type_ref, :fields => flds ) : flds
+            type_ref ? 
+                MingleStruct.new( :type => type_ref, :fields => flds ) : flds
         end
     end
 

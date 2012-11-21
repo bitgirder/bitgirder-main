@@ -43,6 +43,9 @@
             "mingle-service",
             "mingle-io",
             "mysql",
+            "ops-java",
+            "ops-ruby",
+            "ops-tomcat",
             "systest",
             "testing"
         ]

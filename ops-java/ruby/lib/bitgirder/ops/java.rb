@@ -9,7 +9,7 @@ include BitGirder::Core
 
 module JavaEnvironments
 
-    include BitGirder::Core::BitGirderMethods
+    extend BitGirder::Core::BitGirderMethods
 
     ENV_JAVA_HOME = "JAVA_HOME"
 
@@ -24,7 +24,11 @@ module JavaEnvironments
                     res
             end
         else
-            raise "#{ENV_JAVA_HOME} is not set"
+            if jv = Io.which( "java" )
+                File.dirname( File.dirname( jv ) )
+            else
+                raise "#{ENV_JAVA_HOME} is not set and no 'java' found on path"
+            end
         end
     end
 
@@ -35,7 +39,7 @@ class JavaEnvironment < BitGirderClass
 
     include BitGirder::Io
     
-    bg_attr :java_home, validation: :file_exists, required: false
+    bg_attr :java_home, validation: :file_exists
 
     public
     def jcmd( cmd )
@@ -61,12 +65,6 @@ end
 
 class JavaRunner < BitGirderClass
 
-    KEY_APP_RUNNER = :app_runner
-    DEFAULT_APP_RUNNER = "com.bitgirder.application.ApplicationRunner"
-
-    MINGLE_APP_RUNNER =
-        "com.bitgirder.mingle.application.MingleApplicationRunner"
-
     bg_attr :java_env
     bg_attr :command
     bg_attr :classpath, default: proc { [] }
@@ -80,7 +78,7 @@ class JavaRunner < BitGirderClass
     def create_jv_argv
         
         res = []
-        
+ 
         unless @classpath.empty?
             res << "-classpath" << @java_env.as_classpath( @classpath )
         end
@@ -88,6 +86,8 @@ class JavaRunner < BitGirderClass
         res += @jvm_args
         @sys_props.each_pair { |k, v| res << "-D#{k}=#{v}" }
         res += argv
+
+        res.map { |v| v.to_s }
     end
 
     public
@@ -100,24 +100,15 @@ class JavaRunner < BitGirderClass
             opts: @proc_opts
         )
     end
-
+ 
     def self.create_application_runner( opts )
 
         not_nil( opts, :opts )
 
-        argv = [ opts[ KEY_APP_RUNNER ] || DEFAULT_APP_RUNNER ]
-        argv << has_key( opts, :app_class )
+        argv = [ has_key( opts, :main ) ]
         argv += ( opts[ :argv ] || [] )
 
         JavaRunner.new( opts.merge( command: "java", argv: argv ) )
-    end
-
-    def self.create_mingle_app_runner( opts )
-        
-        not_nil( opts, :opts )
-
-        opts = opts.merge( KEY_APP_RUNNER => MINGLE_APP_RUNNER )
-        self.create_application_runner( opts )
     end
 end
 

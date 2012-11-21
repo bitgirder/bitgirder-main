@@ -1,6 +1,7 @@
 require 'bitgirder/core'
 require 'bitgirder/testing'
 require 'bitgirder/ops/java'
+require 'bitgirder/io'
 require 'mingle'
 
 module BitGirder
@@ -11,6 +12,7 @@ class JavaOpsTests
 
     include TestClassMixin
     include Mingle
+    include BitGirder::Io
 
     def jv_home
         @jv_home ||= JavaEnvironments.get_java_home
@@ -23,6 +25,24 @@ class JavaOpsTests
     # Mainly of value as basic code coverage of get_default()
     def test_jv_env_get_default
         assert_equal( jv_home, JavaEnvironment.get_default.java_home )
+    end
+
+    def test_jv_env_get_default_uses_path_inference
+        
+        save = ENV.values_at( "JAVA_HOME", "PATH" )
+        begin
+            ENV.delete( "JAVA_HOME" )
+            which_dir = File.dirname( which( "which" ) ) 
+
+            Dir.mktmpdir do |tmp|
+                ENV[ "PATH" ] = "#{tmp}/bin:/more/blah:#{which_dir}"
+                fu().touch( java = ensure_parent( "#{tmp}/bin/java" ) )
+                fu().chmod( 0755, java )
+                assert_equal( tmp, JavaEnvironments.get_java_home )
+            end
+        ensure
+            ENV[ "JAVA_HOME" ], ENV[ "PATH" ] = *save
+        end
     end
 
     def create_jrunner1
@@ -89,33 +109,6 @@ class JavaOpsTests
             "a:b:c", jv_env.as_classpath( MingleList.new( %w{ a b c } ) ) )
     end
 
-    def test_create_app_runner
-        
-        b =
-            JavaRunner.create_application_runner(
-                java_env: jv_env,
-                app_class: "Foo",
-                classpath: "foo.jar",
-                jvm_args: [ "-Xblah" ],
-                sys_props: { "p1" => "val1" },
-                argv: %w{ arg1 arg2 },
-                proc_env: { "VAR1" => "val1" },
-                proc_opts: { k: :v }
-            ).
-            process_builder
-        
-        assert_equal( "#{jv_home}/bin/java", b.cmd )
-
-        assert_equal(
-            %w{ -classpath foo.jar -Xblah -Dp1=val1
-                com.bitgirder.application.ApplicationRunner Foo arg1 arg2 },
-            b.argv
-        )
-
-        assert_equal( { "VAR1" => "val1" }, b.env )
-        assert_equal( { k: :v }, b.opts )
-    end
-
     # Not re-testing all of what is tested in test_create_app_runner, just the
     # app_runner specific part
     def test_create_app_runner_custom_runner_class
@@ -123,31 +116,14 @@ class JavaOpsTests
         b = 
             JavaRunner.create_application_runner(
                 java_env: jv_env,
-                app_class: "Foo",
-                app_runner: "com.bitgirder.runner.Runner",
-                classpath: "foo.jar"
+                main: "com.bitgirder.runner.Runner",
+                classpath: "foo.jar",
+                argv: [ "arg1" ]
             ).
             process_builder
 
         assert_equal(
-            %w{ -classpath foo.jar com.bitgirder.runner.Runner Foo }, b.argv )
-    end
-
-    def test_create_mingle_app_runner
-        
-        b =
-            JavaRunner.create_mingle_app_runner(
-                java_env: jv_env,
-                app_class: "Foo",
-                classpath: "foo.jar"
-            ).
-            process_builder
-        
-        argv_expct =
-            %w{ -classpath foo.jar 
-                com.bitgirder.mingle.application.MingleApplicationRunner Foo }
-
-        assert_equal( argv_expct, b.argv )
+            %w{ -classpath foo.jar com.bitgirder.runner.Runner arg1 }, b.argv )
     end
 end
 

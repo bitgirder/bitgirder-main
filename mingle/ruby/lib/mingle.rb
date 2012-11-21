@@ -2230,7 +2230,7 @@ class MingleSymbolMap < MingleValue
     EMPTY = new( {} )
 end
 
-class MingleStructure < MingleValue
+class MingleStruct < MingleValue
 
     bg_attr :type, :processor => MingleTypeReference
     
@@ -2248,8 +2248,6 @@ class MingleStructure < MingleValue
         @fields[ fld ]
     end
 end
-
-class MingleStruct < MingleStructure; end
 
 class GenericRaisedMingleError < StandardError
 

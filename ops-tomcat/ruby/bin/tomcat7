@@ -1,0 +1,569 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+include BitGirder::Core
+
+require 'bitgirder/io'
+
+require 'bitgirder/ops/java'
+include BitGirder::Ops::Java
+
+require 'mingle'
+include Mingle
+
+require 'mingle/json'
+
+require 'rexml/document'
+
+require 'socket'
+
+ENV_TOMCAT7_HOME = "TOMCAT7_HOME"
+
+class Command < BitGirderClass
+
+    include BitGirder::Io
+
+    private
+    def load_struct( f )
+
+        File.open( f ) do |io|
+            Mingle::Json::JsonMingleCodec.new.from_buffer( io.read( io.size ) )
+        end
+    end
+
+    private
+    def save_struct( f, s )
+        
+        File.open( ensure_parent( f ), "w" ) do |io|
+            io.print Mingle::Json::JsonMingleCodec.new.as_buffer( s )
+        end
+    end
+
+    private
+    def load_config( f )
+        
+        flds = load_struct( f ).fields
+
+        TomcatConfig.new(
+            control_port: flds.expect_int( :control_port ),
+            http_port: flds.expect_int( :http_port ),
+            https_port: flds.expect_int( :https_port ),
+            shutdown_string: flds.expect_string( :shutdown_string ),
+            tomcat_home: flds.expect_string( :tomcat_home ),
+            java_home: flds.expect_string( :java_home )
+        )
+    end
+
+    private
+    def load_runtime_config( rt )
+        load_config( "#{rt}/config.json" )
+    end
+end
+
+class Help < Command
+
+    public
+    def run( run_ctx )
+ 
+        print "\ncommands:\n\n"
+        COMMANDS.keys.sort.each { |s| puts "#{ " " * 4 }#{s}" }
+        puts
+
+    end
+end
+
+class TomcatConfig < BitGirderClass
+    
+    bg_attr :control_port, validation: :positive
+    bg_attr :http_port, validation: :positive
+    bg_attr :https_port, validation: :positive
+
+    bg_attr :shutdown_string
+    
+    bg_attr :tomcat_home, validation: :file_exists
+
+    bg_attr :java_home,     
+            validation: :file_exists,
+            default: lambda { JavaEnvironments.get_java_home }
+    
+    public
+    def to_mingle_struct
+        
+        MingleStruct.new(
+            type: :"bitgirder:ops:tomcat@v1/TomcatConfig",
+            fields: {
+                control_port: @control_port,
+                http_port: @http_port,
+                https_port: @https_port,
+                shutdown_string: @shutdown_string,
+                tomcat_home: @tomcat_home,
+                java_home: @java_home
+            }
+        )
+    end
+end
+
+PORT_OPTS = { validation: :positive, processor: :integer }
+
+class Install < Command
+
+    PROTO_HTTP11 = "HTTP/1.1"
+
+    bg_attr :install_to
+
+    bg_attr :tomcat_home, validation: :file_exists
+
+    bg_attr :control_port, PORT_OPTS
+
+    bg_attr :http_port, PORT_OPTS
+
+    bg_attr :https_port, PORT_OPTS.merge( required: false )
+
+    bg_attr :ssl_keystore, validation: :file_exists, required: false
+
+    bg_attr :ssl_keystore_pass, required: false
+
+    bg_attr :ssl_keystore_type, required: false
+
+    bg_attr :ssl_key_alias, required: false
+
+    bg_attr :ssl_key_pass, required: false
+
+    bg_attr :wipe_install, required: false, processor: :boolean
+
+    bg_attr :webapps,
+            is_list: true,
+            processor: lambda { |s|
+                idx = s.index( "=" ) || s.size
+                dest = s[ 0, idx ]
+                if idx < s.size - 1
+                    [ dest, s[ idx + 1 .. -1 ] ]
+                else
+                    raise "Need a name for webapp #{dest}"
+                end
+            },
+            list_validation: :not_empty
+
+    bg_attr :java_home,
+            default: lambda { JavaEnvironments.get_java_home }
+
+    private
+    def impl_initialize
+        
+        if @https_port && ( ! @ssl_keystore )
+            raise "Cannot configure SSL without at least a keystore"
+        end
+
+        if @ssl_keystore && ( ! @https_port )
+            raise "Need a port for SSL listener"
+        end
+    end
+
+    private
+    def base_dir( dir )
+        "#@install_to/catalina/#{dir}"
+    end
+
+    private
+    def init_config
+
+        @config = TomcatConfig.new(
+            control_port: @control_port,
+            http_port: @http_port,
+            https_port: @https_port,
+            shutdown_string: rand( 2 ** 128 ).to_s( 16 ),
+            tomcat_home: @tomcat_home,
+            java_home: @java_home
+        )
+    end
+
+    private
+    def setup_install_dir
+        
+        if File.exist?( @install_to )
+            if @wipe_install 
+                fu().rm_rf( @install_to )
+            else
+                raise "Install dir #@install_to exists (--wipe-install?)"
+            end
+        end
+
+        %w{ conf logs webapps work temp }.each do |dir| 
+            ensure_dir( base_dir( dir ) )
+        end
+ 
+        fu().cp( "#@tomcat_home/conf/web.xml", base_dir( "conf" ) )
+    end
+
+    private
+    def new_elt( name, attrs )
+        
+        res = REXML::Element.new( name.to_s )
+
+        attrs.each_pair do |k, v| 
+            res.add_attribute( k.to_s, v.to_s ) unless v.nil?
+        end
+
+        res
+    end
+
+    private
+    def add_listener_elts( doc )
+        
+        %w{ org.apache.catalina.core.JasperListener
+            org.apache.catalina.core.JreMemoryLeakPreventionListener
+            org.apache.catalina.mbeans.GlobalResourcesLifecycleListener
+            org.apache.catalina.core.ThreadLocalLeakPreventionListener 
+        }.
+        each { |s| doc.root << new_elt( :Listener, :className => s ) }
+    end
+
+    private
+    def add_http_connector( svc )
+
+        svc << new_elt( :Connector,
+            :port => @config.http_port,
+            :protocol => PROTO_HTTP11,
+            :connectionTimeout => 20000,
+            :redirectPort => @config.https_port
+        )
+    end
+
+    private
+    def add_https_connector( svc )
+        
+        svc << new_elt( :Connector,
+            :port => @config.https_port,
+            :protocol => PROTO_HTTP11,
+            :SSLEnabled => true,
+            :maxThreads => 150,
+            :scheme => "https",
+            :secure => true,
+            :clientAuth => false,
+            :sslProtocol => :TLS,
+            :keystoreFile => @ssl_keystore,
+            :keystorePass => @ssl_keystore_pass,
+            :keystoreType => @ssl_keystore_type,
+            :keyAlias => @ssl_key_alias,
+            :keyPass => @ssl_key_pass
+        )
+    end
+
+    private
+    def add_engine( svc )
+        
+        eng = new_elt( :Engine, name: "Catalina", defaultHost: "localhost" )
+
+        valve = new_elt( :Valve,
+            className: "org.apache.catalina.valves.AccessLogValve",
+            directory: "logs",
+            prefix: "localhost_access_log.",
+            suffix: ".txt",
+            pattern: '%h %l %u %t "%r" %s %b'
+        )
+
+        host = new_elt( :Host,
+            name: "localhost",
+            appBase: "webapps",
+            unpackWARs: true,
+            autoDeply: true
+        )
+
+        host << valve
+        eng << host
+        svc << eng
+    end
+
+    private
+    def add_service_elt( doc )
+ 
+        doc.root << ( svc = new_elt( :Service, :name => "Catalina" ) )
+
+        add_http_connector( svc )
+        add_https_connector( svc )
+
+        add_engine( svc )
+    end
+
+    private
+    def build_server_conf
+        
+        doc = REXML::Document.new
+        doc << REXML::XMLDecl.new( "1.0", "utf-8" )
+
+        doc << new_elt( :Server, 
+            port: @config.control_port, 
+            shutdown: @config.shutdown_string
+        )
+
+        add_listener_elts( doc )
+        add_service_elt( doc )
+        
+        doc
+    end
+
+    private
+    def write_server_conf
+        
+        doc = build_server_conf
+ 
+        File.open( "#{base_dir( :conf )}/server.xml", "w" ) do |io| 
+            doc.write( io, 4 )
+            io.print "\n"
+        end
+    end
+
+    private
+    def install_webapps
+       
+        @webapps.each do |app|
+            
+            dest, src = *app
+            dest = ensure_parent( dest )
+            fu().ln_s( src, "#{base_dir( :webapps )}/#{dest}" )
+        end
+    end
+
+    private
+    def write_config
+        save_struct( "#@install_to/config.json", @config.to_mingle_struct )
+    end
+
+    public
+    def run
+ 
+        init_config
+        setup_install_dir
+        write_server_conf
+        install_webapps
+        write_config
+    end
+end
+
+class TomcatProcessBuilder < BitGirderClass
+    
+    bg_attr :runtime
+    bg_attr :config
+
+    bg_attr :proc_opts, default: lambda { {} }
+
+    include BitGirder::Io
+
+    private
+    def get_run_classpath
+        
+        %w{ bootstrap.jar tomcat-juli.jar }.map do |f|
+            file_exists( "#{@config.tomcat_home}/bin/#{f}" )
+        end
+    end
+
+    private
+    def get_run_sysprops
+ 
+        cat_home = @config.tomcat_home
+
+        res = {
+
+            "java.util.logging.config.file" =>
+                file_exists( "#{cat_home}/conf/logging.properties" ),
+
+            "java.util.logging.manager" =>
+                "org.apache.juli.ClassLoaderLogManager",
+ 
+            "catalina.base" => "#@runtime/catalina",
+            "catalina.home" => cat_home,
+
+            "java.io.tmpdir" => file_exists( "#@runtime/catalina/temp" )
+        }
+    end
+
+    private
+    def get_run_argv
+        %w{ start }
+    end
+
+    public
+    def build
+ 
+        JavaRunner.create_application_runner(
+            java_env: JavaEnvironment.new( java_home: @config.java_home ),
+            command: "java",
+            classpath: get_run_classpath,
+            sys_props: get_run_sysprops,
+            main: "org.apache.catalina.startup.Bootstrap",
+            argv: get_run_argv,
+            proc_opts: @proc_opts
+        ).
+        process_builder
+    end
+end
+
+class RuntimeCommand < Command
+    
+    bg_attr :runtime, 
+            validation: :file_exists,
+            default: ENV[ ENV_TOMCAT7_HOME ]
+    
+    include BitGirder::Io
+
+    private
+    def impl_initialize
+        @config = load_config( file_exists( "#@runtime/config.json" ) )
+    end
+
+    private
+    def pid_file
+        "#@runtime/tomcat.pid"
+    end
+end
+
+class Run < RuntimeCommand
+
+    public
+    def run
+
+        TomcatProcessBuilder.
+            new( config: @config, runtime: @runtime ).
+            build.
+            exec
+    end
+end
+
+class Daemon < RuntimeCommand
+
+    private
+    def do_start
+ 
+        b = TomcatProcessBuilder.new( config: @config, runtime: @runtime )
+
+        Process.daemon
+        File.open( pid_file, "w" ) { |io| io.puts $$ }
+        
+        out = "#@runtime/catalina/logs/catalina.out"
+        b.proc_opts[ [ STDOUT, STDERR ] ] = File.open( out, "a" )
+
+        b.build.exec
+    end
+
+    private
+    def get_current_pid
+        
+        if File.exist?( f = pid_file )
+            File.open( f ) { |io| io.gets.to_i }
+        else
+            raise "No pid file (#{f}) present. Tomcat not running?"
+        end
+    end
+
+    private
+    def send_shutdown
+        
+        begin
+            sock = TCPSocket::new( "localhost", @config.control_port )
+    
+            begin
+                sock.puts @config.shutdown_string
+            ensure
+                sock.close
+            end
+
+        rescue Errno::ECONNREFUSED
+        end
+    end
+
+    private
+    def await_port_close( port )
+        
+        3.times do |i|
+            begin
+                TCPSocket.new( "localhost", port ).close
+                code( "Still got a connection at :#{port}; will retry" )
+                sleep( 2 )
+            rescue Errno::ECONNREFUSED
+                return true
+            end
+        end
+
+        return false
+    end
+
+    private
+    def await_srv_close
+        
+        # Returns true if and only if all ports are seen closed
+        ! [ :control_port, :http_port, :https_port ].find do |port|
+            ! await_port_close( @config.send( port ) )
+        end
+    end
+
+    private
+    def do_stop
+        
+        pid = get_current_pid
+        
+        send_shutdown
+        
+        unless await_srv_close
+            code( "Server appears to still be running; sending KILL to #{pid}" )
+            Process.kill( "KILL", pid )
+        end
+
+        fu().rm( pid_file )
+    end
+
+    private
+    def do_restart
+        
+        do_stop
+        do_start
+    end
+ 
+    public
+    def run( run_ctx )
+ 
+        cmd = run_ctx[ :argv_remain ].shift or raise "Need a daemon command"
+
+        if respond_to?( meth = :"do_#{cmd}", true )
+            send( meth )
+        else
+            raise "Unknown daemon command: #{cmd}"
+        end
+    end
+end
+
+class Tailf < RuntimeCommand
+
+    public
+    def run
+        
+        UnixProcessBuilder.new(
+            cmd: "tail",
+            argv: [ "-f" ] + Dir.glob( "#@runtime/catalina/logs/*" )
+        ).
+        exec
+    end
+end
+
+COMMANDS = {
+    install: Install,
+    run: Run,
+    daemon: Daemon,
+    tailf: Tailf,
+    help: Help
+}
+
+def get_command_cls
+    
+    idx = ARGV.find_index { |arg| ! arg.start_with?( "-" ) }
+    
+    cmd_sym = idx ? ARGV.delete_at( idx ).to_sym : :help
+ 
+    unless res = COMMANDS[ cmd_sym ]
+        res = Help
+        STDERR.puts( "Unrecognized command: #{cmd_sym}" )
+    end
+
+    res
+end
+
+BitGirderCliApplication.run( get_command_cls )
