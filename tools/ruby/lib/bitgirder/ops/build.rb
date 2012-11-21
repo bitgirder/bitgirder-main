@@ -39,7 +39,7 @@ class TreeLinker < BitGirderClass
     def update_from( opts )
         
         src_dir = has_key( opts, :src )
-        sel = has_key( opts, :selector )
+        sel = opts[ :selector ] || "**/*"
         
         return unless File.exists?( src_dir )
 
@@ -85,6 +85,27 @@ module Constants
     MOD_TEST = Mingle::MingleIdentifier.get( :test )
     MOD_BIN = Mingle::MingleIdentifier.get( :bin )
     MOD_INTEG = Mingle::MingleIdentifier.get( :integ )
+end
+
+module BuildVersions
+
+    def get_version( opts = {} )
+        
+        if ( run_opts = opts[ :run_opts ] ) &&
+           ( ver = run_opts.get_string( :build_version ) )
+            ver
+        else
+            cmd = which( "hg" )
+            
+            case tag = `hg identify -t`.chomp
+            when "tip", nil, /^\s*$/
+                raise "No build version given or inferred"
+            else tag
+            end
+        end
+    end
+
+    module_function :get_version
 end
 
 module MingleCodecMixin

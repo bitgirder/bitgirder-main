@@ -39,7 +39,7 @@ class JavaEnvironment < BitGirderClass
 
     include BitGirder::Io
     
-    bg_attr :java_home, validation: :file_exists
+    bg_attr :java_home, :validation => :file_exists
 
     public
     def jcmd( cmd )
@@ -59,7 +59,7 @@ class JavaEnvironment < BitGirderClass
     end
 
     def self.get_default
-        self.new( java_home: JavaEnvironments.get_java_home )
+        self.new( :java_home => JavaEnvironments.get_java_home )
     end
 end
 
@@ -67,12 +67,12 @@ class JavaRunner < BitGirderClass
 
     bg_attr :java_env
     bg_attr :command
-    bg_attr :classpath, default: proc { [] }
-    bg_attr :jvm_args, default: proc { [] }
-    bg_attr :sys_props, default: proc { {} }
+    bg_attr :classpath, :default => proc { [] }
+    bg_attr :jvm_args, :default => proc { [] }
+    bg_attr :sys_props, :default => proc { {} }
     bg_attr :argv, :validation => :not_empty
-    bg_attr :proc_env, default: proc { {} }
-    bg_attr :proc_opts, default: proc { {} }
+    bg_attr :proc_env, :default => proc { {} }
+    bg_attr :proc_opts, :default => proc { {} }
 
     private
     def create_jv_argv
@@ -94,10 +94,10 @@ class JavaRunner < BitGirderClass
     def process_builder
 
         BitGirder::Io::UnixProcessBuilder.new(
-            cmd: @java_env.jcmd( @command ),
-            argv: create_jv_argv,
-            env: @proc_env,
-            opts: @proc_opts
+            :cmd => @java_env.jcmd( @command ),
+            :argv => create_jv_argv,
+            :env => @proc_env,
+            :opts => @proc_opts
         )
     end
  
@@ -108,7 +108,7 @@ class JavaRunner < BitGirderClass
         argv = [ has_key( opts, :main ) ]
         argv += ( opts[ :argv ] || [] )
 
-        JavaRunner.new( opts.merge( command: "java", argv: argv ) )
+        JavaRunner.new( opts.merge( :command => "java", :argv => argv ) )
     end
 end
 

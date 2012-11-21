@@ -297,6 +297,8 @@ class StringType < BitGirderClass
     end
 end
 
+if RubyVersions.is_19x? # Don't even test unless we're >= 1.9
+
 class UnixProcessBuilderTests < BitGirderClass
     
     include TestClassMixin
@@ -340,6 +342,8 @@ class UnixProcessBuilderTests < BitGirderClass
         system
     end
 end
+
+end # Conditional 1.9.x block
 
 class BinaryConverterTests < BitGirderClass
 
@@ -808,7 +812,7 @@ class BinIoTests < BitGirderClass
 
         rd = BinaryReader.new( :order => ORDER_LITTLE_ENDIAN, :io => io )
         str = rd.read_utf8
-        assert_equal( Encoding::UTF_8, str.encoding )
+        RubyVersions.when_19x { assert_equal( Encoding::UTF_8, str.encoding ) }
         assert_equal( "hello", str )
     end
 

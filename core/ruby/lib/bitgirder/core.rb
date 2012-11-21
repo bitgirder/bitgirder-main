@@ -20,6 +20,10 @@ class RubyVersions
         end
     end
 
+    def self.is_19x?
+        RUBY_VERSION >= "1.9"
+    end
+
     def self.when_19x( val = nil, &blk )
         self.when_geq( "1.9", val, &blk )
     end

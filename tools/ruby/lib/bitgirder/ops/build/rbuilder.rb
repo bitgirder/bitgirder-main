@@ -4,6 +4,7 @@ require 'bitgirder/ops/build'
 require 'bitgirder/ops/build/distro'
 
 require 'erb'
+require 'set'
 
 include BitGirder::Core
 include BitGirder::Ops::Build
@@ -809,34 +810,6 @@ end
 
 TaskRegistry.instance.register_path( RubyDistTest, :ruby, :dist, :test )
 
-class RubyDistInteg < RubyDistTask
-    
-    public
-    def get_direct_dependencies
-        [ TaskTarget.create( :integ, :dist, :build, dist ) ]
-    end
-
-    public
-    def execute( chain )
-
-        env = TestRunner.get_integ_env( chain, [ :integ, :dist, :build, dist ] )
-
-        TestRunner.new(
-            chain: chain, 
-            test_projs: direct_deps,
-            task: self,
-            run_opts: run_opts(),
-            run_ctx: run_ctx(),
-            ruby_ctx: ruby_ctx,
-            proc_env: env,
-            test_mod: :integ
-        ).
-        run
-    end
-end
-
-TaskRegistry.instance.register_path( RubyDistInteg, :ruby, :dist, :integ )
-
 class RubyDistValidate < RubyDistTask
 
     public
@@ -926,10 +899,46 @@ class RubyDistGem < RubyDistTask
     end
 
     private
+    def collect_bin_dirs( chain )
+        
+        res = {}
+
+        BuildChains.tasks( chain, RubyModBuilder ).each do |tsk|
+            
+            bin_dir = ws_ctx.mod_dir( proj: tsk.proj, mod: :bin )
+
+            if File.exist?( bin_dir )
+                res[ tsk.proj ] = bin_dir
+            end
+        end
+
+        res
+    end
+
+    private
+    def build_gem_bin( gem_work, chain )
+        
+        bin_dirs = collect_bin_dirs( chain )
+
+        lnk = TreeLinker.new( dest: "#{gem_work}/bin" )
+
+        bin_dirs.each_pair do |proj, dir|
+            
+            pd = ws_ctx.proj_def( proj: proj )
+
+            if msk = pd.fields.get_string( :publish_bin )
+                lnk.update_from( src: dir, selector: msk )
+            end
+        end
+
+        lnk.build
+    end
+
+    private
     def add_bg_license( gem_work )
         
         File.open( "#{gem_work}/LICENSE.txt", "w" ) do |io|
-            io.print MASTER_LICENSE
+            io.print APACHE2_LICENSE
         end
     end
 
@@ -937,7 +946,13 @@ class RubyDistGem < RubyDistTask
     def build_gem_files( gem_work, chain )
 
         build_gem_lib( gem_work, chain )
+        build_gem_bin( gem_work, chain )
         add_bg_license( gem_work )
+    end
+
+    private
+    def get_gem_executables
+        Dir.chdir( "bin" ) { Dir.glob( "*" ) }
     end
 
     # Called in gem work dir
@@ -952,12 +967,13 @@ class RubyDistGem < RubyDistTask
         end
 
         spec.name = "bitgirder-#{dist}"
-        spec.version = "0.1.0"
+        spec.version = BuildVersions.get_version( run_opts: @run_opts )
         spec.authors = ["BitGirder Technologies, Inc"]
         spec.email = "dev-support@bitgirder.com"
         spec.homepage = "http://www.bitgirder.com"
         spec.licenses = ["BitGirder Master Software License"]
         spec.require_paths = ["lib"]
+        spec.executables.push( *( get_gem_executables ) )
 
         spec.files = Dir.glob( "**/*" )
 
@@ -981,285 +997,183 @@ end
 
 TaskRegistry.instance.register_path( RubyDistGem, :ruby, :dist, :gem )
 
-MASTER_LICENSE = <<END_LIC
-THE FOLLOWING TERMS AND CONDITIONS CONTROL THE USE OF THE SOFTWARE PROVIDED BY
-BITGIRDER AND CONTAIN SIGNIFICANT RESTRICTIONS AND LIMITATIONS ON RIGHTS AND
-REMEDIES, AND CREATE OBLIGATIONS ON ANYONE WHO ACCEPTS THIS AGREEMENT.
-THEREFORE, YOU SHOULD READ THIS AGREEMENT CAREFULLY.
+APACHE2_LICENSE = <<END_LIC
 
-BITGIRDER TECHNOLOGIES, INC. SOFTWARE LICENSE AGREEMENT:
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
 
-BY USING THE BITGIRDER SOFTWARE (THE "SOFTWARE"), YOU AGREE TO THE FOLLOWING
-TERMS AND CONDITIONS WHICH CONSTITUTE A LEGALLY ENFORCEABLE LICENSE AGREEMENT
-(THE "AGREEMENT"). IF YOU ARE ENTERING INTO THIS AGREEMENT ON BEHALF OF A
-COMPANY OR OTHER LEGAL ENTITY, YOU REPRESENT THAT YOU HAVE THE COMPLETE
-AUTHORITY TO ENTER INTO THIS AGREEMENT ON BEHALF OF YOUR COMPANY.  IF YOU ARE
-USING THE SOFTWARE AS AN INDIVIDUAL, YOU REPRESENT THAT YOU ARE OVER THE AGE OF
-18. AS USED IN THIS LICENSE AGREEMENT, THE TERM "CUSTOMER" ENCOMPASSES THE
-ENTITY AND/OR EACH USER OF THE SOFTWARE, INCLUDING, IF YOU ARE A CORPORATE
-ENTITY, ALL EMPLOYEES OF YOUR COMPANY.  IF YOU DO NOT HAVE THE REQUISITE
-AUTHORITY, OR IF YOU DO NOT AGREE WITH THESE TERMS AND CONDITIONS, YOU MAY NOT
-USE THIS SOFTWARE.
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 
-Your registration for, or use of, the Software shall be deemed to be your
-agreement to abide by this Agreement and any materials available on the
-BitGirder website or provided to you by BitGirder which are incorporated by
-reference herein (including but not limited to any privacy or security
-policies).  For reference, a Definitions section is included at the end of this
-Agreement.
+   1. Definitions.
 
-1. Grant of Rights; Restrictions Pursuant to the terms and conditions of this
-Agreement, BitGirder hereby grants Customer a limited, non-exclusive,
-non-transferable, worldwide right to use the Software solely for Customer's own
-internal business purposes (the "License"). 
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
 
-Customer may copy, reverse engineer or modify the Software for its own internal
-purposes, but shall not (unless indicated in the applicable Order Form) license,
-grant, sell, resell, transfer, assign, or distribute to any third party the
-Software or any derivative works thereof in any way.  
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
 
-BitGirder and its licensors reserve all rights not expressly granted to
-Customer.
-  
-2. The Software BitGirder is providing Customer with the Software in the edition
-selected by Customer in the applicable Order Form.  
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
 
-3. Support BitGirder has no obligation under this Agreement to provide any
-support to Customer unless specifically contracted for by Customer.  Additional
-service and support options are available, may be selected on the applicable
-Order Form(s) and are governed by a Professional Service and Support Agreement
-(the "Service Agreement") available from BitGirder.
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
 
-4. Customer's Responsibilities Customer shall abide by all applicable local,
-state, national and foreign laws, treaties and regulations in connection with
-Customer's use of the Software, including those related to data privacy,
-international communications and the transmission of technical or personal data.
-Customer is solely responsible for protecting any of its password and
-authentication information.  Customer shall report to BitGirder immediately and
-use reasonable efforts to stop immediately, any unauthorized copying or
-distribution of Software or Content that is known or suspected by Customer or
-any User. Customer further (a) understands that the Software contains
-information which is considered a trade secret of BitGirder, (b) will preserve
-as confidential all trade secrets, confidential knowledge, data or other
-proprietary information relating to the Software and (c) will take all
-reasonable and necessary precautions to protect such information.
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
 
-5. Intellectual Property Ownership BitGirder alone (and its licensors, where
-applicable) shall own all right, title and interest, including all related
-Intellectual Property Rights, in and to the BitGirder Technology, the Content,
-and the Software and any suggestions, ideas, enhancement requests, feedback,
-recommendations or other information provided by Customer or any other party
-relating to the Software.  The BitGirder name, the BitGirder logo, and the
-product names associated with the Software are trademarks of BitGirder or third
-parties, and no right or license is granted to use them.   Customer acknowledges
-that, except as specifically provided under this Agreement, no other right,
-title, or interest in the Software, Content or BitGirder Technology is granted.
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
 
-6. Representations & Warranties Each party represents and warrants that it has
-the legal power and authority to enter into this Agreement.  Customer represents
-and warrants that Customer has not falsely identified itself to gain access to
-the Software and that, if applicable, Customer's billing information is correct. 
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
 
-Disclaimer of Warranties UNLESS OTHERWISE SET FORTH ON THE APPLICABLE ORDER
-FORM, BITGIRDER AND ITS LICENSORS MAKE NO REPRESENTATION, WARRANTY, OR GUARANTY
-AS TO THE RELIABILITY, TIMELINESS, QUALITY, SUITABILITY, TRUTH, AVAILABILITY,
-ACCURACY OR COMPLETENESS OF THE SOFTWARE OR ANY CONTENT.  BITGIRDER AND ITS
-LICENSORS DO NOT REPRESENT OR WARRANT THAT (A) THE SOFTWARE WILL BE ERROR-FREE
-OR OPERATE IN COMBINATION WITH ANY OTHER HARDWARE, SOFTWARE, SYSTEM OR DATA, (B)
-THE SOFTWARE WILL MEET CUSTOMER'S REQUIREMENTS OR EXPECTATIONS, (C) ANY STORED
-DATA WILL BE ACCURATE OR RELIABLE, (D) THE QUALITY OF ANY PRODUCTS, SOFTWARE,
-INFORMATION, OR OTHER MATERIAL PURCHASED OR OBTAINED BY CUSTOMER THROUGH THE
-SOFTWARE WILL MEET CUSTOMER'S REQUIREMENTS OR EXPECTATIONS, OR (E) ERRORS OR
-DEFECTS WILL BE CORRECTED.  THE SOFTWARE AND ALL CONTENT IS PROVIDED TO CUSTOMER
-STRICTLY ON AN "AS IS" BASIS.  ALL CONDITIONS, REPRESENTATIONS AND WARRANTIES,
-WHETHER EXPRESS, IMPLIED, STATUTORY OR OTHERWISE, INCLUDING, WITHOUT LIMITATION,
-ANY IMPLIED WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR
-NON-INFRINGEMENT OF THIRD PARTY RIGHTS, ARE HEREBY DISCLAIMED TO THE MAXIMUM
-EXTENT PERMITTED BY APPLICABLE LAW BY BITGIRDER AND ITS LICENSORS. CUSTOMER
-ACKNOWLEDGES THAT SOFTWARE IS OF AN EXPERIMENTAL NATURE.
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
 
-7. Limitation of Liability CUSTOMER ASSUMES ALL RISKS IN CONNECTION WITH ITS USE
-OF THE SOFTWARE. IN NO EVENT SHALL BITGIRDER AND/OR ITS LICENSORS BE LIABLE TO
-ANYONE FOR ANY INDIRECT, PUNITIVE, SPECIAL, EXEMPLARY, INCIDENTAL, CONSEQUENTIAL
-OR OTHER DAMAGES OF ANY TYPE OR KIND (INCLUDING LOSS OF DATA, REVENUE, PROFITS,
-USE OR OTHER ECONOMIC ADVANTAGE) ARISING OUT OF, OR IN ANY WAY CONNECTED WITH
-THIS SOFTWARE, INCLUDING BUT NOT LIMITED TO THE USE OR INABILITY TO USE THE
-SOFTWARE, OR FOR ANY CONTENT OBTAINED FROM OR THROUGH THE SOFTWARE, INACCURACY,
-ERROR OR OMISSION, REGARDLESS OF CAUSE IN THE CONTENT, EVEN IF THE PARTY FROM
-WHICH DAMAGES ARE BEING SOUGHT OR SUCH PARTY'S LICENSORS HAVE BEEN PREVIOUSLY
-ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. 
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
 
-8. Additional Rights Certain states and/or jurisdictions do not allow the
-disclaimer of warranties or limitation of liability, so the exclusions set forth
-above may not apply to Customer. 
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
 
-9. Mutual Indemnification Customer and every User under this Agreement shall
-indemnify and hold BitGirder, its licensors and their parent organizations,
-subsidiaries, affiliates, officers, directors, employees, attorneys and agents
-harmless from and against any and all claims, causes of action, costs, damages,
-losses, liabilities and expenses (including attorneys' fees and costs) arising
-out of or in connection with: (i) violation by Customer of Customer's
-representations and warranties or (ii) the breach by Customer or any User
-pursuant to this Agreement, provided in any such case, that BitGirder (a) gives
-written notice of the claim promptly to Customer; (b) gives Customer sole
-control of the defense and settlement of the claim (except Customer may not
-settle any claim, without BitGirder's consent, unless Customer unconditionally
-releases BitGirder of all liability and such settlement does not affect
-BitGirder's business or Software,); (c) provides to Customer all available
-information and assistance; and (d) has not compromised or settled such claim.
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
 
-BitGirder shall indemnify and hold Customer and Customer's authorized Users,
-parent organizations, subsidiaries, affiliates, officers, directors, employees,
-attorneys and agents harmless from and against any and all claims, causes of
-action, costs, damages, losses, liabilities and expenses (including attorneys'
-fees and costs) arising out of or in connection with: (i) an allegation that the
-Software directly infringes a copyright, a U.S. patent issued as of the date
-Customer accepts this Agreement, or a trademark of a third party; (ii) a
-violation by BitGirder of its representations or warranties; or (iii) breach of
-this Agreement by BitGirder; provided in any such case, that Customer (a)
-promptly gives written notice of the claim to BitGirder; (b) gives BitGirder
-sole control of the defense and settlement of the claim (except BitGirder may
-not settle any claim, without Customer's consent, unless it unconditionally
-releases Customer of all liability); (c) provides to BitGirder all available
-information and assistance; and (d) has not compromised or settled such claim.  
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
 
-BitGirder shall have no indemnification obligation, and Customer shall indemnify
-BitGirder pursuant to this Agreement, for claims arising from any infringement
-alleged to be caused by the combination of the Software with any of Customer's
-products, software, and hardware or business process. 
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
 
-10. Local Laws and Export Control The Software uses technology that may be
-subject to United States export controls administered by the U.S. Department of
-Commerce, the United States Department of Treasury Office of Foreign Assets
-Control, and other U.S. agencies and the export control regulations of the
-European Union.  Customer and each User acknowledges and agrees that the
-Software shall not be used, and none of the Software, Content or BitGirder
-Technology may be transferred or otherwise exported or re-exported to countries
-as to which the United States and/or the European Union maintains an embargo
-(collectively, "Embargoed Countries"), or to or by a national or resident
-thereof, or any person or entity on the U.S. Department of Treasury's List of
-Specially Designated Nationals or the U.S. Department of Commerce's Table of
-Denial Orders (collectively, "Designated Nationals").  The lists of Embargoed
-Countries and Designated Nationals are subject to change without notice.  By
-using the Software, Customer represents and warrants that Customer is not
-located in, under the control of, or a national or resident of an Embargoed
-Country or Designated National.  Customer agrees to comply strictly with all
-U.S. and European Union export laws and assume sole responsibility for obtaining
-any necessary licenses to export or re-export.
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
 
-The Software provided on the site may use encryption technology that is subject
-to licensing requirements under the U.S. Export Administration Regulations, 15
-C.F.R. Parts 730-774 and Council Regulation (EC) No. 1334/2000.
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
 
-BitGirder and its licensors make no representation that the Software is
-appropriate or available for use in other locations.  If Customer uses the
-Software from outside the United States of America and/or the European Union,
-Customer is solely responsible for compliance with all applicable laws,
-including without limitation export and import regulations of other countries.
-Any diversion of the Content contrary to United States or European Union
-(including European Union Member States) law is prohibited. None of the Software
-or Content, nor any information acquired through the use of the Software, is or
-will be used for nuclear activities, chemical or biological weapons or missile
-projects, unless specifically authorized by the United States government or
-appropriate European body for such purposes. 
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
 
-11. Notice BitGirder may give notice by means of a general notice on the
-Website, electronic mail to Customer's e-mail address on record in BitGirder's
-account information, or by written communication sent by first class mail or
-pre-paid post to Customer's address on record in BitGirder's account
-information.  Such notice shall be deemed to have been given upon the expiration
-of 48 hours after mailing or posting (if sent by first class mail or pre-paid
-post) or 12 hours after sending (if sent by email) or posted on the Website.
-Customer may give notice to BitGirder (such notice shall be deemed given when
-received by BitGirder) at any time by any of the following: letter sent by
-confirmed electronic mail to BitGirder at info@BitGirder.com; letter delivered
-by nationally recognized overnight delivery service or first class postage
-prepaid mail to BitGirder at the following address: BitGirder Technologies,
-Inc., 530 Brannan Street, #103, San Francisco, CA 94107, addressed to the
-attention of: Chief Technology Officer. 
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
 
-12. Modification to Terms BitGirder reserves the right to modify the terms and
-conditions of this Agreement or its policies relating to the Software at any
-time, effective upon posting of an updated version of this Agreement on the
-Website.  Customer is responsible for regularly reviewing this Agreement.
-Continued use of the Software after any such changes shall constitute Customer's
-consent to such changes.  
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
 
-13. Assignment This Agreement may not be assigned without the prior written
-approval of the parties, but may be assigned without any prior consent by either
-party to (i) a parent or subsidiary, (ii) an acquirer of substantially all of
-such assigning party's assets, or (iii) a successor by merger.  Any purported
-assignment in violation of this section shall be void.
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
 
-14. General This Agreement shall be governed by California law and controlling
-United States federal law, without regard to the choice or conflicts of law
-provisions of any jurisdiction, and any disputes, actions, claims or causes of
-action arising out of or in connection with this Agreement or the Software shall
-be subject to the exclusive jurisdiction of the state and federal courts located
-in San Francisco County, California.  If any provision of this Agreement is held
-by a court of competent jurisdiction to be invalid or unenforceable, then such
-provision(s) shall be construed, as nearly as possible, to reflect the
-intentions of the invalid or unenforceable provision(s), with all other
-provisions remaining in full force and effect.  No joint venture, partnership,
-employment, or agency relationship exists between Customer or any User and
-BitGirder as a result of this Agreement or use of the Software.  The failure of
-BitGirder to enforce any right or provision in this Agreement shall not
-constitute a waiver of such right or provision unless acknowledged and agreed to
-by BitGirder in writing.  This Agreement, together with any applicable Order
-Form(s) and the Service Agreement, comprises the entire agreement between
-Customer and BitGirder and supersedes all prior or contemporaneous negotiations,
-discussions or agreements, whether written or oral, between the parties
-regarding the subject matter contained herein.
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
 
-15. Definitions As used in this Agreement and in any Order Forms now or
-hereafter associated herewith: 
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
 
-"Agreement" means these terms of use, the original Order Form, any subsequent
-Order Forms, submitted by Customer, and any materials specifically incorporated
-by reference herein, as such materials, including the terms of this Agreement,
-may be updated by BitGirder from time to time in its sole discretion; 
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
 
-"BitGirder" means collectively BitGirder Technologies, Inc., a Delaware
-corporation, having its principal place of business at: 387 Dolores Street, San
-Francisco, CA 94110, and any of its direct or indirect subsidiaries; 
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
 
-"BitGirder Technology" means all of BitGirder's proprietary technology
-(including software, hardware, products, business concepts, and processes, logic
-algorithms, graphical User interfaces (GUI), techniques, designs and other
-tangible or intangible technical material or information) made available to
-Customer by BitGirder in providing the Software; 
-
-"Content" means the audio and visual information, documents, software, products
-and Software contained or made available to Customer and the User(s) authorized
-to use the Software under this License in the course of using the Software; 
-
-"Intellectual Property Rights" means all rights, title and interest in and to
-the BitGirder Technology, the Content, and all copyrights, patents, trade
-secrets, trademarks, Software marks or other intellectual property or
-proprietary rights and any corrections, bug fixes, enhancements, updates,
-releases, or other modifications, including custom modifications made by
-BitGirder relating thereto, and the media on which same are furnished; 
-
-"Order Form(s)" means the form evidencing the initial designation of Software
-and any subsequent Order Forms, specifying, among other things, the edition of
-the Software selected and covered by the License, the number of Users, the
-applicable fees, and any applicable billing information, as agreed to between
-BitGirder and Customer, each such Order Form to be incorporated into and to
-become a part of this Agreement (in the event of any conflict between the terms
-of this Agreement and the terms of any such Order Form, the terms of the
-applicable Order Form(s) shall prevail);  
-
-"User(s)" means Customer's employees, representatives, consultants, contractors
-or agents who are authorized under the License made by this Agreement to use the
-Software.
-
-"Website" means http://www.BitGirder.com 
-
-Questions or Additional Information: If you have questions regarding this User
-Agreement or wish to obtain additional information, please send an e-mail to
-info@BitGirder.com.
-
-Copyright 2007 BitGirder Technologies, Inc. All rights reserved.
 END_LIC
 
 end

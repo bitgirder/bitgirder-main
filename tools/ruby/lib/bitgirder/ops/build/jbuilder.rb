@@ -1708,29 +1708,13 @@ class MavenRepoBuilder < AbstractJavaDistTask
         jv_opts.expect_string( :maven_group_id )
     end
 
-    private
-    def get_version
-        
-        if ver = @run_opts.get_string( :build_version )
-            ver
-        else
-            cmd = which( "hg" )
-            
-            case tag = `hg identify -t`.chomp
-            when "tip", nil, /^\s*$/
-                raise "No build version given or inferred"
-            else tag
-            end
-        end
-    end
-
     public
     def get_maven_opts
         
         MavenOpts.new(
             :group_id => get_group_id,
             :artifact_id => "#{dist_distrib}-#{dist_name}",
-            :version => get_version
+            :version => BuildVersions.get_version( run_opts: @run_opts )
         )
     end
 

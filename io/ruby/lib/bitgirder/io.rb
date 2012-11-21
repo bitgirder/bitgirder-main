@@ -788,7 +788,14 @@ class BinaryReader < BinaryIo
 
     public
     def peekc
-        @io.getc.tap { |c| @io.ungetc( c ) }
+        
+        res = @io.getc.tap { |c| @io.ungetc( c ) }
+
+        case res
+        when String then res
+        when Fixnum then res.chr
+        else raise "Unexpected getc val: #{res.class}"
+        end
     end
 
     public

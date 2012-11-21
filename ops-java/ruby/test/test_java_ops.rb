@@ -24,12 +24,15 @@ class JavaOpsTests
 
     # Mainly of value as basic code coverage of get_default()
     def test_jv_env_get_default
-        assert_equal( jv_home, JavaEnvironment.get_default.java_home )
+
+        assert_equal( 
+            jv_home.sub( %r{/$}, "" ), 
+            JavaEnvironment.get_default.java_home.sub( %r{/$}, "" )
+        )
     end
 
-    def test_jv_env_get_default_uses_path_inference
+    def run_forked_jv_env_test
         
-        save = ENV.values_at( "JAVA_HOME", "PATH" )
         begin
             ENV.delete( "JAVA_HOME" )
             which_dir = File.dirname( which( "which" ) ) 
@@ -40,26 +43,46 @@ class JavaOpsTests
                 fu().chmod( 0755, java )
                 assert_equal( tmp, JavaEnvironments.get_java_home )
             end
-        ensure
-            ENV[ "JAVA_HOME" ], ENV[ "PATH" ] = *save
+
+            exit! 0
+        rescue => e
+            code( "Forked #{__method__} failed: #{e} (#{e.class})" )
+            exit! -1
         end
+    end
+
+    # Because this runs concurrently with other tests and intentionally sets
+    # PATH to a value that would cause other tests to fail, we run the actual
+    # meat of the test in a forked process
+    def test_jv_env_get_default_uses_path_inference
+        
+        return if RubyVersions.jruby?
+
+        if pid = fork
+
+            opts = { :name => "forked #{__method__}", :pid => pid }
+            pid, stat = debug_wait2( opts )
+            assert( stat.success? )
+        else
+            run_forked_jv_env_test
+        end 
     end
 
     def create_jrunner1
             
         JavaRunner.new(
-            java_env: jv_env,
-            command: "java",
-            classpath: %w{ cp-dir1 cp-dir2 },
-            jvm_args: %w{ -Xmx512m -XmaxBlah=ddd },
-            sys_props: { 
+            :java_env => jv_env,
+            :command => "java",
+            :classpath => %w{ cp-dir1 cp-dir2 },
+            :jvm_args => %w{ -Xmx512m -XmaxBlah=ddd },
+            :sys_props => { 
                 "prop1" => "val1", 
-                prop2: :val2,
+                :prop2 => :val2,
                 MingleIdentifier.get( :prop3 ) => MingleInt64.new( 3 )
             },
-            argv: [ "arg1", :arg2, 77 ],
-            proc_env: { "VAR1" => "val1" },
-            proc_opts: { k: :v }
+            :argv => [ "arg1", :arg2, 77 ],
+            :proc_env => { "VAR1" => "val1" },
+            :proc_opts => { :k => :v }
         )
     end
 
@@ -93,7 +116,7 @@ class JavaOpsTests
         assert_jrunner1_argv( b )
 
         assert_equal( { "VAR1" => "val1" }, b.env )
-        assert_equal( { k: :v }, b.opts )
+        assert_equal( { :k => :v }, b.opts )
     end
 
     def test_jv_env_as_classpath
@@ -115,10 +138,10 @@ class JavaOpsTests
         
         b = 
             JavaRunner.create_application_runner(
-                java_env: jv_env,
-                main: "com.bitgirder.runner.Runner",
-                classpath: "foo.jar",
-                argv: [ "arg1" ]
+                :java_env => jv_env,
+                :main => "com.bitgirder.runner.Runner",
+                :classpath => "foo.jar",
+                :argv => [ "arg1" ]
             ).
             process_builder
 
