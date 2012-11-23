@@ -99,7 +99,8 @@ implements Comparable< MingleIdentifier >
     MingleIdentifier
     create( CharSequence str )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.createIdentifier( str );
     }
 
     public
@@ -108,7 +109,8 @@ implements Comparable< MingleIdentifier >
     parse( CharSequence str )
         throws MingleSyntaxException
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.parseIdentifier( str );
     }
 
     public

@@ -85,7 +85,8 @@ class MingleNamespace
     MingleNamespace
     create( CharSequence str )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.createNamespace( str );
     }
 
     public
@@ -94,6 +95,7 @@ class MingleNamespace
     parse( CharSequence str )
         throws MingleSyntaxException
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.parseNamespace( str );
     }
 }

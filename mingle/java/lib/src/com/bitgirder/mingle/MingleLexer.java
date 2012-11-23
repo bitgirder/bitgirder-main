@@ -55,7 +55,11 @@ class MingleLexer
         private final String lit;
     
         private SpecialLiteral( String lit ) { this.lit = lit; }
+
+        String inspect() { return "'" + lit + "'"; }
     }
+
+    long position() { return cr.position(); }
 
     private
     MingleSyntaxException
@@ -398,6 +402,43 @@ class MingleLexer
         return new MingleIdentifier( parts.toArray( partsArr ) );
     }
 
+    private
+    boolean
+    isSpecStart( int v )
+    {
+        return SpecialLiteral.ALPHABET.indexOf( (char) v ) >= 0;
+    }
+
+    private
+    SpecialLiteral
+    parseSpecial()
+        throws MingleSyntaxException,
+               IOException
+    {
+        int v = cr.read();
+        
+        switch ( v )
+        {
+            case (int) ':': return SpecialLiteral.COLON;
+            case (int) '~': return SpecialLiteral.TILDE;
+            case (int) '(': return SpecialLiteral.OPEN_PAREN;
+            case (int) ')': return SpecialLiteral.CLOSE_PAREN;
+            case (int) '[': return SpecialLiteral.OPEN_BRACKET;
+            case (int) ']': return SpecialLiteral.CLOSE_BRACKET;
+            case (int) ',': return SpecialLiteral.COMMA;
+            case (int) '?': return SpecialLiteral.QUESTION_MARK;
+            case (int) '-': return SpecialLiteral.MINUS;
+            case (int) '/': return SpecialLiteral.FORWARD_SLASH;
+            case (int) '.': return SpecialLiteral.PERIOD;
+            case (int) '*': return SpecialLiteral.ASTERISK;
+            case (int) '+': return SpecialLiteral.PLUS;
+            case (int) '@': return SpecialLiteral.ASPERAND;
+
+            default: 
+                throw state.createFailf( "Unhandled spec start: %c", (char) v );
+        }
+    }
+
     Object
     nextToken()
         throws MingleSyntaxException,
@@ -410,6 +451,7 @@ class MingleLexer
         if ( v == (int) '"' ) return parseStringToken();
         if ( v == (int) '-' || isDigit( v ) ) return parseNumber();
         if ( isIdStart( v ) ) return parseIdentifier( null );
+        if ( isSpecStart( v ) ) return parseSpecial();
 
         throw failf( 
             1, "Unrecognized token start: \"%c\" (U+%04X)", (char) v, v );

@@ -142,7 +142,22 @@ class ParseTests
                 "Unexpected identifier character: \"M\" (U+004D)",
             
             errMsgKey( TestType.IDENTIFIER, "a-bad-ch@r" ),
-                "Unexpected trailing data \"@\" (U+0040)"
+                "Unexpected trailing data \"@\" (U+0040)",
+            
+            errMsgKey( TestType.NAMESPACE, "ns1:ns2@v1:ns3" ),
+                "Unexpected trailing data \":\" (U+003A)",
+            
+            errMsgKey( TestType.NAMESPACE, "ns1:ns2@v1@v2" ),
+                "Unexpected trailing data \"@\" (U+0040)",
+            
+            errMsgKey( TestType.NAMESPACE, "ns1:ns2@v1/Stuff" ),
+                "Unexpected trailing data \"/\" (U+002F)",
+            
+            errMsgKey( TestType.NAMESPACE, "ns1.ns2@v1" ),
+                "Expected ':' or '@' but found: '.'",
+            
+            errMsgKey( TestType.NAMESPACE, "ns1 : ns2:ns3@v1" ),
+                "Unexpected identifier character: \" \" (U+0020)"
         );
 
     private
@@ -287,7 +302,8 @@ class ParseTests
             {
                 case STRING: return expectOneTok( MingleString.class );
                 case NUMBER: return expectOneTok( MingleLexer.Number.class );
-                case IDENTIFIER: return MingleParser.parseIdentifier( in );
+                case IDENTIFIER: return MingleIdentifier.parse( in );
+                case NAMESPACE: return MingleNamespace.parse( in );
 
                 default: 
                     throw state.createFailf( "Unhandled test type: %s", tt );
@@ -304,6 +320,9 @@ class ParseTests
 
                 case IDENTIFIER: 
                     return ( (MingleIdentifier) val ).getExternalForm();
+
+                case NAMESPACE:
+                    return ( (MingleNamespace) val ).getExternalForm();
 
                 default: 
                     throw state.createFailf( 
