@@ -15,17 +15,17 @@ implements AtomicTypeReference.Name
     private final static State state = new State();
 
     private final MingleNamespace ns;
-    private final MingleDeclaredTypeName name;
+    private final DeclaredTypeName name;
 
     QualifiedTypeName( MingleNamespace ns,
-                       MingleDeclaredTypeName name )
+                       DeclaredTypeName name )
     {
         this.ns = inputs.notNull( ns, "ns" );
         this.name = inputs.notNull( name, "name" );
     }
 
     public MingleNamespace getNamespace() { return ns; }
-    public MingleDeclaredTypeName getName() { return name; }
+    public DeclaredTypeName getName() { return name; }
 
     public int hashCode() { return ns.hashCode() ^ name.hashCode(); }
 
@@ -62,7 +62,7 @@ implements AtomicTypeReference.Name
     static
     QualifiedTypeName
     create( MingleNamespace ns,
-            MingleDeclaredTypeName name )
+            DeclaredTypeName name )
     {
         inputs.notNull( ns, "ns" );
         inputs.notNull( name, "name" );
@@ -75,7 +75,8 @@ implements AtomicTypeReference.Name
     QualifiedTypeName
     create( CharSequence str )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.createQualifiedTypeName( str );
     }
 
     public
@@ -84,6 +85,7 @@ implements AtomicTypeReference.Name
     parse( CharSequence str )
         throws MingleSyntaxException
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.parseQualifiedTypeName( str );
     }
 }

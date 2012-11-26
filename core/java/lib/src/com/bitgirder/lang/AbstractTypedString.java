@@ -51,6 +51,14 @@ implements CharSequence,
 
     @Override public final String toString() { return s; }
 
+    public
+    final
+    String
+    inspect()
+    {
+        return Lang.getRfc4627String( this ).toString(); 
+    }
+
     public final char charAt( int indx ) { return s.charAt( indx ); }
     public final int length() { return s.length(); }
     

@@ -8,55 +8,19 @@ require 'bitgirder/io'
 require 'bitgirder/ops/java'
 include BitGirder::Ops::Java
 
-require 'mingle'
-include Mingle
-
-require 'mingle/json'
-
 require 'rexml/document'
 
 require 'socket'
 
-ENV_TOMCAT7_HOME = "TOMCAT7_HOME"
+ENV_TOMCAT7_RUNTIME = "TOMCAT7_RUNTIME"
 
 class Command < BitGirderClass
 
     include BitGirder::Io
 
     private
-    def load_struct( f )
-
-        File.open( f ) do |io|
-            Mingle::Json::JsonMingleCodec.new.from_buffer( io.read( io.size ) )
-        end
-    end
-
-    private
-    def save_struct( f, s )
-        
-        File.open( ensure_parent( f ), "w" ) do |io|
-            io.print Mingle::Json::JsonMingleCodec.new.as_buffer( s )
-        end
-    end
-
-    private
     def load_config( f )
-        
-        flds = load_struct( f ).fields
-
-        TomcatConfig.new(
-            control_port: flds.expect_int( :control_port ),
-            http_port: flds.expect_int( :http_port ),
-            https_port: flds.expect_int( :https_port ),
-            shutdown_string: flds.expect_string( :shutdown_string ),
-            tomcat_home: flds.expect_string( :tomcat_home ),
-            java_home: flds.expect_string( :java_home )
-        )
-    end
-
-    private
-    def load_runtime_config( rt )
-        load_config( "#{rt}/config.json" )
+        load_yaml( f )
     end
 end
 
@@ -86,21 +50,9 @@ class TomcatConfig < BitGirderClass
             validation: :file_exists,
             default: lambda { JavaEnvironments.get_java_home }
     
-    public
-    def to_mingle_struct
-        
-        MingleStruct.new(
-            type: :"bitgirder:ops:tomcat@v1/TomcatConfig",
-            fields: {
-                control_port: @control_port,
-                http_port: @http_port,
-                https_port: @https_port,
-                shutdown_string: @shutdown_string,
-                tomcat_home: @tomcat_home,
-                java_home: @java_home
-            }
-        )
-    end
+    bg_attr :sysprops, default: lambda { {} }
+
+    bg_attr :classpath_dirs, default: lambda { [] }
 end
 
 PORT_OPTS = { validation: :positive, processor: :integer }
@@ -111,41 +63,11 @@ class Install < Command
 
     bg_attr :install_to
 
+    bg_attr :install_opts, validation: :file_exists
+ 
     bg_attr :tomcat_home, validation: :file_exists
 
-    bg_attr :control_port, PORT_OPTS
-
-    bg_attr :http_port, PORT_OPTS
-
-    bg_attr :https_port, PORT_OPTS.merge( required: false )
-
-    bg_attr :ssl_keystore, validation: :file_exists, required: false
-
-    bg_attr :ssl_keystore_pass, required: false
-
-    bg_attr :ssl_keystore_type, required: false
-
-    bg_attr :ssl_key_alias, required: false
-
-    bg_attr :ssl_key_pass, required: false
-
     bg_attr :wipe_install, required: false, processor: :boolean
-
-    bg_attr :webapps,
-            is_list: true,
-            processor: lambda { |s|
-                idx = s.index( "=" ) || s.size
-                dest = s[ 0, idx ]
-                if idx < s.size - 1
-                    [ dest, s[ idx + 1 .. -1 ] ]
-                else
-                    raise "Need a name for webapp #{dest}"
-                end
-            },
-            list_validation: :not_empty
-
-    bg_attr :java_home,
-            default: lambda { JavaEnvironments.get_java_home }
 
     private
     def impl_initialize
@@ -164,17 +86,37 @@ class Install < Command
         "#@install_to/catalina/#{dir}"
     end
 
+    # Scoped to its own method to reduce risk of local vars in eval'd code
+    # stomping on something in this script
     private
-    def init_config
+    def eval_install_opts
+        eval( IO::read( @install_opts ), binding, @install_opts )
+    end
 
-        @config = TomcatConfig.new(
-            control_port: @control_port,
-            http_port: @http_port,
-            https_port: @https_port,
+    private
+    def expect_install_opt( opts, key )
+        
+        opts[ key ] or raise "No value in install opts for #{key.inspect}"
+    end
+
+    private
+    def init_config( tc_opts )
+
+        defls = { 
             shutdown_string: rand( 2 ** 128 ).to_s( 16 ),
-            tomcat_home: @tomcat_home,
-            java_home: @java_home
-        )
+            tomcat_home: @tomcat_home
+        }
+
+        @config = TomcatConfig.new( defls.merge( tc_opts ) )
+    end
+
+    private
+    def process_install_opts
+
+        opts = eval_install_opts
+        init_config( expect_install_opt( opts, :tomcat_opts ) )
+        @webapps = expect_install_opt( opts, :webapps )
+        @ssl_opts = opts[ :ssl_opts ] || {}
     end
 
     private
@@ -232,7 +174,7 @@ class Install < Command
     private
     def add_https_connector( svc )
         
-        svc << new_elt( :Connector,
+        attrs = {
             :port => @config.https_port,
             :protocol => PROTO_HTTP11,
             :SSLEnabled => true,
@@ -240,13 +182,12 @@ class Install < Command
             :scheme => "https",
             :secure => true,
             :clientAuth => false,
-            :sslProtocol => :TLS,
-            :keystoreFile => @ssl_keystore,
-            :keystorePass => @ssl_keystore_pass,
-            :keystoreType => @ssl_keystore_type,
-            :keyAlias => @ssl_key_alias,
-            :keyPass => @ssl_key_pass
-        )
+            :sslProtocol => :TLS
+        }
+
+        attrs.merge!( @ssl_opts )
+
+        svc << new_elt( :Connector, attrs )
     end
 
     private
@@ -317,7 +258,7 @@ class Install < Command
     def install_webapps
        
         @webapps.each do |app|
-            
+ 
             dest, src = *app
             dest = ensure_parent( dest )
             fu().ln_s( src, "#{base_dir( :webapps )}/#{dest}" )
@@ -326,13 +267,13 @@ class Install < Command
 
     private
     def write_config
-        save_struct( "#@install_to/config.json", @config.to_mingle_struct )
+        dump_yaml( @config, "#@install_to/config.yaml" )
     end
 
     public
     def run
  
-        init_config
+        process_install_opts
         setup_install_dir
         write_server_conf
         install_webapps
@@ -343,6 +284,7 @@ end
 class TomcatProcessBuilder < BitGirderClass
     
     bg_attr :runtime
+
     bg_attr :config
 
     bg_attr :proc_opts, default: lambda { {} }
@@ -351,10 +293,19 @@ class TomcatProcessBuilder < BitGirderClass
 
     private
     def get_run_classpath
-        
-        %w{ bootstrap.jar tomcat-juli.jar }.map do |f|
+ 
+        res = %w{ bootstrap.jar tomcat-juli.jar }.map do |f|
             file_exists( "#{@config.tomcat_home}/bin/#{f}" )
         end
+
+        res += @config.classpath_dirs
+
+        res
+    end
+
+    private
+    def get_config_sysprops
+        {}
     end
 
     private
@@ -375,6 +326,8 @@ class TomcatProcessBuilder < BitGirderClass
 
             "java.io.tmpdir" => file_exists( "#@runtime/catalina/temp" )
         }
+
+        res.merge( @config.sysprops )
     end
 
     private
@@ -402,13 +355,19 @@ class RuntimeCommand < Command
     
     bg_attr :runtime, 
             validation: :file_exists,
-            default: ENV[ ENV_TOMCAT7_HOME ]
+            default: lambda {
+                if ( v = ( ENV[ ENV_TOMCAT7_RUNTIME ] || "" ).strip ).empty?
+                    nil
+                else   
+                    v
+                end
+            }
     
     include BitGirder::Io
 
     private
     def impl_initialize
-        @config = load_config( file_exists( "#@runtime/config.json" ) )
+        @config = load_config( file_exists( "#@runtime/config.yaml" ) )
     end
 
     private

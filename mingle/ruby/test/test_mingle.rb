@@ -548,6 +548,7 @@ PARSE_OVERRIDES = {
     },
 
     :type_reference => {
+            
         "mingle:core@v1/Float32~[1,2)" => {
             :external_form => 'mingle:core@v1/Float32~[1.0,2.0)'
         },
@@ -561,6 +562,7 @@ PARSE_OVERRIDES = {
             :external_form => 'mingle:core@v1/Timestamp~["2012-01-01T12:00:00.000000000Z","2012-01-02T12:00:00.000000000Z"]'
         },
         "mingle:core@v1/String ~= \"sdf\"" => 'Unrecognized token: "=" (0x3D)',
+        "mingle:core@v1/String~" => "Expected type restriction but found: END",
         "Int~[1,3}" => 'Unexpected char in integer part: "}" (0x7D)',
         "Int~[-\"abc\",2)" => 'Unexpected char in integer part: "\"" (0x22)',
         "Int~[--3,4)" => {
@@ -594,29 +596,6 @@ class ParseTest < BitGirderClass
         res
     end
 
-#    private
-#    def expects_restriction?( val )
-#        case val
-#        when AtomicTypeReference then val.restriction
-#        when ListTypeReference then expects_restriction?( val.element_type )
-#        when NullableTypeReference then expects_restriction?( val.type )
-#        else false
-#        end
-#    end
-
-    private
-    def skip?
- 
-        false
-#        res = @error.is_a?( RestrictionErrorExpectation ) ||
-#              expects_restriction?( @expect ) ||
-#              ( @test_type == :type_reference && @input.index( ?~ ) )
-# 
-#        code( "Skipping #@test_type #{@input.inspect}" ) if res
-#
-#        res
-    end
-
     private
     def expect_token( cls )
         
@@ -631,10 +610,6 @@ class ParseTest < BitGirderClass
     private
     def call_parse
         
-#        if @test_type == :type_reference
-#            code( "Parsing #@test_type: #{@input.inspect}" )
-#        end
-
         case @test_type
         when :string then expect_token( StringToken )
         when :number then ParsedNumber.parse( @input )
@@ -711,8 +686,6 @@ class ParseTest < BitGirderClass
     public
     def call
  
-        return if skip?
-
         begin
 
             res = call_parse

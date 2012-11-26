@@ -53,28 +53,38 @@ class MingleNamespace
 
     private
     CharSequence
-    fmtId( MingleIdentifier id )
+    fmtId( MingleIdentifier id,
+           MingleIdentifierFormat fmt )
     {
-        return id.format( MingleIdentifierFormat.LC_CAMEL_CAPPED );
+        return id.format( fmt );
+    }
+
+    public
+    CharSequence
+    format( MingleIdentifierFormat fmt )
+    {
+        inputs.notNull( fmt, "fmt" );
+        
+        StringBuilder sb = new StringBuilder();
+
+        for ( int i = 0, e = parts.length; i < e; ++i )
+        {
+            sb.append( fmtId( parts[ i ], fmt ) );
+            
+            if ( i < e - 1 ) sb.append( ':' );
+        }
+
+        sb.append( '@' );
+        sb.append( fmtId( ver, fmt ) );
+
+        return sb;
     }
 
     public
     CharSequence
     getExternalForm()
     {
-        StringBuilder sb = new StringBuilder();
-
-        for ( int i = 0, e = parts.length; i < e; ++i )
-        {
-            sb.append( fmtId( parts[ i ] ) );
-            
-            if ( i < e - 1 ) sb.append( ':' );
-        }
-
-        sb.append( '@' );
-        sb.append( fmtId( ver ) );
-
-        return sb;
+        return format( MingleIdentifierFormat.LC_CAMEL_CAPPED );
     }
 
     @Override 

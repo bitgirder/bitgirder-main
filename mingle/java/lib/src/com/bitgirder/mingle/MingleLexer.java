@@ -388,7 +388,6 @@ class MingleLexer
         parts.add( expectIdPart( fmt ) );
 
         if ( fmt == null ) fmt = detectIdFormat();
-        code( "Id fmt:", fmt );
 
         if ( fmt != null ) 
         {
@@ -404,9 +403,60 @@ class MingleLexer
 
     private
     boolean
-    isSpecStart( int v )
+    isDeclNmStart( int v )
+    {
+        return isUpperCase( v );
+    }
+
+    private
+    boolean
+    isSpecChar( int v )
     {
         return SpecialLiteral.ALPHABET.indexOf( (char) v ) >= 0;
+    }
+
+    private
+    void
+    readDeclNameTail( StringBuilder sb )
+        throws MingleSyntaxException,
+               IOException
+    {
+        for ( int v = cr.peek(); ! ( v < 0 || isSpecChar( v ) ); v = cr.peek() )
+        {
+            if ( isUpperCase( v ) || isLowerCase( v ) || isDigit( v ) )
+            {
+                sb.append( (char) v );
+                cr.read();
+            }
+            else
+            {
+                throw failf( 1, "Illegal type name rune: \"%c\" (U+%04X)",
+                    (char) v, v );
+            }
+        }
+    }
+
+    DeclaredTypeName
+    parseDeclaredTypeName()
+        throws MingleSyntaxException,
+               IOException
+    {
+        checkUnexpectedEnd( "Empty type name" );
+
+        StringBuilder sb = new StringBuilder();
+
+        int v = cr.read();
+
+        if ( isDeclNmStart( v ) ) sb.append( (char) v );
+        else
+        {
+            throw failf( "Illegal type name start: \"%c\" (U+%04X)", 
+                (char) v, v );
+        }
+
+        readDeclNameTail( sb );
+
+        return new DeclaredTypeName( sb.toString() );
     }
 
     private
@@ -451,7 +501,8 @@ class MingleLexer
         if ( v == (int) '"' ) return parseStringToken();
         if ( v == (int) '-' || isDigit( v ) ) return parseNumber();
         if ( isIdStart( v ) ) return parseIdentifier( null );
-        if ( isSpecStart( v ) ) return parseSpecial();
+        if ( isDeclNmStart( v ) ) return parseDeclaredTypeName();
+        if ( isSpecChar( v ) ) return parseSpecial();
 
         throw failf( 
             1, "Unrecognized token start: \"%c\" (U+%04X)", (char) v, v );

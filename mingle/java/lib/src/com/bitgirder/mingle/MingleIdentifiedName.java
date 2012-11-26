@@ -15,6 +15,9 @@ class MingleIdentifiedName
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
+    private final static MingleIdentifierFormat ID_FMT =
+        MingleIdentifierFormat.LC_HYPHENATED;
+
     private MingleNamespace ns;
     private MingleIdentifier[] names;
 
@@ -40,12 +43,11 @@ class MingleIdentifiedName
     {
         StringBuilder res = 
             new StringBuilder().
-                append( ns.getExternalForm() );
+                append( ns.format( ID_FMT ) );
         
         for ( MingleIdentifier id : names )
         {
-            CharSequence idStr =
-                id.format( MingleIdentifierFormat.LC_CAMEL_CAPPED );
+            CharSequence idStr = id.format( ID_FMT );
 
             res.append( '/' ).
                 append( idStr );
@@ -76,7 +78,8 @@ class MingleIdentifiedName
     MingleIdentifiedName
     create( CharSequence str )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.createIdentifiedName( str );
     }
 
     public
@@ -85,6 +88,7 @@ class MingleIdentifiedName
     parse( CharSequence str )
         throws MingleSyntaxException
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+        return MingleParser.parseIdentifiedName( str );
     }
 }

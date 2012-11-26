@@ -12,6 +12,9 @@ Go:
 
     - add float(32|64) inf and NaN coverage to bincodec test vals
 
+    - check empty input fails for every type of parse test (string, num, ident,
+      qname, etc)
+
 Java:
     
     - add and test utils like Lang.compareUint(32|64) and

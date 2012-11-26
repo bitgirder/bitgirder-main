@@ -7,31 +7,33 @@ import com.bitgirder.lang.TypedString;
 
 public
 final
-class MingleDeclaredTypeName
-extends TypedString< MingleDeclaredTypeName >
+class DeclaredTypeName
+extends TypedString< DeclaredTypeName >
 implements AtomicTypeReference.Name
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    MingleDeclaredTypeName( CharSequence s ) { super( s ); }
+    DeclaredTypeName( CharSequence s ) { super( s ); }
 
     public CharSequence getExternalForm() { return toString(); }
 
     public
     static
-    MingleDeclaredTypeName
+    DeclaredTypeName
     create( CharSequence cs )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( cs, "cs" );
+        return MingleParser.createDeclaredTypeName( cs );
     }
 
     public
     static
-    MingleDeclaredTypeName
+    DeclaredTypeName
     parse( CharSequence cs )
         throws MingleSyntaxException
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( cs, "cs" );
+        return MingleParser.parseDeclaredTypeName( cs );
     }
 }

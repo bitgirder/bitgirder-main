@@ -144,6 +144,9 @@ class ParseTests
             errMsgKey( TestType.IDENTIFIER, "a-bad-ch@r" ),
                 "Unexpected trailing data \"@\" (U+0040)",
             
+            errMsgKey( TestType.DECLARED_TYPE_NAME, "Bad-Char" ),
+                "Unexpected trailing data \"-\" (U+002D)",
+            
             errMsgKey( TestType.NAMESPACE, "ns1:ns2@v1:ns3" ),
                 "Unexpected trailing data \":\" (U+003A)",
             
@@ -157,7 +160,16 @@ class ParseTests
                 "Expected ':' or '@' but found: '.'",
             
             errMsgKey( TestType.NAMESPACE, "ns1 : ns2:ns3@v1" ),
-                "Unexpected identifier character: \" \" (U+0020)"
+                "Unexpected identifier character: \" \" (U+0020)",
+            
+            errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1/T1" ),
+                "Expected ':' or '@' but found: '/'",
+            
+            errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1@v1" ),
+                "Expected '/' but found: END",
+            
+            errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1@v1/T1/" ),
+                "Unexpected trailing data \"/\" (U+002F)"
         );
 
     private
@@ -303,7 +315,11 @@ class ParseTests
                 case STRING: return expectOneTok( MingleString.class );
                 case NUMBER: return expectOneTok( MingleLexer.Number.class );
                 case IDENTIFIER: return MingleIdentifier.parse( in );
+                case DECLARED_TYPE_NAME: return DeclaredTypeName.parse( in );
                 case NAMESPACE: return MingleNamespace.parse( in );
+                case IDENTIFIED_NAME: return MingleIdentifiedName.parse( in );
+                case QUALIFIED_TYPE_NAME: return QualifiedTypeName.parse( in );
+                case TYPE_REFERENCE: return MingleTypeReference.parse( in );
 
                 default: 
                     throw state.createFailf( "Unhandled test type: %s", tt );
@@ -321,8 +337,20 @@ class ParseTests
                 case IDENTIFIER: 
                     return ( (MingleIdentifier) val ).getExternalForm();
 
+                case DECLARED_TYPE_NAME:
+                    return ( (DeclaredTypeName) val ).getExternalForm();
+
                 case NAMESPACE:
                     return ( (MingleNamespace) val ).getExternalForm();
+
+                case IDENTIFIED_NAME:
+                    return ( (MingleIdentifiedName) val ).getExternalForm();
+                
+                case QUALIFIED_TYPE_NAME:
+                    return ( (QualifiedTypeName) val ).getExternalForm();
+                
+                case TYPE_REFERENCE:
+                    return ( (MingleTypeReference) val ).getExternalForm();
 
                 default: 
                     throw state.createFailf( 
@@ -578,13 +606,13 @@ class ParseTests
         }
 
         private
-        MingleDeclaredTypeName
+        DeclaredTypeName
         readDeclName( boolean expctType )
             throws Exception
         {
             if ( expctType ) expectTypeCode( TYPE_DECLARED_TYPE_NAME );
 
-            return new MingleDeclaredTypeName( rd.readUtf8() );
+            return new DeclaredTypeName( rd.readUtf8() );
         }
 
         private

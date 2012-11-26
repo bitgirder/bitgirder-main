@@ -303,6 +303,7 @@ class LangTests
 
         TypedStringImpl s = new TypedStringImpl( "hello" );
         state.equal( "hello", s.toString() );
+        state.equal( "\"hello\"", s.inspect() );
         state.isTrue( 'h' == s.charAt( 0 ) );
         state.isTrue( 'o' == s.charAt( 4 ) );
         state.isTrue( 'e' == s.charAt( 1 ) );

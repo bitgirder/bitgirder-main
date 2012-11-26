@@ -41,7 +41,10 @@ class MingleTypeReference
     MingleTypeReference
     create( CharSequence str )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+
+        return 
+            MingleParser.createTypeReference( str, Mingle.CORE_NAME_RESOLVER );
     }
 
     public
@@ -50,6 +53,9 @@ class MingleTypeReference
     parse( CharSequence str )
         throws MingleSyntaxException
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
+        inputs.notNull( str, "str" );
+
+        return 
+            MingleParser.parseTypeReference( str, Mingle.CORE_NAME_RESOLVER );
     }
 }

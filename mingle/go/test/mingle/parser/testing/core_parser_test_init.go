@@ -593,6 +593,7 @@ func init() {
             "Illegal type name start: \"b\" (U+0062)" ),
         typRefFail( "ns1@v1/T1*?-+", 12, "Unexpected token: -" ),
         typRefFail( "ns1@v1/T1*? +", 12, `Unexpected token: " "` ),
+        typRefFail( "mingle:core@v1/String~", 23, "Unexpected end of input" ),
         typRefFail( "mingle:core@v1/~\"s*\"", 16, 
             "Illegal type name start: \"~\" (U+007E)" ),
         typRefFail( "mingle:core@v1~\"s*\"", 15, 

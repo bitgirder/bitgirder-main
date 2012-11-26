@@ -1,5 +1,5 @@
 {
     "$type": "bitgirder:ops:build:ruby@v1/RubyProject",
-    "direct-deps": [ "core", "ops-java", "mingle", "mingle-json", "io" ],
+    "direct-deps": [ "core", "ops-java", "io" ],
     "publish-bin": "*"
 }
