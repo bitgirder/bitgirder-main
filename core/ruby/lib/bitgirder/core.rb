@@ -421,6 +421,8 @@ class BitGirderAttribute
     # See PROCESSOR_INTEGER
     PROCESSOR_FLOAT = lambda { |v| v == nil ? nil : v.to_f }
 
+    PROCESSOR_EXPAND_PATH = lambda { |v| File.expand_path( v ) }
+
     VALIDATION_NOT_NIL = lambda { |val| raise "Missing value" if val == nil }
  
     # Implies not nil
@@ -486,6 +488,7 @@ class BitGirderAttribute
             when :symbol then PROCESSOR_SYMBOL
             when :integer then PROCESSOR_INTEGER
             when :float then PROCESSOR_FLOAT
+            when :expand_path then PROCESSOR_EXPAND_PATH
 
             when Class
                 if p.ancestors.include?( BitGirderClass )

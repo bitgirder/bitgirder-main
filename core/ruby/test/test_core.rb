@@ -380,6 +380,7 @@ class CoreTests < TestClassBase
             [ :symbol, [ "s", :s ], :s ],
             [ :integer, [ 1, "1", 1.1, "1.1" ], 1 ],
             [ :float, [ 1.0, "1.0", 1 ], 1.0 ],
+            [ :expand_path, [ "/a/b", "/a/b/c/../../b" ], "/a/b" ],
             [ TestClass1, [ TestClass1::INST1 ], TestClass1::INST1 ]
 
         ].each do |test|
