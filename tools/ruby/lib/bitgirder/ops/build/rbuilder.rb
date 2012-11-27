@@ -932,6 +932,7 @@ class RubyDistGem < RubyDistTask
         end
 
         lnk.build
+        Dir.glob( "#{lnk.dest}/*" ).each { |f| File.chmod( 0755, f ) }
     end
 
     private
