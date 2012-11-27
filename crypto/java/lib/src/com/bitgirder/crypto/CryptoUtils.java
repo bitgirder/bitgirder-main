@@ -487,6 +487,75 @@ class CryptoUtils
         return res;
     } 
 
+    private
+    static
+    < E extends KeyStore.Entry >
+    E
+    expectEntry( KeyStore ks,
+                 String alias,
+                 KeyStore.ProtectionParameter pp,
+                 Class< E > cls )
+        throws GeneralSecurityException
+    {
+        inputs.notNull( ks, "ks" );
+        inputs.notNull( alias, "alias" );
+        inputs.notNull( pp, "pp" );
+
+        KeyStore.Entry res = ks.getEntry( alias, pp );
+
+        if ( res == null )
+        {
+            inputs.failf( "No keystore entry for alias: %s", alias );
+        }
+        
+        if ( cls.isInstance( res ) ) return cls.cast( res );
+
+        throw inputs.createFailf( 
+            "Expected entry of type %s for alias %s but got %s",
+            cls.getName(), alias, res.getClass().getName() 
+        );
+    }
+
+    public
+    static
+    KeyStore.Entry
+    expectEntry( KeyStore ks,
+                 String alias,
+                 KeyStore.ProtectionParameter pp )
+        throws GeneralSecurityException
+    {
+        return expectEntry( ks, alias, pp, KeyStore.Entry.class );
+    }
+
+    public
+    static
+    SecretKey
+    expectSecretKey( KeyStore ks,
+                     String alias,
+                     KeyStore.ProtectionParameter pp )
+        throws GeneralSecurityException
+    {
+        return
+            expectEntry( ks, alias, pp, KeyStore.SecretKeyEntry.class ).
+            getSecretKey();
+    }
+ 
+    public
+    static
+    SecretKey
+    expectSecretKey( KeyStore ks,
+                     String alias,
+                     char[] pass )
+        throws GeneralSecurityException
+    {
+        inputs.notNull( pass, "pass" );
+
+        KeyStore.ProtectionParameter pp = 
+            new KeyStore.PasswordProtection( pass );
+
+        return expectSecretKey( ks, alias, pp );
+    }
+
     public
     static
     SecretKey

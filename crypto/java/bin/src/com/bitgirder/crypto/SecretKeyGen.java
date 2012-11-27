@@ -30,9 +30,11 @@ extends ApplicationProcess
     private final static State state = new State();
 
     private final FileWrapper ksFile;
+    private final String ksPass;
     private final String ksType;
     private final String alias;
     private final int keyLen;
+    private final String keyPass;
     private final String algorithm;
 
     private
@@ -41,17 +43,22 @@ extends ApplicationProcess
         super( c );
 
         this.ksFile = new FileWrapper( inputs.notNull( c.ksFile, "ksFile" ) );
+        this.ksPass = c.ksPass;
         this.ksType = inputs.notNull( c.ksType, "ksType" );
         this.alias = inputs.notNull( c.alias, "alias" ).toLowerCase();
         this.keyLen = inputs.positiveI( c.keyLen, "keyLen" );
+        this.keyPass = c.keyPass;
         this.algorithm = inputs.notNull( c.algorithm, "algorithm" );
     }
 
     private
     char[]
-    getPassword( String fmt,
+    getPassword( String val,
+                 String fmt,
                  Object... args )
     {
+        if ( val != null ) return val.toCharArray();
+
         Console c = System.console();
 
         state.isFalse( 
@@ -62,7 +69,7 @@ extends ApplicationProcess
         
     private
     KeyStore
-    loadKeyStore( char[] keyStorePass )
+    loadKeyStore( char[] ksPassArr )
         throws Exception
     {
         if ( ksFile.exists() )
@@ -72,7 +79,7 @@ extends ApplicationProcess
             FileInputStream fis = new FileInputStream( ksFile.getFile() );
             try
             {
-                res.load( fis, keyStorePass );
+                res.load( fis, ksPassArr );
                 return res;
             }
             finally { fis.close(); }
@@ -143,16 +150,16 @@ extends ApplicationProcess
     execute()
         throws Exception
     {
-        char[] keyStorePass = getPassword( "Keystore password: " );
-        KeyStore ks = loadKeyStore( keyStorePass );
+        char[] ksPassArr = getPassword( ksPass, "Keystore password: " );
+        KeyStore ks = loadKeyStore( ksPassArr );
 
         checkAliasAbsent( ks );
         
         SecretKey key = generateSecretKey();
-        char[] keyPass = getPassword( "Password for key %1$s: ", alias );
-        addKey( ks, key, keyPass );
+        char[] kp = getPassword( keyPass, "Password for key %1$s: ", alias );
+        addKey( ks, key, kp );
 
-        saveKeyStore( ks, keyStorePass );
+        saveKeyStore( ks, ksPassArr );
 
         return 0;
     }
@@ -164,9 +171,11 @@ extends ApplicationProcess
     extends ApplicationProcess.Configurator
     {
         private String ksFile;
+        private String ksPass;
         private String ksType = CryptoConstants.KEY_STORE_TYPE_JCEKS;
         private String alias;
         private int keyLen;
+        private String keyPass;
         private String algorithm;
 
         @Argument
@@ -181,10 +190,16 @@ extends ApplicationProcess
         private void setKeyStoreType( String ksType ) { this.ksType = ksType; }
 
         @Argument
+        private void setKeyStorePass( String ksPass ) { this.ksPass = ksPass; }
+
+        @Argument
         private void setKeyAlias( String alias ) { this.alias = alias; }
 
         @Argument
         private void setKeyLength( int keyLen ) { this.keyLen = keyLen; }
+
+        @Argument
+        private void setKeyPass( String keyPass ) { this.keyPass = keyPass; }
 
         @Argument
         private

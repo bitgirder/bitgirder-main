@@ -12,6 +12,7 @@ import com.bitgirder.io.IoTests;
 import com.bitgirder.io.Charsets;
 
 import com.bitgirder.test.Test;
+import com.bitgirder.test.TestCall;
 
 import java.util.Map;
 
@@ -210,6 +211,21 @@ class CryptoTests
 
     private
     void
+    addKey( KeyStore ks,
+            KeyGenerator kg,
+            String alias,
+            char[] pass )
+        throws Exception
+    {
+        ks.setEntry( 
+            alias,
+            new KeyStore.SecretKeyEntry( kg.generateKey() ),
+            new KeyStore.PasswordProtection( pass )
+        );
+    }
+
+    private
+    void
     addKeys( KeyStore ks,
              char[] pass,
              int keyCount,
@@ -219,11 +235,7 @@ class CryptoTests
     {
         for ( int i = 0; i < keyCount; ++i )
         {
-            ks.setEntry( 
-                String.format( tmpl, i ),
-                new KeyStore.SecretKeyEntry( kg.generateKey() ),
-                new KeyStore.PasswordProtection( pass )
-            );
+            addKey( ks, kg, String.format( tmpl, i ), pass );
         }
     }
 
@@ -250,6 +262,64 @@ class CryptoTests
         {
             String k = String.format( "accept-%016x", i );
             state.isTrue( m.containsKey( k ) );
+        }
+    }
+
+    private
+    abstract
+    class KeyStoreEntryTest
+    implements TestCall
+    {
+        KeyStore ks;
+        char[] pass;
+
+        abstract
+        void
+        implCall()
+            throws Exception;
+
+        public
+        final
+        void
+        call()
+            throws Exception
+        {
+            pass = "test".toCharArray();
+            ks = newKeyStore( pass );
+    
+            KeyGenerator kg = CryptoUtils.createKeyGenerator( "AES", 192 );
+            addKey( ks, kg, "sk1", pass );
+
+            implCall();
+        }
+    }
+
+    @Test
+    private
+    final
+    class ExpectSecretKeyTest
+    extends KeyStoreEntryTest
+    {
+        void
+        implCall()
+            throws Exception
+        {
+            state.notNull( CryptoUtils.expectSecretKey( ks, "sk1", pass ) );
+        }
+    }
+
+    @Test( expected = IllegalArgumentException.class,
+           expectedPattern = "\\QNo keystore entry for alias: sk2\\E" )
+    private
+    final
+    class MissingExpectKeyFailsTest
+    extends KeyStoreEntryTest
+    {
+        void
+        implCall()
+            throws Exception
+        {
+            CryptoUtils.expectSecretKey( ks, "sk2", pass );
         }
     }
 
