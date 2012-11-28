@@ -39,8 +39,8 @@ end
 class TomcatConfig < BitGirderClass
     
     bg_attr :control_port, validation: :positive
-    bg_attr :http_port, validation: :positive
-    bg_attr :https_port, validation: :positive
+    bg_attr :http_port, validation: :positive, required: false
+    bg_attr :https_port, validation: :positive, required: false
 
     bg_attr :shutdown_string
     
@@ -56,6 +56,10 @@ class TomcatConfig < BitGirderClass
 end
 
 PORT_OPTS = { validation: :positive, processor: :integer }
+
+def tomcat7_dir( base )
+    "#{base}/tomcat7"
+end
 
 class Install < Command
 
@@ -83,7 +87,7 @@ class Install < Command
 
     private
     def base_dir( dir )
-        "#@install_to/catalina/#{dir}"
+        "#{tomcat7_dir( @install_to )}/#{dir}"
     end
 
     # Scoped to its own method to reduce risk of local vars in eval'd code
@@ -220,8 +224,8 @@ class Install < Command
  
         doc.root << ( svc = new_elt( :Service, :name => "Catalina" ) )
 
-        add_http_connector( svc )
-        add_https_connector( svc )
+        add_http_connector( svc ) if @config.http_port
+        add_https_connector( svc ) if @config.https_port
 
         add_engine( svc )
     end
@@ -312,6 +316,7 @@ class TomcatProcessBuilder < BitGirderClass
     def get_run_sysprops
  
         cat_home = @config.tomcat_home
+        cat_base = tomcat7_dir( @runtime )
 
         res = {
 
@@ -321,10 +326,10 @@ class TomcatProcessBuilder < BitGirderClass
             "java.util.logging.manager" =>
                 "org.apache.juli.ClassLoaderLogManager",
  
-            "catalina.base" => "#@runtime/catalina",
+            "catalina.base" => cat_base,
             "catalina.home" => cat_home,
 
-            "java.io.tmpdir" => file_exists( "#@runtime/catalina/temp" )
+            "java.io.tmpdir" => file_exists( "#{cat_base}/temp" )
         }
 
         res.merge( @config.sysprops )
@@ -355,6 +360,7 @@ class RuntimeCommand < Command
     
     bg_attr :runtime, 
             validation: :file_exists,
+            processor: :expand_path,
             default: lambda {
                 if ( v = ( ENV[ ENV_TOMCAT7_RUNTIME ] || "" ).strip ).empty?
                     nil
@@ -395,10 +401,16 @@ class Daemon < RuntimeCommand
  
         b = TomcatProcessBuilder.new( config: @config, runtime: @runtime )
 
+        if File.exist?( pid_file )
+            raise "Tomcat already running (or stale pid file #{pid_file})"
+        end
+
         Process.daemon
+
         File.open( pid_file, "w" ) { |io| io.puts $$ }
         
-        out = "#@runtime/catalina/logs/catalina.out"
+        out = "#{tomcat7_dir( @runtime )}/logs/catalina.out"
+        code( "Sending daemon output to #{out}" )
         b.proc_opts[ [ STDOUT, STDERR ] ] = File.open( out, "a" )
 
         b.build.exec
@@ -449,9 +461,13 @@ class Daemon < RuntimeCommand
     private
     def await_srv_close
         
+        to_check = [ @config.control_port ]
+        to_check << @config.http_port if @config.http_port
+        to_check << @config.https_port if @config.https_port
+        
         # Returns true if and only if all ports are seen closed
-        ! [ :control_port, :http_port, :https_port ].find do |port|
-            ! await_port_close( @config.send( port ) )
+        ! to_check.find do |port|
+            ! await_port_close( port )
         end
     end
 
@@ -476,13 +492,20 @@ class Daemon < RuntimeCommand
         do_stop
         do_start
     end
+
+    private
+    def do_wipe_pid
+        
+        fu().rm( pid_file ) if File.exist?( pid_file )
+    end
  
     public
     def run( run_ctx )
  
         cmd = run_ctx[ :argv_remain ].shift or raise "Need a daemon command"
+        meth = :"do_#{cmd.gsub( "-", "_" )}"
 
-        if respond_to?( meth = :"do_#{cmd}", true )
+        if respond_to?( meth, true )
             send( meth )
         else
             raise "Unknown daemon command: #{cmd}"
@@ -497,7 +520,7 @@ class Tailf < RuntimeCommand
         
         UnixProcessBuilder.new(
             cmd: "tail",
-            argv: [ "-f" ] + Dir.glob( "#@runtime/catalina/logs/*" )
+            argv: [ "-f" ] + Dir.glob( "#{tomcat7_dir( @runtime )}/logs/*" )
         ).
         exec
     end
