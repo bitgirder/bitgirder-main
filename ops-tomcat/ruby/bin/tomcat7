@@ -397,13 +397,7 @@ end
 class Daemon < RuntimeCommand
 
     private
-    def do_start
- 
-        b = TomcatProcessBuilder.new( config: @config, runtime: @runtime )
-
-        if File.exist?( pid_file )
-            raise "Tomcat already running (or stale pid file #{pid_file})"
-        end
+    def exec_daemon( b )
 
         Process.daemon
 
@@ -414,6 +408,39 @@ class Daemon < RuntimeCommand
         b.proc_opts[ [ STDOUT, STDERR ] ] = File.open( out, "a" )
 
         b.build.exec
+    end
+
+    private
+    def await_start
+        
+        connected = 4.times.find do |i|
+            begin
+                TCPSocket::new( "localhost", @config.control_port ).close
+                true
+            rescue Errno::ECONNREFUSED
+                code( "Server ctl port not up yet; waiting" )
+                sleep( 2 ** i )
+                false
+            end
+        end 
+
+        raise "Could not get a ctl port connection" unless connected
+    end
+
+    private
+    def do_start
+ 
+        b = TomcatProcessBuilder.new( config: @config, runtime: @runtime )
+
+        if File.exist?( pid_file )
+            raise "Tomcat already running (or stale pid file #{pid_file})"
+        end
+
+        if fork
+            await_start
+        else
+            exec_daemon( b )
+        end
     end
 
     private
