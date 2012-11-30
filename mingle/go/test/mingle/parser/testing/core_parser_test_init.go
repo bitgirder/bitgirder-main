@@ -576,8 +576,7 @@ func init() {
         typRefRestrictFail( fmt.Sprintf( "Timestamp~[%q,%q]", tm2, tm1 ), 
             "Unsatisfiable range" ),
         typRefRestrictFail( `Timestamp~["2001-0x-22",)`,
-            "Invalid min value in range restriction: val: Error converting " +
-            "to mingle:core@v1/Timestamp: Invalid timestamp: " +
+            "Invalid min value in range restriction: val: Invalid timestamp: " +
             "[<input>, line 1, col 1]: Invalid RFC3339 time: \"2001-0x-22\"" ),
         typRefRestrictFail( `String~"ab[a-z"`, 
             "error parsing regexp: missing closing ]: `[a-z`" ),

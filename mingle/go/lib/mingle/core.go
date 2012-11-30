@@ -847,7 +847,7 @@ func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
 func ( acc *SymbolMapAccessor ) GetValueById( id *Identifier ) ( Value, error ) {
     val, err := acc.m.GetById( id ), error( nil )
     if val == nil { 
-        err = &ValidationError{ "value is null", acc.descend( id ) } 
+        err = newValidationError( "value is null", acc.descend( id ) )
     }
     return val, err
 }
@@ -1070,54 +1070,80 @@ func TypeOf( mgVal Value ) TypeReference {
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }
 
-const typCastMsgWithoutPath = "Expected value of type %s but found %s"
-const typCastMsgWithPath = "%s: " + typCastMsgWithoutPath
+type ValueError interface {
+    Location() objpath.PathNode
+    error
+}
 
-type TypeCastError struct {
-    actual, expected TypeReference
+type valueErrorImpl struct {
     path idPath
 }
 
-func ( e *TypeCastError ) Error() string {
-    var msg string
-    var off int
-    args := make( []interface{}, 3 )
-    args[ 1 ], args[ 2 ] = e.expected, e.actual
-    if e.path == nil {
-        msg, off = typCastMsgWithoutPath, 1
-    } else { 
-        args[ 0 ] = FormatIdPath( e.path )
-        msg, off = typCastMsgWithPath, 0 
-    }
-    return fmt.Sprintf( msg, args[ off : ]... )
-}
+func ( e valueErrorImpl ) Location() objpath.PathNode { return e.path }
 
-func asTypeCastError( 
-    path idPath, t TypeReference, mgVal Value ) *TypeCastError {
-    return &TypeCastError{ actual: TypeOf( mgVal ), expected: t, path: path }
+func ( e valueErrorImpl ) makeError( msg string ) string {
+    if e.path == nil { return msg }
+    return fmt.Sprintf( "%s: %s", FormatIdPath( e.path ), msg )
 }
 
 type ValidationError struct {
-    message string
-    path idPath
+    valueErrorImpl
+    msg string
 }
 
-func ( e *ValidationError ) Message() string { return e.message }
+func newValidationError( msg string, path idPath ) *ValidationError {
+    res := &ValidationError{ msg: msg }
+    res.path = path
+    return res
+}
+
+func ( e *ValidationError ) Message() string { return e.msg }
 
 func ( e *ValidationError ) Error() string {
-    return fmt.Sprintf( "%s: %s", FormatIdPath( e.path ), e.message )
+    return e.makeError( e.msg )
 }
 
-func asValueCastError( 
-    path idPath, 
-    targType TypeReference,
-    msg string, 
-    args ...interface{} ) *ValidationError {
-    args2 := make( []interface{}, 1, len( args ) + 1 )
-    args2[ 0 ] = targType
-    args2 = append( args2, args... )
-    msg = "Error converting to %s: " + msg
-    return &ValidationError{ message: fmt.Sprintf( msg, args2... ), path: path }
+type TypeCastError struct {
+    valueErrorImpl
+    expected TypeReference
+    actual TypeReference
+}
+
+func ( e *TypeCastError ) Error() string {
+    tmpl := "Expected value of type %s but found %s"
+    return e.makeError( fmt.Sprintf( tmpl, e.expected, e.actual ) )
+}
+
+func newTypeCastError( expct, act TypeReference, path idPath ) *TypeCastError {
+    res := &TypeCastError{ expected: expct, actual: act }
+    res.path = path
+    return res
+}
+
+func asTypeCastError( t TypeReference, val Value, path idPath ) *TypeCastError {
+    return newTypeCastError( t, TypeOf( val ), path )
+}
+
+type ValueCastError struct {
+    valueErrorImpl
+    msg string
+}
+
+func ( e *ValueCastError ) Error() string { return e.makeError( e.msg ) }
+
+func newValueCastError(
+    targTyp TypeReference, path idPath, msg string ) *ValueCastError {
+    res := &ValueCastError{ msg: msg }
+    res.path = path
+    return res
+}
+
+func newValueCastErrorf(
+    targTyp TypeReference,
+    path idPath,
+    tmpl string,
+    args ...interface{} ) *ValueCastError {
+    return newValueCastError( targTyp, path, fmt.Sprintf( tmpl, args... ) )
 }
 
 func strToBool( 
@@ -1126,7 +1152,9 @@ func strToBool(
     case "true": return Boolean( true ), nil
     case "false": return Boolean( false ), nil
     }
-    return nil, asValueCastError( path, at, "Invalid boolean value: %s", s )
+    errTmpl :="Invalid boolean value: %s"
+    errStr := QuoteValue( s )
+    return nil, newValueCastErrorf( at, path, errTmpl, errStr )
 }
 
 func castBoolean( 
@@ -1135,7 +1163,7 @@ func castBoolean(
     case Boolean: return v, nil
     case String: return strToBool( v, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castBuffer( 
@@ -1146,9 +1174,9 @@ func castBuffer(
         buf, err := base64.StdEncoding.DecodeString( string( v ) )
         if err == nil { return Buffer( buf ), nil }
         msg := "Invalid base64 string: %s"
-        return nil, asValueCastError( path, at, msg, err.Error() )
+        return nil, newValueCastErrorf( at, path, msg, err.Error() )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castString( 
@@ -1162,12 +1190,12 @@ func castString(
         return String( base64.StdEncoding.EncodeToString( []byte( v ) ) ), nil
     case *Enum: return String( v.Value.ExternalForm() ), nil
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func valueCastErrorForNumError(
     path idPath, at *AtomicTypeReference, err *strconv.NumError ) error {
-    return asValueCastError( path, at, "%s: %s", err.Err.Error(), err.Num )
+    return newValueCastErrorf( at, path, "%s: %s", err.Err.Error(), err.Num )
 }
 
 func parseIntInitial(
@@ -1205,13 +1233,13 @@ func parseInt(
         case TypeUint64: return Uint64( uInt ), nil
         default:
             msg := "Unhandled number type: %s"
-            panic( asValueCastError( path, at, msg, numTyp ) )
+            panic( newValueCastErrorf( at, path, msg, numTyp ) )
         }
     } 
     if ne, ok := err.( *strconv.NumError ); ok {
         return nil, valueCastErrorForNumError( path, at, ne )
     }
-    return nil, asValueCastError( path, at, err.Error() )
+    return nil, newValueCastErrorf( at, path, err.Error() )
 }
 
 func castInt32( 
@@ -1225,7 +1253,7 @@ func castInt32(
     case Float64: return Int32( int32( v ) ), nil
     case String: return parseInt( v, 32, TypeInt32, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castInt64( 
@@ -1239,7 +1267,7 @@ func castInt64(
     case Float64: return Int64( int64( v ) ), nil
     case String: return parseInt( v, 64, TypeInt64, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castUint32(
@@ -1253,7 +1281,7 @@ func castUint32(
     case Float64: return Uint32( uint32( v ) ), nil
     case String: return parseInt( v, 32, TypeUint32, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castUint64(
@@ -1267,7 +1295,7 @@ func castUint64(
     case Float64: return Uint64( uint64( v ) ), nil
     case String: return parseInt( v, 64, TypeUint64, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func parseFloat32(
@@ -1285,7 +1313,7 @@ func parseFloat32(
     case TypeFloat32: return Float32( f ), nil
     case TypeFloat64: return Float64( f ), nil
     }
-    panic( asValueCastError( path, at, "Unhandled num type: %s", numTyp ) )
+    panic( newValueCastErrorf( at, path, "Unhandled num type: %s", numTyp ) )
 }
 
 func castFloat32( 
@@ -1299,7 +1327,7 @@ func castFloat32(
     case Float64: return Float32( float32( v ) ), nil
     case String: return parseFloat32( string( v ), 32, TypeFloat32, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castFloat64( 
@@ -1313,7 +1341,7 @@ func castFloat64(
     case Float64: return v, nil
     case String: return parseFloat32( string( v ), 64, TypeFloat64, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castTimestamp( 
@@ -1324,9 +1352,9 @@ func castTimestamp(
         tm, err := ParseTimestamp( string( v ) )
         if err == nil { return tm, nil }
         msg := "Invalid timestamp: %s"
-        return nil, asValueCastError( path, at, msg, err.Error() )
+        return nil, newValueCastErrorf( at, path, msg, err.Error() )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castEnum( 
@@ -1335,7 +1363,7 @@ func castEnum(
     case *Enum: 
         if at.Equals( TypeEnum ) || v.Type.Equals( at ) { return v, nil }
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castSymbolMap( 
@@ -1343,7 +1371,7 @@ func castSymbolMap(
     switch v := mgVal.( type ) {
     case *SymbolMap: return v, nil
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castStruct( 
@@ -1352,20 +1380,20 @@ func castStruct(
     case *Struct: 
         if at.Equals( TypeStruct ) || v.Type.Equals( at ) { return v, nil }
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castNull( 
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     if _, ok := mgVal.( *Null ); ok { return mgVal, nil }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func castAtomicUnrestricted(
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     if _, ok := mgVal.( *Null ); ok {
         if at.Equals( TypeNull ) { return mgVal, nil }
-        return nil, asValueCastError( path, at, "value is null" )
+        return nil, newValueCastErrorf( at, path, "Value is null" )
     }
     switch nm := at.Name; {
     case nm.Equals( QnameBoolean ): return castBoolean( mgVal, at, path )
@@ -1387,13 +1415,13 @@ func castAtomicUnrestricted(
     case *Enum: return castEnum( mgVal, at, path )
     case *Struct: return castStruct( mgVal, at, path )
     }
-    return nil, asTypeCastError( path, at, mgVal )
+    return nil, asTypeCastError( at, mgVal, path )
 }
 
 func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
     if at.Restriction.AcceptsValue( val ) { return nil }
-    return asValueCastError( 
-        path, at, "Value %s does not satisfy restriction %s",
+    return newValueCastErrorf( 
+        at, path, "Value %s does not satisfy restriction %s",
         QuoteValue( val ), at.Restriction.ExternalForm() )
 }
 
@@ -1403,6 +1431,7 @@ func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
 func castAtomic(
     mgVal Value, 
     at *AtomicTypeReference,
+    orig TypeReference,
     path idPath ) ( val Value, err error ) {
     if val, err = castAtomicUnrestricted( mgVal, at, path ); err == nil {
         if at.Restriction != nil { err = checkRestriction( val, at, path ) }
@@ -1419,40 +1448,59 @@ func castAtomic(
 // case), a space optimization will be to only lazily initiate a copy, returning
 // the original list untouched if possible. That's tabled for now though.
 func castList(
-    mgVal Value, lt *ListTypeReference, path idPath ) ( Value, error ) {
+    mgVal Value, 
+    lt *ListTypeReference, 
+    orig TypeReference,
+    path idPath ) ( Value, error ) {
     if ml, ok := mgVal.( *List ); ok {
         eltTyp := lt.ElementType
         vals := make( []Value, len( ml.vals ) )
         lp := path.StartList()
         for i, inVal := range ml.vals {
-            if val, err := CastValue( inVal, eltTyp, lp ); err == nil {
+            if val, err := castValue( inVal, eltTyp, orig, lp ); err == nil {
                 vals[ i ] = val
             } else { return nil, err }
             lp = lp.Next()
         }
         if len( vals ) == 0 && ( ! lt.AllowsEmpty ) {
-            return nil, asValueCastError( path, lt, "list is empty" )
+            return nil, newValueCastErrorf( lt, path, "List is empty" )
         }
         return &List{ vals }, nil
     }
-    return nil, asTypeCastError( path, lt, mgVal )
+    return nil, asTypeCastError( lt, mgVal, path )
 }
 
 func castNullable(
-    mgVal Value, nt *NullableTypeReference, path idPath ) ( Value, error ) {
+    mgVal Value, 
+    nt *NullableTypeReference, 
+    orig TypeReference, 
+    path idPath ) ( Value, error ) {
     if nv, ok := mgVal.( *Null ); ok { return nv, nil }
-    return CastValue( mgVal, nt.Type, path )
+    val, err := castValue( mgVal, nt.Type, orig, path )
+    // Reset error type to be the enclosing nullable type
+    if tcErr, ok := err.( *TypeCastError ); ok { tcErr.expected = nt }
+    return val, err
+}
+
+func castValue(
+    mgVal Value, 
+    typ TypeReference,
+    orig TypeReference, 
+    path idPath ) ( val Value, err error ) {
+    switch v := typ.( type ) {
+    case *AtomicTypeReference: val, err = castAtomic( mgVal, v, orig, path )
+    case *ListTypeReference: val, err = castList( mgVal, v, orig, path )
+    case *NullableTypeReference: val, err = castNullable( mgVal, v, orig, path )
+    default: panic( libErrorf( "Unhandled target type (%T): %s", typ, typ ) )
+    }
+    return val, err
 }
 
 func CastValue( 
     mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
+    if path == nil { return nil, errors.New( "path arg is nil" ) }
     if mgVal == nil { return nil, errors.New( "mgVal is nil" ) }
-    switch v := typ.( type ) {
-    case *AtomicTypeReference: return castAtomic( mgVal, v, path )
-    case *ListTypeReference: return castList( mgVal, v, path )
-    case *NullableTypeReference: return castNullable( mgVal, v, path )
-    }
-    panic( fmt.Errorf( "Unhandled target type (%T): %s", typ, typ ) )
+    return castValue( mgVal, typ, typ, path )
 }
 
 type mapImplKey interface { ExternalForm() string }

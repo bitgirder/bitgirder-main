@@ -496,11 +496,9 @@ func TestCompiler( t *testing.T ) {
             }
         ` ).
         expectError( 5, 42, 
-            `Error converting to mingle:core@v1/String~"^a+$": ` +
-            `Value "bbb" does not satisfy restriction "^a+$"` ).
+            `const-val: Value "bbb" does not satisfy restriction "^a+$"` ).
         expectError( 6, 40,
-            "Error converting to mingle:core@v1/Int32~[8,9]: " +
-            "Value 12 does not satisfy restriction [8,9]" ),
+            "const-val: Value 12 does not satisfy restriction [8,9]" ),
 
         newCompilerTest( "duplicate-enum-constants" ).
         setSource( 
@@ -596,11 +594,9 @@ func TestCompiler( t *testing.T ) {
             8, 22, "Invalid target type for regex restriction: ns@v1/S1" ).
         expectError( 10, 38, "List value not expected" ).
         expectError( 12, 38,
-            `Error converting to mingle:core@v1/String~"^a+$": ` +
-            `Value "b" does not satisfy restriction "^a+$"` ).
+            `const-val: Value "b" does not satisfy restriction "^a+$"` ).
         expectError( 14, 38,
-            `Error converting to mingle:core@v1/Int64~[0,3]: ` +
-            `Value -1 does not satisfy restriction [0,3]` ),
+            `const-val: Value -1 does not satisfy restriction [0,3]` ),
  
         newCompilerTest( "circular-aliasing-within-ns" ).
         setSource( "@version v1; namespace ns1; alias A1 A2; alias A2 A1*;" ).

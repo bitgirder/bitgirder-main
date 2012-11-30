@@ -92,14 +92,28 @@ type PathAsserter struct {
     p objpath.PathNode
 }
 
+func ( pa *PathAsserter ) locString() string {
+    return objpath.Format( pa.p, objpath.StringDotFormatter )
+}
+
 func ( pa *PathAsserter ) Fatal( args ...interface{} ) {
     args2 := args
     if pa.p != nil {
         args2 = make( []interface{}, 1, 1 + len( args ) )
-        args2[ 0 ] = objpath.Format( pa.p, objpath.StringDotFormatter ) + ": "
+        args2[ 0 ] = pa.locString() + ": "
         args2 = append( args2, args... )
     }
     pa.f.Fatal( args2... )
+}
+
+func ( pa *PathAsserter ) Log( msg string ) {
+    if pa.p == nil {
+        log.Print( msg )
+    } else { log.Printf( "%s: %s", pa.locString(), msg ) }
+}
+
+func ( pa *PathAsserter ) Logf( tmpl string, argv ...interface{} ) {
+    pa.Log( fmt.Sprintf( tmpl, argv... ) )
 }
 
 func makePathAsserter( f Failer, p objpath.PathNode ) *PathAsserter {
@@ -127,17 +141,6 @@ func ( pa *PathAsserter ) StartList() *PathAsserter {
 func ( pa *PathAsserter ) Next() *PathAsserter {
     p := pa.p.( *objpath.ListNode ).Next()
     return makePathAsserter( pa.f, p )
-}
-
-func ( pa *PathAsserter ) Printf( tmpl string, args ...interface{} ) {
-    if pa.p == nil {
-        log.Printf( tmpl, args... )
-    } else {
-        log.Printf( "%s: %s",
-            objpath.Format( pa.p, objpath.StringDotFormatter ),
-            fmt.Sprintf( tmpl, args... ),
-        )
-    }
 }
 
 var defl *Asserter
