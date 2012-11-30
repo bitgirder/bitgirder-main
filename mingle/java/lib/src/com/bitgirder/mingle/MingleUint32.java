@@ -24,10 +24,7 @@ implements MingleValue,
     {
         if ( o == null ) throw new NullPointerException();
 
-        long u1 = Lang.asUnsignedInt( num );
-        long u2 = Lang.asUnsignedInt( o.num );
-
-        return u1 < u2 ? -1 : u1 == u2 ? 0 : 1;
+        return Lang.compareUint32( num, o.num );
     }
 
     public int hashCode() { return num; }
@@ -43,12 +40,7 @@ implements MingleValue,
     }
 
     @Override 
-    public 
-    String 
-    toString() 
-    { 
-        return Long.toString( Lang.asUnsignedInt( num ) ); 
-    }
+    public String toString() { return Lang.toUint32String( num ); }
 
     public long longValue() { return (long) num; }
     public int intValue() { return (int) num; }

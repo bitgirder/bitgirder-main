@@ -59,6 +59,9 @@ class Lang
 
     private final static Casts casts = new Casts();
 
+    private final static BigInteger BI_MAX_UINT32 =
+        BigInteger.ONE.shiftLeft( 32 ).subtract( BigInteger.ONE );
+
     private final static BigInteger BI_MAX_UINT64 =
         BigInteger.ONE.shiftLeft( 64 ).subtract( BigInteger.ONE );
 
@@ -114,44 +117,57 @@ class Lang
         return res;
     }
 
-    // get b as an unsigned byte, stored in an int
-    public 
-    static 
-    int 
-    asOctet( byte b ) 
-    { 
-        int res = b & 127;
-        return b < 0 ? res + 128 : res;
-    }
-
-    // Gets an unsigned byte, passed in an int, as a signed byte. This
-    // implementation is essentially just a checked narrowing conversion from
-    // int --> byte
     public
     static
-    byte
-    fromOctet( int octet )
+    int
+    compareUint32( int i1,
+                   int i2 )
     {
-        inputs.inRange( octet, "octet", OCTET_RANGE );
-        return (byte) octet;
+        if ( i1 == i2 ) return 0;
+
+        boolean less = ( i1 + Integer.MIN_VALUE ) < ( i2 + Integer.MIN_VALUE );
+        return less ? -1 : 1;
     }
 
     public
     static
-    long
-    asUnsignedInt( int i )
+    String
+    toUint32String( int i )
     {
-        long res = i & Integer.MAX_VALUE;
+        if ( i >= 0 ) return Integer.toString( i );
 
-        return i < 0 ? res + ( 1L << 31 ) : res;
+        long l = ( 1L << 31 ) | (long) ( i & Integer.MAX_VALUE );
+
+        return Long.toString( l );
     }
 
     public
     static
-    long
-    parseUint64( CharSequence s )
+    int
+    compareUint64( long l1,
+                   long l2 )
     {
-        inputs.notNull( s, "s" );
+        if ( l1 == l2 ) return 0;
+
+        boolean less = ( l1 + Long.MIN_VALUE ) < ( l2 + Long.MIN_VALUE );
+
+        return less ? -1 : 1;
+    }
+
+    // null-checks param on behalf of public frontends
+    private
+    static
+    BigInteger
+    parseUint( CharSequence s,
+               BigInteger max,
+               String errNm )
+    {
+        String numStr = inputs.notNull( s, "s" ).toString().trim();
+
+        if ( numStr.length() == 0 ) 
+        {
+            throw new NumberFormatException( "Empty number" );
+        }
 
         BigInteger bi = new BigInteger( s.toString() );
 
@@ -160,13 +176,42 @@ class Lang
             throw new NumberFormatException( "Number is negative: " + s );
         }
 
-        if ( bi.compareTo( BI_MAX_UINT64 ) > 0 )
+        if ( bi.compareTo( max ) > 0 )
         {
             throw new NumberFormatException( 
-                "Number is too large for uint64: " + s );
+                "Number is too large for " + errNm + ": " + s );
         }
 
-        return bi.longValue();
+        return bi;
+    }
+
+    public
+    static
+    int
+    parseUint32( CharSequence s )
+    {
+        return parseUint( s, BI_MAX_UINT32, "uint32" ).intValue();
+    }
+
+    public
+    static
+    String
+    toUint64String( long l )
+    {
+        if ( l >= 0 ) return Long.toString( l );
+
+        BigInteger bi = BigInteger.valueOf( l & Long.MAX_VALUE );
+        bi = bi.flipBit( 63 );
+
+        return bi.toString();
+    }
+
+    public
+    static
+    long
+    parseUint64( CharSequence s )
+    {
+        return parseUint( s, BI_MAX_UINT64, "uint64" ).longValue();
     }
 
     public

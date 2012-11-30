@@ -102,8 +102,8 @@ extends BinIoProcessor
 
         if ( sz < 0 ) 
         {
-            long uSz = Lang.asUnsignedInt( sz );
-            throw new IOException( "Array size too large: " + uSz );
+            throw new IOException( 
+                "Array size too large: " + Lang.toUint32String( sz ) );
         }
 
         byte[] res = new byte[ sz ];

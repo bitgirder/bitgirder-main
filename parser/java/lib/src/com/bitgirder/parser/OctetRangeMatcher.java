@@ -26,12 +26,20 @@ implements TerminalMatcher< Byte >
         this.maxIncl = maxIncl;
     }
 
+    private
+    int 
+    asOctet( byte b ) 
+    { 
+        int res = b & 127;
+        return b < 0 ? res + 128 : res;
+    }
+
     public
     boolean
     isMatch( Byte byteObj )
     {
         byte b = byteObj.byteValue();
-        int octet = Lang.asOctet( b );
+        int octet = asOctet( b );
 
         return octet >= minIncl && octet <= maxIncl;
     }

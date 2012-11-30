@@ -38,6 +38,15 @@ class LangTests
         System.out.println( Strings.join( "", msg ) );
     }
 
+    public
+    static
+    void
+    codef( String tmpl,
+           Object... args )
+    {
+        code( String.format( tmpl, args ) );
+    }
+
     @Test
     private
     void
@@ -499,51 +508,6 @@ class LangTests
         catch ( UnsupportedOperationException okay ) {}
     }
 
-    @Test
-    private
-    void
-    testOctetToUnsignedByteConversions()
-    {
-        state.equalInt( 0, Lang.asOctet( (byte) 0 ) );
-        state.equalInt( 1, Lang.asOctet( (byte) 1 ) );
-        state.equalInt( 127, Lang.asOctet( (byte) 127 ) );
-        state.equalInt( 128, Lang.asOctet( (byte) -128 ) );
-        state.equalInt( 129, Lang.asOctet( (byte) -127 ) );
-        state.equalInt( 255, Lang.asOctet( (byte) -1 ) );
-
-        state.isTrue( (byte) 0 == Lang.fromOctet( 0 ) );
-        state.isTrue( (byte) 1 == Lang.fromOctet( 1 ) );
-        state.isTrue( (byte) 2 == Lang.fromOctet( 2 ) );
-        state.isTrue( (byte) 127 == Lang.fromOctet( 127 ) );
-        state.isTrue( (byte) -128 == Lang.fromOctet( 128 ) );
-        state.isTrue( (byte) -127 == Lang.fromOctet( 129 ) );
-        state.isTrue( (byte) -1 == Lang.fromOctet( 255 ) );
-    }
-
-    private
-    void
-    assertUnsignedInt( long expct,
-                       int intVal )
-    {
-        long actual = Lang.asUnsignedInt( intVal );
-        state.equal( expct, actual );
-    }
-
-    @Test
-    private
-    void
-    testIntToUnsignedIntConversions()
-    {
-        long maxI = (long) Integer.MAX_VALUE;
-
-        assertUnsignedInt( 0L, 0 );
-        assertUnsignedInt( 1L, 1 );
-        assertUnsignedInt( maxI, Integer.MAX_VALUE );
-        assertUnsignedInt( 1L << 31, Integer.MIN_VALUE );
-        assertUnsignedInt( ( 1L << 31 ) + 2, Integer.MIN_VALUE + 2 );
-        assertUnsignedInt( ( 1L << 32 ) - 1L, -1 );
-    }
-
     // regression for bug which allowed an immutable list with null elts to be
     // returned from a call to unmodifiableList with allowNullElts set to false
     @Test( expected = IllegalArgumentException.class,
@@ -739,5 +703,114 @@ class LangTests
 
         TypedStringImpl t2 = (TypedStringImpl) ois.readObject();
         state.equalString( t1, t2 );
+    }
+
+    private
+    void
+    assertUintString( String s1,
+                      Number expct )
+    {
+        Number n;
+
+        if ( expct instanceof Long ) n = Lang.parseUint64( s1 );
+        else n = Lang.parseUint32( s1 );
+
+        state.equal( expct, n );
+
+        String s2;
+        if ( expct instanceof Long ) s2 = Lang.toUint64String( (Long) n );
+        else s2 = Lang.toUint32String( (Integer) n );
+
+        state.equal( s1, s2 );
+    }
+
+    private
+    void
+    assertUintParseFail( int sz,
+                         String in,
+                         String tmpl )
+    {
+        state.isTrue( sz == 32 || sz == 64 );
+
+        try
+        {
+            if ( sz == 32 ) Lang.parseUint32( in ); else Lang.parseUint64( in );
+            state.fail( "Parsed:", in );
+        }
+        catch ( NumberFormatException nfe )
+        {
+            state.equal( nfe.getMessage(), String.format( tmpl, in ) );
+        }
+    }
+
+    private
+    void
+    assertUintComp( int sign,
+                    Number n1,
+                    Number n2 )
+    {
+        int res;
+
+        if ( n1 instanceof Long ) 
+        {
+            res = Lang.compareUint64( (Long) n1, (Long) n2 );
+        }
+        else res = Lang.compareUint32( (Integer) n1, (Integer) n2 );
+ 
+        state.equalInt( sign, res );
+    }
+
+    @Test
+    private
+    void
+    testUint32()
+    {
+        assertUintComp( -1, 0, 1 );
+        assertUintComp( -1, 1, -1 );
+        assertUintComp( -1, 1, Integer.MIN_VALUE );
+        assertUintComp( 0, 0, 0 );
+        assertUintComp( 0, 1, 1 );
+        assertUintComp( 0, -1, -1 );
+        assertUintComp( 1, -1, 1 );
+        assertUintComp( 1, 2, 1 );
+        assertUintComp( 1, -1, Integer.MIN_VALUE );
+   
+        assertUintString( "0", 0 );
+        assertUintString( "2147483648", Integer.MIN_VALUE );
+        assertUintString( "4294967295", -1 );
+
+        assertUintParseFail( 32, "-1", "Number is negative: %s" );
+
+        assertUintParseFail( 
+            32, "4294967296", "Number is too large for uint32: %s" );
+
+        assertUintParseFail( 32, "", "Empty number" );
+    }
+
+    @Test
+    private
+    void
+    testUint64()
+    {
+        assertUintComp( -1, 0L, 1L );
+        assertUintComp( -1, 1L, -1L );
+        assertUintComp( -1, 1L, Long.MIN_VALUE );
+        assertUintComp( 0, 0L, 0L );
+        assertUintComp( 0, 1L, 1L );
+        assertUintComp( 0, -1L, -1L );
+        assertUintComp( 1, -1L, 1L );
+        assertUintComp( 1, 2L, 1L );
+        assertUintComp( 1, -1L, Long.MIN_VALUE );
+   
+        assertUintString( "0", 0L );
+        assertUintString( "9223372036854775808", Long.MIN_VALUE );
+        assertUintString( "18446744073709551615", -1L );
+
+        assertUintParseFail( 64, "-1", "Number is negative: %s" );
+
+        assertUintParseFail( 
+            64, "18446744073709551616", "Number is too large for uint64: %s" );
+
+        assertUintParseFail( 64, "", "Empty number" );
     }
 }
