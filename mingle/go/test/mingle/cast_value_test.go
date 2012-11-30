@@ -2,7 +2,6 @@ package mingle
 
 import (
     "testing"
-    "reflect"
     "bitgirder/objpath"
     "bitgirder/assert"
 )
@@ -55,11 +54,7 @@ func ( r *cvtRunner ) assertError( err error ) {
 func ( r *cvtRunner ) call() {
     if act, err := CastValue( r.cvt.In, r.cvt.Type, r.cvt.Path ); err == nil {
         if r.cvt.Err != nil { r.Fatal( "Expected error" ) }
-        if comp, ok := r.cvt.Expect.( Comparer ); ok {
-            if reflect.TypeOf( comp ) == reflect.TypeOf( act ) {
-                assert.Equal( 0, comp.Compare( act ) )
-            }
-        } else { assert.Equal( r.cvt.Expect, act ) }
+        r.Equal( r.cvt.Expect, act )
     } else { r.assertError( err ) }
 }
 

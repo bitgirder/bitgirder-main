@@ -3,6 +3,7 @@ package mingle
 import (
     "bitgirder/objpath"
     "encoding/base64"
+    "fmt"
 )
 
 type CastValueTest struct {
@@ -237,6 +238,9 @@ func ( t *cvtInit ) addTruncateNumTests() {
         t.addSucc( val, Int32( -1 ), TypeInt32 )
         t.addSucc( val, Int64( -1 ), TypeInt64 )
     }
+    t.addSucc( int64( 1 << 31 ), int32( -2147483648 ), TypeInt32 )
+    t.addSucc( int64( 1 << 33 ), int32( 0 ), TypeInt32 )
+    t.addSucc( int64( 1 << 31 ), uint32( 1 << 31 ), TypeUint32 )
 }
 
 func ( t *cvtInit ) addNumTests() {
@@ -245,7 +249,18 @@ func ( t *cvtInit ) addNumTests() {
     }
     t.addIdentityNumTests()
     t.addTruncateNumTests()
-    t.addSucc( "1", int64( 1 ), "Int64~[-1,1]" )
+    t.addSucc( "1", int64( 1 ), "Int64~[-1,1]" ) // just cover String with range
+    rngErr := func( val string, typ TypeReference ) {
+        t.addVcError( val, typ, fmt.Sprintf( "value out of range: %s", val ) )
+    }
+    rngErr( "2147483648", TypeInt32 )
+    rngErr( "-2147483649", TypeInt32 )
+    rngErr( "9223372036854775808", TypeInt64 )
+    rngErr( "-9223372036854775809", TypeInt64 )
+    rngErr( "4294967296", TypeUint32 )
+    t.addVcError( "-1", TypeUint32, "invalid syntax: -1" )
+    rngErr( "18446744073709551616", TypeUint64 )
+    t.addVcError( "-1", TypeUint64, "invalid syntax: -1" )
     t.addVcError(
         12, "Int32~[0,10)", "Value 12 does not satisfy restriction [0,10)" )
 }
