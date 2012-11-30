@@ -420,27 +420,57 @@ class Rfc4627Reader
         return new StringReader( cr ).exec();
     }
 
-    // For now only privately constructed; as there are more than a single
-    // option we'll expose some ways to create instances.
     public
     final
     static
     class NumberOptions
     {
         private final boolean allowLeadingZeroes;
+        private final int[] delims;
         
         private
-        NumberOptions( boolean allowLeadingZeroes )
+        NumberOptions( NumberOptionsBuilder b )
         {
-            this.allowLeadingZeroes = allowLeadingZeroes;
+            this.allowLeadingZeroes = b.allowLeadingZeroes;
+            this.delims = b.delims;
         }
     }
 
-    public final static NumberOptions ALLOW_LEADING_ZEROES =
-        new NumberOptions( true );
+    public
+    final
+    static
+    class NumberOptionsBuilder
+    {
+        private final int[] DEFAULT_DELIMS = new int[] {
+            (int) ',',
+            (int) ']',
+            (int) '}'
+        };
+
+        private int[] delims = DEFAULT_DELIMS;
+        private boolean allowLeadingZeroes = false;
+
+        public
+        NumberOptionsBuilder
+        setDelimiters( int[] delims )
+        {
+            this.delims = inputs.notNull( delims, "delims" );
+            return this;
+        }
+
+        public
+        NumberOptionsBuilder
+        setAllowLeadingZeroes( boolean flag )
+        {
+            this.allowLeadingZeroes = flag;
+            return this;
+        }
+
+        public NumberOptions build() { return new NumberOptions( this ); }
+    }
 
     private final static NumberOptions DEFAULT =
-        new NumberOptions( false );
+        new NumberOptionsBuilder().build();
 
     public
     final
@@ -566,7 +596,12 @@ class Rfc4627Reader
         boolean
         isNaturalNumDelim( int v )
         {
-            return v == (int) ',' || v == (int) ']' || v == (int) '}';
+            for ( int i = 0, e = opts.delims.length; i < e; ++i )
+            {
+                if ( v == opts.delims[ i ] ) return true;
+            }
+
+            return false;
         }
 
         private

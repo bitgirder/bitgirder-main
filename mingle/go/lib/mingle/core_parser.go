@@ -215,7 +215,7 @@ func castRangeValue(
     if err = checkRangeValueCast( sx, typ, bound ); err != nil { return }
     ms := String( sx.( syntax.LiteralStringer ).LiteralString() )
     if val, err = CastValue( ms, typ, idPathRootVal ); err != nil {
-        msg := "Invalid % value in range restriction: %s" 
+        msg := "Invalid %s value in range restriction: %s" 
         err = &RestrictionTypeError{ fmt.Sprintf( msg, bound, err.Error() ) }
     }
     return

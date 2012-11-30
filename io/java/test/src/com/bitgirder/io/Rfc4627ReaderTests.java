@@ -367,13 +367,31 @@ class Rfc4627ReaderTests
             
             new NumTestCall( "multi-zero-int" ).
                 setIn( "000000" ).
-                setOptions( Rfc4627Reader.ALLOW_LEADING_ZEROES ).
+                setOptions( 
+                    new Rfc4627Reader.NumberOptionsBuilder().
+                        setAllowLeadingZeroes( true ).
+                        build()
+                ).
                 setNumber( false, "000000", null, null ),
             
             new NumTestCall( "multi-zero-int-with-dec" ).
                 setIn( "-000000.001" ).
-                setOptions( Rfc4627Reader.ALLOW_LEADING_ZEROES ).
+                setOptions( 
+                    new Rfc4627Reader.NumberOptionsBuilder().
+                        setAllowLeadingZeroes( true ).
+                        build()
+                ).
                 setNumber( true, "000000", "001", null ),
+            
+            new NumTestCall( "custom-delim" ).
+                setIn( "1234," ).
+                setOptions(
+                    new Rfc4627Reader.NumberOptionsBuilder().
+                        setDelimiters( new int[] { (int) ',' } ).
+                        build()
+                ).
+                setNumber( false, "1234", null, null ).
+                setTail( "," ),
 
             new NumTestCall( "illegal-leading-zeroes-posint" ).
                 setError( "Illegal leading zero(es) in integer part", 1 ).

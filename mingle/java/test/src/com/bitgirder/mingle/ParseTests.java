@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.io.BufferedInputStream;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Queue;
@@ -74,8 +75,8 @@ class ParseTests
     private final static byte ELT_TYPE_FILE_END = (byte) 0x00;
     private final static byte ELT_TYPE_PARSE_TEST = (byte) 0x01;
 
-    private final static Map< ErrorMessageKey, Object > ERR_MSG_OVERRIDES =
-        Lang.newMap( ErrorMessageKey.class, Object.class,
+    private final static Map< ErrorOverrideKey, Object > ERR_OVERRIDES =
+        Lang.newMap( ErrorOverrideKey.class, Object.class,
 
             errMsgKey( TestType.STRING, "\"\\u012k\"" ),
                 "Invalid hex char in escape: \"k\" (U+006B)",
@@ -169,19 +170,92 @@ class ParseTests
                 "Expected '/' but found: END",
             
             errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1@v1/T1/" ),
-                "Unexpected trailing data \"/\" (U+002F)"
+                "Unexpected trailing data \"/\" (U+002F)",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "ns1@v1" ),
+                "Expected '/' but found: END",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "/T1" ),
+                "Expected identifier or declared type name but found: '/'",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "ns1@v1/T1*?-+" ),
+                "Unrecognized token start: \"-\" (U+002D)",
+
+            errMsgKey( TestType.TYPE_REFERENCE, "ns1@v1/T1*? +" ),
+                "Unrecognized token start: \" \" (U+0020)",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "mingle:core@v1~\"s*\"" ),
+                "Expected '/' but found: '~'",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "S1~12.1" ),
+                "Expected restriction but found: NUMBER",
+
+            errMsgKey( 
+                TestType.TYPE_REFERENCE, "mingle:core@v1/String~=\"sdf\"" ),
+                "Unrecognized token start: \"=\" (U+003D)",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "mingle:core@v1/String~" ),
+                "Expected type restriction but found END",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "String~\"ab[a-z\"" ),
+                "(near pattern string char 5) Unclosed character class: " +
+                "\"ab[a-z\"",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, 
+                "mingle:core@v1/Timestamp~[\"2012-01-01T12:00:00Z\"," +
+                "\"2012-01-02T12:00:00Z\"]" ),
+                new ExtFormOverride(
+                    "mingle:core@v1/Timestamp~" +
+                    "[\"2012-01-01T12:00:00.000000000Z\"," +
+                    "\"2012-01-02T12:00:00.000000000Z\"]"
+                ),
+            
+            errMsgKey( TestType.TYPE_REFERENCE, 
+                "Timestamp~[\"2012-01-01T12:00:00Z\"," +
+                "\"2012-01-02T12:00:00Z\"]" ),
+                new ExtFormOverride(
+                    "mingle:core@v1/Timestamp~" +
+                    "[\"2012-01-01T12:00:00.000000000Z\"," +
+                    "\"2012-01-02T12:00:00.000000000Z\"]"
+                ),
+            
+            errMsgKey( TestType.TYPE_REFERENCE, 
+                "mingle:core@v1/Float32~[1,2)" ),
+                new ExtFormOverride( "mingle:core@v1/Float32~[1.0,2.0)" ),
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "Float32~[1,2)" ),
+                new ExtFormOverride( "mingle:core@v1/Float32~[1.0,2.0)" ),
+
+            errMsgKey( TestType.TYPE_REFERENCE, "Int32~[--3,4)" ),
+                "Number has invalid or empty integer part",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "Int32~[-\"abc\",2)" ),
+                "Number has invalid or empty integer part",
+
+            errMsgKey( TestType.TYPE_REFERENCE, "Int32~[abc,2)" ),
+                "Expected range value but found: IDENTIFIER",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "Int32~(1:2)" ),
+                "Expected ',' but found: ':'",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "Int32~[1,3}" ),
+                "Unrecognized token start: \"}\" (U+007D)",
+            
+            errMsgKey( TestType.TYPE_REFERENCE, "Timestamp~[\"2001-0x-22\",)" ),
+                "Invalid min value in range restriction: Invalid timestamp: " +
+                "\"2001-0x-22\""
         );
 
     private
     final
     static
-    class ErrorMessageKey
+    class ErrorOverrideKey
     {
         private final Object[] arr;
 
         private
-        ErrorMessageKey( TestType tt,
-                         String msg )
+        ErrorOverrideKey( TestType tt,
+                          String msg )
         {
             arr = new Object[] { tt, msg };
         }
@@ -193,19 +267,26 @@ class ParseTests
         equals( Object o )
         {
             if ( o == this ) return true;
-            if ( ! ( o instanceof ErrorMessageKey ) ) return false;
+            if ( ! ( o instanceof ErrorOverrideKey ) ) return false;
 
-            return Arrays.equals( arr, ( (ErrorMessageKey) o ).arr );
+            return Arrays.equals( arr, ( (ErrorOverrideKey) o ).arr );
+        }
+
+        public
+        String
+        toString()
+        {
+            return Lang.asList( arr ).toString();
         }
     }
 
     private
     static
-    ErrorMessageKey
+    ErrorOverrideKey
     errMsgKey( TestType tt,
                String msg )
     {
-        return new ErrorMessageKey( tt, msg );
+        return new ErrorOverrideKey( tt, msg );
     }
 
     private
@@ -260,6 +341,15 @@ class ParseTests
     private
     final
     static
+    class ExtFormOverride
+    extends TypedString< ExtFormOverride >
+    {
+        private ExtFormOverride( CharSequence s ) { super( s ); }
+    }
+
+    private
+    final
+    static
     class CoreParseTest
     implements LabeledTestObject,
                TestCall
@@ -289,6 +379,15 @@ class ParseTests
         }
 
         public Object getInvocationTarget() { return this; }
+
+        private ErrorOverrideKey overrideKey() { return errMsgKey( tt, in ); }
+
+        private
+        Object
+        override()
+        {
+            return ERR_OVERRIDES.get( overrideKey() );
+        }
 
         private
         < V >
@@ -324,6 +423,21 @@ class ParseTests
                 default: 
                     throw state.createFailf( "Unhandled test type: %s", tt );
             }
+        }
+
+        private
+        CharSequence
+        expectedExtForm()
+        {
+            Object override = override();
+
+            if ( override instanceof ExtFormOverride ) 
+            {
+                code( "Returning override ext form:", override );
+                return (ExtFormOverride) override;
+            }
+
+            return extForm;
         }
 
         private
@@ -367,7 +481,7 @@ class ParseTests
 
             if ( tt != TestType.NUMBER )
             {
-                state.equalString( extForm, extFormOf( val ) );
+                state.equalString( expectedExtForm(), extFormOf( val ) );
             }
         }
 
@@ -375,7 +489,7 @@ class ParseTests
         int
         expectErrCol( int defl )
         {
-            Object override = ERR_MSG_OVERRIDES.get( errMsgKey( tt, in ) );
+            Object override = override();
 
             if ( override == null || override instanceof String ) return defl;
 
@@ -393,7 +507,7 @@ class ParseTests
         String
         expectErrString( String defl )
         {
-            Object override = ERR_MSG_OVERRIDES.get( errMsgKey( tt, in ) );
+            Object override = override();
 
             if ( override == null || override instanceof Integer ) return defl;
             if ( override instanceof String ) return (String) override;
@@ -413,12 +527,28 @@ class ParseTests
         {
             ParseErrorExpectation pee = (ParseErrorExpectation) errExpct;
 
-            if ( ! (ex instanceof MingleSyntaxException ) ) throw ex;
+            if ( ! ( ex instanceof MingleSyntaxException ) ) throw ex;
 
             MingleSyntaxException mse = (MingleSyntaxException) ex;
             
             state.equalString( expectErrString( pee.msg ), mse.getError() );
             state.equalInt( expectErrCol( pee.col ), mse.getColumn() );
+        }
+
+        private
+        void
+        assertRestrictionError( Exception ex )
+            throws Exception
+        {
+            RestrictionErrorExpectation ee = 
+                (RestrictionErrorExpectation) errExpct;
+
+            if ( ! ( ex instanceof MingleSyntaxException ) ) throw ex;
+
+            MingleSyntaxException mse = (MingleSyntaxException) ex;
+
+            state.equalString( 
+                expectErrString( ee.toString() ), mse.getError() );
         }
 
         private
@@ -430,6 +560,10 @@ class ParseTests
             else if ( errExpct instanceof ParseErrorExpectation )
             {
                 assertParseError( ex );
+            }
+            else if ( errExpct instanceof RestrictionErrorExpectation )
+            {
+                assertRestrictionError( ex );
             }
             else state.failf( "Unhandled error expectation: %s", errExpct );
         }
@@ -638,14 +772,57 @@ class ParseTests
         }
 
         private
+        MingleRegexRestriction
+        readRegexRestriction()
+            throws Exception
+        {
+            return MingleRegexRestriction.create( rd.readUtf8() );
+        }
+
+        private
+        MingleRangeRestriction
+        readRangeRestriction( TypeName tn )
+            throws Exception
+        {
+            QualifiedTypeName qn = (QualifiedTypeName) tn;
+            AtomicTypeReference at = new AtomicTypeReference( qn, null );
+            Class< ? extends MingleValue > typeTok = Mingle.valueClassFor( at );
+
+            return MingleRangeRestriction.create(
+                (Boolean) readJvPrimVal(),
+                (MingleValue) readVal(),
+                (MingleValue) readVal(),
+                (Boolean) readJvPrimVal(),
+                typeTok
+            );
+        }
+
+        private
+        MingleValueRestriction
+        readRestriction( TypeName tn )
+            throws Exception
+        {
+            byte tc = rd.readByte();
+
+            switch ( tc )
+            {
+                case TYPE_REGEX_RESTRICTION: return readRegexRestriction();
+                case TYPE_RANGE_RESTRICTION: return readRangeRestriction( tn );
+                case TYPE_NIL: return null;
+
+                default: 
+                    throw failf( "Unhandled restriction type: 0x%02x", tc );
+            }
+        }
+
+        private
         AtomicTypeReference
         readAtomicType()
             throws Exception
         {
-            return new AtomicTypeReference(
-                (AtomicTypeReference.Name) readVal(),
-                (MingleValueRestriction) readVal()
-            );
+            TypeName tn = (TypeName) readVal();
+
+            return new AtomicTypeReference( tn, readRestriction( tn ) );
         }
 
         private
@@ -665,27 +842,6 @@ class ParseTests
             throws Exception
         {
             return new NullableTypeReference( (MingleTypeReference) readVal() );
-        }
-
-        private
-        MingleRegexRestriction
-        readRegexRestriction()
-            throws Exception
-        {
-            return MingleRegexRestriction.create( rd.readUtf8() );
-        }
-
-        private
-        MingleRangeRestriction
-        readRangeRestriction()
-            throws Exception
-        {
-            return MingleRangeRestriction.create(
-                (Boolean) readJvPrimVal(),
-                (MingleValue) readVal(),
-                (MingleValue) readVal(),
-                (Boolean) readJvPrimVal()
-            );
         }
 
         private
@@ -720,8 +876,6 @@ class ParseTests
                 case TYPE_ATOMIC_TYPE_REFERENCE: return readAtomicType();
                 case TYPE_LIST_TYPE_REFERENCE: return readListType();
                 case TYPE_NULLABLE_TYPE_REFERENCE: return readNullableType();
-                case TYPE_REGEX_RESTRICTION: return readRegexRestriction();
-                case TYPE_RANGE_RESTRICTION: return readRangeRestriction();
 
                 default: throw failf( "Unrecognized value type: 0x%02x", tc );
             }
@@ -803,6 +957,35 @@ class ParseTests
         }
     }
 
+    private
+    CoreParseTest
+    filter( CoreParseTest t )
+    {
+        if ( t.tt == TestType.TYPE_REFERENCE )
+        {
+            if ( t.in.indexOf( "~(" ) >= 0 || t.in.indexOf( "~[" ) >= 0 )
+            {
+//                if ( t.errExpct != null ) t = null;
+            }
+        }
+
+        return t;
+    }
+
+    private
+    void
+    checkOverrides( List< CoreParseTest > l )
+    {
+        Set< ErrorOverrideKey > s = Lang.newSet( ERR_OVERRIDES.keySet() );
+
+        for ( CoreParseTest t : l )
+        {
+            ErrorOverrideKey k = t.overrideKey();
+            if ( s.contains( k ) ) s.remove( k );
+        }
+
+        state.isTrue( s.isEmpty(), "Unmatched overrides:", s );
+    }
 
     @InvocationFactory
     private
@@ -816,7 +999,13 @@ class ParseTests
         CoreParseTestReader rd = new CoreParseTestReader( is );
 
         CoreParseTest t = null;
-        while ( ( t = rd.next() ) != null ) res.add( t );
+//        while ( ( t = rd.next() ) != null ) res.add( t );
+        while ( ( t = rd.next() ) != null ) 
+        {
+            if ( ( t = filter( t ) ) != null ) res.add( t );
+        }
+
+        checkOverrides( res );
 
         return res;
     }

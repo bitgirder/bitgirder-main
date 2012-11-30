@@ -458,134 +458,73 @@ func init() {
                 false,
             },
         ),
-        // Now just basic coverage of core types with restrictions,
-        // fully-qualified and otherwise
-        typRefSucc( `String~"^a+$"`,
-            `mingle:core@v1/String~"^a+$"`,
-            &AtomicTypeReference{ qnMgStr, rx( "^a+$" ) } ),
-        typRefSucc( `mingle:core@v1/String~["aaa","bbb"]`, "",
-            &AtomicTypeReference{ 
-                qnMgStr, 
-                &RangeRestriction{ true, "aaa", "bbb", true },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Int32~(0,1]`, "",
-            &AtomicTypeReference{ 
-                primQn( "Int32" ),
-                &RangeRestriction{ false, int32( 0 ), int32( 1 ), true },
-            },
-        ),
-        typRefSucc( `Int32~[0,12]?`, `mingle:core@v1/Int32~[0,12]?`, 
-            &NullableTypeReference{
-                &AtomicTypeReference{
-                    primQn( "Int32" ),
-                    &RangeRestriction{ true, int32( 0 ), int32( 12 ), true },
-                },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Int32~[0,0]`, "",
-            &AtomicTypeReference{
-                primQn( "Int32" ),
-                &RangeRestriction{ true, int32( 0 ), int32( 0 ), true },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Uint32~(0,1]`, "",
-            &AtomicTypeReference{ 
-                primQn( "Uint32" ),
-                &RangeRestriction{ false, uint32( 0 ), uint32( 1 ), true },
-            },
-        ),
-        typRefSucc( `Uint32~[0,12]?`, `mingle:core@v1/Uint32~[0,12]?`, 
-            &NullableTypeReference{
-                &AtomicTypeReference{
-                    primQn( "Uint32" ),
-                    &RangeRestriction{ true, uint32( 0 ), uint32( 12 ), true },
-                },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Uint32~[0,0]`, "",
-            &AtomicTypeReference{
-                primQn( "Uint32" ),
-                &RangeRestriction{ true, uint32( 0 ), uint32( 0 ), true },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Int64~[0,2)`, "",
-            &AtomicTypeReference{
-                primQn( "Int64" ),
-                &RangeRestriction{ true, int64( 0 ), int64( 2 ), false },
-            },
-        ),
-        typRefSucc( `Int64~[0,2)`, `mingle:core@v1/Int64~[0,2)`, 
-            &AtomicTypeReference{ 
-                primQn( "Int64" ),
-                &RangeRestriction{ true, int64( 0 ), int64( 2 ), false },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Int64~[0,0]`, "",
-            &AtomicTypeReference{
-                primQn( "Int64" ),
-                &RangeRestriction{ true, int64( 0 ), int64( 0 ), true },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Uint64~[0,2)`, "",
-            &AtomicTypeReference{
-                primQn( "Uint64" ),
-                &RangeRestriction{ true, uint64( 0 ), uint64( 2 ), false },
-            },
-        ),
-        typRefSucc( `Uint64~[0,2)`, `mingle:core@v1/Uint64~[0,2)`, 
-            &AtomicTypeReference{ 
-                primQn( "Uint64" ),
-                &RangeRestriction{ true, uint64( 0 ), uint64( 2 ), false },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Uint64~[0,0]`, "",
-            &AtomicTypeReference{
-                primQn( "Uint64" ),
-                &RangeRestriction{ true, uint64( 0 ), uint64( 0 ), true },
-            },
-        ),
-        // For floating points we use numbers that can convert without loss of
-        // precision between machine and string form, to simplify testing of
-        // external forms.
-        typRefSucc( `mingle:core@v1/Float32~[1,2)`, "",
-            &AtomicTypeReference{
-                primQn( "Float32" ),
-                &RangeRestriction{ 
-                    true, float32( 1.0 ), float32( 2.0 ), false },
-            },
-        ),
-        typRefSucc( `Float32~[1,2)`, `mingle:core@v1/Float32~[1,2)`, 
-            &AtomicTypeReference{
-                primQn( "Float32" ),
-                &RangeRestriction{ 
-                    true, float32( 1 ), float32( 2 ), false },
-            },
-        ),
-        typRefSucc( `mingle:core@v1/Float64~[0.1,2.1)`, "",
-            &AtomicTypeReference{
-                primQn( "Float64" ),
-                &RangeRestriction{ 
-                    true, float64( 0.1 ), float64( 2.1 ), false },
-            },
-        ),
-        typRefSucc( `Float64~[0.1,2.1)`, `mingle:core@v1/Float64~[0.1,2.1)`, 
-            &AtomicTypeReference{
-                primQn( "Float64" ),
-                &RangeRestriction{ 
-                    true, float64( 0.1 ), float64( 2.1 ), false },
-            },
-        ),
-        typRefSucc( 
-            fmt.Sprintf( "mingle:core@v1/Timestamp~[%q,%q]", tm1, tm2 ),
-            "",
-            atTm1,
-        ),
-        typRefSucc( 
-            fmt.Sprintf( "Timestamp~[%q,%q]", tm1, tm2 ), 
-            fmt.Sprintf( "mingle:core@v1/Timestamp~[%q,%q]", tm1, tm2 ),
-            atTm1,
-        ),
+    )
+    // Now just basic coverage of core type resolution and restrictions.
+    addCoreTypRefSucc := func( inBase string, expct interface{} ) {
+        extForm := "mingle:core@v1/" + inBase
+        CoreParseTests = append( CoreParseTests,
+            typRefSucc( extForm, "", expct ),
+            typRefSucc( inBase, extForm, expct ),
+        )
+    }
+    primNames := []string{
+        "Boolean", "String", "Int32", "Uint32", "Int64", "Uint64", "Float32",
+        "Float64", "Buffer", "Timestamp", "Value", "Null",
+    }
+    for _, s := range primNames {
+        addCoreTypRefSucc( s, &AtomicTypeReference{ primQn( s ), nil } )
+    }
+    addCoreTypRefSucc( `String~"^a+$"`, 
+        &AtomicTypeReference{ qnMgStr, rx( "^a+$" ) },
+    )
+    addCoreTypRefSucc( `String~["aaa","bbb"]`,
+        &AtomicTypeReference{ 
+            qnMgStr, &RangeRestriction{ true, "aaa", "bbb", true },
+        },
+    )
+    // We simultaneously permute primitive num types and interval combinations
+    // with the next 4
+    addCoreTypRefSucc( `Int32~(0,1]`,
+        &AtomicTypeReference{ 
+            primQn( "Int32" ),
+            &RangeRestriction{ false, int32( 0 ), int32( 1 ), true },
+        },
+    )
+    addCoreTypRefSucc( `Uint32~[0,1]`,
+        &AtomicTypeReference{ 
+            primQn( "Uint32" ),
+            &RangeRestriction{ true, uint32( 0 ), uint32( 1 ), true },
+        },
+    )
+    addCoreTypRefSucc( `Int64~[0,1)`,
+        &AtomicTypeReference{ 
+            primQn( "Int64" ),
+            &RangeRestriction{ true, int64( 0 ), int64( 1 ), false },
+        },
+    )
+    addCoreTypRefSucc( `Uint64~(0,2)`,
+        &AtomicTypeReference{ 
+            primQn( "Uint64" ),
+            &RangeRestriction{ false, uint64( 0 ), uint64( 2 ), false },
+        },
+    )
+    // For floating points we use numbers that can convert without loss of
+    // precision between machine and string form, to simplify testing of
+    // external forms.
+    addCoreTypRefSucc( `Float32~[1,2)`,
+        &AtomicTypeReference{
+            primQn( "Float32" ),
+            &RangeRestriction{ true, float32( 1.0 ), float32( 2.0 ), false },
+        },
+    )
+    addCoreTypRefSucc( `Float64~[0.1,2.1)`,
+        &AtomicTypeReference{
+            primQn( "Float64" ),
+            &RangeRestriction{ true, float64( 0.1 ), float64( 2.1 ), false },
+        },
+    )
+    addCoreTypRefSucc( fmt.Sprintf( "Timestamp~[%q,%q]", tm1, tm2 ), atTm1 )
+    CoreParseTests = append( CoreParseTests,
         typRefFail( "/T1", 1, 
             "Expected identifier or declared type name but found: /" ),
         typRefFail( "ns1@v1", 7, "Expected type path but found: END" ),
@@ -598,17 +537,17 @@ func init() {
             "Illegal type name start: \"~\" (U+007E)" ),
         typRefFail( "mingle:core@v1~\"s*\"", 15, 
             "Expected type path but found: ~" ),
-        typRefFail( "mingle:core@v1/String ~= \"sdf\"", 24, 
+        typRefFail( "mingle:core@v1/String~=\"sdf\"", 23, 
             `Unexpected char: "=" (U+003D)` ),
-        typRefFail( "Int~(1:2)", 7, "Expected , but found: :" ),
-        typRefFail( "Int~[1,3}", 9, 
+        typRefFail( "Int32~(1:2)", 9, "Expected , but found: :" ),
+        typRefFail( "Int32~[1,3}", 11, 
             `Expected one of [ ")", "]" ] but found: }` ),
-        typRefFail( "Int~[abc,2)", 6, `Expected range value but found: abc` ),
-        typRefFail( `Int~[-"abc",2)`, 7, "Expected number but found: abc" ),
-        typRefFail( "Int~[--3,4)", 7, "Expected range value but found: -" ),
-        typRefFail( "Int~[,]", 5, "Infinite range must be open" ),
-        typRefFail( "Int~[8,]", 8, "Infinite high range must be open" ),
-        typRefFail( "Int~[,8]", 5, "Infinite low range must be open" ),
+        typRefFail( "Int32~[abc,2)", 8, `Expected range value but found: abc` ),
+        typRefFail( `Int32~[-"abc",2)`, 9, "Expected number but found: abc" ),
+        typRefFail( "Int32~[--3,4)", 9, "Expected range value but found: -" ),
+        typRefFail( "Int32~[,]", 7, "Infinite range must be open" ),
+        typRefFail( "Int32~[8,]", 10, "Infinite high range must be open" ),
+        typRefFail( "Int32~[,8]", 7, "Infinite low range must be open" ),
         typRefFail( "S1~12.1", 4, "Expected type restriction but found: 12.1" ),
         typRefRestrictFail( `ns1@v1/T~"a"`, 
             "Invalid target type for regex restriction: ns1@v1/T" ),
@@ -622,6 +561,12 @@ func init() {
             "Got number as min value for range" ),
         typRefRestrictFail( `String~["0",1)`, 
             "Got number as max value for range" ),
+        typRefRestrictFail( `Timestamp~(,1)`,
+            "Got number as max value for range" ),
+        typRefRestrictFail( `Int32~["a",2)`,
+            "Got string as min value for range" ),
+        typRefRestrictFail( `Int32~(1,"20")`,
+            "Got string as max value for range" ),
         typRefRestrictFail( `Int32~"a"`, 
             "Invalid target type for regex restriction: " + 
             "mingle:core@v1/Int32" ),
@@ -630,6 +575,10 @@ func init() {
             "mingle:core@v1/Buffer" ),
         typRefRestrictFail( fmt.Sprintf( "Timestamp~[%q,%q]", tm2, tm1 ), 
             "Unsatisfiable range" ),
+        typRefRestrictFail( `Timestamp~["2001-0x-22",)`,
+            "Invalid min value in range restriction: val: Error converting " +
+            "to mingle:core@v1/Timestamp: Invalid timestamp: " +
+            "[<input>, line 1, col 1]: Invalid RFC3339 time: \"2001-0x-22\"" ),
         typRefRestrictFail( `String~"ab[a-z"`, 
             "error parsing regexp: missing closing ]: `[a-z`" ),
     )

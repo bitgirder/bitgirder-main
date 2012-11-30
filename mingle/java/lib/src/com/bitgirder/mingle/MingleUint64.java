@@ -3,6 +3,8 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.log.CodeLoggers;
+
 import com.bitgirder.lang.Lang;
 
 import java.math.BigInteger;
@@ -15,6 +17,8 @@ implements MingleValue,
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
+
+    private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
     private final static BigInteger HIGH_UINT_BIT =
         BigInteger.ONE.shiftLeft( 63 );
@@ -47,10 +51,12 @@ implements MingleValue,
     boolean
     equals( Object other )
     {
-        return 
-            other == this ||
-            ( other instanceof MingleUint64 &&
-              ( (MingleUint64) other ).num == num );
+        if ( other == this ) return true;
+        if ( ! ( other instanceof MingleUint64 ) ) return false;
+
+        code( "Checking whether", other, "equals this:", this );
+        MingleUint64 o = (MingleUint64) other;
+        return o.num == num;
     }
 
     @Override 

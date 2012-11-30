@@ -869,11 +869,6 @@ service Service1 {
             ),
         ),
         makeDefMap(
-//`@version v2
-//
-//import ns1@v1/Struct1 # import that should be shadowed
-//
-//namespace ns1
             makeStructDef(
                 "ns1@v2/Struct1",
                 "",

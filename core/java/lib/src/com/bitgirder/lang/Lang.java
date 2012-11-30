@@ -42,6 +42,8 @@ import java.io.UnsupportedEncodingException;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
+import java.math.BigInteger;
+
 public
 final
 class Lang
@@ -56,6 +58,9 @@ class Lang
         "com.bitgirder.lang.Lang.traceOrigin";
 
     private final static Casts casts = new Casts();
+
+    private final static BigInteger BI_MAX_UINT64 =
+        BigInteger.ONE.shiftLeft( 64 ).subtract( BigInteger.ONE );
 
     private final static Range< Integer > OCTET_RANGE = Range.closed( 0, 255 );
 
@@ -139,6 +144,29 @@ class Lang
         long res = i & Integer.MAX_VALUE;
 
         return i < 0 ? res + ( 1L << 31 ) : res;
+    }
+
+    public
+    static
+    long
+    parseUint64( CharSequence s )
+    {
+        inputs.notNull( s, "s" );
+
+        BigInteger bi = new BigInteger( s.toString() );
+
+        if ( bi.signum() < 0 ) 
+        {
+            throw new NumberFormatException( "Number is negative: " + s );
+        }
+
+        if ( bi.compareTo( BI_MAX_UINT64 ) > 0 )
+        {
+            throw new NumberFormatException( 
+                "Number is too large for uint64: " + s );
+        }
+
+        return bi.longValue();
     }
 
     public

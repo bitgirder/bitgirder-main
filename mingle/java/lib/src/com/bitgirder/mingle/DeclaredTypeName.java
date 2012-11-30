@@ -9,7 +9,7 @@ public
 final
 class DeclaredTypeName
 extends TypedString< DeclaredTypeName >
-implements AtomicTypeReference.Name
+implements TypeName
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();

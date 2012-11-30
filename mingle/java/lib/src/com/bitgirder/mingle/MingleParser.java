@@ -1,7 +1,11 @@
 package com.bitgirder.mingle;
 
+import static com.bitgirder.mingle.MingleLexer.SpecialLiteral;
+
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
+
+import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
@@ -9,6 +13,7 @@ import com.bitgirder.lang.Strings;
 import java.io.IOException;
 
 import java.util.List;
+import java.util.Map;
 
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -19,18 +24,44 @@ class MingleParser
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static MingleLexer.SpecialLiteral[] NS_SPEC_LITS =
-        new MingleLexer.SpecialLiteral[] {
-            MingleLexer.SpecialLiteral.COLON,
-            MingleLexer.SpecialLiteral.ASPERAND
+    private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
+
+    private final static SpecialLiteral[] NS_SPEC_LITS =
+        new SpecialLiteral[] {
+            SpecialLiteral.COLON,
+            SpecialLiteral.ASPERAND
         };
     
-    private final static MingleLexer.SpecialLiteral[] TYPE_QUANT_LITS =
-        new MingleLexer.SpecialLiteral[] {
-            MingleLexer.SpecialLiteral.QUESTION_MARK,
-            MingleLexer.SpecialLiteral.ASTERISK,
-            MingleLexer.SpecialLiteral.PLUS
+    private final static List< SpecialLiteral > TYPE_QUANTS =
+        Lang.asList(
+            SpecialLiteral.QUESTION_MARK,
+            SpecialLiteral.ASTERISK,
+            SpecialLiteral.PLUS
+        );
+
+    private final static SpecialLiteral[] RANGE_MIN_LITS =
+        new SpecialLiteral[] {
+            SpecialLiteral.OPEN_PAREN, 
+            SpecialLiteral.OPEN_BRACKET
         };
+
+    private final static SpecialLiteral[] RANGE_MAX_LITS =
+        new SpecialLiteral[] {
+            SpecialLiteral.CLOSE_PAREN,
+            SpecialLiteral.CLOSE_BRACKET
+        };
+    
+    private final static Map< TypeName, AtomicTypeReference > RANGE_TYPES =
+        Lang.newMap( TypeName.class, AtomicTypeReference.class,
+            Mingle.QNAME_INT32, Mingle.TYPE_INT32,
+            Mingle.QNAME_INT64, Mingle.TYPE_INT64,
+            Mingle.QNAME_UINT32, Mingle.TYPE_UINT32,
+            Mingle.QNAME_UINT64, Mingle.TYPE_UINT64,
+            Mingle.QNAME_FLOAT32, Mingle.TYPE_FLOAT32,
+            Mingle.QNAME_FLOAT64, Mingle.TYPE_FLOAT64,
+            Mingle.QNAME_STRING, Mingle.TYPE_STRING,
+            Mingle.QNAME_TIMESTAMP, Mingle.TYPE_TIMESTAMP
+        );
 
     private final MingleLexer lx;
 
@@ -111,6 +142,15 @@ class MingleParser
     }
 
     private
+    MingleSyntaxException
+    failf( int col,
+           String msg,
+           Object... args )
+    {
+        return fail( col, String.format( msg, args ) );
+    }
+
+    private
     String
     errStringFor( Object tok )
     {
@@ -118,9 +158,9 @@ class MingleParser
         else if ( tok instanceof MingleString ) return "STRING";
         else if ( tok instanceof MingleLexer.Number ) return "NUMBER";
         else if ( tok instanceof MingleIdentifier ) return "IDENTIFIER";
-        else if ( tok instanceof MingleLexer.SpecialLiteral ) 
+        else if ( tok instanceof SpecialLiteral ) 
         {
-            return ( (MingleLexer.SpecialLiteral) tok ).inspect();
+            return ( (SpecialLiteral) tok ).inspect();
         }
         
         throw state.createFailf( "Unexpected token: %s", tok );
@@ -148,7 +188,7 @@ class MingleParser
 
     private
     String
-    expectStringFor( MingleLexer.SpecialLiteral[] specs )
+    expectStringFor( SpecialLiteral[] specs )
     {
         String[] strs = new String[ specs.length ];
 
@@ -161,18 +201,18 @@ class MingleParser
     } 
 
     private
-    MingleLexer.SpecialLiteral
-    pollSpecial( MingleLexer.SpecialLiteral... specs )
+    SpecialLiteral
+    pollSpecial( SpecialLiteral... specs )
         throws MingleSyntaxException,
                IOException
     {
         Object tok = peekToken();
 
-        if ( tok instanceof MingleLexer.SpecialLiteral )
+        if ( tok instanceof SpecialLiteral )
         {
-            MingleLexer.SpecialLiteral act = (MingleLexer.SpecialLiteral) tok;
+            SpecialLiteral act = (SpecialLiteral) tok;
 
-            for ( MingleLexer.SpecialLiteral spec : specs )
+            for ( SpecialLiteral spec : specs )
             {
                 if ( spec == act ) 
                 {
@@ -186,12 +226,12 @@ class MingleParser
     }
 
     private
-    MingleLexer.SpecialLiteral
-    expectSpecial( MingleLexer.SpecialLiteral... specs )
+    SpecialLiteral
+    expectSpecial( SpecialLiteral... specs )
         throws MingleSyntaxException,
                IOException
     {
-        MingleLexer.SpecialLiteral res = pollSpecial( specs );
+        SpecialLiteral res = pollSpecial( specs );
         
         if ( res == null )
         {
@@ -277,8 +317,7 @@ class MingleParser
 
         while ( ver == null )
         {
-            if ( expectSpecial( NS_SPEC_LITS ) ==
-                 MingleLexer.SpecialLiteral.COLON )
+            if ( expectSpecial( NS_SPEC_LITS ) == SpecialLiteral.COLON )
             {
                 parts.add( expectIdentifier() );
             }
@@ -295,7 +334,7 @@ class MingleParser
                IOException
     {
         MingleNamespace ns = expectNamespace();
-        expectSpecial( MingleLexer.SpecialLiteral.FORWARD_SLASH );
+        expectSpecial( SpecialLiteral.FORWARD_SLASH );
         DeclaredTypeName nm = expectDeclaredTypeName();
 
         return new QualifiedTypeName( ns, nm );
@@ -311,8 +350,7 @@ class MingleParser
         
         List< MingleIdentifier > names = Lang.newList();
 
-        while ( pollSpecial( MingleLexer.SpecialLiteral.FORWARD_SLASH ) != 
-                null )
+        while ( pollSpecial( SpecialLiteral.FORWARD_SLASH ) != null )
         {
             names.add( expectIdentifier() );
         }
@@ -323,8 +361,8 @@ class MingleParser
     }
 
     private
-    AtomicTypeReference.Name
-    expectAtomicTypeReferenceName( MingleNameResolver r )
+    TypeName
+    expectTypeName( MingleNameResolver r )
         throws MingleSyntaxException,
                IOException
     {
@@ -345,7 +383,7 @@ class MingleParser
 
     private
     MingleSyntaxException
-    failRestrictionTarget( AtomicTypeReference.Name targ,
+    failRestrictionTarget( TypeName targ,
                            int nmPos,
                            String errTyp )
     {
@@ -358,8 +396,23 @@ class MingleParser
     }
 
     private
+    MingleSyntaxException
+    asSyntaxException( PatternSyntaxException pse,
+                       MingleString patStr )
+    {
+        String msg = String.format(
+            "(near pattern string char %d) %s: %s", 
+            pse.getIndex(), 
+            pse.getDescription(), 
+            patStr.getExternalForm()
+        );
+
+        return new MingleSyntaxException( msg, curPos );
+    }
+
+    private
     MingleRegexRestriction
-    expectRegexRestriction( AtomicTypeReference.Name nm,
+    expectRegexRestriction( TypeName nm,
                             int nmPos )
         throws MingleSyntaxException,
                IOException
@@ -375,8 +428,7 @@ class MingleParser
             }
             catch ( PatternSyntaxException pse )
             {
-                String msg = pse.getMessage();
-                throw new MingleSyntaxException( msg, curPos );
+                throw asSyntaxException( pse, patStr );
             }
         }
  
@@ -384,8 +436,264 @@ class MingleParser
     }
 
     private
+    boolean
+    getRangeBound( SpecialLiteral[] toks )
+        throws MingleSyntaxException,
+               IOException
+    {
+        SpecialLiteral spec = expectSpecial( toks );
+
+        return spec == SpecialLiteral.OPEN_BRACKET || 
+               spec == SpecialLiteral.CLOSE_BRACKET;
+    }
+
+    private
+    MingleSyntaxException
+    rangeValTypeFail( String valTypDesc,
+                      String bound,
+                      int errPos )
+    {
+        return failf( errPos, 
+            "Got %s as %s value for range", valTypDesc, bound );
+    }
+
+    private
+    MingleValue
+    castRangeValue( MingleValue v,
+                    MingleTypeReference t,
+                    String bound,
+                    int errPos )
+        throws MingleSyntaxException
+    {
+        try { return Mingle.castValue( v, t ); }
+        catch ( MingleValidationException mve )
+        {
+            throw failf( errPos, "Invalid %s value in range restriction: %s", 
+                bound, mve.getError() );
+        }
+    }
+
+    private
+    MingleValue
+    asRangeValue( AtomicTypeReference typ,
+                  MingleString s,
+                  String bound,
+                  int errPos )
+        throws MingleSyntaxException
+    {
+        if ( typ.equals( Mingle.TYPE_STRING ) || 
+             typ.equals( Mingle.TYPE_TIMESTAMP ) )
+        {
+            return castRangeValue( s, typ, bound, errPos );
+        }
+
+        throw rangeValTypeFail( "string", bound, errPos );
+    }
+
+    // Can make this faster later and skip the pass through MingleString; for
+    // now just let Mingle.castValue() do the real work
+    private
+    MingleValue
+    asRangeValue( AtomicTypeReference typ,
+                  MingleLexer.Number n,
+                  String bound,
+                  int errPos )
+        throws MingleSyntaxException
+    {
+        if ( Mingle.isNumberType( typ ) )
+        {
+            if ( Mingle.isIntegralType( typ ) &&
+                 ! ( n.f == null && n.e == null ) )
+            {
+                throw rangeValTypeFail( "decimal", bound, errPos );
+            }
+
+            MingleString numStr = new MingleString( n.toString() );
+            return castRangeValue( numStr, typ, bound, errPos );
+        }
+        
+        throw rangeValTypeFail( "number", bound, errPos );
+    }
+
+    private
+    boolean
+    impliesNullRangeValue( Object tok )
+    {
+        return tok == SpecialLiteral.COMMA ||
+               tok == SpecialLiteral.CLOSE_PAREN ||
+               tok == SpecialLiteral.CLOSE_BRACKET;
+    }
+
+    private
+    MingleValue
+    getRangeValue( AtomicTypeReference rngTyp,
+                   String bound )
+        throws MingleSyntaxException,
+               IOException
+    {
+        Object tok = peekToken();
+
+        if ( tok instanceof MingleString ) 
+        {
+            MingleString ms = (MingleString) nextToken();
+            return asRangeValue( rngTyp, ms, bound, curPos );
+        }
+        else if ( tok instanceof MingleLexer.Number )
+        {
+            MingleLexer.Number n = (MingleLexer.Number) nextToken();
+            return asRangeValue( rngTyp, n, bound, curPos );
+        }
+        else if ( impliesNullRangeValue( tok ) ) return null; // leave peekVal
+
+        throw failUnexpectedToken( peekPos, tok, "range value" );
+    }
+
+    private
+    final
+    static
+    class RangeBuilder
+    {
+        // minPos,maxPos are positions of min or max bound token
+
+        private int minPos;
+        private boolean minClosed;
+        private MingleValue min;
+        private MingleValue max;
+        private boolean maxClosed;
+        private int maxPos;
+
+        private AtomicTypeReference rngTyp;
+
+        private
+        MingleRangeRestriction
+        build()
+        {
+            Class< ? extends MingleValue > typeTok = 
+                Mingle.expectValueClassFor( rngTyp );
+
+            return MingleRangeRestriction.create(
+                minClosed, min, max, maxClosed, typeTok );
+        }
+    }
+
+    // min,max have been cast successfully already, so the unchecked cast below
+    // is okay
+    private
+    int
+    getRangeCompSignum( RangeBuilder b )
+    {
+        Comparable< MingleValue > minCmp = Lang.castUnchecked( b.min );
+
+        return minCmp.compareTo( b.max );
+    }
+
+    private
+    boolean
+    areAdjacentInts( RangeBuilder b )
+    {
+        if ( b.max instanceof MingleInt32 )
+        {
+            return ( (MingleInt32) b.max ).intValue() -
+                   ( (MingleInt32) b.min ).intValue() == 1;
+        }
+        else if ( b.max instanceof MingleUint32 )
+        {
+            return ( (MingleUint32) b.max ).intValue() -
+                   ( (MingleUint32) b.min ).intValue() == 1;
+        }
+        else if ( b.max instanceof MingleInt64 )
+        {
+            return ( (MingleInt64) b.max ).longValue() -
+                   ( (MingleInt64) b.min ).longValue() == 1L;
+        }
+        else if ( b.max instanceof MingleUint64 )
+        {
+            return ( (MingleUint64) b.max ).longValue() -
+                   ( (MingleUint64) b.min ).longValue() == 1L;
+        }
+        else return false;
+    } 
+
+    private
+    void
+    checkInifiniteRangeBounds( RangeBuilder b )
+        throws MingleSyntaxException
+    {
+        boolean errLf = b.minClosed && b.min == null;
+        boolean errRt = b.maxClosed && b.max == null;
+
+        String msg = null;
+        int errPos = 0;
+
+        if ( errLf )
+        {
+            errPos = b.minPos;
+
+            if ( errRt ) msg = "Infinite range must be open";
+            else msg = "Infinite low range must be open";
+        }
+        else if ( errRt )
+        {
+            errPos = b.maxPos;
+            msg = "Infinite high range must be open";
+        }
+
+        if ( msg != null ) throw fail( errPos, msg );
+    }
+
+    private
+    void
+    checkRangeSatisfiable( RangeBuilder b )
+        throws MingleSyntaxException
+    {
+        checkInifiniteRangeBounds( b );
+
+        if ( b.min == null || b.max == null ) return;
+        int i = getRangeCompSignum( b );
+
+        boolean sat = false;
+        if ( i == 0 ) sat = b.minClosed && b.maxClosed;
+        else if ( i > 0 ) sat = false;
+        else
+        {
+            boolean open = ! ( b.minClosed || b.maxClosed );
+            sat = ! ( open && areAdjacentInts( b ) );
+        }
+
+        if ( ! sat ) throw fail( b.minPos, "Unsatisfiable range" );
+    }
+
+    private
+    MingleRangeRestriction
+    expectRangeRestriction( TypeName nm,
+                            int nmPos )
+        throws MingleSyntaxException,
+               IOException
+    {
+        RangeBuilder b = new RangeBuilder();
+
+        b.rngTyp = RANGE_TYPES.get( nm );
+        if ( b.rngTyp == null ) 
+        {
+            throw failRestrictionTarget( nm, nmPos, "range" );
+        }
+
+        b.minClosed = getRangeBound( RANGE_MIN_LITS );
+        b.minPos = curPos;
+        b.min = getRangeValue( b.rngTyp, "min" );
+        expectSpecial( SpecialLiteral.COMMA );
+        b.max = getRangeValue( b.rngTyp, "max" );
+        b.maxClosed = getRangeBound( RANGE_MAX_LITS );
+        b.maxPos = curPos;
+
+        checkRangeSatisfiable( b );
+
+        return b.build();
+    }
+
+    private
     MingleValueRestriction
-    expectRestriction( AtomicTypeReference.Name nm,
+    expectRestriction( TypeName nm,
                        int nmPos )
         throws MingleSyntaxException,
                IOException
@@ -395,6 +703,12 @@ class MingleParser
         if ( tok instanceof MingleString )
         {
             return expectRegexRestriction( nm, nmPos );
+        }
+
+        if ( tok == SpecialLiteral.OPEN_PAREN ||
+             tok == SpecialLiteral.OPEN_BRACKET )
+        {
+            return expectRangeRestriction( nm, nmPos );
         }
  
         throw failUnexpectedToken( peekPos, peekTok, "restriction" );
@@ -409,11 +723,11 @@ class MingleParser
         checkUnexpectedEnd( "type reference" );
 
         int nmPos = nextPos();
-        AtomicTypeReference.Name nm = expectAtomicTypeReferenceName( r );
+        TypeName nm = expectTypeName( r );
 
         MingleValueRestriction vr = null;
 
-        if ( pollSpecial( MingleLexer.SpecialLiteral.TILDE ) != null )
+        if ( pollSpecial( SpecialLiteral.TILDE ) != null )
         {
             checkUnexpectedEnd( "type restriction" );
             vr = expectRestriction( nm, nmPos );
@@ -423,31 +737,13 @@ class MingleParser
     }
 
     private
-    List< MingleLexer.SpecialLiteral >
-    readTypeQuants()
-        throws MingleSyntaxException,
-               IOException
-    {
-        List< MingleLexer.SpecialLiteral > res = Lang.newList();
-
-        MingleLexer.SpecialLiteral spec;
-
-        while ( ( spec = pollSpecial( TYPE_QUANT_LITS ) ) != null )
-        {
-            res.add( spec );
-        }
-
-        return res;
-    }
-
-    private
     MingleTypeReference
     quantifyType( AtomicTypeReference typ,
-                  List< MingleLexer.SpecialLiteral > quants )
+                  List< SpecialLiteral > quants )
     {
         MingleTypeReference res = typ;
 
-        for ( MingleLexer.SpecialLiteral quant : quants )
+        for ( SpecialLiteral quant : quants )
         {
             switch ( quant )
             {
@@ -465,6 +761,41 @@ class MingleParser
     }
 
     private
+    SpecialLiteral
+    readTypeQuant()
+        throws MingleSyntaxException,
+               IOException
+    {
+        if ( peekTok != null )
+        {
+            Object tok = nextToken();
+
+            if ( tok instanceof SpecialLiteral )
+            {
+                if ( TYPE_QUANTS.contains( tok ) ) return (SpecialLiteral) tok;
+            }
+
+            throw failUnexpectedToken( curPos, tok, "type quantifier" );
+        }
+
+        return lx.readTypeQuant();
+    }
+
+    private
+    List< SpecialLiteral >
+    readTypeQuants()
+        throws MingleSyntaxException,
+               IOException
+    {
+        List< SpecialLiteral > res = Lang.newList();
+
+        SpecialLiteral quant;
+        while ( ( quant = readTypeQuant() ) != null ) res.add( quant );
+
+        return res;
+    }
+
+    private
     MingleTypeReference
     expectTypeReference( MingleNameResolver r )
         throws MingleSyntaxException,
@@ -472,7 +803,7 @@ class MingleParser
     {
         AtomicTypeReference atr = expectAtomicTypeReference( r );
 
-        List< MingleLexer.SpecialLiteral > quants = readTypeQuants();
+        List< SpecialLiteral > quants = readTypeQuants();
         return quantifyType( atr, quants );
     }
 

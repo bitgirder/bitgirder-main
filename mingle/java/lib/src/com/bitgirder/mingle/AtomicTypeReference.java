@@ -11,17 +11,17 @@ extends MingleTypeReference
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final Name name;
+    private final TypeName name;
     private final MingleValueRestriction restriction;
 
-    AtomicTypeReference( Name name,
+    AtomicTypeReference( TypeName name,
                          MingleValueRestriction restriction )
     {
         this.name = inputs.notNull( name, "name" );
         this.restriction = restriction;
     }
 
-    public Name getName() { return name; }
+    public TypeName getName() { return name; }
 
     public MingleValueRestriction getRestriction() { return restriction; }
 
@@ -32,7 +32,8 @@ extends MingleTypeReference
     equals( Object other )
     {
         if ( other == this ) return true;
-        else if ( other instanceof AtomicTypeReference )
+
+        if ( other instanceof AtomicTypeReference )
         {
             AtomicTypeReference o = (AtomicTypeReference) other;
 
@@ -68,7 +69,7 @@ extends MingleTypeReference
     public
     static
     AtomicTypeReference
-    create( Name nm )
+    create( TypeName nm )
     {
         return new AtomicTypeReference( nm, null );
     }
@@ -76,19 +77,10 @@ extends MingleTypeReference
     public
     static
     AtomicTypeReference
-    create( Name nm,
+    create( TypeName nm,
             MingleValueRestriction restriction )
     {
         inputs.notNull( restriction, "restriction" );
         return new AtomicTypeReference( nm, restriction );
-    }
-
-    public
-    static
-    interface Name
-    {
-        public
-        CharSequence 
-        getExternalForm();
     }
 }

@@ -981,4 +981,123 @@ class IoUtils
         }
         finally { bis.close(); }
     }
+
+    // The methods which follow are support methods for converting java strings
+    // to json strings. The method is included here instead of in the JSON libs
+    // since JSON strings are also a very convenient, safe, and meaningful way
+    // to serialize unicode strings in general
+
+    private
+    static
+    void
+    appendUnicodeEscape( char ch,
+                         StringBuilder sb )
+    {
+        sb.append( "\\u" );
+
+        String numStr = Integer.toString( ch, 16 );
+
+        if ( ch <= '\u000F' ) sb.append( "000" );
+        else if ( ch <= '\u00FF' ) sb.append( "00" );
+        else if ( ch <= '\u0FFF' ) sb.append( "0" );
+
+        sb.append( Integer.toString( ch, 16 ) );
+    }
+
+    private
+    static
+    void
+    verifyAndAppendLowSurrogate( CharSequence cs,
+                                 int indx,
+                                 StringBuilder sb )
+    {
+        if ( indx < cs.length() )
+        {
+            char ch = cs.charAt( indx );
+
+            if ( Character.isLowSurrogate( ch ) ) sb.append( ch );
+            else
+            {
+                inputs.fail(
+                    "Character at index", indx, "is not a low surrogate " +
+                    "but preceding character was a high surrogate" );
+            }
+        }
+        else
+        {
+            inputs.fail(
+                "Unexpected end of string while expecting low surrogate" );
+        }
+    }
+
+    private
+    static
+    void
+    appendOrdinaryChar( char ch,
+                        StringBuilder sb )
+    {
+
+        if ( ch == '\u0020' || ch == '\u0021' ||
+             ( ch >= '\u0023' && ch <= '\u005b' ) || ch >= '\u005d' )
+        {
+            sb.append( ch );
+        }
+        else appendUnicodeEscape( ch, sb );
+    }
+
+    private
+    static
+    void
+    appendChar( char ch,
+                StringBuilder sb )
+    {
+        switch ( ch )
+        {
+            case '"': sb.append( "\\\"" ); break;
+            case '\\': sb.append( "\\\\" ); break;
+            case '\b': sb.append( "\\b" ); break;
+            case '\f': sb.append( "\\f" ); break;
+            case '\n': sb.append( "\\n" ); break;
+            case '\r': sb.append( "\\r" ); break;
+            case '\t': sb.append( "\\t" ); break;
+
+            default: appendOrdinaryChar( ch, sb );
+        }
+    }
+
+    public
+    static
+    StringBuilder
+    appendRfc4627String( StringBuilder sb,
+                         CharSequence str )
+    {
+        inputs.notNull( sb, "sb" );
+        inputs.notNull( str, "str" );
+
+        sb.append( '"' );
+
+        for ( int i = 0, e = str.length(); i < e; )
+        {
+            char ch = str.charAt( i++ );
+
+            if ( Character.isHighSurrogate( ch ) )
+            {
+                sb.append( ch );
+                verifyAndAppendLowSurrogate( str, i++, sb );
+            }
+            else appendChar( ch, sb );
+        }
+
+        sb.append( '"' );
+
+        return sb;
+    }
+
+    public
+    static
+    CharSequence
+    getRfc4627String( CharSequence str )
+    {
+        return appendRfc4627String( new StringBuilder(), str );
+    }
 }

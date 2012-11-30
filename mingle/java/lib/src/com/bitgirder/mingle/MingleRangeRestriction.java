@@ -5,6 +5,8 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.log.CodeLoggers;
 
+import com.bitgirder.lang.Lang;
+
 import com.bitgirder.lang.path.ObjectPath;
 
 import java.util.Arrays;
@@ -23,6 +25,7 @@ extends MingleValueRestriction
     private final MingleValue min;
     private final MingleValue max;
     private final boolean maxClosed;
+    private final Class< ? extends MingleValue > typeTok;
 
     private final int hc;
 
@@ -30,12 +33,14 @@ extends MingleValueRestriction
     MingleRangeRestriction( boolean minClosed,
                             MingleValue min,
                             MingleValue max,
-                            boolean maxClosed )
+                            boolean maxClosed,
+                            Class< ? extends MingleValue > typeTok )
     { 
         this.minClosed = minClosed;
         this.min = min;
         this.max = max;
         this.maxClosed = maxClosed;
+        this.typeTok = typeTok;
 
         this.hc = 
             Arrays.hashCode( new Object[] { minClosed, min, max, maxClosed } );
@@ -46,26 +51,22 @@ extends MingleValueRestriction
     appendVal( StringBuilder sb,
                MingleValue mv )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
-//        if ( cls.equals( MingleTimestamp.class ) )
-//        {
-//            mv = 
-//                MingleModels.asMingleString( 
-//                    ( (MingleTimestamp) mv ).getRfc3339String() );
-//        }
-//
-//        MingleModels.appendInspection( sb, mv );
+        if ( typeTok.equals( MingleTimestamp.class ) )
+        {
+            MingleTimestamp t = state.cast( MingleTimestamp.class, mv );
+            Lang.appendRfc4627String( sb, t.getRfc3339String() );
+        }
+        else Mingle.appendInspection( sb, mv );
     }
 
     void
     appendExternalForm( StringBuilder sb )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
-//        sb.append( range.includesMin() ? "[" : "(" );
-//        if ( range.min() != null ) appendVal( sb, range.min() );
-//        sb.append( "," );
-//        if ( range.max() != null ) appendVal( sb, range.max() );
-//        sb.append( range.includesMax() ? "]" : ")" );
+        sb.append( minClosed ? "[" : "(" );
+        if ( min != null ) appendVal( sb, min );
+        sb.append( "," );
+        if ( max != null ) appendVal( sb, max );
+        sb.append( maxClosed ? "]" : ")" );
     }
 
     public
@@ -121,34 +122,31 @@ extends MingleValueRestriction
     equals( Object other )
     {
         if ( other == this ) return true;
-        else if ( other instanceof MingleRangeRestriction )
-        {
-            MingleRangeRestriction o = (MingleRangeRestriction) other;
+        if ( ! ( other instanceof MingleRangeRestriction ) ) return false;
+ 
+        MingleRangeRestriction o = (MingleRangeRestriction) other;
 
-            return 
-                minClosed == o.minClosed &&
-                maxClosed == o.maxClosed &&
-                equalVal( min, o.min ) &&
-                equalVal( max, o.max );
-        }
-        else return false;
+        return 
+            typeTok.equals( o.typeTok ) && 
+            minClosed == o.minClosed &&
+            maxClosed == o.maxClosed &&
+            equalVal( min, o.min ) &&
+            equalVal( max, o.max );
     }
 
     private
     static
-    Class< ? >
-    checkEffectiveClass( MingleValue min,
-                         MingleValue max )
+    void
+    checkCreateType( MingleValue mv,
+                     Class< ? extends MingleValue > cls,
+                     String bound )
     {
-        if ( min == null ) return max == null ? null : max.getClass();
-        
-        if ( max != null && ( ! min.getClass().equals( max.getClass() ) ) )
-        {
-            state.failf( "min is of type %s but max is of type %s",
-                min.getClass(), max.getClass() );
-        }
+        if ( mv == null ) return;
 
-        return min.getClass();
+        state.isTruef( cls.isInstance( mv ),
+            "%s value is of type %s where %s is expected",
+            bound, mv.getClass().getName(), cls.getName()
+        );
     }
 
     private
@@ -167,12 +165,16 @@ extends MingleValueRestriction
     create( boolean minClosed,
             MingleValue min,
             MingleValue max,
-            boolean maxClosed )
+            boolean maxClosed,
+            Class< ? extends MingleValue > typeTok )
     {
-        Class< ? > cls = checkEffectiveClass( min, max );
+        inputs.notNull( typeTok, "typeTok" );
+        checkCreateType( min, typeTok, "min" );
+        checkCreateType( max, typeTok, "max" );
         checkClosedHasVal( minClosed, min, "min" );
         checkClosedHasVal( maxClosed, max, "max" );
 
-        return new MingleRangeRestriction( minClosed, min, max, maxClosed );
+        return new MingleRangeRestriction( 
+            minClosed, min, max, maxClosed, typeTok );
     }
 }

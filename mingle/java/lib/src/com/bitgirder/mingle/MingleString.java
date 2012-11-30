@@ -10,7 +10,8 @@ public
 final
 class MingleString
 extends TypedString< MingleString >
-implements MingleValue
+implements MingleValue,
+           Comparable< MingleString >
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();

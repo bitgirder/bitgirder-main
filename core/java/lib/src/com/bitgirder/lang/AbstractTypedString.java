@@ -20,7 +20,8 @@ public
 abstract
 class AbstractTypedString< T extends AbstractTypedString >
 implements CharSequence,
-           Serializable
+           Serializable,
+           Comparable< T >
 {
     private static Inputs inputs = new Inputs();
     private static State state = new State();

@@ -25,6 +25,20 @@ class MingleLexer
 
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
+    private final static Rfc4627Reader.NumberOptions NUM_OPTS =
+        new Rfc4627Reader.NumberOptionsBuilder().
+            setAllowLeadingZeroes( true ).
+            setDelimiters( 
+                new int[] { 
+                    (int) ',', 
+                    (int) ')', 
+                    (int) ']',
+                    (int) '}',
+                    (int) ':'
+                } 
+            ).
+            build();
+
     private final CountingCharReader cr;
 
     private 
@@ -102,14 +116,24 @@ class MingleLexer
             rr.errorMessage(), startCol + rr.errorCol() );
     }
 
+    private
     void
-    checkUnexpectedEnd( String msg )
+    implCheckUnexpectedEnd( String msg,
+                            Object... args )
         throws MingleSyntaxException,
                IOException
     {
         int v = cr.peek();
 
-        if ( v < 0 ) throw fail( 1, msg );
+        if ( v < 0 ) throw failf( 1, msg, args );
+    }
+
+    void
+    checkUnexpectedEnd( String errExpct )
+        throws MingleSyntaxException,
+               IOException
+    {
+        implCheckUnexpectedEnd( "Expected %s but found END", errExpct );
     }
 
     void
@@ -117,7 +141,7 @@ class MingleLexer
         throws MingleSyntaxException,
                IOException
     {
-        checkUnexpectedEnd( "Unexpected end of input" );
+        implCheckUnexpectedEnd( "Unexpected end of input" );
     }
 
     void
@@ -248,8 +272,7 @@ class MingleLexer
     {
         int startCol = (int) cr.position();
 
-        Rfc4627Reader.NumberRead rd = 
-            Rfc4627Reader.readNumber( cr, Rfc4627Reader.ALLOW_LEADING_ZEROES );
+        Rfc4627Reader.NumberRead rd = Rfc4627Reader.readNumber( cr, NUM_OPTS );
 
         if ( rd.isOk() ) 
         {
@@ -382,7 +405,7 @@ class MingleLexer
         throws MingleSyntaxException,
                IOException
     {
-        checkUnexpectedEnd( "Empty identifier" );
+        implCheckUnexpectedEnd( "Empty identifier" );
 
         List< String > parts = Lang.newList();
         parts.add( expectIdPart( fmt ) );
@@ -441,7 +464,7 @@ class MingleLexer
         throws MingleSyntaxException,
                IOException
     {
-        checkUnexpectedEnd( "Empty type name" );
+        implCheckUnexpectedEnd( "Empty type name" );
 
         StringBuilder sb = new StringBuilder();
 
@@ -489,6 +512,14 @@ class MingleLexer
         }
     }
 
+    private
+    MingleSyntaxException
+    unrecognizedTokStart( int v )
+    {
+        return failf( 
+            1, "Unrecognized token start: \"%c\" (U+%04X)", (char) v, v );
+    }
+
     Object
     nextToken()
         throws MingleSyntaxException,
@@ -504,8 +535,32 @@ class MingleLexer
         if ( isDeclNmStart( v ) ) return parseDeclaredTypeName();
         if ( isSpecChar( v ) ) return parseSpecial();
 
-        throw failf( 
-            1, "Unrecognized token start: \"%c\" (U+%04X)", (char) v, v );
+        throw unrecognizedTokStart( v );
+    }
+
+    // Used when accumulating type reference quantifiers. Allows us to fail when
+    // we see an unrecognized char ('-', ' ', etc) without assuming that that
+    // char is part of some next token (like a negative number)
+    SpecialLiteral
+    readTypeQuant()
+        throws MingleSyntaxException,
+               IOException
+    {
+        SpecialLiteral res = null;
+
+        int v = cr.peek();
+        if ( v < 0 ) return res;
+
+        switch ( v )
+        {
+            case (int) '?': res = SpecialLiteral.QUESTION_MARK; break;
+            case (int) '+': res = SpecialLiteral.PLUS; break;
+            case (int) '*': res = SpecialLiteral.ASTERISK; break;
+            default: throw unrecognizedTokStart( v );
+        }
+
+        cr.read(); // advance past v
+        return res;
     }
 
     static

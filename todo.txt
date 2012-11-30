@@ -15,7 +15,13 @@ Go:
     - check empty input fails for every type of parse test (string, num, ident,
       qname, etc)
 
+    - remove mingle:core@v1/(Enum|Struct|List) as types (can readd if needed);
+      make mingle:core@v1/SymbolMap a primitive type
+
 Java:
     
     - add and test utils like Lang.compareUint(32|64) and
       Lang.asUint(32|64)String() and build MingleUint(32|64) on top of them.
+
+    - remove com.bitgirder.parser and com.bitgirder.io.Rfc4627Recognizer (after
+      refactory com.bitgirder.json)

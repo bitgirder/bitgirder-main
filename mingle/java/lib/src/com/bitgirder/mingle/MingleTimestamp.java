@@ -6,6 +6,7 @@ import com.bitgirder.validation.State;
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Range;
+import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.PatternHelper;
 
 import java.util.TimeZone;
@@ -476,7 +477,7 @@ implements MingleValue,
         if ( m.matches() ) return buildTimestamp( m );
         else
         {
-            String msg = "Invalid timestamp: " + str;
+            String msg = "Invalid timestamp: " + Lang.getRfc4627String( str );
             throw new MingleSyntaxException( msg, colOffset );
         }
     }
