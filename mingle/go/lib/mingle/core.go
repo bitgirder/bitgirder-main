@@ -1072,6 +1072,7 @@ func TypeOf( mgVal Value ) TypeReference {
 
 type ValueError interface {
     Location() objpath.PathNode
+    Message() string
     error
 }
 
@@ -1079,7 +1080,9 @@ type valueErrorImpl struct {
     path idPath
 }
 
-func ( e valueErrorImpl ) Location() objpath.PathNode { return e.path }
+func ( e valueErrorImpl ) Location() objpath.PathNode { 
+    return e.path.( objpath.PathNode )
+}
 
 func ( e valueErrorImpl ) makeError( msg string ) string {
     if e.path == nil { return msg }
@@ -1105,17 +1108,21 @@ func ( e *ValidationError ) Error() string {
 
 type TypeCastError struct {
     valueErrorImpl
-    expected TypeReference
-    actual TypeReference
+    Expected TypeReference
+    Actual TypeReference
+}
+
+func ( e *TypeCastError ) Message() string {
+    tmpl := "Expected value of type %s but found %s"
+    return fmt.Sprintf( tmpl, e.Expected, e.Actual )
 }
 
 func ( e *TypeCastError ) Error() string {
-    tmpl := "Expected value of type %s but found %s"
-    return e.makeError( fmt.Sprintf( tmpl, e.expected, e.actual ) )
+    return e.makeError( e.Message() )
 }
 
 func newTypeCastError( expct, act TypeReference, path idPath ) *TypeCastError {
-    res := &TypeCastError{ expected: expct, actual: act }
+    res := &TypeCastError{ Expected: expct, Actual: act }
     res.path = path
     return res
 }
@@ -1129,6 +1136,7 @@ type ValueCastError struct {
     msg string
 }
 
+func ( e *ValueCastError ) Message() string { return e.msg }
 func ( e *ValueCastError ) Error() string { return e.makeError( e.msg ) }
 
 func newValueCastError(
@@ -1478,7 +1486,7 @@ func castNullable(
     if nv, ok := mgVal.( *Null ); ok { return nv, nil }
     val, err := castValue( mgVal, nt.Type, orig, path )
     // Reset error type to be the enclosing nullable type
-    if tcErr, ok := err.( *TypeCastError ); ok { tcErr.expected = nt }
+    if tcErr, ok := err.( *TypeCastError ); ok { tcErr.Expected = nt }
     return val, err
 }
 

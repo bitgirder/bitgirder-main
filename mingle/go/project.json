@@ -25,7 +25,7 @@
         "cast-value-tests": {
             "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
             "command": "write-cast-value-tests",
-            "argv": []
+            "argv": [ "--out-file", "${data_gen_dir}/cast-value-tests.bin" ]
         }
     }
 }

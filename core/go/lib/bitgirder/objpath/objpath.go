@@ -93,28 +93,53 @@ func ascentOrderFor( n PathNode ) []interface{} {
     return res
 }
 
-func appendNode( elt interface{}, f Formatter, apnd AppendFunc, isRoot bool ) {
-    switch v := elt.( type ) {
-    case *dictNode: {
-        if ! isRoot { f.AppendSeparator( apnd ) }
-        f.AppendDictKey( v.elt, apnd )
+type Visitor interface {
+    Descend( elt interface{} ) error
+    List( idx int ) error
+}
+
+func Visit( p PathNode, v Visitor ) error {
+    elts := ascentOrderFor( p )
+    for i := len( elts ); i > 0; i-- {
+        switch n := elts[ i - 1 ].( type ) {
+        case *dictNode:
+            if err := v.Descend( n.elt ); err != nil { return err }
+        case *ListNode:
+            if err := v.List( n.indx ); err != nil { return err }
+        default: panic( libErrorf( "Unhandled node type: %T", n ) )
+        }
     }
-    case *ListNode: {
-        apnd( "[ " )
-        apnd( strconv.Itoa( int( v.indx ) ) )
-        apnd( " ]" )
-    }
-    default: panic( &PathElementError{ elt } )
-    }
+    return nil
+}
+
+type formatVisitor struct {
+    sawRoot bool
+    f Formatter
+    apnd AppendFunc
+}
+
+func ( v *formatVisitor ) Descend( elt interface{} ) error {
+    if v.sawRoot { v.f.AppendSeparator( v.apnd ) }
+    v.sawRoot = true // mayb was already
+    v.f.AppendDictKey( elt, v.apnd )
+    return nil
+}
+
+func ( v *formatVisitor ) List( idx int ) error {
+    v.sawRoot = true
+    v.apnd( "[ " )
+    v.apnd( strconv.Itoa( idx ) )
+    v.apnd( " ]" )
+    return nil
 }
 
 func Format( p PathNode, f Formatter ) string {
     res := &bytes.Buffer{}
-    apnd := func( s string ) { res.WriteString( s ) }
-    elts := ascentOrderFor( p )
-    for i := len( elts ); i > 0; i-- {
-        appendNode( elts[ i - 1 ], f, apnd, i == len( elts ) )
+    v := &formatVisitor{
+        f: f,
+        apnd: func( s string ) { res.WriteString( s ) },
     }
+    Visit( p, v )
     return res.String()
 }
 

@@ -2,12 +2,19 @@ package mingle
 
 import (
     "testing"
+    "bitgirder/objpath"
     "bitgirder/assert"
     "bytes"
 )
 
 func TestCoreIo( t *testing.T ) {
     la := assert.NewPathAsserter( t ).StartList()
+    id := MustIdentifier
+    p1 := objpath.RootedAt( id( "id1" ) )
+    p2 := p1.Descend( id( "id2" ) )
+    p3 := p2.StartList().Next().Next()
+    p4 := p3.Descend( id( "id3" ) )
+    p5 := objpath.RootedAtList().Descend( id( "id1" ) )
     for _, obj := range []interface{} {
         nil,
         NullVal,
@@ -33,8 +40,13 @@ func TestCoreIo( t *testing.T ) {
         MustStruct( "ns1@v1/T1", "k1", int32( 1 ) ),
         MustList(),
         MustList( int32( 1 ), "hello" ),
-        MustIdentifier( "id1" ),
-        MustIdentifier( "id1-id2" ),
+        id( "id1" ),
+        id( "id1-id2" ),
+        p1,
+        p2,
+        p3,
+        p4,
+        p5,
         MustNamespace( "ns1@v1" ),
         MustNamespace( "ns1:ns2@v1" ),
         MustDeclaredTypeName( "T1" ),
@@ -67,6 +79,7 @@ func TestCoreIo( t *testing.T ) {
              Float64, Boolean, Timestamp, *Enum, *SymbolMap, *Struct, *List:
             err = wr.WriteValue( Value( obj ) )
         case *Identifier: err = wr.WriteIdentifier( v )
+        case objpath.PathNode: err = wr.WriteIdPath( v )
         case *Namespace: err = wr.WriteNamespace( v )
         case TypeName: err = wr.WriteTypeName( v )
         case TypeReference: err = wr.WriteTypeReference( v )
@@ -86,6 +99,10 @@ func TestCoreIo( t *testing.T ) {
         case *Identifier:
             if id, err := rd.ReadIdentifier(); err == nil { 
                 la.True( v.Equals( id ) )
+            } else { la.Fatal( err ) }
+        case objpath.PathNode:
+            if n, err := rd.ReadIdPath(); err == nil {
+                la.Equal( v, n ) 
             } else { la.Fatal( err ) }
         case *Namespace:
             if ns, err := rd.ReadNamespace(); err == nil {

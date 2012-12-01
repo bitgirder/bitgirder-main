@@ -4,8 +4,7 @@ import (
     "log"
     "fmt"
     "flag"
-    "os"
-    "path/filepath"
+    "mingle/testgen"
     bgio "bitgirder/io"
     pt "mingle/parser/testing"
 )
@@ -49,27 +48,6 @@ const (
     eltTypeFileEnd = int8( 0 )
     eltTypeParseTest = int8( 1 )
 )
-
-var outFile string
-
-func init() {
-    flag.StringVar( &outFile, "out-file", "", "Dest file for test data" )
-}
-
-func initOutFile() ( wr *bgio.BinWriter, err error ) {
-    if dir := filepath.Dir( outFile ); dir != "." {
-        if err = os.MkdirAll( dir, os.FileMode( 0755 ) ); err != nil {
-            err = fmt.Errorf( "Couldn't create parent dir %s: %s", dir, err )
-            return
-        }
-    }
-    var f *os.File
-    if f, err = os.Create( outFile ); err != nil {
-        err = fmt.Errorf( "Couldn't create %s: %s", outFile, err )
-        return
-    } else { wr = bgio.NewLeWriter( f ) }
-    return 
-}
 
 func writeNilVal( wr *bgio.BinWriter ) error {
     return writeTypeCode( typeNil, wr )
@@ -297,7 +275,6 @@ func writeTrailer( wr *bgio.BinWriter ) error {
 }
 
 func writeTests( wr *bgio.BinWriter ) ( err error ) {
-    log.Printf( "Writing %s", outFile )
     if err = writeHeader( wr ); err != nil { return }
     for _, cpt := range pt.CoreParseTests {
         if err = writeTest( cpt, wr ); err != nil { return }
@@ -307,13 +284,12 @@ func writeTests( wr *bgio.BinWriter ) ( err error ) {
 }
 
 func main() {
+    tgf := testgen.NewOutFile()
+    tgf.SetParseArg()
     flag.Parse()
-    if outFile == "" { log.Fatalf( "Missing output file" ) }
-    var err error
-    var wr *bgio.BinWriter
-    if wr, err = initOutFile(); err == nil { 
-        defer wr.Close()
-        err = writeTests( wr ) 
-    }
+    err := tgf.WithBinWriter( func( w *bgio.BinWriter ) error {
+        log.Printf( "Writing %s", tgf.Name() )
+        return writeTests( w )
+    })
     if err != nil { log.Fatal( err ) }
 }

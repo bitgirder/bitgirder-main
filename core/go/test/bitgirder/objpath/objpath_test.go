@@ -2,7 +2,78 @@ package objpath
 
 import (
     "testing"
+    "reflect"
+    "errors"
 )
+
+var visErr = errors.New( "visitor error" )
+
+func assertDeepEq( expct, act interface{}, t *testing.T ) {
+    if ! reflect.DeepEqual( expct, act ) {
+        t.Fatalf( "Expected %#v but got %#v", expct, act )
+    }
+}
+
+type pathBuildVisitor struct {
+    p PathNode
+    calls int
+    t *testing.T
+}
+
+func ( v *pathBuildVisitor ) takeCall() error {
+    if v.calls < 0 { return nil }
+    if v.calls == 0 { v.t.Fatal( "No calls remain" ) }
+    v.calls--
+    if v.calls == 0 { return visErr }
+    return nil
+}
+
+func ( v *pathBuildVisitor ) Descend( elt interface{} ) error {
+    if err := v.takeCall(); err != nil { return err }
+    if v.p == nil { v.p = RootedAt( elt ) } else { v.p = v.p.Descend( elt ) }
+    return nil
+}
+
+func ( v *pathBuildVisitor ) List( idx int ) error {
+    if err := v.takeCall(); err != nil { return err }
+    var ln *ListNode
+    if v.p == nil { ln = RootedAtList() } else { ln = v.p.StartList() }
+    for i := 0; i < idx; i++ { ln = ln.Next() }
+    v.p = ln
+    return nil
+}
+
+func assertVisit( p PathNode, t *testing.T ) PathNode {
+    b := &pathBuildVisitor{ t: t, calls: -1 }
+    Visit( p, b )
+    assertDeepEq( p, b.p, t )
+    return p
+}
+
+func TestVisit( t *testing.T ) {
+    p1 := assertVisit( RootedAt( "a" ), t )
+    p1 = assertVisit( p1.Descend( "b" ), t )
+    p1 = assertVisit( p1.StartList(), t )
+    p1 = assertVisit( p1.( *ListNode ).Next(), t )
+    p1 = assertVisit( p1.( *ListNode ).Next(), t )
+    p1 = assertVisit( p1.StartList(), t )
+    p1 = assertVisit( p1.( *ListNode ).Next(), t )
+    p1 = assertVisit( p1.Descend( "c" ), t )
+}
+
+func TestVisitAbortOnError( t *testing.T ) {
+    f := func( p PathNode, calls int ) {
+        b := &pathBuildVisitor{ t: t, calls: calls }
+        if err := Visit( p, b ); err == nil {
+            t.Fatal( "Expected err" )
+        } else { 
+            assertDeepEq( visErr, err, t ) 
+            assertDeepEq( 0, b.calls, t )
+        }
+    }
+    f( RootedAt( 0 ).Descend( 1 ).Descend( 2 ).Descend( 3 ), 3 )
+    f( RootedAt( 0 ).StartList().Next().Next().Next().Descend( 1 ), 3 )
+}
 
 type eltType string
 

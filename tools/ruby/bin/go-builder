@@ -66,7 +66,7 @@ class App < BitGirderClass
             when :run then "go/run-command/#@project"
             when :dist_test then "go/dist/test/#@project"
             when :build_bin then "go/build-bin/#@project/bin"
-            when :errorf_gen then "go/errorf-gen/#@project"
+            when :errorf_gen then "go/errorf-gen/#@project/lib"
             else raise "Unhandled op: #@operation"
         end
     end

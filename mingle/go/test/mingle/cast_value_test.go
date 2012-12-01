@@ -23,6 +23,7 @@ func ( r *cvtRunner ) assertValueError(
     expct, act ValueError ) *assert.PathAsserter {
     a := r.Descend( "Err" )
     a.Descend( "Error()" ).Equal( expct.Error(), act.Error() )
+    a.Descend( "Message()" ).Equal( expct.Message(), act.Message() )
     a.Descend( "Location()" ).Equal( expct.Location(), act.Location() )
     return a
 }
@@ -31,8 +32,8 @@ func ( r *cvtRunner ) assertTcError( err error ) {
     if act, ok := err.( *TypeCastError ); ok {
         expct := r.cvt.Err.( *TypeCastError )
         a := r.assertValueError( expct, act )
-        a.Descend( "expcted" ).Equal( expct.expected, act.expected )
-        a.Descend( "actual" ).Equal( expct.actual, act.actual )
+        a.Descend( "expcted" ).Equal( expct.Expected, act.Expected )
+        a.Descend( "actual" ).Equal( expct.Actual, act.Actual )
     } else { r.Fatal( err ) }
 }
 

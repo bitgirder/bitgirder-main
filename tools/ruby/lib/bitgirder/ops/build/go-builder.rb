@@ -719,7 +719,7 @@ end
 
 TaskRegistry.instance.register_path( GoDistTester, :go, :dist, :test )
 
-class ErrorfBuilder < StandardProjTask
+class ErrorfBuilder < StandardModTask
     
     include GoEnvMixin
 
@@ -730,7 +730,8 @@ class ErrorfBuilder < StandardProjTask
 
     private
     def errorf_file( go_pkg )
-        "#{ws_ctx.mod_dir( mod: :lib )}/#{go_pkg}/errorf.go"
+        code( "ws_ctx: #{ws_ctx}" )
+        "#{ws_ctx.mod_dir}/#{go_pkg}/errorf.go"
     end
 
     private

@@ -3,6 +3,7 @@ package mingle
 import (
     "fmt"
     "io"
+    "bitgirder/objpath"
 //    "log"
     bgio "bitgirder/io"
 )
@@ -34,6 +35,8 @@ const (
     tcStruct = uint8( 0x17 )
     tcList = uint8( 0x19 )
     tcEnd = uint8( 0x1a )
+    tcIdPath = uint8( 0x1b )
+    tcIdPathListNode = uint8( 0x1c )
 )
 
 type BinWriter struct { w *bgio.BinWriter }
@@ -69,6 +72,26 @@ func ( w *BinWriter ) writeIds( ids []*Identifier ) ( err error ) {
         if err = w.WriteIdentifier( id ); err != nil { return }
     }
     return
+}
+
+type pathWriter struct { w *BinWriter }
+
+// Write the tcId even though WriteIdentifier does so that id path reads can
+// unconditionally read a type code as they go
+func ( pw pathWriter ) Descend( elt interface{} ) ( err error ) {
+    if err = pw.w.WriteTypeCode( tcId ); err != nil { return }
+    return pw.w.WriteIdentifier( elt.( *Identifier ) )
+}
+
+func ( pw pathWriter ) List( idx int ) ( err error ) {
+    if err = pw.w.WriteTypeCode( tcIdPathListNode ); err != nil { return }
+    return pw.w.w.WriteInt32( int32( idx ) )
+}
+
+func ( w *BinWriter ) WriteIdPath( p objpath.PathNode ) ( err error ) {
+    if err = w.WriteTypeCode( tcIdPath ); err != nil { return }
+    if err = objpath.Visit( p, pathWriter{ w } ); err != nil { return }
+    return w.WriteTypeCode( tcEnd )
 }
 
 func ( w *BinWriter ) WriteNamespace( ns *Namespace ) ( err error ) {
@@ -291,6 +314,39 @@ func ( r *BinReader ) readIds() ( ids []*Identifier, err error ) {
     ids = make( []*Identifier, sz )
     for i := uint8( 0 ); i < sz; i++ {
         if ids[ i ], err = r.ReadIdentifier(); err != nil { return }
+    }
+    return
+}
+
+func ( r *BinReader ) readIdPathNext( 
+    p objpath.PathNode ) ( objpath.PathNode, bool, error ) {
+    tc, err := r.ReadTypeCode()
+    if err != nil { return nil, false, err }
+    switch tc {
+    case tcId:
+        if id, err := r.ReadIdentifier(); err == nil { 
+            if p == nil { 
+                return objpath.RootedAt( id ), false, nil
+            } else { return p.Descend( id ), false, nil }
+        } else { return nil, false, err }
+    case tcIdPathListNode:
+        if i, err := r.r.ReadInt32(); err == nil {
+            var l *objpath.ListNode
+            if p == nil { 
+                l = objpath.RootedAtList() 
+            } else { l = p.StartList() }
+            for ; i > 0; i-- { l = l.Next() }
+            return l, false, nil
+        } else { return nil, false, err }
+    case tcEnd: return p, true, nil
+    }
+    return nil, false, libErrorf( "Unrecognized id path code: 0x%02x", tc )
+}
+
+func ( r *BinReader ) ReadIdPath() ( p objpath.PathNode, err error ) {
+    if _, err = r.ExpectTypeCode( tcIdPath ); err != nil { return }
+    for done := false; ! done; {
+        if p, done, err = r.readIdPathNext( p ); err != nil { return }
     }
     return
 }
