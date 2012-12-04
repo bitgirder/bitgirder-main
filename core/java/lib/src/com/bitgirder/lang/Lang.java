@@ -404,6 +404,15 @@ class Lang
         return new ArrayList< V >( inputs.notNull( coll, "coll" ) );
     }
 
+    public
+    static
+    < V >
+    List< V >
+    newSynchronizedList()
+    {
+        return Collections.synchronizedList( Lang.< V >newList() );
+    }
+
     // Returns a set which is not guaranteed to be safe for concurrent
     // operations, but which is guaranteed to provide for safe publishing of
     // non-overlapping operations made from different threads.

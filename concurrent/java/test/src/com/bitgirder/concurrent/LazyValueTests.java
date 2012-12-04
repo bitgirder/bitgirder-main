@@ -20,7 +20,7 @@ class LazyValueTests
     final
     static
     class StringCall
-    implements Callable< String >
+    extends LazyValue< String >
     {
         private final String s;
         private final boolean fail;
@@ -53,12 +53,11 @@ class LazyValueTests
         throws Exception
     {
         StringCall sc = new StringCall( "hello", false );
-        LazyValue< String > v = LazyValue.forCall( sc );
 
         // ensure sc is called only once
         for ( int i = 0; i < 2; ++i )
         {
-            state.equal( "hello", v.get() );
+            state.equal( "hello", sc.get() );
             state.equalInt( 1, sc.calls );
         }
     }
@@ -70,18 +69,58 @@ class LazyValueTests
         throws Exception
     {
         StringCall sc = new StringCall( "bad", true );
-        LazyValue< String > v = LazyValue.forCall( sc );
 
         for ( int i = 0; i < 2; ++i )
         {
             try
             {
-                v.get();
+                sc.get();
                 state.fail( "No failure" );
             }
             catch ( MarkerException ok ) {}
 
             state.equalInt( 1, sc.calls );
         }
+    }
+
+    private
+    final
+    static
+    class HelloCall
+    implements Callable< String >
+    {
+        private final boolean fail;
+
+        private HelloCall( boolean fail ) { this.fail = fail; }
+
+        public
+        String
+        call()
+            throws Exception
+        {
+            if ( fail ) throw new MarkerException();
+            return "hello";
+        }
+    }
+
+    @Test
+    private
+    void
+    testForCallSuccess()
+        throws Exception
+    {
+        state.equal(
+            "hello",
+            LazyValue.< String >forCall( new HelloCall( false ) ).get()
+        );
+    }
+
+    @Test( expected = MarkerException.class )
+    private
+    void
+    testForCallFailure()
+        throws Exception
+    {
+        LazyValue.< String >forCall( new HelloCall( true ) ).get();
     }
 }

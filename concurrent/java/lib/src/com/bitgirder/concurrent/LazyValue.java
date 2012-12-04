@@ -9,18 +9,22 @@ import com.bitgirder.lang.Completion;
 import java.util.concurrent.Callable;
 
 public
-final
+abstract
 class LazyValue< V >
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final Callable< V > call;
-
     // guarded by sync
     private Completion< V > comp;
 
-    private LazyValue( Callable< V > call ) { this.call = call; }
+    protected LazyValue() {}
+
+    protected
+    abstract
+    V
+    call()
+        throws Exception;
 
     public
     synchronized
@@ -30,7 +34,7 @@ class LazyValue< V >
     {
         if ( comp == null )
         {
-            try { comp = Lang.successCompletion( call.call() ); }
+            try { comp = Lang.successCompletion( call() ); }
             catch ( Throwable th ) { comp = Lang.failureCompletion( th ); }
         }
 
@@ -41,9 +45,12 @@ class LazyValue< V >
     static
     < V >
     LazyValue< V >
-    forCall( Callable< V > call )
+    forCall( final Callable< V > call )
     {
         inputs.notNull( call, "call" );
-        return new LazyValue< V >( call );
+
+        return new LazyValue< V >() {
+            protected V call() throws Exception { return call.call(); }
+        };
     }
 }
