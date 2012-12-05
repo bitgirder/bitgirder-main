@@ -148,6 +148,44 @@ class JavaOpsTests
         assert_equal(
             %w{ -classpath foo.jar com.bitgirder.runner.Runner arg1 }, b.argv )
     end
+
+    def test_jrunner_split_argv
+        
+        [
+            [ %w{ foo }, { :argv => %w{ foo } } ],
+            [ %w{ -Dk=v }, { :sys_props => { "k" => "v" } } ],
+            [ %w{ -Xmx=2m }, { :jvm_args => %w{ -Xmx=2m } } ],
+
+            # Current behavior is to accept questionable or malformed args and
+            # let the jvm handle them
+            [ %w{ -Dk1= -Dk2 -X -Xm= },
+              { sys_props: { "k1" => "", "k2" => "" }, jvm_args: %w{ -X -Xm= } }
+            ],
+
+            [ %w{ foo -Dk1=v -Dk2=v2 -Xmx blah -Xmx=23 blah2 },
+              { :argv => %w{ foo blah blah2 },
+                :sys_props => { "k1" => "v", "k2" => "v2" },
+                :jvm_args => %w{ -Xmx -Xmx=23 } }
+            ]
+
+        ].each do |pair|
+            
+            argv, expct = *pair
+            act = JavaRunner.split_argv( argv )
+
+            expct = { :argv => [], :sys_props => {}, :jvm_args => [] }.
+                    merge( expct )
+
+            assert_equal( expct, act )
+        end
+    end
+
+    def test_jrunner_split_argv_fail
+        
+        assert_raised( "Property without name", RuntimeError ) do
+            JavaRunner.split_argv( %w{ blah -D foo } )
+        end
+    end
 end
 
 end

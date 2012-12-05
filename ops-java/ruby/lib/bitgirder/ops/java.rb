@@ -110,6 +110,29 @@ class JavaRunner < BitGirderClass
 
         JavaRunner.new( opts.merge( :command => "java", :argv => argv ) )
     end
+
+    def self.split_argv( argv )
+        
+        res = { argv: [], sys_props: {}, jvm_args: [] }
+
+        argv.each do |arg|
+            case arg
+            when /^-X/ then res[ :jvm_args ] << arg
+            when /^-D(?:([^=]+)(?:=(.*))?)?$/
+                raise "Property without name" unless $1
+                res[ :sys_props ][ $1 ] = $2 || "" 
+            else res[ :argv ] << arg
+            end
+        end
+
+        res
+    end
+
+    [ :exec, :system ].each do |meth| 
+        define_method( meth ) do
+            process_builder.send( meth )
+        end
+    end
 end
 
 end

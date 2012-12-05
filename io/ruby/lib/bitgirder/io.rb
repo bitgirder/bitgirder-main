@@ -218,12 +218,15 @@ end
 
 module_function :load_json
 
-def dump_yaml( obj, dest )
+def dump_yaml( obj, dest = nil )
     
     not_nil( obj, :obj )
-    not_nil( dest, :dest )
 
-    as_write_dest( dest ) { |io| YAML.dump( obj, io ) }
+    if dest
+        as_write_dest( dest ) { |io| YAML.dump( obj, io ) }
+    else
+        YAML.dump( obj )
+    end
 end
 
 module_function :dump_yaml
@@ -981,7 +984,7 @@ class UnixProcessBuilder < BitGirderClass
         end
     end
 
-    [ :spawn, :exec, :system, :popen ].each do |meth|
+    [ :spawn, :exec, :system ].each do |meth|
         self.class.send( :define_method, meth ) { |opts| 
             self.new( opts ).send( meth )
         }

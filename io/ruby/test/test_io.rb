@@ -119,6 +119,10 @@ class IoTests < BitGirderClass
         assert_load_and_dump( :yaml )
     end
 
+    def test_dump_yaml_one_arg
+        assert_equal( "---\n:a: 1\n", Io.dump_yaml( { a: 1 } ) )
+    end
+
     def test_strict64
         
         [ "", "abc", "x" * 1000 ].each do |str|
