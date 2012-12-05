@@ -359,7 +359,6 @@ module_function :read_full
 
 def can_connect?( *argv )
     
-    code( "In can_connect, argv: #{argv}" )
     raise "Need at least a port" if argv.empty?
 
     host = argv.first.is_a?( String ) ? argv.shift : "127.0.0.1"
@@ -371,12 +370,9 @@ def can_connect?( *argv )
     end
 
     begin
-        code( "Making connection" )
         TCPSocket::new( host, port ).close
-        code( "Got conn" )
         true
     rescue Errno::ECONNREFUSED
-        code( "No conn" )
         false
     end
 end
