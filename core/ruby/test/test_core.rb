@@ -607,7 +607,7 @@ class WaitConditionTests < TestClassBase
 
     def test_wait_nontrivial_poll
         
-        v = WaitValue.new( complete_at: 3 )
+        v = WaitValue.new( :complete_at => 3 )
 
         assert_wait( v, :expect => v.value, :calls => 4, :min_wait => 1.5 ) do
             WaitCondition.wait_poll( :poll => 0.5, :max_tries => 4 ) { v.get }
