@@ -429,18 +429,20 @@ class Daemon < RuntimeCommand
     private
     def await_start
         
-        connected = 4.times.find do |i|
-            begin
-                TCPSocket::new( "localhost", @config.control_port ).close
-                true
-            rescue Errno::ECONNREFUSED
-                code( "Server ctl port not up yet; waiting" )
-                sleep( 2 ** i )
-                false
-            end
-        end 
+        ports = [ @config.control_port ] +
+                [ :http_port, :https_port ].
+                    map { |p| @config.send( p ) }.
+                    select { |p| p }
 
-        raise "Could not get a ctl port connection" unless connected
+        code( "Awaiting connection on ports: #{ports}" )
+
+        ports.each do |p|
+            WaitCondition.wait_backoff( seed: 1, max_tries: 4 ) do
+                res = can_connect?( p )
+                code( "Got conn on :#{p}: #{res}" )
+                res
+            end or raise "Could not get connection on :#{p}"
+        end
     end
 
     private
@@ -486,42 +488,23 @@ class Daemon < RuntimeCommand
     end
 
     private
-    def await_port_close( port )
+    def await_proc_exit( pid )
         
-        3.times do |i|
-            begin
-                TCPSocket.new( "localhost", port ).close
-                code( "Still got a connection at :#{port}; will retry" )
-                sleep( 2 )
-            rescue Errno::ECONNREFUSED
-                return true
-            end
-        end
-
-        return false
-    end
-
-    private
-    def await_srv_close
-        
-        to_check = [ @config.control_port ]
-        to_check << @config.http_port if @config.http_port
-        to_check << @config.https_port if @config.https_port
-        
-        # Returns true if and only if all ports are seen closed
-        ! to_check.find do |port|
-            ! await_port_close( port )
-        end
+        pc = ProcessCheck.for_pid( pid )
+#        WaitCondition.wait_backoff( seed: 1, max_tries: 3 ) { ! pc.alive? }
+        WaitCondition.wait_backoff( seed: 1, max_tries: 3 ) { 
+            res = ! pc.alive? 
+            code( "tomcat #{pid} is stopped: #{res}" )
+            res
+        }
     end
 
     private
     def do_stop
         
-        pid = get_current_pid
-        
         send_shutdown
         
-        unless await_srv_close
+        unless await_proc_exit( pid = get_current_pid )
             code( "Server appears to still be running; sending KILL to #{pid}" )
             Process.kill( "KILL", pid )
         end

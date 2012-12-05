@@ -563,5 +563,99 @@ class ObjectPathTests < TestClassBase
     end
 end
 
+class WaitConditionTests < TestClassBase
+
+    class WaitValue < BitGirderClass
+        
+        bg_attr :complete_at
+        bg_attr :do_fail, :required => false
+        
+        attr_reader :value, :calls
+
+        private
+        def impl_initialize
+
+            @value = rand( 1 << 64 )
+            @calls = 0
+        end
+
+        public
+        def get
+            
+            begin
+                if @calls == @complete_at
+                    raise MarkerError, @value.to_s if @do_fail
+                    @value
+                end
+            ensure @calls += 1 end
+        end
+    end
+
+    def assert_wait( v, opts )
+        
+        raise "Need an expect val (even if nil)" unless opts.key?( :expect )
+        expct = opts[ :expect ]
+
+        start = Time.now
+        res = yield
+        elaps = Time.now - start
+
+        assert_equal( expct, res )
+        assert_equal( has_key( opts, :calls ), v.calls )
+        assert( elaps >= has_key( opts, :min_wait ) )
+    end
+
+    def test_wait_nontrivial_poll
+        
+        v = WaitValue.new( complete_at: 3 )
+
+        assert_wait( v, :expect => v.value, :calls => 4, :min_wait => 1.5 ) do
+            WaitCondition.wait_poll( :poll => 0.5, :max_tries => 4 ) { v.get }
+        end
+    end
+
+    def test_wait_immediate_success
+        
+        v = WaitValue.new( :complete_at => 0 )
+
+        assert_wait( v, :calls => 1, :expect => v.value, :min_wait => 0 ) do
+            WaitCondition.wait_poll( :poll => 0.5, :max_tries => 1 ) { v.get }
+        end
+    end
+
+    def test_wait_exhausted
+        
+        v = WaitValue.new( :complete_at => 4 )
+
+        assert_wait( v, :calls => 3, :expect => nil, :min_wait => 1 ) do
+            WaitCondition.wait_poll( :poll => 0.5, :max_tries => 3 ) { v.get }
+        end
+    end
+
+    def test_wait_raise
+        
+        v = WaitValue.new( :complete_at => 3, :do_fail => true )
+
+        start = Time.now
+        assert_raised( v.value.to_s, MarkerError ) do
+            WaitCondition.wait_poll( :poll => 0.5, :max_tries => 4 ) { v.get }
+        end
+        elaps = Time.now - start
+
+        assert( elaps >= 1.5 )
+        assert_equal( 4, v.calls )
+    end
+
+    def test_wait_backoff
+ 
+        v = WaitValue.new( :complete_at => 4 )
+
+        assert_wait( v, :calls => 5, :expect => v.value, :min_wait => 1.5 ) do
+            WaitCondition.
+                wait_backoff( :seed => 0.1, :max_tries => 5 ) { v.get }
+        end
+    end
+end
+
 end
 end

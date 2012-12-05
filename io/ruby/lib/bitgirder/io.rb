@@ -9,6 +9,7 @@ require 'json'
 require 'yaml'
 require 'base64'
 require 'tmpdir'
+require 'socket'
 
 include BitGirder::Core
 include BitGirderMethods
@@ -352,6 +353,32 @@ def read_full( io, len, buf = nil )
 end
 
 module_function :read_full
+
+def can_connect?( *argv )
+    
+    code( "In can_connect, argv: #{argv}" )
+    raise "Need at least a port" if argv.empty?
+
+    host = argv.first.is_a?( String ) ? argv.shift : "127.0.0.1"
+
+    raise "Need a port" if argv.empty?
+
+    unless ( port = argv.shift ).is_a?( Integer )
+        raise TypeError, "Invalid host or port value: #{port.class}" 
+    end
+
+    begin
+        code( "Making connection" )
+        TCPSocket::new( host, port ).close
+        code( "Got conn" )
+        true
+    rescue Errno::ECONNREFUSED
+        code( "No conn" )
+        false
+    end
+end
+
+module_function :can_connect?
 
 class DataUnitError < StandardError; end
 
@@ -958,6 +985,39 @@ class UnixProcessBuilder < BitGirderClass
         self.class.send( :define_method, meth ) { |opts| 
             self.new( opts ).send( meth )
         }
+    end
+end
+
+class ProcessCheck < BitGirderClass
+
+    private_class_method :new
+
+    def initialize( pid, ps_str )
+        
+        @pid, @ps_str = pid, ps_str
+    end
+
+    public
+    def alive?
+        self.class.ps_str_for( @pid ) == @ps_str
+    end
+
+    def self.ps_str_for( pid )
+        
+        res = `ps -p #{pid} -w -o command= -o lstart=`.chomp
+        res = nil if res.empty?
+
+        unless $?.success? || ( ( ex = $?.exitstatus ) == 1 && res == nil )
+            raise "Couldn't get ps info for #{pid} (ps exited #{ex}: #{res})"
+        end
+
+        res
+    end
+
+    def self.for_pid( pid )
+        
+        ps_str = self.ps_str_for( pid )
+        self.send( :new, pid, ps_str )
     end
 end
 

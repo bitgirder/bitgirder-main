@@ -1317,5 +1317,53 @@ class DefaultObjectPathFormatter
     end
 end
 
+class WaitCondition < BitGirderClass
+    
+    private_class_method :new
+
+    def initialize( f, waiter, max_tries )
+
+        @f, @waiter = f, waiter
+        @max_tries = positive( max_tries, :max_tries )
+    end
+
+    public
+    def execute
+
+        res = nil
+
+        @max_tries.times do |i|
+            break if res = @f.call
+            @waiter.call if i < @max_tries - 1
+        end
+
+        res
+    end
+
+    def self.create_and_exec( waiter, opts, blk )
+        
+        raise "No block given" unless blk
+        max_tries = has_key( opts, :max_tries )
+
+        self.send( :new, blk, waiter, max_tries ).execute
+    end
+
+    def self.wait_poll( opts, &blk )
+        
+        poll = positive( has_key( opts, :poll ), :poll )
+        waiter = lambda { sleep( poll ) }
+
+        self.create_and_exec( waiter, opts, blk )
+    end
+
+    def self.wait_backoff( opts, &blk )
+        
+        seed = positive( has_key( opts, :seed ), :seed )
+        waiter = lambda { sleep( seed ); seed *= 2 }
+
+        self.create_and_exec( waiter, opts, blk )
+    end
+end
+
 end
 end

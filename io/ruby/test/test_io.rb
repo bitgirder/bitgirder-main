@@ -298,6 +298,62 @@ class IoTests < BitGirderClass
             end
         end
     end
+
+    def assert_process_check( pid )
+ 
+        pc = ProcessCheck.for_pid( pid )
+        assert( pc.alive? )
+
+        # Simulate situation in which the pid has been reused
+        pc2 = ProcessCheck.send( :new, pid, "STUB" )
+        assert_false( pc2.alive? )
+
+        Process.kill( "KILL", pid )
+        sleep( 0.5 )
+        assert_false( pc.alive? )
+    end
+
+    def test_process_check
+        
+        Io.open_tempfile do |f|
+            
+            f.print "#!/bin/bash\nread\n"
+            f.flush
+            f.chmod 0755
+
+            if pid = fork
+                begin
+                    assert_process_check( pid )
+                ensure Process.kill( "KILL", pid ) end
+            else exec f.path
+            end
+        end
+    end
+
+    def test_can_connect
+        
+        [ 1, 22 ].each { |port|
+        [ nil, "127.0.0.1", "localhost" ].each { |host|
+            argv = host ? [ host, port ] : [ port ]
+            code( "argv: #{argv}" )
+            assert_equal( port == 22, Io.can_connect?( *argv ) )
+        }}
+    end
+
+    def test_can_connect_arg_errors
+        
+        assert_raised( "Need a port", RuntimeError ) do
+            Io.can_connect?( "localhost" )
+        end
+
+        assert_raised( "Need at least a port", RuntimeError ) do
+            Io.can_connect?() 
+        end
+
+        assert_raised( "Invalid host or port value: Object", TypeError ) do
+            Io.can_connect?( Object.new )
+        end
+    end
 end
 
 # Used to check that we are correctly converting everything to String before
