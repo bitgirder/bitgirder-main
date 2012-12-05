@@ -24,18 +24,6 @@ class Command < BitGirderClass
     end
 end
 
-class Help < Command
-
-    public
-    def run( run_ctx )
- 
-        print "\ncommands:\n\n"
-        COMMANDS.keys.sort.each { |s| puts "#{ " " * 4 }#{s}" }
-        puts
-
-    end
-end
-
 class TomcatConfig < BitGirderClass
     
     bg_attr :control_port, validation: :positive
@@ -98,6 +86,16 @@ class Install < Command
     end
 
     private
+    def load_install_opts
+        
+        case @install_opts
+        when /\.rb$/ then eval_install_opts
+        when /\.yaml$/ then load_yaml( @install_opts )
+        else raise "Unhandled install opts: #@install_opts"
+        end
+    end
+
+    private
     def expect_install_opt( opts, key )
         
         opts[ key ] or raise "No value in install opts for #{key.inspect}"
@@ -117,7 +115,7 @@ class Install < Command
     private
     def process_install_opts
 
-        opts = eval_install_opts
+        opts = load_install_opts
         init_config( expect_install_opt( opts, :tomcat_opts ) )
         @webapps = expect_install_opt( opts, :webapps )
         @ssl_opts = opts[ :ssl_opts ] || {}
@@ -274,6 +272,22 @@ class Install < Command
         dump_yaml( @config, "#@install_to/config.yaml" )
     end
 
+    private
+    def write_logging_properties
+        
+        File.open( "#{base_dir( :conf )}/logging.properties", "w" ) do |io|
+
+            io.print <<-END_LOGGING
+handlers = java.util.logging.ConsoleHandler
+.handlers = java.util.logging.ConsoleHandler
+java.util.logging.ConsoleHandler.level = FINE
+java.util.logging.ConsoleHandler.formatter = java.util.logging.SimpleFormatter
+org.apache.catalina.core.ContainerBase.[Catalina].[localhost].level = INFO
+org.apache.catalina.core.ContainerBase.[Catalina].[localhost].handlers = java.util.logging.ConsoleHandler
+            END_LOGGING
+        end
+    end
+
     public
     def run
  
@@ -282,6 +296,7 @@ class Install < Command
         write_server_conf
         install_webapps
         write_config
+        write_logging_properties
     end
 end
 
@@ -321,7 +336,7 @@ class TomcatProcessBuilder < BitGirderClass
         res = {
 
             "java.util.logging.config.file" =>
-                file_exists( "#{cat_home}/conf/logging.properties" ),
+                file_exists( "#{cat_base}/conf/logging.properties" ),
 
             "java.util.logging.manager" =>
                 "org.apache.juli.ClassLoaderLogManager",
@@ -361,6 +376,7 @@ class RuntimeCommand < Command
     bg_attr :runtime, 
             validation: :file_exists,
             processor: :expand_path,
+            required: true, # Since our default may still return nil
             default: lambda {
                 if ( v = ( ENV[ ENV_TOMCAT7_RUNTIME ] || "" ).strip ).empty?
                     nil
@@ -557,22 +573,7 @@ COMMANDS = {
     install: Install,
     run: Run,
     daemon: Daemon,
-    tailf: Tailf,
-    help: Help
+    tailf: Tailf
 }
 
-def get_command_cls
-    
-    idx = ARGV.find_index { |arg| ! arg.start_with?( "-" ) }
-    
-    cmd_sym = idx ? ARGV.delete_at( idx ).to_sym : :help
- 
-    unless res = COMMANDS[ cmd_sym ]
-        res = Help
-        STDERR.puts( "Unrecognized command: #{cmd_sym}" )
-    end
-
-    res
-end
-
-BitGirderCliApplication.run( get_command_cls )
+BitGirderCliApplication.run_subcommand_app( commands: COMMANDS )

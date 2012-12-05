@@ -563,17 +563,26 @@ PARSE_OVERRIDES = {
         },
         "mingle:core@v1/String ~= \"sdf\"" => 'Unrecognized token: "=" (0x3D)',
         "mingle:core@v1/String~" => "Expected type restriction but found: END",
-        "Int~[1,3}" => 'Unexpected char in integer part: "}" (0x7D)',
-        "Int~[-\"abc\",2)" => 'Unexpected char in integer part: "\"" (0x22)',
-        "Int~[--3,4)" => {
+        "Int32~[1,3}" => {
+            :err_message => 'Unexpected char in integer part: "}" (0x7D)',
+            :err_col => 11
+        },
+        "Int32~[-\"abc\",2)" => {
+            :err_message => 'Unexpected char in integer part: "\"" (0x22)',
+            :err_col => 9
+        },
+        "Int32~[--3,4)" => {
             :err_message => 'Number has empty or invalid integer part',
-            :err_col => 6
+            :err_col => 8
         },
         "String~\"ab[a-z\"" => 
             'Invalid regex: premature end of ' +
             ( RUBY_VERSION >= "1.9" || RubyVersions.jruby? ? 
                 "char-class" : "regular expression" ) +
-            ': /ab[a-z/'
+            ': /ab[a-z/',
+        
+        "mingle:core@v1/String~=\"sdf\"" => 'Unrecognized token: "=" (0x3D)',
+        "Timestamp~[\"2001-0x-22\",)" => 'invalid date: "2001-0x-22"'
     }
 }
 
@@ -688,6 +697,7 @@ class ParseTest < BitGirderClass
  
         begin
 
+#            code( "Parsing: #{self.inspect}" )
             res = call_parse
 
             raise "Got #{res}, but expected error #{@error.inspect}" if @error

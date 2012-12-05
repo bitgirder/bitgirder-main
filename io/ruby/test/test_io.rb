@@ -61,6 +61,20 @@ class IoTests < BitGirderClass
         end
     end
 
+    # Regression for bug in handling Tempfiles
+    def test_tmp_file_as_write_dest
+        
+        Io.open_tempfile do |tmp|
+
+            Io.as_write_dest( tmp ) do |io|
+                io.print( "a" )
+                io.flush
+            end
+
+            assert_equal( "a", File.read( tmp.path ) )
+        end
+    end
+
     def test_slurp
  
         data = "x" * ( 2 << 16 )

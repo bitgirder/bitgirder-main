@@ -332,8 +332,8 @@ class MingleTimestamp < MingleValue
         new( Time.at( secs ), false )
     end
 
-    # Impl :note => simply calling Time.at( ms / 1000.0 ) doesn't work as we might
-    # want, since it ends up passing a Float to Time.at() which apparently
+    # Impl :note => simply calling Time.at( ms / 1000.0 ) doesn't work as we
+    # might want, since it ends up passing a Float to Time.at() which apparently
     # performs more calculations or otherwise leads to a time which is close to
     # but not precisely the result of the division. To illustrate:
     #
@@ -1475,6 +1475,17 @@ class MingleParser < BitGirderClass
     end
 
     private
+    def exec_cast( ms, typ )
+        
+        begin
+            Mingle.cast_value( MingleString.new( ms ), typ )
+        rescue MingleTimestamp::Rfc3339FormatError => e
+            e = RestrictionTypeError.new( e.message ) if typ == TYPE_TIMESTAMP
+            raise e
+        end
+    end
+
+    private
     def cast_range_value( val, nm, bound )
         
         return nil if val.nil?
@@ -1490,7 +1501,7 @@ class MingleParser < BitGirderClass
         # s is a StringToken or a ParsedNumber
         s = val.is_a?( StringToken ) ? val.val : val.external_form
 
-        Mingle.cast_value( MingleString.new( s ), typ )
+        exec_cast( MingleString.new( s ), typ )
     end
 
     private

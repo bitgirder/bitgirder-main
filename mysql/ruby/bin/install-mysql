@@ -176,14 +176,18 @@ class App < BitGirderClass
 
     private
     def update_root_accounts( db )
- 
-        sql = <<-SQL
-            update mysql.user 
-            set password = password( '#{db.escape_string( root_pass() )}' )
-            where user = 'root'
-        SQL
 
-        db.query( sql )
+        ru = db.escape_string( root_user )
+        rp = db.escape_string( root_pass )
+
+        db.query( "delete from mysql.user where user = 'root'" )
+        db.query( "flush privileges" )
+
+        db.query <<-SQL
+            grant all on *.* to '#{ru}'@'localhost' identified by '#{rp}' 
+            with grant option
+        SQL
+ 
         db.query( "flush privileges" )
     end
 
@@ -224,15 +228,16 @@ class App < BitGirderClass
         set_root_pass( opts )
 
         # Now re-connect with pass (to verify that previous step worked)
-        opts.merge!( password: root_pass() )
+        opts.merge!( user: root_user(), password: root_pass() )
         secure_db_install( opts )
     end
 
     private
-    def stop_db( pid, with_pass )
+    def stop_db( pid, with_defaults )
         
-        argv = [ "--defaults-file=#{my_cnf()}", "-u", "root" ]
-        argv << "--password=#{root_pass()}" if with_pass
+        u = with_defaults ? "root" : root_user
+        argv = [ "--defaults-file=#{my_cnf()}", "-u", "#{u}" ]
+        argv << "--password=#{root_pass()}" unless with_defaults
         argv << "shutdown" 
 
         UnixProcessBuilder.new( cmd: mysqladmin(), argv: argv ).system
@@ -252,7 +257,7 @@ class App < BitGirderClass
             run_db_init
             init_done = true
         ensure
-            stop_db( pid, init_done )
+            stop_db( pid, ! init_done )
         end
     end
 
@@ -293,7 +298,11 @@ class App < BitGirderClass
             io.print <<-END
 #!#{bash()}
 
-exec #{mysqladmin()} --defaults-file=#{my_cnf()} -u #{root_user()} "$@"
+exec #{mysqladmin()} \
+    --defaults-file=#{my_cnf()} \
+    -u #{root_user()} \
+    -p#{root_pass()} \
+    "$@"
             END
         end
     end

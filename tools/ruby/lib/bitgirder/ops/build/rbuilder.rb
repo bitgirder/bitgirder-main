@@ -436,12 +436,24 @@ class RubyCommandRunner < RubyProjTask
         mods.map { |mod| TaskTarget.create( :ruby, :build, proj(), mod ) }
     end
 
+    private
+    def add_incl_dirs?( cmd )
+        
+        %w{ irb ruby }.include?( cmd )
+    end
+
     public
     def execute( chain )
         
-        opts = ruby_ctx.proc_builder_opts( "ruby" )
+        cmd = ( @run_opts.get_string( :command ) || "ruby" ).to_s
+        opts = ruby_ctx.proc_builder_opts( cmd )
 
-        argv = get_rb_incl_dirs( chain ).map { |d| [ "-I", d ] }.flatten
+        argv = []
+
+        if add_incl_dirs?( cmd )
+            argv += get_rb_incl_dirs( chain ).map { |d| [ "-I", d ] }.flatten
+        end
+
         argv += argv_remain
 
         opts[ :argv ].push( *argv )

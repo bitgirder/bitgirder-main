@@ -407,7 +407,9 @@ class BitGirderAttribute
 
     include BitGirderMethods
 
-    class InvalidModifier < RuntimeError; end
+    class AttributeError < RuntimeError; end
+    class InvalidModifier < AttributeError; end
+    class RedefinitionError < AttributeError; end
 
     PROCESSOR_BOOLEAN = lambda { |v| BitGirderMethods.to_bool( v ) }
 
@@ -484,6 +486,7 @@ class BitGirderAttribute
     def get_processor( p )
  
         case p
+            when nil, Proc then p
             when :boolean then PROCESSOR_BOOLEAN
             when :symbol then PROCESSOR_SYMBOL
             when :integer then PROCESSOR_INTEGER
@@ -497,7 +500,7 @@ class BitGirderAttribute
                     raise ArgumentError, "Not a #{BitGirderClass}: #{p}"
                 end
 
-            else p
+            else raise "Unrecognized processor: #{p}"
         end
     end
 
@@ -559,18 +562,29 @@ class BitGirderClassDefinition
             instance_variable_set( :"@#{attr}", val )
         end
     end
+
+    private
+    def read_add_attr_arg( arg )
+
+        case arg
+        when BitGirderAttribute then arg
+        when Hash
+            unless arg.key?( :required ) || arg.key?( :default )
+                arg[ :required ] = true
+            end
+            BitGirderAttribute.new( arg )
+        else raise "Don't know how to add as attr: #{arg}"
+        end
+    end
     
     public
-    def add_attr( opts )
+    def add_attr( arg )
 
-        unless opts.key?( :required ) || opts.key?( :default )
-            opts[ :required ] = true
-        end
-
-        attr = BitGirderAttribute.new( opts )
+        attr = read_add_attr_arg( arg )
  
         if @attrs.key?( attr.identifier )
-            raise "Attribute #{attr.identifier.inspect} already defined"
+            msg = "Attribute #{attr.identifier.inspect} already defined"
+            raise BitGirderAttribute::RedefinitionError, msg
         else
             ident = attr.identifier
             @attrs[ ident ] = attr
@@ -979,6 +993,7 @@ class BitGirderCliApplication < BitGirderClass
             # attr.default could be the boolean false, which we still want to
             # display
             unless ( defl = attr.default ) == nil
+                defl = defl.call if defl.is_a?( Proc )
                 desc += " (Default: #{default_to_s( defl )})"
             end
 
@@ -1112,6 +1127,74 @@ class BitGirderCliApplication < BitGirderClass
 
         BitGirderMethods::not_nil( cls, :cls )
         self.new( :app_class => cls ).run( ARGV )
+    end
+
+    class UnrecognizedSubcommandError < StandardError; end
+
+    def self.get_subcommand( commands )
+        
+        idx = ARGV.find_index { |arg| ! arg.start_with?( "-" ) }
+        
+        return nil unless idx
+
+        cmd_str = ARGV.delete_at( idx )
+        cmd_sym = cmd_str.gsub( "-", "_" ).to_sym
+ 
+        unless res = commands[ cmd_sym ]
+            raise UnrecognizedSubcommandError, cmd_str
+        end
+    
+        res
+    end
+
+    def self.show_subcommand_help( cmds )
+        
+        print "\ncommands:\n\n"
+
+        cmds.keys.sort.map { |s| s.to_s.gsub( "_", "-" ) }.
+             each { |s| puts "#{ " " * 4 }#{s}" }
+
+        puts
+    end
+
+    def self.run_subcommand_app( opts )
+
+        cmds = has_key( opts, :commands )
+        
+        cmd_cls = begin
+            self.get_subcommand( cmds )
+        rescue UnrecognizedSubcommandError => e
+            STDERR.puts( "Unrecognized command: #{e}" )
+        end
+
+        if cmd_cls
+            self.run( cmd_cls )
+        else
+            self.show_subcommand_help( cmds )
+        end
+    end
+end
+
+class AbstractApplication < BitGirderClass
+    
+    bg_abstract :impl_run
+
+    attr_reader :run_ctx, :argv_remain
+    attr_accessor :verbose
+
+    public
+    def verbose?
+        @verbose
+    end
+
+    public
+    def run( run_ctx )
+        
+        @run_ctx = run_ctx
+        @argv_remain = run_ctx[ :argv_remain ] || []
+        @verbose = run_ctx[ :verbose ]
+
+        impl_run
     end
 end
 

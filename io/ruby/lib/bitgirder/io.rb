@@ -168,7 +168,7 @@ def as_write_dest( obj )
     not_nil( obj, :obj )
 
     case obj
-        when IO, Tempfile then yield( io )
+        when IO, Tempfile then yield( obj )
         when String then File.open( obj, "w" ) { |io| yield( io ) }
         else raise TypeError, "Unknown write dest: #{obj.class}"
     end
@@ -952,6 +952,12 @@ class UnixProcessBuilder < BitGirderClass
         else
             IO.popen( get_call_argv18.join( " " ), mode, &blk )
         end
+    end
+
+    [ :spawn, :exec, :system, :popen ].each do |meth|
+        self.class.send( :define_method, meth ) { |opts| 
+            self.new( opts ).send( meth )
+        }
     end
 end
 

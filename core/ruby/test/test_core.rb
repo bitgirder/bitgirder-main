@@ -258,18 +258,63 @@ class CoreTests < TestClassBase
                 e.message, "Environment Variable #{var.inspect} cannot be nil" )
         end
     end
-        
-    # Used by the test below
+
+    @@class_def_errors = {}
+
+    def assert_class_def_error( sym )
+        assert( @@class_def_errors[ sym ] )
+    end
+
     begin
         class TestClass < BitGirderClass
             bg_attr :an_ident, :validatin => :note_validation_misspelled
         end
     rescue BitGirderAttribute::InvalidModifier => e
-        @@invalid_modifier_rescued = e
+        @@class_def_errors[ :mistyped_attr ] = true
     end
     
     def test_class_def_with_mistyped_attr_arg
-        assert( @@invalid_modifier_rescued )
+        assert_class_def_error( :mistyped_attr )
+    end
+
+    begin
+        class Redefine1 < BitGirderClass
+            bg_attr :attr1
+            bg_attr :attr2
+            bg_attr :attr1
+        end
+    rescue BitGirderAttribute::RedefinitionError => e
+        if e.message == "Attribute :attr1 already defined"
+            @@class_def_errors[ :attr_redefined_same_class ] = true
+        else
+            raise
+        end
+    end
+
+    def test_bg_attr_redefined_fails_same_class
+        assert_class_def_error( :attr_redefined_same_class )
+    end
+
+    begin
+        class Redefine2 < BitGirderClass
+            bg_attr :attr1
+        end
+
+        class Redefine3 < Redefine2
+            bg_attr :attr2
+            bg_attr :attr1
+        end
+
+    rescue BitGirderAttribute::RedefinitionError => e
+        if e.message == "Attribute :attr1 already defined"
+            @@class_def_errors[ :attr_redefined_subclass ] = true
+        else
+            raise
+        end
+    end
+
+    def test_bg_attr_redefined_fails_subclass
+        assert_class_def_error( :attr_redefined_subclass )
     end
 
     def test_bg_class_extends_bg_methods
