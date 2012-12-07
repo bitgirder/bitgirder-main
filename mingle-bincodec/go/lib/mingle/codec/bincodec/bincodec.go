@@ -23,8 +23,7 @@ var (
     TypeCodeInt64 = TypeCode( 0x08 )
     TypeCodeUint64 = TypeCode( 0x09 )
     TypeCodeString = TypeCode( 0x0a )
-    TypeCodeRfc3339Str = TypeCode( 0x0b )
-    TypeCodeRfc3339Bin = TypeCode( 0x0c )
+    TypeCodeTimestamp = TypeCode( 0x0b )
     TypeCodeBuffer = TypeCode( 0x0d )
     TypeCodeUtf8String = TypeCode( 0x0e )
     TypeCodeList = TypeCode( 0x0f )
@@ -92,8 +91,8 @@ func ( e *encoder ) writeMgBuffer( b mg.Buffer ) error {
 }
 
 func ( e *encoder ) writeTimestamp( t mg.Timestamp ) error {
-    if err := e.writeTypeCode( TypeCodeRfc3339Str ); err != nil { return err }
-    return e.writeUtf8( t.Rfc3339Nano() )
+    if err := e.writeTypeCode( TypeCodeTimestamp ); err != nil { return err }
+    return e.mgWr.WriteValue( t )
 }
 
 func ( e *encoder ) writeType( typ mg.TypeReference ) error {
@@ -317,16 +316,15 @@ func ( dec *decode ) readMgUint64() error {
     return dec.rct.Value( mg.Uint64( num ) )
 }
 
-func ( dec *decode ) readTimestampString() error {
-    var str string
-    var off int64
-    var err error
-    var t mg.Timestamp
-    if str, off, err = dec.readString(); err != nil { return err }
-    if t, err = mg.ParseTimestamp( str ); err == nil {
-        return dec.rct.Value( t )
-    }
-    return codecErrorfWithOffset( "Invalid timestamp: %s", off, err.Error() )
+func ( dec *decode ) readTimestamp() error {
+    off := dec.r.off
+    val, err := dec.mgRd.ReadValue()
+    if err == nil { 
+        if tm, ok := val.( mg.Timestamp ); ok {
+            return dec.rct.Value( tm )
+        } else { return codecErrorfWithOffset( "Expected timestamp", off ) }
+    } 
+    return err
 }
 
 func ( dec *decode ) readType() ( typ mg.TypeReference, err error ) {
@@ -402,7 +400,7 @@ func ( dec *decode ) readValue( tc TypeCode ) error {
     case TypeCodeInt64: return dec.readMgInt64()
     case TypeCodeUint32: return dec.readMgUint32()
     case TypeCodeUint64: return dec.readMgUint64()
-    case TypeCodeRfc3339Str: return dec.readTimestampString()
+    case TypeCodeTimestamp: return dec.readTimestamp()
     case TypeCodeBuffer: return dec.readMgBuffer()
     case TypeCodeString: return dec.readMgString()
     case TypeCodeList: return dec.readList()

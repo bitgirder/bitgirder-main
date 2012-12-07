@@ -27,7 +27,7 @@ class MingleBinaryConstants
     final static byte TC_UINT64 = (byte) 0x0f;
     final static byte TC_FLOAT32 = (byte) 0x10;
     final static byte TC_FLOAT64 = (byte) 0x11;
-    final static byte TC_TIME_RFC3339 = (byte) 0x12;
+    final static byte TC_TIMESTAMP = (byte) 0x12;
     final static byte TC_BUFFER = (byte) 0x13;
     final static byte TC_ENUM = (byte) 0x14;
     final static byte TC_SYM_MAP = (byte) 0x15;

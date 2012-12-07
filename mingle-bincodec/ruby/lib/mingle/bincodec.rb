@@ -16,8 +16,7 @@ TYPE_CODE_UINT32 = 0x07
 TYPE_CODE_INT64 = 0x08
 TYPE_CODE_UINT64 = 0x09
 TYPE_CODE_STRING = 0x0a
-TYPE_CODE_RFC3339_STR = 0x0b 
-TYPE_CODE_RFC3339_BIN = 0x0c
+TYPE_CODE_TIMESTAMP = 0x0b
 TYPE_CODE_BUFFER = 0x0d
 TYPE_CODE_UTF8_STRING = 0x0e
 TYPE_CODE_LIST = 0x0f
@@ -25,6 +24,8 @@ TYPE_CODE_STRUCT = 0x10
 TYPE_CODE_SYMBOL_MAP = 0x11
 TYPE_CODE_NULL = 0x012
 TYPE_CODE_FIELD = 0x13
+
+TYPE_CODE_TS_HOLD = 0x12
 
 Io = BitGirder::Io
 
@@ -141,8 +142,10 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     private
     def append_timestamp( wr, val )
         
-        append_type_code( wr, TYPE_CODE_RFC3339_STR )
-        append_utf8( wr, val.rfc3339 )
+        append_type_code( wr, TYPE_CODE_TIMESTAMP )
+        append_type_code( wr, TYPE_CODE_TS_HOLD )
+        wr.write_int64( val.time.to_i )
+        wr.write_int32( val.time.nsec )
     end
 
     private
@@ -426,12 +429,11 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     private
     def read_mg_timestamp( scanner )
         
-        parse_string(
-            :scanner => scanner,
-            :parser => lambda { |str| MingleTimestamp.rfc3339( str ) },
-            :parse_type => "rfc3339 timestamp",
-            :error_type => MingleTimestamp::Rfc3339FormatError
-        )
+        expect_type_code( scanner, :TYPE_CODE_TS_HOLD )
+        secs, nsec = scanner.read_int64, scanner.read_int32
+        t = Time.at( secs, nsec.to_f / 1000.0 )
+
+        MingleTimestamp.new( t, false )
     end
 
     private
@@ -462,7 +464,7 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
             when TYPE_CODE_STRING then read_mg_string( scanner )
             when TYPE_CODE_BUFFER then read_mg_buffer( scanner )
             when TYPE_CODE_ENUM then read_mg_enum( scanner )
-            when TYPE_CODE_RFC3339_STR then read_mg_timestamp( scanner )
+            when TYPE_CODE_TIMESTAMP then read_mg_timestamp( scanner )
             when TYPE_CODE_STRUCT then read_mg_struct( scanner )
             when TYPE_CODE_SYMBOL_MAP then read_fields( scanner )
             when TYPE_CODE_LIST then read_mg_list( scanner )

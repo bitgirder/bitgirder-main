@@ -8,6 +8,7 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.lang.Range;
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.PatternHelper;
+import com.bitgirder.lang.Strings;
 
 import java.util.TimeZone;
 import java.util.GregorianCalendar;
@@ -89,7 +90,21 @@ implements MingleValue,
         this.nanos = b.nanos;
     }
 
-    public int hashCode() { return cal.hashCode() | nanos; }
+    public 
+    int 
+    hashCode() 
+    { 
+        return ( (int) cal.getTimeInMillis() ) | nanos; 
+    }
+
+    CharSequence
+    getInspection()
+    {
+        return Strings.crossJoin( "=", ",",
+            "nanos", nanos,
+            "cal", cal
+        );
+    }
 
     public
     boolean
@@ -99,7 +114,9 @@ implements MingleValue,
         else if ( other instanceof MingleTimestamp )
         {
             MingleTimestamp ts2 = (MingleTimestamp) other;
-            return nanos == ts2.nanos && cal.equals( ts2.cal );
+//            return nanos == ts2.nanos && cal.equals( ts2.cal );
+            return nanos == ts2.nanos &&
+                   cal.getTimeInMillis() == ts2.cal.getTimeInMillis();
         }
         else return false;
     }
@@ -243,16 +260,35 @@ implements MingleValue,
         return res;
     }
 
-    public
+    private
     static
-    MingleTimestamp
-    fromMillis( long t )
+    GregorianCalendar
+    initCalFromMillis( long t )
     {
         GregorianCalendar c = new GregorianCalendar();
         c.setTimeZone( TZ_UTC );
         c.setTimeInMillis( t );
 
+        return c;
+    }
+
+    public
+    static
+    MingleTimestamp
+    fromMillis( long t )
+    {
+        GregorianCalendar c = initCalFromMillis( t );
         return new Builder().setFromCalendar( c ).build();
+    }
+
+    public
+    static
+    MingleTimestamp
+    fromUnixNanos( long secs,
+                   int ns )
+    {
+        GregorianCalendar c = initCalFromMillis( secs * 1000 );
+        return new Builder().setFromCalendar( c ).setNanos( ns ).build();
     }
 
     public

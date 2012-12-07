@@ -49,7 +49,7 @@ class MingleBinReader
         TC_FLOAT64,
         TC_STRING,
         TC_BUFFER,
-        TC_TIME_RFC3339,
+        TC_TIMESTAMP,
         TC_ENUM,
         TC_SYM_MAP,
         TC_STRUCT,
@@ -332,17 +332,13 @@ class MingleBinReader
 
     private
     MingleTimestamp
-    processRfc3339Time()
+    processTimestamp()
         throws IOException
     {
-        String s = rd.readUtf8();
+        long secs = rd.readLong();
+        int nsec = rd.readInt();
 
-        try { return MingleTimestamp.parse( s ); }
-        catch ( MingleSyntaxException mse )
-        {
-            throw new MingleBinaryException( 
-                "Couldn't parse rfc3339 timestamp: " + mse, mse );
-        }
+        return MingleTimestamp.fromUnixNanos( secs, nsec );
     }
 
     private
@@ -427,7 +423,7 @@ class MingleBinReader
             case TC_FLOAT64: return new MingleFloat64( rd.readDouble() );
             case TC_BUFFER: return new MingleBuffer( rd.readByteArray() );
             case TC_STRING: return new MingleString( rd.readUtf8() );
-            case TC_TIME_RFC3339: return processRfc3339Time();
+            case TC_TIMESTAMP: return processTimestamp();
             case TC_ENUM: return processEnum();
             case TC_SYM_MAP: return processSymbolMap();
             case TC_STRUCT: return processStruct();

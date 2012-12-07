@@ -222,9 +222,9 @@ class CastValueTests
         );
 
         addExpectation(
-            MingleTimestamp.parse( "2007-08-24T13:15:43.123450000-08:00" ),
+            MingleTimestamp.parse( "2007-08-24T21:15:43.123450000Z" ),
             Mingle.TYPE_STRING,
-            new MingleString( "2007-08-24T13:15:43.123450000-08:00" )
+            new MingleString( "2007-08-24T21:15:43.123450000Z" )
         );
 
         addExpectation(

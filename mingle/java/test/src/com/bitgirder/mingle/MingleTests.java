@@ -395,4 +395,20 @@ class MingleTests
         assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
         assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
     }
+
+    @Test
+    private
+    void
+    testMingleTimestampEqualityRegress0()
+        throws Exception
+    {
+        MingleTimestamp t1 =
+            MingleTimestamp.parse( "2007-08-24T21:15:43.123450000Z" );
+        
+        MingleTimestamp t2 =
+            MingleTimestamp.parse( "2007-08-24T13:15:43.12345-08:00" );
+ 
+        state.equalInt( t1.hashCode(), t2.hashCode() );
+        state.equal( t1, t2 );
+    }
 }

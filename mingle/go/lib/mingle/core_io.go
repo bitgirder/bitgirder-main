@@ -4,6 +4,7 @@ import (
     "fmt"
     "io"
     "bitgirder/objpath"
+    "time"
 //    "log"
     bgio "bitgirder/io"
 )
@@ -27,7 +28,7 @@ const (
     tcUint64 = uint8( 0x0f )
     tcFloat32 = uint8( 0x10 )
     tcFloat64 = uint8( 0x11 )
-    tcTimeRfc3339 = uint8( 0x12 )
+    tcTimestamp = uint8( 0x12 )
     tcBuffer = uint8( 0x13 )
     tcEnum = uint8( 0x14 )
     tcSymMap = uint8( 0x15 )
@@ -192,8 +193,9 @@ func ( w *BinWriter ) WriteValue( val Value ) ( err error ) {
         if err = w.WriteTypeCode( tcFloat64 ); err != nil { return }
         return w.w.WriteFloat64( float64( v ) )
     case Timestamp:
-        if err = w.WriteTypeCode( tcTimeRfc3339 ); err != nil { return }
-        return w.w.WriteUtf8( v.Rfc3339Nano() )
+        if err = w.WriteTypeCode( tcTimestamp ); err != nil { return }
+        if err = w.w.WriteInt64( time.Time( v ).Unix() ); err != nil { return }
+        return w.w.WriteInt32( int32( time.Time( v ).Nanosecond() ) )
     case *Enum: return w.writeEnum( v )
     case *SymbolMap: return w.writeSymbolMap( v )
     case *Struct: return w.writeStruct( v )
@@ -455,10 +457,13 @@ func ( r *BinReader ) implReadValue( tc uint8 ) ( val Value, err error ) {
     case tcBuffer:
         var buf []byte
         if buf, err = r.r.ReadBuffer32(); err == nil { val = Buffer( buf ) }
-    case tcTimeRfc3339:
-        var s string
-        if s, err = r.r.ReadUtf8(); err == nil { 
-            val, err = ParseTimestamp( s ) 
+    case tcTimestamp:
+        var ux int64
+        var ns int32
+        if ux, err = r.r.ReadInt64(); err == nil { 
+            if ns, err = r.r.ReadInt32(); err == nil { 
+                val = Timestamp( time.Unix( ux, int64( ns ) ) )
+            }
         }
     case tcInt32:
         var i int32
@@ -511,7 +516,7 @@ func ( r *BinReader ) readRangeVal() ( val Value, err error ) {
     var tc uint8
     if tc, err = r.PeekTypeCode(); err != nil { return }
     switch tc {
-    case tcString, tcTimeRfc3339, tcInt32, tcInt64, tcUint32, tcUint64,
+    case tcString, tcTimestamp, tcInt32, tcInt64, tcUint32, tcUint64,
          tcFloat32, tcFloat64: 
         return r.ReadValue()
     case tcNil: 

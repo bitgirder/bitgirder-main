@@ -91,12 +91,5 @@ func init() {
                 TypeCodeInt32, int32( 10 ), // an okay list val
                 typeCodeFail,
         ),
-        failDecode(
-            "test-rfc3339-str-fail",
-            "[offset 50]: Invalid timestamp: [<input>, line 1, col 1]: Invalid RFC3339 time: \"2009-23-22222\"",
-            TypeCodeStruct, int32( -1 ), mg.MustTypeReference( "ns@v1/S" ),
-            TypeCodeField, mg.MustIdentifier( "time1" ),
-            TypeCodeRfc3339Str, "2009-23-22222",
-        ),
     )
 }
