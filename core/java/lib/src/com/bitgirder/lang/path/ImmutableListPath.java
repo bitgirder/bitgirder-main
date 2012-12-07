@@ -1,10 +1,16 @@
 package com.bitgirder.lang.path;
 
+import com.bitgirder.validation.Inputs;
+import com.bitgirder.validation.State;
+
 public
 final
 class ImmutableListPath< E >
 extends ListPath< E >
 {
+    private final static Inputs inputs = new Inputs();
+    private final static State state = new State();
+
     private final int indx;
 
     private
@@ -30,8 +36,19 @@ extends ListPath< E >
     static
     < E >
     ImmutableListPath< E >
+    start( ObjectPath< E > parent,
+           int idx )
+    {
+        inputs.nonnegativeI( idx, "idx" );
+        return new ImmutableListPath< E >( idx, parent, "parent" );
+    }
+
+    public
+    static
+    < E >
+    ImmutableListPath< E >
     start( ObjectPath< E > parent )
     {
-        return new ImmutableListPath< E >( 0, parent, "parent" );
+        return start( parent, 0 );
     }
 }

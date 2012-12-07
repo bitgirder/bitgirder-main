@@ -417,9 +417,7 @@ func TestResolveInCore( t *testing.T ) {
     f( "Float32", QnameFloat32 )
     f( "Float64", QnameFloat64 )
     f( "Timestamp", QnameTimestamp )
-    f( "Enum", QnameEnum )
     f( "SymbolMap", QnameSymbolMap )
-    f( "Struct", QnameStruct )
     f( "Null", QnameNull )
 }
 
@@ -627,7 +625,7 @@ func TestSymbolMapAccessorExpectPanic( t *testing.T ) {
         defer func() {
             if err := recover(); err == nil {
                 t.Fatal( "Expected error" )
-            } else if ve, ok := err.( *ValidationError ); ok {
+            } else if ve, ok := err.( *ValueCastError ); ok {
                 expct := ""
                 if path != nil { expct += FormatIdPath( path ) + "." }
                 expct += "f1: value is null"
@@ -650,8 +648,8 @@ func TestSymbolMapAccessorCastErrorPath( t *testing.T ) {
         if _, err := acc.GetStructByString( "f1" ); err == nil {
             t.Fatal( "Expected error" )
         } else {
-            expct := locStr + ": Expected value of type " +
-                "mingle:core@v1/Struct but found mingle:core@v1/String"
+            expct := 
+                locStr + ": Expected *Struct but found mingle:core@v1/String"
             assert.Equal( expct, err.Error() )
         }
     }

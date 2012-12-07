@@ -556,7 +556,7 @@ class IoTests
         }
     }
 
-    @Test( expected = IOException.class )
+    @Test( expected = Base64Exception.class )
     private
     void
     testOutOfRangeChecked()
@@ -567,13 +567,22 @@ class IoTests
             
     }
 
-    @Test( expected = IOException.class )
+    @Test( expected = Base64Exception.class )
     private
     void
     testInvalidCharChecked()
         throws Exception
     {
         new Base64Encoder().decode( "Zg;=" );
+    }
+
+    @Test( expected = Base64Exception.class )
+    private
+    void
+    testBadDecodeInputLength()
+        throws Exception
+    {
+        new Base64Encoder().decode( "abcde" );
     }
 
     private

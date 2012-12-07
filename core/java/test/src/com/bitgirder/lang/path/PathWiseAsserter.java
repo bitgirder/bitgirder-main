@@ -3,6 +3,8 @@ package com.bitgirder.lang.path;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+
 public
 class PathWiseAsserter< V >
 extends State
@@ -31,6 +33,26 @@ extends State
     public final ObjectPathFormatter< ? super V > getFormatter() { return fmt; }
 
     public CharSequence formatPath() { return ObjectPaths.format( path, fmt ); }
+
+    public
+    PathWiseAsserter< V >
+    startImmutableList()
+    {
+        return new PathWiseAsserter< V >( path.startImmutableList(), fmt );
+    }
+
+    public
+    PathWiseAsserter< V >
+    next()
+    {
+        if ( path instanceof ImmutableListPath )
+        {
+            ImmutableListPath< V > lp = Lang.castUnchecked( path );
+            return new PathWiseAsserter< V >( lp.next(), fmt );
+        }
+
+        throw state.createFail( "Not a list path" );
+    }
 
     public
     final

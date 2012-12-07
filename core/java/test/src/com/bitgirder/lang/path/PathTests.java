@@ -147,4 +147,19 @@ class PathTests
                 equals( root ) 
         );
     }
+
+    @Test
+    private
+    void
+    testStartListWithIndex()
+    {
+        ImmutableListPath< Node > p = 
+            ObjectPath.< Node >getRoot().
+                descend( new Node( "a" ) ).
+                descend( new Node( "b" ) ).
+                startImmutableList( 5 );
+        
+        assertFormat( "/a/b[ 5 ]", p );
+        assertFormat( "/a/b[ 6 ]", p.next() );
+    }
 }

@@ -4,11 +4,16 @@ Ruby:
 
     - add DataSize.<=>
 
-Go:
-    - check bad codec reactor sequences against json, bincodec
+Mingle:
+
+    - check bad decode sequences where struct/enum are given non-atomic type
+      references
 
     - check that mingle.BinReader.ReadIdentifier() fails if an id part has
       length 0
+
+Go:
+    - check bad codec reactor sequences against json, bincodec
 
     - add float(32|64) inf and NaN coverage to bincodec test vals
 

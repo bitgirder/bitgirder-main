@@ -847,7 +847,7 @@ func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
 func ( acc *SymbolMapAccessor ) GetValueById( id *Identifier ) ( Value, error ) {
     val, err := acc.m.GetById( id ), error( nil )
     if val == nil { 
-        err = newValidationError( "value is null", acc.descend( id ) )
+        err = newValueCastError( acc.descend( id ), "value is null" )
     }
     return val, err
 }
@@ -966,12 +966,8 @@ var (
     TypeFloat64 *AtomicTypeReference
     QnameTimestamp *QualifiedTypeName
     TypeTimestamp *AtomicTypeReference
-    QnameEnum *QualifiedTypeName
-    TypeEnum *AtomicTypeReference
     QnameSymbolMap *QualifiedTypeName
     TypeSymbolMap *AtomicTypeReference
-    QnameStruct *QualifiedTypeName
-    TypeStruct *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
 )
@@ -1001,9 +997,7 @@ func init() {
     QnameFloat32, TypeFloat32 = f( "Float32" )
     QnameFloat64, TypeFloat64 = f( "Float64" )
     QnameTimestamp, TypeTimestamp = f( "Timestamp" )
-    QnameEnum, TypeEnum = f( "Enum" )
     QnameSymbolMap, TypeSymbolMap = f( "SymbolMap" )
-    QnameStruct, TypeStruct = f( "Struct" )
     QnameNull, TypeNull = f( "Null" )
     PrimitiveTypes = []*AtomicTypeReference{
         TypeValue,
@@ -1089,23 +1083,6 @@ func ( e valueErrorImpl ) makeError( msg string ) string {
     return fmt.Sprintf( "%s: %s", FormatIdPath( e.path ), msg )
 }
 
-type ValidationError struct {
-    valueErrorImpl
-    msg string
-}
-
-func newValidationError( msg string, path idPath ) *ValidationError {
-    res := &ValidationError{ msg: msg }
-    res.path = path
-    return res
-}
-
-func ( e *ValidationError ) Message() string { return e.msg }
-
-func ( e *ValidationError ) Error() string {
-    return e.makeError( e.msg )
-}
-
 type TypeCastError struct {
     valueErrorImpl
     Expected TypeReference
@@ -1139,19 +1116,15 @@ type ValueCastError struct {
 func ( e *ValueCastError ) Message() string { return e.msg }
 func ( e *ValueCastError ) Error() string { return e.makeError( e.msg ) }
 
-func newValueCastError(
-    targTyp TypeReference, path idPath, msg string ) *ValueCastError {
+func newValueCastError( path idPath, msg string ) *ValueCastError {
     res := &ValueCastError{ msg: msg }
     res.path = path
     return res
 }
 
 func newValueCastErrorf(
-    targTyp TypeReference,
-    path idPath,
-    tmpl string,
-    args ...interface{} ) *ValueCastError {
-    return newValueCastError( targTyp, path, fmt.Sprintf( tmpl, args... ) )
+    path idPath, tmpl string, args ...interface{} ) *ValueCastError {
+    return newValueCastError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 func strToBool( 
@@ -1162,7 +1135,7 @@ func strToBool(
     }
     errTmpl :="Invalid boolean value: %s"
     errStr := QuoteValue( s )
-    return nil, newValueCastErrorf( at, path, errTmpl, errStr )
+    return nil, newValueCastErrorf( path, errTmpl, errStr )
 }
 
 func castBoolean( 
@@ -1182,7 +1155,7 @@ func castBuffer(
         buf, err := base64.StdEncoding.DecodeString( string( v ) )
         if err == nil { return Buffer( buf ), nil }
         msg := "Invalid base64 string: %s"
-        return nil, newValueCastErrorf( at, path, msg, err.Error() )
+        return nil, newValueCastErrorf( path, msg, err.Error() )
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
@@ -1203,7 +1176,7 @@ func castString(
 
 func valueCastErrorForNumError(
     path idPath, at *AtomicTypeReference, err *strconv.NumError ) error {
-    return newValueCastErrorf( at, path, "%s: %s", err.Err.Error(), err.Num )
+    return newValueCastErrorf( path, "%s: %s", err.Err.Error(), err.Num )
 }
 
 func parseIntInitial(
@@ -1241,13 +1214,13 @@ func parseInt(
         case TypeUint64: return Uint64( uInt ), nil
         default:
             msg := "Unhandled number type: %s"
-            panic( newValueCastErrorf( at, path, msg, numTyp ) )
+            panic( newValueCastErrorf( path, msg, numTyp ) )
         }
     } 
     if ne, ok := err.( *strconv.NumError ); ok {
         return nil, valueCastErrorForNumError( path, at, ne )
     }
-    return nil, newValueCastErrorf( at, path, err.Error() )
+    return nil, newValueCastErrorf( path, err.Error() )
 }
 
 func castInt32( 
@@ -1321,7 +1294,7 @@ func parseFloat32(
     case TypeFloat32: return Float32( f ), nil
     case TypeFloat64: return Float64( f ), nil
     }
-    panic( newValueCastErrorf( at, path, "Unhandled num type: %s", numTyp ) )
+    panic( newValueCastErrorf( path, "Unhandled num type: %s", numTyp ) )
 }
 
 func castFloat32( 
@@ -1360,7 +1333,7 @@ func castTimestamp(
         tm, err := ParseTimestamp( string( v ) )
         if err == nil { return tm, nil }
         msg := "Invalid timestamp: %s"
-        return nil, newValueCastErrorf( at, path, msg, err.Error() )
+        return nil, newValueCastErrorf( path, msg, err.Error() )
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
@@ -1368,8 +1341,7 @@ func castTimestamp(
 func castEnum( 
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     switch v := mgVal.( type ) {
-    case *Enum: 
-        if at.Equals( TypeEnum ) || v.Type.Equals( at ) { return v, nil }
+    case *Enum: if v.Type.Equals( at ) { return v, nil }
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
@@ -1385,8 +1357,7 @@ func castSymbolMap(
 func castStruct( 
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     switch v := mgVal.( type ) {
-    case *Struct: 
-        if at.Equals( TypeStruct ) || v.Type.Equals( at ) { return v, nil }
+    case *Struct: if v.Type.Equals( at ) { return v, nil }
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
@@ -1401,7 +1372,7 @@ func castAtomicUnrestricted(
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     if _, ok := mgVal.( *Null ); ok {
         if at.Equals( TypeNull ) { return mgVal, nil }
-        return nil, newValueCastErrorf( at, path, "Value is null" )
+        return nil, newValueCastErrorf( path, "Value is null" )
     }
     switch nm := at.Name; {
     case nm.Equals( QnameBoolean ): return castBoolean( mgVal, at, path )
@@ -1415,7 +1386,6 @@ func castAtomicUnrestricted(
     case nm.Equals( QnameFloat64 ): return castFloat64( mgVal, at, path )
     case nm.Equals( QnameTimestamp ): return castTimestamp( mgVal, at, path )
     case nm.Equals( QnameSymbolMap ): return castSymbolMap( mgVal, at, path )
-    case nm.Equals( QnameEnum ): return castEnum( mgVal, at, path )
     case nm.Equals( QnameNull ): return castNull( mgVal, at, path )
     case nm.Equals( QnameValue ): return mgVal, nil
     }
@@ -1429,7 +1399,7 @@ func castAtomicUnrestricted(
 func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
     if at.Restriction.AcceptsValue( val ) { return nil }
     return newValueCastErrorf( 
-        at, path, "Value %s does not satisfy restriction %s",
+        path, "Value %s does not satisfy restriction %s",
         QuoteValue( val ), at.Restriction.ExternalForm() )
 }
 
@@ -1439,7 +1409,6 @@ func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
 func castAtomic(
     mgVal Value, 
     at *AtomicTypeReference,
-    orig TypeReference,
     path idPath ) ( val Value, err error ) {
     if val, err = castAtomicUnrestricted( mgVal, at, path ); err == nil {
         if at.Restriction != nil { err = checkRestriction( val, at, path ) }
@@ -1458,20 +1427,19 @@ func castAtomic(
 func castList(
     mgVal Value, 
     lt *ListTypeReference, 
-    orig TypeReference,
     path idPath ) ( Value, error ) {
     if ml, ok := mgVal.( *List ); ok {
         eltTyp := lt.ElementType
         vals := make( []Value, len( ml.vals ) )
         lp := path.StartList()
         for i, inVal := range ml.vals {
-            if val, err := castValue( inVal, eltTyp, orig, lp ); err == nil {
+            if val, err := castValue( inVal, eltTyp, lp ); err == nil {
                 vals[ i ] = val
             } else { return nil, err }
             lp = lp.Next()
         }
         if len( vals ) == 0 && ( ! lt.AllowsEmpty ) {
-            return nil, newValueCastErrorf( lt, path, "List is empty" )
+            return nil, newValueCastErrorf( path, "List is empty" )
         }
         return &List{ vals }, nil
     }
@@ -1481,10 +1449,9 @@ func castList(
 func castNullable(
     mgVal Value, 
     nt *NullableTypeReference, 
-    orig TypeReference, 
     path idPath ) ( Value, error ) {
     if nv, ok := mgVal.( *Null ); ok { return nv, nil }
-    val, err := castValue( mgVal, nt.Type, orig, path )
+    val, err := castValue( mgVal, nt.Type, path )
     // Reset error type to be the enclosing nullable type
     if tcErr, ok := err.( *TypeCastError ); ok { tcErr.Expected = nt }
     return val, err
@@ -1493,12 +1460,11 @@ func castNullable(
 func castValue(
     mgVal Value, 
     typ TypeReference,
-    orig TypeReference, 
     path idPath ) ( val Value, err error ) {
     switch v := typ.( type ) {
-    case *AtomicTypeReference: val, err = castAtomic( mgVal, v, orig, path )
-    case *ListTypeReference: val, err = castList( mgVal, v, orig, path )
-    case *NullableTypeReference: val, err = castNullable( mgVal, v, orig, path )
+    case *AtomicTypeReference: val, err = castAtomic( mgVal, v, path )
+    case *ListTypeReference: val, err = castList( mgVal, v, path )
+    case *NullableTypeReference: val, err = castNullable( mgVal, v, path )
     default: panic( libErrorf( "Unhandled target type (%T): %s", typ, typ ) )
     }
     return val, err
@@ -1508,7 +1474,7 @@ func CastValue(
     mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
     if path == nil { return nil, errors.New( "path arg is nil" ) }
     if mgVal == nil { return nil, errors.New( "mgVal is nil" ) }
-    return castValue( mgVal, typ, typ, path )
+    return castValue( mgVal, typ, path )
 }
 
 type mapImplKey interface { ExternalForm() string }
@@ -1659,758 +1625,3 @@ func ( m *NamespaceMap ) PutSafe( ns *Namespace, val interface{} ) error {
 }
 
 func ( m *NamespaceMap ) Delete( ns *Namespace ) { m.implDelete( ns ) }
-
-
-// -----------------------------------------------------------------------------
-// Begin autogenerated accessor funcs
-// -----------------------------------------------------------------------------
-
-func ( acc *SymbolMapAccessor ) GetBooleanById(
-    id *Identifier ) ( res Boolean, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeBoolean, acc.descend( id ) )
-        if err == nil { res = val.( Boolean ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetBooleanByString(
-    id string ) ( Boolean, error ) {
-    return acc.GetBooleanById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustBooleanById( 
-    id *Identifier ) Boolean {
-    res, err := acc.GetBooleanById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustBooleanByString( 
-    id string ) Boolean {
-    return acc.MustBooleanById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoBoolById( 
-    id *Identifier ) ( res bool, err error ) {
-    var val Boolean
-    val, err = acc.GetBooleanById( id )
-    if err == nil { res = bool( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoBoolByString( 
-    id string ) ( bool, error ) {
-    return acc.GetGoBoolById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoBoolById( 
-    id *Identifier ) bool {
-    s, err := acc.GetGoBoolById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoBoolByString( 
-    id string ) bool {
-    return acc.MustGoBoolById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetBufferById(
-    id *Identifier ) ( res Buffer, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeBuffer, acc.descend( id ) )
-        if err == nil { res = val.( Buffer ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetBufferByString(
-    id string ) ( Buffer, error ) {
-    return acc.GetBufferById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustBufferById( 
-    id *Identifier ) Buffer {
-    res, err := acc.GetBufferById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustBufferByString( 
-    id string ) Buffer {
-    return acc.MustBufferById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoBufferById( 
-    id *Identifier ) ( res []byte, err error ) {
-    var val Buffer
-    val, err = acc.GetBufferById( id )
-    if err == nil { res = []byte( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoBufferByString( 
-    id string ) ( []byte, error ) {
-    return acc.GetGoBufferById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoBufferById( 
-    id *Identifier ) []byte {
-    s, err := acc.GetGoBufferById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoBufferByString( 
-    id string ) []byte {
-    return acc.MustGoBufferById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetStringById(
-    id *Identifier ) ( res String, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeString, acc.descend( id ) )
-        if err == nil { res = val.( String ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetStringByString(
-    id string ) ( String, error ) {
-    return acc.GetStringById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustStringById( 
-    id *Identifier ) String {
-    res, err := acc.GetStringById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustStringByString( 
-    id string ) String {
-    return acc.MustStringById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoStringById( 
-    id *Identifier ) ( res string, err error ) {
-    var val String
-    val, err = acc.GetStringById( id )
-    if err == nil { res = string( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoStringByString( 
-    id string ) ( string, error ) {
-    return acc.GetGoStringById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoStringById( 
-    id *Identifier ) string {
-    s, err := acc.GetGoStringById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoStringByString( 
-    id string ) string {
-    return acc.MustGoStringById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetInt32ById(
-    id *Identifier ) ( res Int32, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeInt32, acc.descend( id ) )
-        if err == nil { res = val.( Int32 ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetInt32ByString(
-    id string ) ( Int32, error ) {
-    return acc.GetInt32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustInt32ById( 
-    id *Identifier ) Int32 {
-    res, err := acc.GetInt32ById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustInt32ByString( 
-    id string ) Int32 {
-    return acc.MustInt32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoInt32ById( 
-    id *Identifier ) ( res int32, err error ) {
-    var val Int32
-    val, err = acc.GetInt32ById( id )
-    if err == nil { res = int32( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoInt32ByString( 
-    id string ) ( int32, error ) {
-    return acc.GetGoInt32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoInt32ById( 
-    id *Identifier ) int32 {
-    s, err := acc.GetGoInt32ById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoInt32ByString( 
-    id string ) int32 {
-    return acc.MustGoInt32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetInt64ById(
-    id *Identifier ) ( res Int64, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeInt64, acc.descend( id ) )
-        if err == nil { res = val.( Int64 ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetInt64ByString(
-    id string ) ( Int64, error ) {
-    return acc.GetInt64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustInt64ById( 
-    id *Identifier ) Int64 {
-    res, err := acc.GetInt64ById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustInt64ByString( 
-    id string ) Int64 {
-    return acc.MustInt64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoInt64ById( 
-    id *Identifier ) ( res int64, err error ) {
-    var val Int64
-    val, err = acc.GetInt64ById( id )
-    if err == nil { res = int64( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoInt64ByString( 
-    id string ) ( int64, error ) {
-    return acc.GetGoInt64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoInt64ById( 
-    id *Identifier ) int64 {
-    s, err := acc.GetGoInt64ById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoInt64ByString( 
-    id string ) int64 {
-    return acc.MustGoInt64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetUint32ById(
-    id *Identifier ) ( res Uint32, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeUint32, acc.descend( id ) )
-        if err == nil { res = val.( Uint32 ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetUint32ByString(
-    id string ) ( Uint32, error ) {
-    return acc.GetUint32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustUint32ById( 
-    id *Identifier ) Uint32 {
-    res, err := acc.GetUint32ById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustUint32ByString( 
-    id string ) Uint32 {
-    return acc.MustUint32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoUint32ById( 
-    id *Identifier ) ( res uint32, err error ) {
-    var val Uint32
-    val, err = acc.GetUint32ById( id )
-    if err == nil { res = uint32( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoUint32ByString( 
-    id string ) ( uint32, error ) {
-    return acc.GetGoUint32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoUint32ById( 
-    id *Identifier ) uint32 {
-    s, err := acc.GetGoUint32ById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoUint32ByString( 
-    id string ) uint32 {
-    return acc.MustGoUint32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetUint64ById(
-    id *Identifier ) ( res Uint64, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeUint64, acc.descend( id ) )
-        if err == nil { res = val.( Uint64 ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetUint64ByString(
-    id string ) ( Uint64, error ) {
-    return acc.GetUint64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustUint64ById( 
-    id *Identifier ) Uint64 {
-    res, err := acc.GetUint64ById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustUint64ByString( 
-    id string ) Uint64 {
-    return acc.MustUint64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoUint64ById( 
-    id *Identifier ) ( res uint64, err error ) {
-    var val Uint64
-    val, err = acc.GetUint64ById( id )
-    if err == nil { res = uint64( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoUint64ByString( 
-    id string ) ( uint64, error ) {
-    return acc.GetGoUint64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoUint64ById( 
-    id *Identifier ) uint64 {
-    s, err := acc.GetGoUint64ById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoUint64ByString( 
-    id string ) uint64 {
-    return acc.MustGoUint64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetFloat32ById(
-    id *Identifier ) ( res Float32, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeFloat32, acc.descend( id ) )
-        if err == nil { res = val.( Float32 ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetFloat32ByString(
-    id string ) ( Float32, error ) {
-    return acc.GetFloat32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustFloat32ById( 
-    id *Identifier ) Float32 {
-    res, err := acc.GetFloat32ById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustFloat32ByString( 
-    id string ) Float32 {
-    return acc.MustFloat32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoFloat32ById( 
-    id *Identifier ) ( res float32, err error ) {
-    var val Float32
-    val, err = acc.GetFloat32ById( id )
-    if err == nil { res = float32( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoFloat32ByString( 
-    id string ) ( float32, error ) {
-    return acc.GetGoFloat32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoFloat32ById( 
-    id *Identifier ) float32 {
-    s, err := acc.GetGoFloat32ById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoFloat32ByString( 
-    id string ) float32 {
-    return acc.MustGoFloat32ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetFloat64ById(
-    id *Identifier ) ( res Float64, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeFloat64, acc.descend( id ) )
-        if err == nil { res = val.( Float64 ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetFloat64ByString(
-    id string ) ( Float64, error ) {
-    return acc.GetFloat64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustFloat64ById( 
-    id *Identifier ) Float64 {
-    res, err := acc.GetFloat64ById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustFloat64ByString( 
-    id string ) Float64 {
-    return acc.MustFloat64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetGoFloat64ById( 
-    id *Identifier ) ( res float64, err error ) {
-    var val Float64
-    val, err = acc.GetFloat64ById( id )
-    if err == nil { res = float64( val ) }
-    return
-}
-
-func ( acc *SymbolMapAccessor ) GetGoFloat64ByString( 
-    id string ) ( float64, error ) {
-    return acc.GetGoFloat64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustGoFloat64ById( 
-    id *Identifier ) float64 {
-    s, err := acc.GetGoFloat64ById( id )
-    if err != nil { panic( err ) }
-    return s
-}
-
-func ( acc *SymbolMapAccessor ) MustGoFloat64ByString( 
-    id string ) float64 {
-    return acc.MustGoFloat64ById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetTimestampById(
-    id *Identifier ) ( res Timestamp, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeTimestamp, acc.descend( id ) )
-        if err == nil { res = val.( Timestamp ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetTimestampByString(
-    id string ) ( Timestamp, error ) {
-    return acc.GetTimestampById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustTimestampById( 
-    id *Identifier ) Timestamp {
-    res, err := acc.GetTimestampById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustTimestampByString( 
-    id string ) Timestamp {
-    return acc.MustTimestampById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetEnumById(
-    id *Identifier ) ( res *Enum, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeEnum, acc.descend( id ) )
-        if err == nil { res = val.( *Enum ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetEnumByString(
-    id string ) ( *Enum, error ) {
-    return acc.GetEnumById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustEnumById( 
-    id *Identifier ) *Enum {
-    res, err := acc.GetEnumById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustEnumByString( 
-    id string ) *Enum {
-    return acc.MustEnumById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetSymbolMapById(
-    id *Identifier ) ( res *SymbolMap, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeSymbolMap, acc.descend( id ) )
-        if err == nil { res = val.( *SymbolMap ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetSymbolMapByString(
-    id string ) ( *SymbolMap, error ) {
-    return acc.GetSymbolMapById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustSymbolMapById( 
-    id *Identifier ) *SymbolMap {
-    res, err := acc.GetSymbolMapById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustSymbolMapByString( 
-    id string ) *SymbolMap {
-    return acc.MustSymbolMapById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetStructById(
-    id *Identifier ) ( res *Struct, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, TypeStruct, acc.descend( id ) )
-        if err == nil { res = val.( *Struct ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetStructByString(
-    id string ) ( *Struct, error ) {
-    return acc.GetStructById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustStructById( 
-    id *Identifier ) *Struct {
-    res, err := acc.GetStructById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustStructByString( 
-    id string ) *Struct {
-    return acc.MustStructById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) GetListById(
-    id *Identifier ) ( res *List, err error ) {
-    var val Value
-    val, err = acc.GetValueById( id )
-    if err == nil {
-        val, err = CastValue( val, typeOpaqueList, acc.descend( id ) )
-        if err == nil { res = val.( *List ) }
-    }
-    return 
-}
-
-func ( acc *SymbolMapAccessor ) GetListByString(
-    id string ) ( *List, error ) {
-    return acc.GetListById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustListById( 
-    id *Identifier ) *List {
-    res, err := acc.GetListById( id )
-    if err != nil { panic( err ) }
-    return res
-}
-
-func ( acc *SymbolMapAccessor ) MustListByString( 
-    id string ) *List {
-    return acc.MustListById( MustIdentifier( id ) )
-}
-
-// -----------------------------------------------------------------------------
-// End autogenerated accessor funcs
-// -----------------------------------------------------------------------------
-
-
-// # This script generates various type-specific (mingle and go) accessors. When
-// # run, it will output the various functions it generates, followed by this
-// # script itself, so that the functions as well as the script which generates it
-// # may be kept together in the target sourcefile.
-// 
-// $specs = [
-//     { mg_type: "Boolean" },
-//     { go_type: "bool", mg_type: "Boolean" },
-//     { mg_type: "Buffer" },
-//     { go_type: "[]byte", go_type_name: "GoBuffer", mg_type: "Buffer" },
-//     { mg_type: "String" },
-//     { go_type: "string" },
-//     { mg_type: "Int32" },
-//     { go_type: "int32" },
-//     { mg_type: "Int64" },
-//     { go_type: "int64" },
-//     { mg_type: "Uint32" },
-//     { go_type: "uint32" },
-//     { mg_type: "Uint64" },
-//     { go_type: "uint64" },
-//     { mg_type: "Float32" },
-//     { go_type: "float32" },
-//     { mg_type: "Float64" },
-//     { go_type: "float64" },
-//     { mg_type: "Timestamp" },
-//     { mg_type: "*Enum" },
-//     { mg_type: "*SymbolMap" },
-//     { mg_type: "*Struct" },
-//     { mg_type: "*List", cast_type: "typeOpaqueList" },
-// ]
-// 
-// def get_mg_type_name( spec )
-//     spec[ :mg_type ].sub( /^\*/, "" )
-// end
-// 
-// def make_go_funcs( spec )
-// 
-//     go_typ = spec[ :go_type ]
-//     go_typ_nm = (
-//         spec[ :go_type_name ] or
-//         ( "Go" + go_typ[ 0 ].sub( /^\*/, "" ).upcase + go_typ[ 1 .. -1 ] ) )
-//     mg_typ = ( spec[ :mg_type ] || ( go_typ[ 0 ].upcase + go_typ[ 1 .. -1 ] ) )
-//     mg_typ_nm = mg_typ
-//     cast_fmt = ( spec[ :cast_fmt ] || "#{go_typ}( %s )" )
-// 
-//     <<-FUNCS
-// func ( acc *SymbolMapAccessor ) Get#{go_typ_nm}ById( 
-//     id *Identifier ) ( res #{go_typ}, err error ) {
-//     var val #{mg_typ}
-//     val, err = acc.Get#{mg_typ_nm}ById( id )
-//     if err == nil { res = #{sprintf( cast_fmt, "val" )} }
-//     return
-// }
-// 
-// func ( acc *SymbolMapAccessor ) Get#{go_typ_nm}ByString( 
-//     id string ) ( #{go_typ}, error ) {
-//     return acc.Get#{go_typ_nm}ById( MustIdentifier( id ) )
-// }
-// 
-// func ( acc *SymbolMapAccessor ) Must#{go_typ_nm}ById( 
-//     id *Identifier ) #{go_typ} {
-//     s, err := acc.Get#{go_typ_nm}ById( id )
-//     if err != nil { panic( err ) }
-//     return s
-// }
-// 
-// func ( acc *SymbolMapAccessor ) Must#{go_typ_nm}ByString( 
-//     id string ) #{go_typ} {
-//     return acc.Must#{go_typ_nm}ById( MustIdentifier( id ) )
-// }
-//     FUNCS
-// end
-// 
-// def make_mg_funcs( spec )
-//     typ_nm = get_mg_type_name( spec )
-//     typ = spec[ :mg_type ]
-//     cast_type = ( spec[ :cast_type ] || "Type#{typ_nm}" )
-// 
-//     <<-FUNCS
-// func ( acc *SymbolMapAccessor ) Get#{typ_nm}ById(
-//     id *Identifier ) ( res #{typ}, err error ) {
-//     var val Value
-//     val, err = acc.GetValueById( id )
-//     if err == nil {
-//         val, err = CastValue( val, #{cast_type}, acc.descend( id ) )
-//         if err == nil { res = val.( #{typ} ) }
-//     }
-//     return 
-// }
-// 
-// func ( acc *SymbolMapAccessor ) Get#{typ_nm}ByString(
-//     id string ) ( #{typ}, error ) {
-//     return acc.Get#{typ_nm}ById( MustIdentifier( id ) )
-// }
-// 
-// func ( acc *SymbolMapAccessor ) Must#{typ_nm}ById( 
-//     id *Identifier ) #{typ} {
-//     res, err := acc.Get#{typ_nm}ById( id )
-//     if err != nil { panic( err ) }
-//     return res
-// }
-// 
-// func ( acc *SymbolMapAccessor ) Must#{typ_nm}ByString( 
-//     id string ) #{typ} {
-//     return acc.Must#{typ_nm}ById( MustIdentifier( id ) )
-// }
-//     FUNCS
-// end
-// 
-// def make_funcs( spec )
-//     if spec.key?( :go_type )
-//         make_go_funcs( spec )
-//     else
-//         make_mg_funcs( spec )
-//     end
-// end
-// 
-// funcs = $specs.map { |spec| make_funcs( spec ) }.flatten
-// 
-// dashes = "// " + ( "-" * 77 )
-// title = "autogenerated accessor funcs"
-// puts "\n#{dashes}\n// Begin #{title}\n#{dashes}\n\n"
-// puts funcs.join( "\n" )
-// puts "\n#{dashes}\n// End #{title}\n#{dashes}"
-// 
-// puts "\n\n"
-// puts File.open( __FILE__ ) { |io| io.readlines }.map { |s| "// #{s}" }

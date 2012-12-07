@@ -788,7 +788,7 @@ class ParseTests
             AtomicTypeReference at = new AtomicTypeReference( qn, null );
             Class< ? extends MingleValue > typeTok = Mingle.valueClassFor( at );
 
-            return MingleRangeRestriction.create(
+            return MingleRangeRestriction.createChecked(
                 (Boolean) readJvPrimVal(),
                 (MingleValue) readVal(),
                 (MingleValue) readVal(),

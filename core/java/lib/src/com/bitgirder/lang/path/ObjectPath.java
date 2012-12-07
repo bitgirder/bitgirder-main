@@ -109,9 +109,18 @@ class ObjectPath< E >
     public
     final
     ImmutableListPath< E >
+    startImmutableList( int idx )
+    {
+        inputs.nonnegativeI( idx, "idx" );
+        return ImmutableListPath.< E >start( this, idx );
+    }
+
+    public
+    final
+    ImmutableListPath< E >
     startImmutableList()
     {
-        return ImmutableListPath.< E >start( this );
+        return startImmutableList( 0 );
     }
 
     private

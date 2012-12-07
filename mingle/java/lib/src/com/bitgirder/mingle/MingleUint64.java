@@ -10,6 +10,7 @@ import com.bitgirder.lang.Lang;
 public
 final
 class MingleUint64
+extends MingleNumber
 implements MingleValue,
            Comparable< MingleUint64 >
 {
@@ -53,4 +54,13 @@ implements MingleValue,
     public byte byteValue() { return (byte) num; }
     public double doubleValue() { return (double) num; }
     public float floatValue() { return (float) num; }
+
+    public
+    static
+    MingleUint64
+    parseUint( CharSequence s )
+    {
+        inputs.notNull( s, "s" );
+        return new MingleUint64( Lang.parseUint64( s ) );
+    }
 }

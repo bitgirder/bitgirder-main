@@ -26,8 +26,6 @@ const (
     tcTcErr = uint8( 0x09 )
     tcExpected = uint8( 0x0a )
     tcActual = uint8( 0x0b )
-    tcNode = uint8( 0x0c )
-    tcListIdx = uint8( 0x0d )
 )
 
 type writer struct {
@@ -48,7 +46,6 @@ func ( w writer ) writeType( t mg.TypeReference ) error {
 }
 
 func ( w writer ) writePath( p objpath.PathNode ) ( err error ) {
-    if err = w.writeTc( tcPath ); err != nil { return }
     return w.mgw.WriteIdPath( p )
 }
 

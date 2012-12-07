@@ -10,6 +10,8 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
 
+import com.bitgirder.lang.path.ObjectPath;
+
 import java.io.IOException;
 
 import java.util.List;
@@ -62,6 +64,12 @@ class MingleParser
             Mingle.QNAME_STRING, Mingle.TYPE_STRING,
             Mingle.QNAME_TIMESTAMP, Mingle.TYPE_TIMESTAMP
         );
+
+    private final static MingleIdentifier BOUND_RANGE_MIN =
+        new MingleIdentifier( new String[] { "min" } );
+
+    private final static MingleIdentifier BOUND_RANGE_MAX =
+        new MingleIdentifier( new String[] { "max" } );
 
     private final MingleLexer lx;
 
@@ -450,7 +458,7 @@ class MingleParser
     private
     MingleSyntaxException
     rangeValTypeFail( String valTypDesc,
-                      String bound,
+                      MingleIdentifier bound,
                       int errPos )
     {
         return failf( errPos, 
@@ -461,11 +469,13 @@ class MingleParser
     MingleValue
     castRangeValue( MingleValue v,
                     MingleTypeReference t,
-                    String bound,
+                    MingleIdentifier bound,
                     int errPos )
         throws MingleSyntaxException
     {
-        try { return Mingle.castValue( v, t ); }
+        ObjectPath< MingleIdentifier > p = ObjectPath.getRoot( bound );
+
+        try { return Mingle.castValue( v, t, p ); }
         catch ( MingleValidationException mve )
         {
             throw failf( errPos, "Invalid %s value in range restriction: %s", 
@@ -477,7 +487,7 @@ class MingleParser
     MingleValue
     asRangeValue( AtomicTypeReference typ,
                   MingleString s,
-                  String bound,
+                  MingleIdentifier bound,
                   int errPos )
         throws MingleSyntaxException
     {
@@ -496,7 +506,7 @@ class MingleParser
     MingleValue
     asRangeValue( AtomicTypeReference typ,
                   MingleLexer.Number n,
-                  String bound,
+                  MingleIdentifier bound,
                   int errPos )
         throws MingleSyntaxException
     {
@@ -527,7 +537,7 @@ class MingleParser
     private
     MingleValue
     getRangeValue( AtomicTypeReference rngTyp,
-                   String bound )
+                   MingleIdentifier bound )
         throws MingleSyntaxException,
                IOException
     {
@@ -571,7 +581,7 @@ class MingleParser
             Class< ? extends MingleValue > typeTok = 
                 Mingle.expectValueClassFor( rngTyp );
 
-            return MingleRangeRestriction.create(
+            return MingleRangeRestriction.createChecked(
                 minClosed, min, max, maxClosed, typeTok );
         }
     }
@@ -680,9 +690,9 @@ class MingleParser
 
         b.minClosed = getRangeBound( RANGE_MIN_LITS );
         b.minPos = curPos;
-        b.min = getRangeValue( b.rngTyp, "min" );
+        b.min = getRangeValue( b.rngTyp, BOUND_RANGE_MIN );
         expectSpecial( SpecialLiteral.COMMA );
-        b.max = getRangeValue( b.rngTyp, "max" );
+        b.max = getRangeValue( b.rngTyp, BOUND_RANGE_MAX );
         b.maxClosed = getRangeBound( RANGE_MAX_LITS );
         b.maxPos = curPos;
 

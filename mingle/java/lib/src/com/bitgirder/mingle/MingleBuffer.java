@@ -4,9 +4,8 @@ import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import com.bitgirder.io.Base64Encoder;
+import com.bitgirder.io.Base64Exception;
 import com.bitgirder.io.IoUtils;
-
-import java.io.IOException;
 
 import java.nio.ByteBuffer;
 
@@ -30,6 +29,18 @@ implements MingleValue
         this( ByteBuffer.wrap( state.notNull( arr, "arr" ) ) );
     }
 
+    public int hashCode() { return bb.hashCode(); }
+
+    public
+    boolean
+    equals( Object o )
+    {
+        if ( o == this ) return true;
+        if ( ! ( o instanceof MingleBuffer ) ) return false;
+
+        return bb.equals( ( (MingleBuffer) o ).bb );
+    }
+
     public ByteBuffer getByteBuffer() { return bb.slice(); }
 
     public CharSequence asBase64String() { return enc.encode( bb ); }
@@ -39,7 +50,7 @@ implements MingleValue
     static
     MingleBuffer
     fromBase64String( CharSequence str )
-        throws IOException
+        throws Base64Exception
     {
         inputs.notNull( str, "str" );
 

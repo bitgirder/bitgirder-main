@@ -2,8 +2,6 @@ package com.bitgirder.io;
 
 import com.bitgirder.validation.Inputs;
 
-import java.io.IOException;
-
 import java.nio.CharBuffer;
 import java.nio.ByteBuffer;
 
@@ -106,13 +104,13 @@ class Base64Encoder
     int
     getChar( Context ctx,
              int indx )
-        throws IOException
+        throws Base64Exception
     {
         char c = ctx.chars.get( indx );
 
         if ( c > revTable.length ) 
         {
-            throw new IOException( 
+            throw new Base64Exception( 
                 "Character " + (byte) c + " is out of range" );
         }
 
@@ -120,7 +118,7 @@ class Base64Encoder
 
         if ( res == NOT_IN_ALPHABET )
         {
-            throw new IOException( 
+            throw new Base64Exception( 
                 "Character " + (byte) c + " is not in this encoder's alphabet"
             );
         }
@@ -143,7 +141,7 @@ class Base64Encoder
     private
     void
     decodeNextTrio( Context ctx )
-        throws IOException
+        throws Base64Exception
     {
         // Unpack the characters, checking that they are valid. Set ci to the
         // index of the first of our 4 chars
@@ -167,12 +165,17 @@ class Base64Encoder
     public
     byte[]
     decode( CharSequence base64 )
-        throws IOException
+        throws Base64Exception
     {
         inputs.notNull( base64, "base64" );
-        inputs.isTrue( base64.length() % 4 == 0, 
-            "Length of input '" + base64 + "' (" + base64.length() + ") is " +
-            "not a multiple of 4" );
+
+        if ( base64.length() % 4 != 0 )
+        {
+            throw new Base64Exception(
+                "Length of input '" + base64 + "' (" + base64.length() + 
+                ") is not a multiple of 4" 
+            );
+        }
 
         Context ctx = createDecodeContext( base64 );
         while ( ctx.i < ctx.data.length ) decodeNextTrio( ctx );
@@ -183,7 +186,7 @@ class Base64Encoder
     public
     ByteBuffer
     asByteBuffer( CharSequence base64 )
-        throws IOException
+        throws Base64Exception
     {
         return ByteBuffer.wrap( decode( base64 ) );
     }

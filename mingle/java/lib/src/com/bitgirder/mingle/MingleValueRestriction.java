@@ -12,11 +12,29 @@ class MingleValueRestriction
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    public
     abstract
+    boolean
+    implValidate( MingleValue mv );
+
+    public
+    final
     void
     validate( MingleValue mv,
-              ObjectPath< MingleIdentifier > path );
+              ObjectPath< MingleIdentifier > path )
+    {
+        inputs.notNull( mv, "mv" );
+        inputs.notNull( path, "path" );
+
+        if ( ! implValidate( mv ) )
+        {
+            StringBuilder sb = new StringBuilder( "Value " );
+            Mingle.appendInspection( sb, mv );
+            sb.append( " does not satisfy restriction " );
+            appendExternalForm( sb );
+
+            throw new MingleValueCastException( sb.toString(), path );
+        }
+    }
 
     public
     abstract

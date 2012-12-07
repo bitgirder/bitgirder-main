@@ -54,8 +54,8 @@ implements MingleValue
 
         String s = str.toString();
 
-        if ( s.equals( "true" ) ) return TRUE;
-        else if ( s.equals( "false" ) ) return FALSE;
+        if ( s.equalsIgnoreCase( "true" ) ) return TRUE;
+        else if ( s.equalsIgnoreCase( "false" ) ) return FALSE;
         else 
         {
             String msg = "Invalid boolean string: " + str;

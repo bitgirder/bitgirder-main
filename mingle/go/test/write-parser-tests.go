@@ -288,7 +288,6 @@ func main() {
     tgf.SetParseArg()
     flag.Parse()
     err := tgf.WithBinWriter( func( w *bgio.BinWriter ) error {
-        log.Printf( "Writing %s", tgf.Name() )
         return writeTests( w )
     })
     if err != nil { log.Fatal( err ) }

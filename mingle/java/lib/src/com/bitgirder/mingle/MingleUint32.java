@@ -8,6 +8,7 @@ import com.bitgirder.lang.Lang;
 public
 final
 class MingleUint32
+extends MingleNumber
 implements MingleValue,
            Comparable< MingleUint32 >
 {
@@ -48,4 +49,13 @@ implements MingleValue,
     public byte byteValue() { return (byte) num; }
     public double doubleValue() { return (double) num; }
     public float floatValue() { return (float) num; }
+
+    public
+    static
+    MingleUint32
+    parseUint( CharSequence s )
+    {
+        inputs.notNull( s, "s" );
+        return new MingleUint32( Lang.parseUint32( s ) );
+    }
 }

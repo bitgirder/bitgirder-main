@@ -6,6 +6,7 @@ import com.bitgirder.validation.State;
 public
 final
 class MingleInt64
+extends MingleNumber
 implements MingleValue,
            Comparable< MingleInt64 >
 {
@@ -45,4 +46,18 @@ implements MingleValue,
     public byte byteValue() { return (byte) num; }
     public double doubleValue() { return (double) num; }
     public float floatValue() { return (float) num; }
+
+    public
+    static
+    MingleInt64
+    parseInt( CharSequence s )
+    {
+        inputs.notNull( s, "s" );
+        
+        try { return new MingleInt64( Long.parseLong( s.toString() ) ); }
+        catch ( NumberFormatException nfe )
+        {
+            throw asNumberFormatException( nfe, s );
+        }
+    }
 }

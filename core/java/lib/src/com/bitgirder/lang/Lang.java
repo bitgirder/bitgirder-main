@@ -117,6 +117,28 @@ class Lang
         return res;
     }
 
+    // get b as an unsigned byte, stored in an int
+    public 
+    static 
+    int 
+    asOctet( byte b ) 
+    { 
+        int res = b & 127;
+        return b < 0 ? res + 128 : res;
+    }
+
+    // Gets an unsigned byte, passed in an int, as a signed byte. This
+    // implementation is essentially just a checked narrowing conversion from
+    // int --> byte
+    public
+    static
+    byte
+    fromOctet( int octet )
+    {
+        inputs.inRange( octet, "octet", OCTET_RANGE );
+        return (byte) octet;
+    }
+
     public
     static
     int
@@ -1108,6 +1130,14 @@ class Lang
     getRfc4627String( CharSequence str )
     {
         return appendRfc4627String( new StringBuilder(), str );
+    }
+
+    public
+    static
+    CharSequence
+    quoteString( CharSequence str )
+    {
+        return getRfc4627String( str );
     }
 
     public

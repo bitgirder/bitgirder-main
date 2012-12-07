@@ -1306,7 +1306,7 @@ func ( c *Compilation ) buildExpression(
 func ( c *Compilation ) validateConstVal(
     val mg.Value, typ mg.TypeReference, errLoc *loc.Location ) bool {
     if _, err := mg.CastValue( val, typ, objpathConstExp ); err != nil {
-        if ve, ok := err.( *mg.ValidationError ); ok {
+        if ve, ok := err.( *mg.ValueCastError ); ok {
             c.addError( errLoc, ve.Message() )
         } else { c.addError( errLoc, err.Error() ) }
         return false

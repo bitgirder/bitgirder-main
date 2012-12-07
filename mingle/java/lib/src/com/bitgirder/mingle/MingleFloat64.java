@@ -6,6 +6,7 @@ import com.bitgirder.validation.State;
 public
 final
 class MingleFloat64
+extends MingleNumber
 implements MingleValue,
            Comparable< MingleFloat64 >
 {
@@ -51,4 +52,13 @@ implements MingleValue,
     public byte byteValue() { return (byte) num; }
     public double doubleValue() { return (double) num; }
     public float floatValue() { return (float) num; }
+
+    public
+    static
+    MingleFloat64
+    parseFloat( CharSequence s )
+    {
+        inputs.notNull( s, "s" );
+        return new MingleFloat64( Double.parseDouble( s.toString() ) );
+    }
 }

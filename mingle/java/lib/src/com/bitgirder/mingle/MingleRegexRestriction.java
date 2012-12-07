@@ -25,26 +25,15 @@ extends MingleValueRestriction
 
     private
     boolean
-    doCheck( CharSequence str )
+    checkPat( CharSequence str )
     {
         return pat.matcher( str ).matches();
     }
 
-    public
-    void
-    validate( MingleValue mv,
-              ObjectPath< MingleIdentifier > path )
+    boolean
+    implValidate( MingleValue mv )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
-//        if ( ! doCheck( (MingleString) mv ) )
-//        {
-//            throw   
-//                new MingleValidationException(
-//                    "Value does not match " + getExternalForm() + ": " +
-//                    MingleModels.inspect( mv ), 
-//                    path 
-//                );
-//        }
+        return checkPat( state.cast( MingleString.class, mv ) );
     }
 
     void
@@ -72,7 +61,7 @@ extends MingleValueRestriction
     boolean 
     matches( CharSequence str )
     {
-        return doCheck( inputs.notNull( str, "str" ) );
+        return checkPat( inputs.notNull( str, "str" ) );
     }
 
     public

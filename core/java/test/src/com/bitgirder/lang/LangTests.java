@@ -536,6 +536,9 @@ class LangTests
         state.equalString(
             "\"a gclef: \ud834\uDD1e\"",
             Lang.getRfc4627String( "a gclef: \ud834\uDD1e" ) );
+        
+        // just cover the quoteString() frontend as well
+        state.equalString( "\"a\"", Lang.quoteString( "a" ) );
     }
 
     @Test
@@ -703,6 +706,27 @@ class LangTests
 
         TypedStringImpl t2 = (TypedStringImpl) ois.readObject();
         state.equalString( t1, t2 );
+    }
+
+    @Test
+    private
+    void
+    testOctetToUnsignedByteConversions()
+    {
+        state.equalInt( 0, Lang.asOctet( (byte) 0 ) );
+        state.equalInt( 1, Lang.asOctet( (byte) 1 ) );
+        state.equalInt( 127, Lang.asOctet( (byte) 127 ) );
+        state.equalInt( 128, Lang.asOctet( (byte) -128 ) );
+        state.equalInt( 129, Lang.asOctet( (byte) -127 ) );
+        state.equalInt( 255, Lang.asOctet( (byte) -1 ) );
+
+        state.isTrue( (byte) 0 == Lang.fromOctet( 0 ) );
+        state.isTrue( (byte) 1 == Lang.fromOctet( 1 ) );
+        state.isTrue( (byte) 2 == Lang.fromOctet( 2 ) );
+        state.isTrue( (byte) 127 == Lang.fromOctet( 127 ) );
+        state.isTrue( (byte) -128 == Lang.fromOctet( 128 ) );
+        state.isTrue( (byte) -127 == Lang.fromOctet( 129 ) );
+        state.isTrue( (byte) -1 == Lang.fromOctet( 255 ) );
     }
 
     private

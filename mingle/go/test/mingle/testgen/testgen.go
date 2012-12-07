@@ -5,6 +5,7 @@ import (
     "os"
     "fmt"
     "path/filepath"
+    "log"
     bgio "bitgirder/io"
 )
 
@@ -44,5 +45,6 @@ func ( f *OutFile ) WithBinWriter( call func( *bgio.BinWriter ) error ) error {
     wr, err := f.openBinWriter()
     if err != nil { return err }
     defer wr.Close()
+    log.Printf( "Writing %s", f.Name() )
     return call( wr )
 }

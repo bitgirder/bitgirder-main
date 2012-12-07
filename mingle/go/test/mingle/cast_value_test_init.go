@@ -30,7 +30,7 @@ type cvtInit struct {
 
 func ( t *cvtInit ) initStdVals() {
     t.buf1 = Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
-    t.tm1 = Now()
+    t.tm1 = MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
     t.map1 = MustSymbolMap( "key1", 1, "key2", "val2" )
     t.en1 = MustEnum( "ns1@v1/En1", "en-val1" )
     t.struct1 = MustStruct( "ns1@v1/S1", "key1", "val1" )
@@ -74,7 +74,6 @@ func ( t *cvtInit ) addBaseTypeTests() {
     t.addIdent( t.tm1, TypeTimestamp )
     t.addIdent( t.en1, t.en1.Type )
     t.addIdent( t.map1, TypeSymbolMap )
-    t.addIdent( t.struct1, TypeStruct )
     t.addIdent( t.struct1, t.struct1.Type )
     t.addIdent( 1, TypeValue )
     t.addIdent( nil, TypeNull )
@@ -84,7 +83,6 @@ func ( t *cvtInit ) addBaseTypeTests() {
         Int32( -1 ), Uint64( uint64( 18446744073709551615 ) ), TypeUint64 )
     t.addSucc( 
         Int64( -1 ), Uint64( uint64( 18446744073709551615 ) ), TypeUint64 )
-    t.addSucc( t.en1, t.en1, TypeEnum )
     t.addSucc( "true", true, TypeBoolean )
     t.addSucc( "TRUE", true, TypeBoolean )
     t.addSucc( "TruE", true, TypeBoolean )
@@ -143,7 +141,7 @@ func ( t *cvtInit ) addVcError0(
         &CastValueTest{
             In: MustValue( val ),
             Type: typRef,
-            Err: newValueCastError( typRef, path, msg ),
+            Err: newValueCastError( path, msg ),
         },
     )
 }
@@ -269,6 +267,8 @@ func ( t *cvtInit ) addBufferTests() {
     buf1B64 := base64.StdEncoding.EncodeToString( t.buf1 )
     t.addSucc( t.buf1, buf1B64, TypeString )
     t.addSucc( buf1B64, t.buf1, TypeBuffer  )
+    t.addVcError( "abc$/@", TypeBuffer, 
+        "Invalid base64 string: illegal base64 data at input byte 3" )
 }
 
 func ( t *cvtInit ) addTimeTests() {

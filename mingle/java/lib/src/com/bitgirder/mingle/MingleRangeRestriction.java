@@ -13,7 +13,7 @@ import java.util.Arrays;
 
 public
 final
-class MingleRangeRestriction
+class MingleRangeRestriction< V extends MingleValue & Comparable< V > >
 extends MingleValueRestriction
 {
     private final static Inputs inputs = new Inputs();
@@ -22,10 +22,10 @@ extends MingleValueRestriction
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
     private final boolean minClosed;
-    private final MingleValue min;
-    private final MingleValue max;
+    private final V min;
+    private final V max;
     private final boolean maxClosed;
-    private final Class< ? extends MingleValue > typeTok;
+    private final Class< V > typeTok;
 
     private final int hc;
 
@@ -34,11 +34,11 @@ extends MingleValueRestriction
                             MingleValue min,
                             MingleValue max,
                             boolean maxClosed,
-                            Class< ? extends MingleValue > typeTok )
+                            Class< V > typeTok )
     { 
         this.minClosed = minClosed;
-        this.min = min;
-        this.max = max;
+        this.min = min == null ? null : typeTok.cast( min );
+        this.max = max == null ? null : typeTok.cast( max );
         this.maxClosed = maxClosed;
         this.typeTok = typeTok;
 
@@ -69,42 +69,16 @@ extends MingleValueRestriction
         sb.append( maxClosed ? "]" : ")" );
     }
 
-    public
-    void
-    validate( MingleValue mv,
-              ObjectPath< MingleIdentifier > path )
-    {
-        throw new UnsupportedOperationException( "Unimplemented" );
-//        if ( ! range.includes( cls.cast( mv ) ) )
-//        {
-//            throw 
-//                new MingleValidationException( 
-//                    "Value is not in range " + getExternalForm() + ": " +
-//                    MingleModels.inspect( mv ), 
-//                    path 
-//                );
-//        }
-    }
-
-    // We may choose later to handcode all or some of this; for now we just
-    // convert obj to its default mingle value, ensure that it is testable
-    // against this range instance, and return the comparison result
-    public
     boolean
-    acceptsJavaValue( Object obj )
+    implValidate( MingleValue mv )
     {
-        throw new UnsupportedOperationException( "Unimplemented" );
-//        inputs.notNull( obj, "obj" );
-//
-//        return range.includes(
-//            cls.cast( 
-//                MingleModels.asMingleInstance(
-//                    MingleModels.typeReferenceOf( cls ),
-//                    MingleModels.asMingleValue( obj ),
-//                    ObjectPath.< MingleIdentifier >getRoot()
-//                )
-//            )
-//        );
+        V val = typeTok.cast( mv );
+
+        int minCmp = min == null ? 1 : val.compareTo( min );
+        int maxCmp = max == null ? -1 : val.compareTo( max );
+
+        return ( ( minCmp > 0 ) || ( minCmp == 0 && minClosed ) ) &&
+               ( ( maxCmp < 0 ) || ( maxCmp == 0 && maxClosed ) );
     }
 
     public int hashCode() { return hc; }
@@ -161,12 +135,13 @@ extends MingleValueRestriction
     }
 
     static
-    MingleRangeRestriction
+    < V extends MingleValue & Comparable< V > >
+    MingleRangeRestriction< V >
     create( boolean minClosed,
             MingleValue min,
             MingleValue max,
             boolean maxClosed,
-            Class< ? extends MingleValue > typeTok )
+            Class< V > typeTok )
     {
         inputs.notNull( typeTok, "typeTok" );
         checkCreateType( min, typeTok, "min" );
@@ -174,7 +149,55 @@ extends MingleValueRestriction
         checkClosedHasVal( minClosed, min, "min" );
         checkClosedHasVal( maxClosed, max, "max" );
 
-        return new MingleRangeRestriction( 
+        return new MingleRangeRestriction< V >( 
             minClosed, min, max, maxClosed, typeTok );
+    }
+
+    static
+    MingleRangeRestriction< ? >
+    createChecked( boolean minClosed,
+                   MingleValue min,
+                   MingleValue max,
+                   boolean maxClosed,
+                   Class< ? extends MingleValue > typeTok )
+    {
+        state.notNull( typeTok, "typeTok" );
+
+        if ( typeTok.equals( MingleInt32.class ) )
+        {
+            return create( minClosed, min, max, maxClosed, MingleInt32.class );
+        }
+        else if ( typeTok.equals( MingleInt64.class ) )
+        {
+            return create( minClosed, min, max, maxClosed, MingleInt64.class );
+        }
+        else if ( typeTok.equals( MingleUint32.class ) )
+        {
+            return create( minClosed, min, max, maxClosed, MingleUint32.class );
+        }
+        else if ( typeTok.equals( MingleUint64.class ) )
+        {
+            return create( minClosed, min, max, maxClosed, MingleUint64.class );
+        }
+        else if ( typeTok.equals( MingleFloat32.class ) )
+        {
+            return 
+                create( minClosed, min, max, maxClosed, MingleFloat32.class );
+        }
+        else if ( typeTok.equals( MingleFloat64.class ) )
+        {
+            return create
+                ( minClosed, min, max, maxClosed, MingleFloat64.class );
+        }
+        else if ( typeTok.equals( MingleString.class ) )
+        {
+            return create( minClosed, min, max, maxClosed, MingleString.class );
+        }
+        else if ( typeTok.equals( MingleTimestamp.class ) )
+        {
+            return 
+                create( minClosed, min, max, maxClosed, MingleTimestamp.class );
+        }
+        else throw state.createFail( "Not a comparable value class:", typeTok );
     }
 }
