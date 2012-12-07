@@ -370,4 +370,29 @@ class MingleTests
             Mingle.isDecimalType(
                 new AtomicTypeReference( QNAME_FLOAT32, dummy ) ) );
     }
+
+    private
+    void
+    assertTypeNameIn( QualifiedTypeName qn,
+                      MingleTypeReference ref )
+    {
+        state.equal( qn, Mingle.typeNameIn( ref ) );
+    }
+
+    @Test
+    private
+    void
+    testTypeNameIn()
+    {
+        QualifiedTypeName qn = QNAME_STRING;
+        MingleTypeReference ref = TYPE_STRING;
+        
+        assertTypeNameIn( qn, ref );
+        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
+        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
+        assertTypeNameIn( qn, ref = new ListTypeReference( ref, true ) );
+        assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
+        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
+        assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
+    }
 }

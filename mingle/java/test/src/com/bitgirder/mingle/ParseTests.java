@@ -242,8 +242,8 @@ class ParseTests
                 "Unrecognized token start: \"}\" (U+007D)",
             
             errMsgKey( TestType.TYPE_REFERENCE, "Timestamp~[\"2001-0x-22\",)" ),
-                "Invalid min value in range restriction: Invalid timestamp: " +
-                "\"2001-0x-22\""
+                "Invalid min value in range restriction: " +
+                "(at or near char 0) Invalid timestamp: \"2001-0x-22\""
         );
 
     private

@@ -249,7 +249,7 @@ class CastValueTests
         addExpectation(
             new MingleString( "s" ),
             Mingle.TYPE_BOOLEAN,
-            new ErrMsg( "[1]: Invalid boolean string: s" )
+            new ErrMsg( "(at or near char 1) Invalid boolean string: s" )
         );
     }
 

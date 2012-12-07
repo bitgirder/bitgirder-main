@@ -143,6 +143,20 @@ class AbstractJavaModuleTask < StandardModTask
         Dir.glob( "#{mod_resource}/**/*" ).select { |f| File.file?( f ) }
     end
 
+    public
+    def get_declared_test_deps
+        
+        res = []
+
+        pd = ws_ctx.proj_def
+
+        if deps = pd.fields.get_mingle_list( :test_deps )
+            deps.each { |dep| res << TaskTarget.parse( dep ) }
+        end
+
+        res
+    end
+
     private
     def get_mods
         
@@ -1127,6 +1141,14 @@ module JavaTesting
     end
 
     module_function :add_filter_args
+
+    def add_test_data_path( path, chain )
+        unless ( td_path = TestData.get_test_data_path( chain ) ).empty?
+            path << "-Dbitgirder.testData.path=#{td_path}"
+        end
+    end
+
+    module_function :add_test_data_path
 end
 
 class JavaTestRunner < AbstractJavaModuleTask
@@ -1137,20 +1159,6 @@ class JavaTestRunner < AbstractJavaModuleTask
         res = get_run_classpath( chain )
         res << mod_classes
         res += JavaTesting.get_test_cp_extra( @run_opts )
-    end
-
-    private
-    def get_declared_test_deps
-        
-        res = []
-
-        pd = ws_ctx.proj_def
-
-        if deps = pd.fields.get_mingle_list( :test_deps )
-            deps.each { |dep| res << TaskTarget.parse( dep ) }
-        end
-
-        res
     end
 
     public
@@ -1200,9 +1208,7 @@ class JavaTestRunner < AbstractJavaModuleTask
         argv = []
         argv << "-classpath" << get_test_classpath( chain ).join( ":" )
 
-        unless ( td_path = TestData.get_test_data_path( chain ) ).empty?
-            argv << "-Dbitgirder.testData.path=#{td_path}"
-        end
+        JavaTesting.add_test_data_path( argv, chain )
 
         argv += get_test_runner_args( chain, get_test_class_names )
         JavaTesting.add_filter_args( argv, @run_opts )
@@ -1853,6 +1859,19 @@ class JavaDistTestRunner < AbstractJavaDistTask
         [ TaskTarget.create( :java, :dist, :jar, dist ) ]
     end
 
+    public
+    def get_closure_dependencies( tasks )
+        
+        tasks.inject( [] ) do |arr, t| 
+            
+            if t.is_a?( JavaBuilder ) && t.mod?( :test )
+                arr += t.get_declared_test_deps
+            end
+
+            arr
+        end
+    end
+
     private
     def get_test_class_names( chain )
         
@@ -1907,6 +1926,7 @@ class JavaDistTestRunner < AbstractJavaDistTask
 
         argv += JavaTesting.get_test_jvm_args( @run_ctx )
         argv << "-classpath" << get_test_classpath( chain ).join( ":" )
+        JavaTesting.add_test_data_path( argv, chain )
 
         nms = get_test_class_names( chain )
         argv += JavaTesting.get_testing_test_runner_args( nms, @run_ctx )

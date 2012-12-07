@@ -113,6 +113,14 @@ class App < BitGirder::Core::BitGirderClass
     end
 
     private
+    def update_task_closure( targs, create_opts, res )
+
+        targs.each do |targ|
+            get_task_closure( targ, create_opts, res )
+        end
+    end
+
+    private
     def get_task_closure( targ, create_opts, res = {} )
  
         unless res.key?( targ )
@@ -121,9 +129,14 @@ class App < BitGirder::Core::BitGirderClass
             deps = task.get_direct_dependencies
 
             res[ targ ] = { task: task, deps: deps }
+            update_task_closure( deps, create_opts, res )
 
-            deps.each do |dep_targ|
-                get_task_closure( dep_targ, create_opts, res )
+            if task.respond_to?( :get_closure_dependencies )
+                clos = res.values.map { |h| h[ :task ] }
+                deps2 = task.get_closure_dependencies( clos ).
+                             reject { |dep| deps.include?( dep ) }
+                res[ targ ][ :deps ] += deps2
+                update_task_closure( deps2, create_opts, res )
             end
         end
 

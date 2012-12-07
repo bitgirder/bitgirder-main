@@ -476,10 +476,10 @@ class MingleParser
         ObjectPath< MingleIdentifier > p = ObjectPath.getRoot( bound );
 
         try { return Mingle.castValue( v, t, p ); }
-        catch ( MingleValidationException mve )
+        catch ( MingleValueException mve )
         {
             throw failf( errPos, "Invalid %s value in range restriction: %s", 
-                bound, mve.getError() );
+                bound, mve.error() );
         }
     }
 

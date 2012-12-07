@@ -18,7 +18,7 @@ extends Exception
                            int col )
     {
         super( 
-            String.format( "[%d]: %s",
+            String.format( "(at or near char %d) %s",
                 state.nonnegativeI( col, "col" ),
                 state.notNull( msg, "msg" )
             )

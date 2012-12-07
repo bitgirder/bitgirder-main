@@ -158,7 +158,7 @@ end
 
 class TaskTarget < BitGirderClass
     
-    include Mingle
+    include Mingle, Comparable
 
     bg_attr :path,
             is_list: true,
@@ -185,6 +185,11 @@ class TaskTarget < BitGirderClass
     public
     def to_s
         @path.join( "/" )
+    end
+
+    public
+    def <=>( o )
+        return o.is_a?( TaskTarget ) ? to_s <=> o.to_s : nil
     end
 
     def self.create( *path )
