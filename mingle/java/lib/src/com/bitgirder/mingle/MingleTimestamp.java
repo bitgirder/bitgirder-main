@@ -33,15 +33,6 @@ implements MingleValue,
 
     private final static int ONE_MILLION = 1000000;
 
-    private final static Range< Integer > NANOS_RANGE =
-        Range.openMax( 0, 1000000000 );
-    
-    private final static Range< Integer > MILLIS_RANGE =
-        Range.openMax( 0, 1000 );
-
-    private final static TimeZone DEFAULT_TIME_ZONE =
-        TimeZone.getTimeZone( "UTC" );
-
     private final static Range< Integer > PRECISION_RANGE =
         Range.closed( 0, 9 );
 
@@ -53,7 +44,7 @@ implements MingleValue,
     private final static Pattern STRICT_RFC3339_TIMESTAMP_PATTERN =
         PatternHelper.compile(
             "(\\d{4})-(\\d{2})-(\\d{2})[Tt](\\d{2}):(\\d{2}):(\\d{2})" +
-            "(?:\\.(\\d+))?(?:([zZ])|([+\\-]\\d{2}:\\d{2}))"
+            "(?:\\.(\\d+){1,9})?(?:([zZ])|([+\\-]\\d{2}:\\d{2}))"
         );
 
     private final static int RFC3339_GROUP_YEAR = 1;
@@ -66,44 +57,22 @@ implements MingleValue,
     private final static int RFC3339_GROUP_TIME_ZONE_ZULU = 8;
     private final static int RFC3339_GROUP_TIME_ZONE_UTC_OFFSET = 9;
 
-    private final GregorianCalendar cal;
+    private final long secs;
     private final int nanos;
 
     private
-    MingleTimestamp( Builder b )
+    MingleTimestamp( long secs,
+                     int nanos )
     {
-        cal = new GregorianCalendar( b.timeZone, Locale.US );
-
-        // note the month subtracts 1 to adjust back to GregorianCalendar's
-        // 0-indexed months
-        cal.set( GregorianCalendar.YEAR, b.year );
-        cal.set( GregorianCalendar.MONTH, b.month - 1 );
-        cal.set( GregorianCalendar.DATE, b.date );
-        cal.set( GregorianCalendar.HOUR_OF_DAY, b.hour );
-        cal.set( GregorianCalendar.MINUTE, b.minute );
-        cal.set( GregorianCalendar.SECOND, b.seconds );
-
-        // Since we keep our own fractional precision, cancel out the one auto
-        // set by the calendar constructor, since it will affect our comparisons
-        cal.set( GregorianCalendar.MILLISECOND, 0 );
-
-        this.nanos = b.nanos;
+        this.secs = secs;
+        this.nanos = inputs.nonnegativeI( nanos, "nanos" );
     }
 
     public 
     int 
     hashCode() 
     { 
-        return ( (int) cal.getTimeInMillis() ) | nanos; 
-    }
-
-    CharSequence
-    getInspection()
-    {
-        return Strings.crossJoin( "=", ",",
-            "nanos", nanos,
-            "cal", cal
-        );
+        return ( (int) secs ) | nanos; 
     }
 
     public
@@ -111,14 +80,10 @@ implements MingleValue,
     equals( Object other )
     {
         if ( other == this ) return true;
-        else if ( other instanceof MingleTimestamp )
-        {
-            MingleTimestamp ts2 = (MingleTimestamp) other;
-//            return nanos == ts2.nanos && cal.equals( ts2.cal );
-            return nanos == ts2.nanos &&
-                   cal.getTimeInMillis() == ts2.cal.getTimeInMillis();
-        }
-        else return false;
+        if ( ! ( other instanceof MingleTimestamp ) ) return false;
+
+        MingleTimestamp ts2 = (MingleTimestamp) other;
+        return nanos == ts2.nanos && secs == ts2.secs;
     }
 
     public
@@ -126,24 +91,25 @@ implements MingleValue,
     compareTo( MingleTimestamp ts2 )
     {
         if ( ts2 == null ) throw new NullPointerException();
-        else
-        {
-            if ( ts2 == this ) return 0;
-            else
-            {
-                int res = cal.compareTo( ts2.cal );
-                return res == 0 ? nanos - ts2.nanos : res;
-            }
-        }
+        if ( ts2 == this ) return 0;
+        
+        int res = secs < ts2.secs ? -1 : secs == ts2.secs ? 0 : 1;
+        if ( res != 0 ) return res;
+        
+        res = nanos < ts2.nanos ? -1 : nanos == ts2.nanos ? 0 : 1;
+        if ( secs < 0 ) res *= -1;
+
+        return res;
     }
 
-    private
-    boolean
-    isUtc( TimeZone tz )
-    {
-        String id = tz.getID();
+    public long seconds() { return secs; }
+    public int nanos() { return nanos; }
 
-        return id.equalsIgnoreCase( "UTC" ) || id.equalsIgnoreCase( "Zulu" );
+    public
+    long
+    getTimeInMillis()
+    {
+        return ( secs * 1000L ) + ( nanos / ONE_MILLION );
     }
 
     private
@@ -159,24 +125,7 @@ implements MingleValue,
     void
     appendRfc3339TimeZone( StringBuilder sb )
     {
-        TimeZone tz = cal.getTimeZone();
-
-        if ( isUtc( tz ) ) sb.append( "Z" );
-        else
-        {
-            // offset is in millis which we truncate to some number of minutes;
-            // we leave the sign off the truncated form so that negative values
-            // don't find their way into the string appends; offset retains the
-            // sign for our checks
-            int offset = cal.get( GregorianCalendar.ZONE_OFFSET );
-            int trunc = Math.abs( ( offset / 1000 ) / 60 );
-
-            sb.append( offset < 0 ? '-' : '+' );
-
-            appendTwoDigitPad( sb, trunc / 60 );
-            sb.append( ':' );
-            appendTwoDigitPad( sb, trunc % 60 );
-        }
+        sb.append( "Z" );
     }
 
     private
@@ -199,6 +148,10 @@ implements MingleValue,
         inputs.inRange( precision, "precision", PRECISION_RANGE );
 
         StringBuilder res = new StringBuilder( 25 );
+
+        GregorianCalendar cal = new GregorianCalendar();
+        cal.setTimeZone( TZ_UTC );
+        cal.setTimeInMillis( secs * 1000L ); // discard any fractional part
 
         res.append( cal.get( GregorianCalendar.YEAR ) );
         res.append( '-' );
@@ -227,59 +180,17 @@ implements MingleValue,
 
     @Override public String toString() { return getRfc3339String().toString(); }
 
-    public 
-    long 
-    getTimeInMillis() 
-    { 
-        // we still use getTimeInMillis() for convenience and then just add back
-        // the millis which we store on our own
-        return cal.getTimeInMillis() + ( nanos / ONE_MILLION );
-    }
-
-    public Date asJavaDate() { return new Date( getTimeInMillis() ); }
-
-    public
-    GregorianCalendar
-    asJavaCalendar()
-    {
-        GregorianCalendar res = (GregorianCalendar) cal.clone();
-        res.set( GregorianCalendar.MILLISECOND, nanos / ONE_MILLION );
-
-        return res;
-    }
-
-    public
-    Timestamp
-    asSqlTimestamp()
-    {
-        // See javadocs for java.sql.Timestamp( long ) -- it ultimately stores
-        // it's integral/frac part as this class does
-        Timestamp res = new Timestamp( getTimeInMillis() );
-        res.setNanos( nanos );
-        
-        return res;
-    }
-
-    private
-    static
-    GregorianCalendar
-    initCalFromMillis( long t )
-    {
-        GregorianCalendar c = new GregorianCalendar();
-        c.setTimeZone( TZ_UTC );
-        c.setTimeInMillis( t );
-
-        return c;
-    }
-
-    public
-    static
-    MingleTimestamp
-    fromMillis( long t )
-    {
-        GregorianCalendar c = initCalFromMillis( t );
-        return new Builder().setFromCalendar( c ).build();
-    }
+//    public
+//    Timestamp
+//    asSqlTimestamp()
+//    {
+//        // See javadocs for java.sql.Timestamp( long ) -- it ultimately stores
+//        // it's integral/frac part as this class does
+//        Timestamp res = new Timestamp( getTimeInMillis() );
+//        res.setNanos( nanos );
+//        
+//        return res;
+//    }
 
     public
     static
@@ -287,8 +198,18 @@ implements MingleValue,
     fromUnixNanos( long secs,
                    int ns )
     {
-        GregorianCalendar c = initCalFromMillis( secs * 1000 );
-        return new Builder().setFromCalendar( c ).setNanos( ns ).build();
+        return new MingleTimestamp( secs, ns );
+    }
+
+    public
+    static
+    MingleTimestamp
+    fromMillis( long t )
+    {
+        long secs = t / 1000;
+        int ns = Math.abs( (int) ( t % 1000L ) ) * ONE_MILLION;
+
+        return fromUnixNanos( secs, ns );
     }
 
     public
@@ -307,146 +228,6 @@ implements MingleValue,
         return fromMillis( System.currentTimeMillis() );
     }
 
-    // We may also add flags such as setLenient( boolean ) to be passed through
-    // during build to do extra validation; for now the default is the default
-    // of Calendar (lenient).
-    public
-    final
-    static
-    class Builder
-    {
-        private int year;
-        private int month;
-        private int date;
-        private int hour;
-        private int minute;
-        private int seconds;
-        private int nanos;
-        private TimeZone timeZone = DEFAULT_TIME_ZONE;
-
-        public
-        Builder
-        setYear( int year )
-        {
-            this.year = year;
-            return this;
-        }
-
-        // Note: unlike java.util.Calendar, this class takes a 1-based month (1
-        // for January)
-        public
-        Builder
-        setMonth( int month )
-        {
-            this.month = month;
-            return this;
-        }
-
-        public
-        Builder
-        setDate( int date )
-        {
-            this.date = date;
-            return this;
-        }
-
-        public
-        Builder
-        setHour( int hour )
-        {
-            this.hour = hour;
-            return this;
-        }
-
-        public
-        Builder
-        setMinute( int minute )
-        {
-            this.minute = minute;
-            return this;
-        }
-
-        public
-        Builder
-        setSeconds( int seconds )
-        {
-            this.seconds = seconds;
-            return this;
-        }
-
-        public
-        Builder
-        setNanos( int nanos )
-        {
-            this.nanos = inputs.inRange( nanos, "nanos", NANOS_RANGE );
-            return this;
-        }
-
-        public
-        Builder
-        setMillis( int millis )
-        {
-            inputs.inRange( millis, "millis", MILLIS_RANGE );
-            this.nanos = millis * ONE_MILLION;
-
-            return this;
-        }
-
-        public
-        Builder
-        setFraction( CharSequence frac )
-        {
-            int len = frac.length();
-
-            inputs.isTrue( 
-                len < 10, 
-                "Fraction string is too long to represent nanos:", frac );
-
-            char[] intStr = new char[ 9 ];
-            int i;
-            for ( i = 0; i < len; ++i ) intStr[ i ] = frac.charAt( i );
-            while ( i < 9 ) intStr[ i++ ] = '0';
-
-            return setNanos( Integer.parseInt( new String( intStr ) ) );
-        }
-
-        public
-        Builder
-        setTimeZone( TimeZone timeZone )
-        {
-            this.timeZone = inputs.notNull( timeZone, "timeZone" );
-            return this;
-        }
-
-        public
-        Builder
-        setTimeZone( String tzStr )
-        {
-            inputs.notNull( tzStr, "tzStr" );
-            return setTimeZone( TimeZone.getTimeZone( tzStr ) );
-        }
-
-        public
-        Builder
-        setFromCalendar( GregorianCalendar cal )
-        {
-            inputs.notNull( cal, "cal" );
-
-            setYear( cal.get( GregorianCalendar.YEAR ) );
-            setMonth( cal.get( GregorianCalendar.MONTH ) + 1 );
-            setDate( cal.get( GregorianCalendar.DATE ) );
-            setHour( cal.get( GregorianCalendar.HOUR_OF_DAY ) );
-            setMinute( cal.get( GregorianCalendar.MINUTE ) );
-            setSeconds( cal.get( GregorianCalendar.SECOND ) );
-            setMillis( cal.get( GregorianCalendar.MILLISECOND ) );
-            setTimeZone( cal.getTimeZone() );
-
-            return this;
-        } 
-
-        public MingleTimestamp build() { return new MingleTimestamp( this ); }
-    }
-
     // We put the parsing in here rather than with the larger mingle parser code
     // since this is really just an rfc3339 parse and is well self-contained;
     // moreover, we want to be able to parse rfc3339 strings into instances of
@@ -455,25 +236,48 @@ implements MingleValue,
 
     private
     static
-    int
-    parseInt( Matcher m,
-              int group )
+    void
+    setCalInt( GregorianCalendar c,
+               Matcher m,
+               int group,
+               int calFld )
     {
-        return Integer.parseInt( m.group( group ) );
+        int val = Integer.parseInt( m.group( group ) );
+
+        if ( calFld == GregorianCalendar.MONTH ) --val;
+        c.set( calFld, val );
     }
 
     private
     static
     void
-    setTimeZone( Builder b,
+    setTimeZone( GregorianCalendar c,
                  Matcher m )
     {
+        String tzStr;
+
         if ( m.group( RFC3339_GROUP_TIME_ZONE_ZULU ) == null )
         {
-            b.setTimeZone( 
-                "GMT" + m.group( RFC3339_GROUP_TIME_ZONE_UTC_OFFSET ) );
+            tzStr = "GMT" + m.group( RFC3339_GROUP_TIME_ZONE_UTC_OFFSET );
         }
-        else b.setTimeZone( "UTC" );
+        else tzStr = "UTC";
+            
+        c.setTimeZone( TimeZone.getTimeZone( tzStr ) );
+    }
+
+    private
+    static
+    int
+    getNanos( Matcher m )
+    {
+        String fracPart = m.group( RFC3339_GROUP_FRAC_PART );
+
+        if ( fracPart == null ) return 0;
+        
+        int res = Integer.parseInt( fracPart );
+        for ( int i = fracPart.length(); i < 9; ++i ) res *= 10;
+        
+        return res;
     }
 
     private
@@ -481,21 +285,21 @@ implements MingleValue,
     MingleTimestamp
     buildTimestamp( Matcher m )
     {
-        Builder b = new Builder();
+        GregorianCalendar c = new GregorianCalendar( Locale.US );
 
-        b.setYear( parseInt( m, RFC3339_GROUP_YEAR ) );
-        b.setMonth( parseInt( m, RFC3339_GROUP_MONTH ) );
-        b.setDate( parseInt( m, RFC3339_GROUP_DATE ) );
-        b.setHour( parseInt( m, RFC3339_GROUP_HOUR ) );
-        b.setMinute( parseInt( m, RFC3339_GROUP_MINUTE ) );
-        b.setSeconds( parseInt( m, RFC3339_GROUP_SECONDS ) );
- 
-        String fracPart = m.group( RFC3339_GROUP_FRAC_PART );
-        if ( fracPart != null ) b.setFraction( fracPart );
+        setCalInt( c, m, RFC3339_GROUP_YEAR, GregorianCalendar.YEAR );
+        setCalInt( c, m, RFC3339_GROUP_MONTH, GregorianCalendar.MONTH ); // -1
+        setCalInt( c, m, RFC3339_GROUP_DATE, GregorianCalendar.DATE );
+        setCalInt( c, m, RFC3339_GROUP_HOUR, GregorianCalendar.HOUR_OF_DAY );
+        setCalInt( c, m, RFC3339_GROUP_MINUTE, GregorianCalendar.MINUTE );
+        setCalInt( c, m, RFC3339_GROUP_SECONDS, GregorianCalendar.SECOND );
         
-        setTimeZone( b, m );
+        int nanos = getNanos( m );
+        c.set( GregorianCalendar.MILLISECOND, 0 );
+        
+        setTimeZone( c, m );
 
-        return b.build();
+        return new MingleTimestamp( c.getTimeInMillis() / 1000, nanos ); 
     }
 
     public

@@ -25,15 +25,17 @@ class MingleTests
 
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
  
-    private final static MingleTimestamp TEST_TIMESTAMP1;
+    private final static long TS1_SECS = 1187990143;
+    private final static int TS1_NS = 123450000;
  
-    private final static MingleTimestamp TEST_TIMESTAMP2;
+    private final static MingleTimestamp TS1 =
+        MingleTimestamp.fromUnixNanos( TS1_SECS, TS1_NS );
+ 
+    private final static String TS1_RFC3339 =
+        "2007-08-24T21:15:43.123450000Z";
 
-    private final static String TEST_TIMESTAMP1_STRING =
-        "2007-08-24T13:15:43.123450000-08:00";
-
-    private final static String TEST_TIMESTAMP2_STRING =
-        "2007-08-24T13:15:43.000000000-08:00";
+//    private final static String TS2_STRING =
+//        "2007-08-24T13:15:43.000000000-08:00";
 
     private
     static
@@ -115,7 +117,7 @@ class MingleTests
         assertInspection( new MingleFloat64( 1.1 ), "1.1" );
         assertInspection( new MingleString( "" ), "\"\"" );
         assertInspection( new MingleString( "abc\t\rd" ), "\"abc\\t\\rd\"" );
-        assertInspection( TEST_TIMESTAMP1, TEST_TIMESTAMP1_STRING );
+        assertInspection( TS1, TS1_RFC3339 );
 
         assertInspection( new MingleBuffer( new byte[] {} ), "buffer:[]" );
         assertInspection( 
@@ -168,27 +170,6 @@ class MingleTests
                 build(),
             "ns1@v1/S1{id1:1}"
         );
-    }
-    
-    static
-    {
-        // base builder for timestamps 1 and 2;
-        MingleTimestamp.Builder b =
-            new MingleTimestamp.Builder().
-                setYear( 2007 ).
-                setMonth( 8 ).
-                setDate( 24 ).
-                setHour( 13 ).
-                setMinute( 15 ).
-                setSeconds( 43 ).
-                setTimeZone( "GMT-08:00" );
-        
-        // build ts2 with no frac part
-        TEST_TIMESTAMP2 = b.build();
-
-        // build ts1 (which came first in our code) with the frac part
-        b.setFraction( "12345" );
-        TEST_TIMESTAMP1 = b.build();
     }
 
     private
@@ -399,16 +380,51 @@ class MingleTests
     @Test
     private
     void
-    testMingleTimestampEqualityRegress0()
+    testTimestampRfc3339()
         throws Exception
     {
-        MingleTimestamp t1 =
-            MingleTimestamp.parse( "2007-08-24T21:15:43.123450000Z" );
-        
-        MingleTimestamp t2 =
-            MingleTimestamp.parse( "2007-08-24T13:15:43.12345-08:00" );
- 
-        state.equalInt( t1.hashCode(), t2.hashCode() );
-        state.equal( t1, t2 );
+        state.equalString( TS1_RFC3339, TS1.getRfc3339String() );
+        state.equal( TS1, MingleTimestamp.parse( TS1_RFC3339 ) );
+    }
+
+    @Test
+    private
+    void
+    testTimestampFromMillis()
+    {
+        long ms = System.currentTimeMillis();
+        MingleTimestamp ts = MingleTimestamp.fromMillis( ms );
+
+        state.equal( ms / 1000L, ts.seconds() );
+        state.equalInt( ( (int) ( ms % 1000 ) ) * 1000000, ts.nanos() );
+        state.equal( ms, ts.getTimeInMillis() );
+    }
+
+    private
+    void
+    assertTsComp( int expct,
+                  int secs1,
+                  int ns1,
+                  int secs2,
+                  int ns2 )
+    {
+        MingleTimestamp t1 = MingleTimestamp.fromUnixNanos( (long) secs1, ns1 );
+        MingleTimestamp t2 = MingleTimestamp.fromUnixNanos( (long) secs2, ns2 );
+
+        state.equalInt( expct, t1.compareTo( t2 ) );
+        state.equalInt( -expct, t2.compareTo( t1 ) );
+    }
+
+    @Test
+    private
+    void
+    testTimestampCompare()
+    {
+        assertTsComp( -1, 1, 0, 1, 1 );
+        assertTsComp( -1, 1, 0, 2, 0 );
+        assertTsComp( 0, 1, 1, 1, 1 );
+        assertTsComp( 0, -1, 0, -1, 0 );
+        assertTsComp( 1, -1, 1, -1, 2 );
+        assertTsComp( 1, -1, 0, -2, 0 );
     }
 }
