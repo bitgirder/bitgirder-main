@@ -88,6 +88,15 @@ class CharsetHelper
         return IoUtils.toByteArray( asByteBuffer( s ) );
     }
 
+    private
+    RuntimeException
+    asUncheckedException( CharacterCodingException cce )
+    {
+        return
+            new RuntimeException( 
+                "Unexpected character coding exception", cce );
+    }
+
     public
     ByteBuffer
     asByteBufferUnchecked( CharSequence s )
@@ -95,9 +104,18 @@ class CharsetHelper
         try { return asByteBuffer( s ); }
         catch ( CharacterCodingException cce )
         {
-            throw 
-                new RuntimeException( 
-                    "Unexpected character coding exception", cce );
+            throw asUncheckedException( cce );
+        }
+    }
+
+    public
+    byte[]
+    asByteArrayUnchecked( CharSequence s )
+    {
+        try { return asByteArray( s ); }
+        catch ( CharacterCodingException cce )
+        {
+            throw asUncheckedException( cce );
         }
     }
 

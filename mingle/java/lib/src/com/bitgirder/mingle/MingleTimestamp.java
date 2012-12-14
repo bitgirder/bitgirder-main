@@ -142,7 +142,7 @@ implements MingleValue,
     }
  
     public
-    CharSequence
+    String
     getRfc3339String( int precision )
     {
         inputs.inRange( precision, "precision", PRECISION_RANGE );
@@ -168,11 +168,11 @@ implements MingleValue,
         appendPrecision( res, precision );
         appendRfc3339TimeZone( res );
 
-        return res;
+        return res.toString();
     }
 
     public
-    CharSequence
+    String
     getRfc3339String()
     {
         return getRfc3339String( PRECISION_RANGE.max() );

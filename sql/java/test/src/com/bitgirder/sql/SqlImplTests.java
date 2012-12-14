@@ -13,6 +13,8 @@ import com.bitgirder.lang.TypedString;
 import com.bitgirder.lang.CaseInsensitiveTypedString;
 
 import com.bitgirder.io.IoTestFactory;
+import com.bitgirder.io.IoTests;
+import com.bitgirder.io.Charsets;
 
 import com.bitgirder.test.Test;
 import com.bitgirder.test.TestFactory;
@@ -78,13 +80,15 @@ extends AbstractSqlTests
     enum ValType
     {
         OBJECT,
+        BYTE_ARR,
         LONG,
         LONG_OBJ,
         INT,
         INT_OBJ,
         ROW_DATA,
         MAP_DATA,
-        STRING;
+        STRING,
+        BOOLEAN;
     }
 
     private
@@ -201,7 +205,8 @@ extends AbstractSqlTests
         abstract
         void
         assertResult( V o,
-                      int i );
+                      int i )
+            throws Exception;
 
         private
         void
@@ -298,6 +303,10 @@ extends AbstractSqlTests
                     return "data1";
 
                 case STRING: return "cast( data1 as char ) as data1";
+                case BYTE_ARR: 
+                    return "cast( cast( data1 as char ) as binary ) as data1";
+                
+                case BOOLEAN: return "( data1 % 2 = 0 ) as data1";
 
                 case ROW_DATA:
                 case MAP_DATA:
@@ -325,6 +334,16 @@ extends AbstractSqlTests
                         ? Sql.expectString( conn, sql, bindArgs )
                         : Sql.selectString( conn, sql, bindArgs );
                 
+                case BOOLEAN:
+                    return useExpct
+                        ? Sql.expectBoolean( conn, sql, bindArgs )
+                        : Sql.selectBoolean( conn, sql, bindArgs );
+
+                case BYTE_ARR:
+                    return useExpct
+                        ? Sql.expectByteArray( conn, sql, bindArgs )
+                        : Sql.selectByteArray( conn, sql, bindArgs );
+
                 case INT:
                     return useExpct
                         ? Sql.expectInt( conn, sql, bindArgs )
@@ -380,6 +399,22 @@ extends AbstractSqlTests
 
         private
         void
+        assertByteArrayResult( byte[] arr,
+                               int i )
+            throws Exception
+        {
+            if ( rsSize == 0 ) state.isTrue( arr == null );
+            else 
+            {
+                IoTests.assertEqual(
+                    Charsets.US_ASCII.asByteArray( Integer.toString( i ) ),
+                    arr
+                );
+            }
+        }
+
+        private
+        void
         assertRowDataResult( SqlImpl2RowData d,
                              int i )
         {
@@ -405,12 +440,21 @@ extends AbstractSqlTests
         void
         assertResult( Object o,
                       int i )
+            throws Exception
         {
             switch ( vt )
             {
                 case STRING: 
                     if ( rsSize == 0 ) state.isTrue( o == null );
                     else state.equal( Integer.toString( i ), o ); 
+                    break;
+                
+                case BYTE_ARR: assertByteArrayResult( (byte[]) o, i ); break;
+
+                case BOOLEAN:
+                    Boolean b = (Boolean) o;
+                    if ( rsSize == 0 ) state.isFalse( b );
+                    else state.equal( i % 2 == 0, b );
                     break;
 
                 case LONG_OBJ:
@@ -1736,27 +1780,31 @@ extends AbstractSqlTests
         private StringType2( String s ) { super( s ); }
     }
 
+    private
+    void
+    assertDefaultStringBind( CharSequence s,
+                             Connection conn )
+        throws Exception
+    {
+        String uid = Lang.randomUuid();
+
+        Sql.executeUpdate( conn,
+            "insert into sql_impl1 ( uid, data1 ) values ( ?, ? )", uid, s );
+        
+        state.equalString( s,
+            Sql.expectString( conn,
+                "select data1 from sql_impl1 where uid = ?", uid ) );
+    }
+
     @TestWithConn
     private
     void
-    testDefaultBindTypedString( Connection conn )
+    testDefaultStringBinds( Connection conn )
         throws Exception
     {
-        String uid1 = Lang.randomUuid();
-        String uid2 = Lang.randomUuid();
-
-        Sql.executeUpdate( conn,
-            "insert into sql_impl1 ( uid, data1 ) values ( ?, ? ), ( ?, ? )",
-            uid1, new StringType1( "hello" ),
-            uid2, new StringType2( "hello" )
-        );
-        
-        for ( String uid : new String[] { uid1, uid2 } )
-        {
-            state.equalString( "hello",
-                Sql.expectString( conn,
-                    "select data1 from sql_impl1 where uid = ?", uid ) );
-        }
+        assertDefaultStringBind( new StringType1( "hello" ), conn );
+        assertDefaultStringBind( new StringType2( "hello" ), conn );
+        assertDefaultStringBind( new StringBuilder( "hello" ), conn );
     }
 
     @TestWithConn
@@ -1823,6 +1871,65 @@ extends AbstractSqlTests
         state.isTrue( u.didFirstUpdate );
         String sel = "select data1 from sql_impl1 where uid = ?";
         state.isTrue( Sql.selectOne( conn, sel, u.uid ) == null );
+    }
+
+    private
+    final
+    static
+    class StringType1Proc
+    implements Sql.RowProcessor< StringType1, Void >
+    {
+        public Void init( ResultSet rs ) { return null; }
+        
+        public
+        StringType1
+        processRow( ResultSet rs,
+                    Void ign )
+            throws Exception
+        {
+            return new StringType1( rs.getString( 1 ) );
+        }
+    }
+
+    @TestWithConn
+    private
+    void
+    testSelectListBaseMethod( Connection conn )
+        throws Exception
+    {
+        List< StringType1 > l1 = 
+            Lang.asList( new StringType1( "a" ), new StringType1( "b" ) );
+
+        String uid = Lang.randomUuid();
+
+        for ( StringType1 s : l1 )
+        {
+            Sql.executeUpdate( conn, 
+                "insert into sql_impl3 ( test_id, str1 ) values ( ?, ? )",
+                uid, s );
+        }
+
+        List< StringType1 > l2 = Sql.selectList( conn, new StringType1Proc(),
+            "select str1 from sql_impl3 where test_id = ? order by str1 asc",
+            uid
+        );
+
+        state.equal( l1, l2 );
+    }
+
+    @TestWithConn
+    private
+    void
+    testSelectEmptyList( Connection conn )
+        throws Exception
+    {   
+        state.isTrue(
+            Sql.selectList( conn, new StringType1Proc(),
+                "select str1 from sql_impl3 where test_id = ?",
+                Lang.randomUuid()
+            ).
+            isEmpty()
+        );
     }
 
     @TestFactory

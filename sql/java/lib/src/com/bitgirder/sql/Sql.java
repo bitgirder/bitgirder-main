@@ -78,7 +78,8 @@ class Sql
         inputs.notNull( bindArgs, "bindArgs" ); 
     }
 
-    // special case handling for args that are AbstractTypedString
+    // special case handling for a few standard types that wouldn't be known to
+    // JDBC 
     private
     static
     void
@@ -93,7 +94,12 @@ class Sql
             if ( o == null ) st.setNull( i + 1, Types.NULL );
             else 
             {
-                if ( o instanceof AbstractTypedString ) o = o.toString();
+                if ( o instanceof AbstractTypedString ||
+                     o instanceof StringBuilder ) 
+                {
+                    o = o.toString();
+                }
+
                 st.setObject( i + 1, o );
             }
         }
@@ -168,7 +174,9 @@ class Sql
         OBJECT,
         INTEGER,
         LONG,
-        STRING;
+        STRING,
+        BYTE_ARR,
+        BOOLEAN;
     }
 
     private
@@ -444,14 +452,13 @@ class Sql
         finally { if ( closeResultSet ) rs.close(); }
     }
 
-    // will ultimately be made public
     public
     static
     < V, I >
     List< V >
     selectList( Connection conn,
-                CharSequence stmt,
                 RowProcessor< ? extends V, I > proc,
+                CharSequence stmt,
                 Object... bindArgs )
         throws Exception
     {
@@ -470,7 +477,7 @@ class Sql
                       Object... bindArgs )
         throws SQLException
     {
-        try { return selectList( conn, stmt, MAP_ROW_PROCESSOR, bindArgs ); }
+        try { return selectList( conn, MAP_ROW_PROCESSOR, stmt, bindArgs ); }
         catch ( Exception ex ) { throw createSqlRethrow( ex ); }
     }
 
@@ -640,6 +647,8 @@ class Sql
             case INTEGER: return rs.getInt( 1 );
             case LONG: return rs.getLong( 1 );
             case STRING: return rs.getString( 1 );
+            case BYTE_ARR: return rs.getBytes( 1 );
+            case BOOLEAN: return rs.getBoolean( 1 );
 
             default: throw state.createFail( "Unexpected vt:", vt );
         }
@@ -735,6 +744,53 @@ class Sql
         throws SQLException
     {
         return (String) doExpectOne( conn, stmt, bindArgs, ValType.STRING );
+    }
+
+    public
+    static
+    byte[]
+    selectByteArray( Connection conn,
+                     CharSequence stmt,
+                     Object... bindArgs )
+        throws SQLException
+    {
+        return (byte[]) doSelectOne( conn, stmt, bindArgs, ValType.BYTE_ARR );
+    }
+
+    public
+    static
+    byte[]
+    expectByteArray( Connection conn,
+                     CharSequence stmt,
+                     Object... bindArgs )
+        throws SQLException
+    {
+        return (byte[]) doExpectOne( conn, stmt, bindArgs, ValType.BYTE_ARR );
+    }
+
+    public
+    static
+    boolean
+    selectBoolean( Connection conn,
+                  CharSequence stmt,
+                  Object... bindArgs )
+        throws SQLException
+    {
+        Boolean res =
+            (Boolean) doSelectOne( conn, stmt, bindArgs, ValType.BOOLEAN );
+        
+        return res == null ? false : res.booleanValue();
+    }
+
+    public
+    static
+    boolean
+    expectBoolean( Connection conn,
+                  CharSequence stmt,
+                  Object... bindArgs )
+        throws SQLException
+    {
+        return (Boolean) doExpectOne( conn, stmt, bindArgs, ValType.BOOLEAN );
     }
 
     public
