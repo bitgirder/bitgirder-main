@@ -109,7 +109,7 @@ type encoder struct {
     c *JsonCodec
     w io.Writer
     stack *list.List
-    impl *codec.ReactorImpl
+    impl *mg.ReactorImpl
 }
 
 // Both value() and end() operate on and return go json vals (not mg.Value)
@@ -197,12 +197,12 @@ func ( e *encoder ) End() error {
     return nil
 }
 
-func ( c *JsonCodec ) EncoderTo( w io.Writer ) codec.Reactor {
+func ( c *JsonCodec ) EncoderTo( w io.Writer ) mg.Reactor {
     return &encoder{ 
         w: w, 
         c: c, 
         stack: &list.List{},
-        impl: codec.NewReactorImpl(),
+        impl: mg.NewReactorImpl(),
     }
 }
 
@@ -232,14 +232,14 @@ func visitErrorf(
 func ( c *JsonCodec ) visitNumber(
     n gojson.Number,
     path objpath.PathNode,
-    rct codec.Reactor ) error {
+    rct mg.Reactor ) error {
     mgNum, err := asMingleNumber( n )
     if err != nil { return err }
     return rct.Value( mgNum )
 }
 
 func ( c *JsonCodec ) visitValue(
-    goVal interface{}, path objpath.PathNode, rct codec.Reactor ) error {
+    goVal interface{}, path objpath.PathNode, rct mg.Reactor ) error {
     switch v := goVal.( type ) {
     case nil: return rct.Value( mg.NullVal )
     case gojson.Number: return c.visitNumber( v, path, rct )
@@ -252,7 +252,7 @@ func ( c *JsonCodec ) visitValue(
 }
 
 func ( c *JsonCodec ) visitList(
-    l []interface{}, path objpath.PathNode, rct codec.Reactor ) error {
+    l []interface{}, path objpath.PathNode, rct mg.Reactor ) error {
     lp := startList( path )
     if err := rct.StartList(); err != nil { return err }
     for _, val := range l {
@@ -267,7 +267,7 @@ func ( c *JsonCodec ) visitEnum(
     typ mg.TypeReference,
     m map[ string ]interface{},
     path objpath.PathNode,
-    rct codec.Reactor ) error {
+    rct mg.Reactor ) error {
     if len( m ) > 2 {
         return visitError( path, "Enum has one or more unrecognized keys" )
     }
@@ -287,7 +287,7 @@ func ( c *JsonCodec ) visitEnum(
 func ( c *JsonCodec ) visitFields(
     m map[ string ]interface{},
     path objpath.PathNode,
-    rct codec.Reactor ) error {
+    rct mg.Reactor ) error {
     for fld, val := range m {
         if fld != jsonKeyType {
             if len( fld ) > 0 && fld[ 0 ] == byte( '$' ) {
@@ -311,7 +311,7 @@ func ( c *JsonCodec ) visitFields(
 func ( c *JsonCodec ) visitMap( 
     m map[ string ]interface{}, 
     path objpath.PathNode, 
-    rct codec.Reactor ) error {
+    rct mg.Reactor ) error {
     if typVal, ok := m[ jsonKeyType ]; ok {
         if typStr, ok2 := typVal.( string ); ok2 {
             if typ, err := mg.ParseTypeReference( typStr ); err == nil {
@@ -333,7 +333,7 @@ func ( c *JsonCodec ) visitMap(
     return c.visitFields( m, path, rct )
 }
 
-func ( c *JsonCodec ) DecodeFrom( r io.Reader, rct codec.Reactor ) error {
+func ( c *JsonCodec ) DecodeFrom( r io.Reader, rct mg.Reactor ) error {
     dec := gojson.NewDecoder( r )
     dec.UseNumber()
     var dest interface{}

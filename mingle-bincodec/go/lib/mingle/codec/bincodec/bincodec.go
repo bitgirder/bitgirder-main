@@ -43,7 +43,7 @@ func New() *BinCodec { return &BinCodec{} }
 type encoder struct {
     w io.Writer
     bc *BinCodec
-    impl *codec.ReactorImpl
+    impl *mg.ReactorImpl
     mgWr *mg.BinWriter
 }
 
@@ -157,11 +157,11 @@ func ( e *encoder ) End() error {
     return e.writeTypeCode( TypeCodeEnd )
 }
 
-func ( bc *BinCodec ) EncoderTo( w io.Writer ) codec.Reactor {
+func ( bc *BinCodec ) EncoderTo( w io.Writer ) mg.Reactor {
     return &encoder{ 
         w: w, 
         bc: bc, 
-        impl: codec.NewReactorImpl(),
+        impl: mg.NewReactorImpl(),
         mgWr: mg.NewWriter( w ),
     }
 }
@@ -180,7 +180,7 @@ func ( t *offsetTracker ) Read( p []byte ) ( n int, err error ) {
 type decode struct {
     bc *BinCodec
     r *offsetTracker
-    rct codec.Reactor
+    rct mg.Reactor
     mgRd *mg.BinReader
 }
 
@@ -412,7 +412,7 @@ func ( dec *decode ) readValue( tc TypeCode ) error {
     return dec.unexpectedTypeCode( tc )
 }
 
-func ( bc *BinCodec ) DecodeFrom( r io.Reader, rct codec.Reactor ) error {
+func ( bc *BinCodec ) DecodeFrom( r io.Reader, rct mg.Reactor ) error {
     ot := &offsetTracker{ r: r }
     dec := &decode{ bc: bc, r: ot, rct: rct, mgRd: mg.NewReader( ot ) }
     if _, err := dec.expectTypeCode( TypeCodeStruct ); err != nil { return err }

@@ -34,7 +34,3 @@ func TestCodecRegistration( t *testing.T ) {
         _ = cdc.( *BinCodec )
     })
 }
-
-func TestWriteReactorErrors( t *testing.T ) {
-    codecTesting.TestCodecErrorSequences( New(), t )
-}

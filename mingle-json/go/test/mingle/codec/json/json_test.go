@@ -48,7 +48,3 @@ func TestCodecRegistration( t *testing.T ) {
         _ = cdc.( *JsonCodec )
     })
 }
-
-func TestWriteReactorErrors( t *testing.T ) {
-    codecTesting.TestCodecErrorSequences( NewJsonCodec(), t )
-}

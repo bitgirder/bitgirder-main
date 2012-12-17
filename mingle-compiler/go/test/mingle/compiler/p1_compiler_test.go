@@ -156,7 +156,7 @@ struct Struct1 {
     bool2 Boolean default true
     buf1 Buffer?
     timestamp1 Timestamp?
-    timestamp2 Timestamp default "2007-08-24T13:15:43.123450000-08:00"
+    timestamp2 Timestamp default "2007-08-24T14:15:43.123450000-07:00"
     int1 Int64
     int2 Int64 default 1234
     int3 Int64?
@@ -276,7 +276,7 @@ struct FieldConstantTester {
     f12 String default "a"
     f13 String~"a" default "a"
     f14 Enum1 default Enum1.green
-    f15 Timestamp default "2007-08-24T13:15:43.123450000-08:00"
+    f15 Timestamp default "2007-08-24T14:15:43.123450000-07:00"
     f16 String+ default [ "a", "b", "c" ]
     f17 Int32* default [ 1, 2, 3 ]
     f18 Float64* default []
@@ -435,7 +435,7 @@ service Service1 {
                         "timestamp2", 
                         "mingle:core@v1/Timestamp",
                         mg.MustTimestamp( 
-                            "2007-08-24T13:15:43.123450000-08:00" ),
+                            "2007-08-24T14:15:43.123450000-07:00" ),
                     ),
                     makeFieldDef( "int1", "mingle:core@v1/Int64", nil ),
                     makeFieldDef( 
@@ -707,7 +707,7 @@ service Service1 {
                     ),
                     makeFieldDef( "f15", "mingle:core@v1/Timestamp",
                         mg.MustTimestamp( 
-                            "2007-08-24T13:15:43.123450000-08:00" ) ),
+                            "2007-08-24T14:15:43.123450000-07:00" ) ),
                     makeFieldDef( 
                         "f16", "mingle:core@v1/String+",
                         []interface{}{ "a", "b", "c" } ),
