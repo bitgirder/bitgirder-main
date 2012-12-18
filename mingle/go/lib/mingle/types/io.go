@@ -10,7 +10,7 @@ import (
 
 const (
 
-    tcNil = uint8( 0x00 )
+    tcNull = uint8( 0x00 )
     tcDefMap = uint8( 0x01 )
     tcPrimDef = uint8( 0x02 )
     tcAliasDef = uint8( 0x03 )
@@ -62,7 +62,7 @@ func ( w *BinWriter ) writeField( fd *FieldDefinition ) ( err error ) {
     if err = w.mgw.WriteIdentifier( fd.Name ); err != nil { return }
     if err = w.mgw.WriteTypeReference( fd.Type ); err != nil { return }
     if defl := fd.Default; defl == nil {
-        if err = w.mgw.WriteNil(); err != nil { return }
+        if err = w.mgw.WriteNull(); err != nil { return }
     } else {
         if err = w.mgw.WriteValue( defl ); err != nil { return }
     }
@@ -161,29 +161,26 @@ func ( w *BinWriter ) WriteDefinitionMap( m *DefinitionMap ) ( err error ) {
         if err == nil { err = w.WriteDefinition( d ) }
     })
     if err != nil { return }
-    return w.mgw.WriteTypeCode( tcNil )
+    return w.mgw.WriteTypeCode( tcNull )
 }
 
 type BinReader struct {
-    r *bgio.BinReader
     mgr *mg.BinReader
 }
 
 func NewBinReader( rd io.Reader ) *BinReader {
-    r := bgio.NewLeReader( rd )
-    mgr := mg.AsReader( r )
-    return &BinReader{ r: r, mgr: mgr }
+    return &BinReader{ mgr: mg.NewReader( rd ) }
 }
 
 func ( r *BinReader ) readLen() ( int, error ) {
-    i, err := r.r.ReadUint32()
+    i, err := r.mgr.ReadUint32()
     if err != nil { return 0, err }
     return int( i ), nil
 }
 
 func ( r *BinReader ) readOptType() ( typ mg.TypeReference, err error ) {
     var ok bool
-    if ok, err = r.r.ReadBool(); err != nil { return }
+    if ok, err = r.mgr.ReadBool(); err != nil { return }
     if ok {
         if typ, err = r.mgr.ReadTypeReference(); err != nil { return }
     }
@@ -301,7 +298,7 @@ func ( r *BinReader ) readServiceDef() ( sd *ServiceDefinition, err error ) {
         sd.Operations = append( sd.Operations, od )
     }
     var hasSec bool
-    if hasSec, err = r.r.ReadBool(); err != nil { return }
+    if hasSec, err = r.mgr.ReadBool(); err != nil { return }
     if hasSec {
         if sd.Security, err = r.mgr.ReadQualifiedTypeName(); err != nil { 
             return
@@ -318,7 +315,7 @@ func ( r *BinReader ) ReadDefinitionMap() ( m *DefinitionMap, err error ) {
         var def Definition
         if tc, err = r.mgr.ReadTypeCode(); err != nil { return }
         switch tc {
-        case tcNil: return
+        case tcNull: return
         case tcPrimDef: def, err = r.readPrimDef()
         case tcAliasDef: def, err = r.readAliasDef()
         case tcProtoDef: def, err = r.readProtoDef()

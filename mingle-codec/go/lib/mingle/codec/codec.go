@@ -15,7 +15,7 @@ type Codec interface {
 
 func Encode( ms *mg.Struct, cdc Codec, w io.Writer ) error {
     rct := cdc.EncoderTo( w )
-    return mg.VisitStruct( ms, rct )
+    return mg.VisitValue( ms, rct )
 }
 
 func EncodeBytes( ms *mg.Struct, cdc Codec ) ( []byte, error ) {
@@ -25,9 +25,9 @@ func EncodeBytes( ms *mg.Struct, cdc Codec ) ( []byte, error ) {
 }
 
 func Decode( cdc Codec, rd io.Reader ) ( *mg.Struct, error ) {
-    rct := mg.NewStructBuilder()
+    rct := mg.NewValueBuilder()
     if err := cdc.DecodeFrom( rd, rct ); err != nil { return nil, err }
-    return rct.GetStruct(), nil
+    return rct.GetValue().( *mg.Struct ), nil
 }
 
 func DecodeBytes( cdc Codec, buf []byte ) ( *mg.Struct, error ) {

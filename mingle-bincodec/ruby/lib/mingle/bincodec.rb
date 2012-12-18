@@ -5,27 +5,24 @@ require 'mingle/codec'
 
 module Mingle
 module BinCodec
-    
-TYPE_CODE_END = 0x00
-TYPE_CODE_BOOLEAN = 0x01
-TYPE_CODE_FLOAT64 = 0x03
-TYPE_CODE_ENUM = 0x04
-TYPE_CODE_FLOAT32 = 0x05
-TYPE_CODE_INT32 = 0x06
-TYPE_CODE_UINT32 = 0x07
-TYPE_CODE_INT64 = 0x08
-TYPE_CODE_UINT64 = 0x09
-TYPE_CODE_STRING = 0x0a
-TYPE_CODE_TIMESTAMP = 0x0b
-TYPE_CODE_BUFFER = 0x0d
-TYPE_CODE_UTF8_STRING = 0x0e
-TYPE_CODE_LIST = 0x0f
-TYPE_CODE_STRUCT = 0x10
-TYPE_CODE_SYMBOL_MAP = 0x11
-TYPE_CODE_NULL = 0x012
-TYPE_CODE_FIELD = 0x13
 
-TYPE_CODE_TS_HOLD = 0x12
+TYPE_CODE_NULL = 0x00
+TYPE_CODE_BOOLEAN = 0x0a
+TYPE_CODE_STRING = 0x0b
+TYPE_CODE_INT32 = 0x0c
+TYPE_CODE_INT64 = 0x0d
+TYPE_CODE_UINT32 = 0x0e
+TYPE_CODE_UINT64 = 0x0f
+TYPE_CODE_FLOAT32 = 0x10
+TYPE_CODE_FLOAT64 = 0x11
+TYPE_CODE_TIMESTAMP = 0x12
+TYPE_CODE_BUFFER = 0x13
+TYPE_CODE_ENUM = 0x14
+TYPE_CODE_SYMBOL_MAP = 0x15
+TYPE_CODE_FIELD = 0x16
+TYPE_CODE_STRUCT = 0x17
+TYPE_CODE_LIST = 0x19
+TYPE_CODE_END = 0x1a
 
 Io = BitGirder::Io
 
@@ -52,25 +49,13 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     end
 
     private
-    def append_utf8( wr, str )
-
-        append_type_code( wr, TYPE_CODE_UTF8_STRING )
-
-#        str = BitGirder::Io.as_utf8( str )
-#        append_sized_buffer( wr, str.encode( "binary" ) )
-        wr.write_utf8( str )
-    end
-
-    private
     def append_type_reference( wr, typ )
         BinWriter.as_bin_writer( wr ).write_type_reference( typ )
-#        append_utf8( wr, typ.external_form )
     end
 
     private
     def append_identifier( wr, id )
         BinWriter.as_bin_writer( wr ).write_identifier( id )
-#        append_utf8( wr, id.external_form )
     end
 
     private
@@ -84,7 +69,7 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     def append_string( wr, str )
         
         append_type_code( wr, TYPE_CODE_STRING )
-        append_utf8( wr, str.to_s )
+        wr.write_utf8( str.to_s )
     end
 
     private
@@ -143,7 +128,6 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     def append_timestamp( wr, val )
         
         append_type_code( wr, TYPE_CODE_TIMESTAMP )
-        append_type_code( wr, TYPE_CODE_TS_HOLD )
         wr.write_int64( val.time.to_i )
         wr.write_int32( val.time.nsec )
     end
@@ -260,12 +244,13 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     end
 
     private
+    def raise_unrecognized_value_code( tc, pos )
+        decode_raise( pos, sprintf( "Unrecognized value code: 0x%02x", tc ) )
+    end
+
+    private
     def type_code_expect_raise( code_sym, code_act, pos )
-
-        code_val = BinCodec.const_get( code_sym )
-
-        codec_raise "Expected #{code_sym} (#{to_hex_byte( code_val )}) " \
-                    "but saw #{to_hex_byte( code_act )} at byte #{pos}"
+        raise_unrecognized_value_code( code_act, pos )
     end
 
     private
@@ -286,62 +271,13 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     end
 
     private
-    def read_string_with_info( scanner )
-
-        # Only handling utf8 strings right now
-        expect_type_code( scanner, :TYPE_CODE_UTF8_STRING )
-
-        str = scanner.read_utf8
-        start_pos = scanner.pos - str.bytesize
-        [ str, { :string_start => start_pos } ]
-    end
-
-    private
-    def read_string( scanner )
-        read_string_with_info( scanner )[ 0 ]
-    end
-
-    private
-    def parse_string( opts )
-
-        scanner = has_key( opts, :scanner )
-        parser = has_key( opts, :parser )
-        parse_type = has_key( opts, :parse_type )
-        error_type = has_key( opts, :error_type )
-
-        str, info = read_string_with_info( scanner )
-
-        begin
-            parser.call( str )
-        rescue error_type => err
-            pos = has_key( info, :string_start )
-            decode_raise( pos, "Invalid #{parse_type}: #{err}" )
-        end
-    end
-
-    private
     def read_type_reference( scanner )
-        
         return BinReader.as_bin_reader( scanner ).read_type_reference
-
-#        parse_string(
-#            :scanner => scanner,
-#            :parser => lambda { |str| MingleTypeReference.get( str ) },
-#            :parse_type => "type reference",
-#            :error_type => MingleParseError
-#        )
     end
 
     private
     def read_identifier( scanner )
-        
         return BinReader.as_bin_reader( scanner ).read_identifier
-#        parse_string(
-#            :scanner => scanner,
-#            :parser => lambda { |str| MingleIdentifier.get( str ) },
-#            :parse_type => "identifier",
-#            :error_type => MingleParseError
-#        )
     end
 
     private
@@ -382,7 +318,7 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
 
     private
     def read_mg_string( scanner )
-        MingleString.new( read_string( scanner ) )
+        MingleString.new( scanner.read_utf8 )
     end
 
     private
@@ -429,7 +365,6 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     private
     def read_mg_timestamp( scanner )
         
-        expect_type_code( scanner, :TYPE_CODE_TS_HOLD )
         secs, nsec = scanner.read_int64, scanner.read_int32
         t = Time.at( secs, nsec.to_f / 1000.0 )
 
@@ -469,10 +404,7 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
             when TYPE_CODE_SYMBOL_MAP then read_fields( scanner )
             when TYPE_CODE_LIST then read_mg_list( scanner )
             when TYPE_CODE_NULL then MingleNull::INSTANCE
-
-            else 
-                decode_raise( 
-                    scanner, "Unexpected type code: #{to_hex_byte( typ )}" )
+            else raise_unrecognized_value_code( typ, scanner )
         end
     end
 
@@ -487,10 +419,7 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
         end
 
         unless ( tc = @conv.read_int8( buf[ 0, 1 ] ) ) == TYPE_CODE_STRUCT 
-
-            msg = "Saw type code #{to_hex_byte( tc )} but expected " +
-                to_hex_byte( TYPE_CODE_STRUCT )
-            decode_raise( 0, msg )
+            raise_unrecognized_value_code( tc, 0 )
         end
     end
 

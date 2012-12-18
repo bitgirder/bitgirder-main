@@ -126,6 +126,10 @@ func NewPathAsserter( f Failer ) *PathAsserter {
     return makePathAsserter( f, nil )
 }
 
+func NewListPathAsserter( f Failer ) *PathAsserter {
+    return NewPathAsserter( f ).StartList()
+}
+
 func ( pa *PathAsserter ) Descend( node interface{} ) *PathAsserter {
     p := pa.p
     if p == nil { p = objpath.RootedAt( node ) } else { p = p.Descend( node ) }

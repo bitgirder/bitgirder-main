@@ -5,26 +5,38 @@ import (
     "bitgirder/assert"
 )
 
-func callTestStructReactors( ms *Struct, t *testing.T ) {
-    rct := NewStructBuilder()
-    if err := VisitStruct( ms, rct ); err == nil {
-        assert.Equal( ms, rct.GetStruct() )
-    } else { t.Fatal( err ) }
+func assertValueReactorRoundtrip( v Value, a *assert.PathAsserter ) {
+    rct := NewValueBuilder()
+    rct.SetTopType( ReactorTopTypeValue )
+    if err := VisitValue( v, rct ); err == nil {
+        a.Equal( v, rct.GetValue() )
+    } else { a.Fatal( err ) }
 }
 
-func TestStructBuilderReactor( t *testing.T ) {
-    callTestStructReactors( 
-        MustStruct( "ns1@v1/S1",
-            "val1", String( "hello" ),
-            "list1", MustList(),
-            "map1", MustSymbolMap(),
-            "struct1", MustStruct( "ns1@v1/S2" ),
-        ),
-        t,
+func TestValueBuilderReactor( t *testing.T ) {
+    a := assert.NewPathAsserter( t ).StartList()
+    s1 := MustStruct( "ns1@v1/S1",
+        "val1", String( "hello" ),
+        "list1", MustList(),
+        "map1", MustSymbolMap(),
+        "struct1", MustStruct( "ns1@v1/S2" ),
     )
+    for _, val := range []Value{
+        String( "hello" ),
+        MustList(),
+        MustList( 1, 2, 3 ),
+        MustList( 1, MustList(), MustList( 1, 2 ) ),
+        MustSymbolMap(),
+        MustSymbolMap( "f1", "v1", "f2", MustList(), "f3", s1 ),
+        s1,
+        MustStruct( "ns1@v1/S3" ),
+    } {
+        assertValueReactorRoundtrip( val, a )
+        a = a.Next()
+    }
 }
 
-func TestStructBuilderReactorErrors( t *testing.T ) {
+func TestValueBuilderReactorErrors( t *testing.T ) {
     tests := []*ReactorErrorTest{}
     tests = append( tests, StdReactorErrorTests... )
     tests = append( tests,
@@ -39,6 +51,5 @@ func TestStructBuilderReactorErrors( t *testing.T ) {
             ErrMsg: "Invalid fields: Multiple entries for key: f1",
         },
     )
-    fact := func() Reactor { return NewStructBuilder() }
-    CallReactorErrorTests( fact, tests, t )
+    CallReactorErrorTests( tests, t )
 }

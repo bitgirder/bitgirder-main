@@ -22,6 +22,17 @@ class BinCodecTests < BitGirder::Core::BitGirderClass
         ms2 = MingleCodecs.decode( codec, enc_buf )
         ModelTestInstances.assert_equal( ms, ms2 )
     end
+
+    def test_rt1
+        
+        codec = MingleBinCodec.new
+
+        ms = ModelTestInstances::TYPE_COV_STRUCT1
+        enc_buf = MingleCodecs.encode( codec, ms )
+        ms2 = MingleCodecs.decode( codec, enc_buf )
+
+        ModelTestInstances.assert_equal( ms, ms2 )
+    end
 end
 
 class StandardTests < Mingle::Codec::StandardCodecTests

@@ -3,6 +3,7 @@ package mingle
 import (
     "container/list"
     "fmt"
+//    "log"
 )
 
 // Misc design note: Reactor is meant to be composable, and the design should
@@ -32,8 +33,27 @@ func rctErrorf( tmpl string, args ...interface{} ) *ReactorError {
     return &ReactorError{ fmt.Sprintf( tmpl, args... ) }
 }
 
-func getTopLevelStructStartExpectError( valName string ) error {
-    return rctErrorf( "Expected top-level struct start but got %s", valName )
+type ReactorTopType int
+
+const (
+    ReactorTopTypeValue = ReactorTopType( iota )
+    ReactorTopTypeList
+    ReactorTopTypeMap 
+    ReactorTopTypeStruct 
+)
+
+func ( t ReactorTopType ) String() string {
+    switch t {
+    case ReactorTopTypeValue: return "value"
+    case ReactorTopTypeList: return "list"
+    case ReactorTopTypeMap: return "map"
+    case ReactorTopTypeStruct: return "struct"
+    }
+    panic( libErrorf( "Unhandled reactor top type: %d", t ) )
+}
+
+func getReactorTopTypeError( valName string, tt ReactorTopType ) error {
+    return rctErrorf( "Expected %s but got %s", tt, valName )
 }
 
 type reactorImplMap struct {
@@ -69,11 +89,16 @@ func ( m *reactorImplMap ) end() error {
 
 type ReactorImpl struct {
     stack *list.List
+    topTyp ReactorTopType
     done bool
 }
 
 func NewReactorImpl() *ReactorImpl {
-    return &ReactorImpl{ stack: &list.List{} }
+    return &ReactorImpl{ stack: &list.List{}, topTyp: ReactorTopTypeStruct }
+}
+
+func ( ri *ReactorImpl ) getReactorTopTypeError( valName string ) error {
+    return getReactorTopTypeError( valName, ri.topTyp )
 }
 
 func ( ri *ReactorImpl ) checkActive( call string ) error {
@@ -81,10 +106,12 @@ func ( ri *ReactorImpl ) checkActive( call string ) error {
     return nil
 }
 
-// ri.stack known to be non-empty when this returns without error
+// ri.stack known to be non-empty when this returns without error, unless top
+// type is value.
 func ( ri *ReactorImpl ) checkValue( valName string ) error {
     if ri.stack.Len() == 0 {
-        return getTopLevelStructStartExpectError( valName )
+        if ri.topTyp == ReactorTopTypeValue { return nil }
+        return ri.getReactorTopTypeError( valName )
     }
     elt := ri.stack.Front().Value
     if m, ok := elt.( *reactorImplMap ); ok { return m.checkValue( valName ) }
@@ -130,7 +157,7 @@ func ( ri *ReactorImpl ) StartField( fld *Identifier ) error {
         }
     }
     errLoc := fmt.Sprintf( "field '%s'", fld )
-    return getTopLevelStructStartExpectError( errLoc )
+    return getReactorTopTypeError( errLoc, ReactorTopTypeStruct )
 }
 
 func ( ri *ReactorImpl ) Value() error {
@@ -141,7 +168,7 @@ func ( ri *ReactorImpl ) Value() error {
 
 func ( ri *ReactorImpl ) End() error {
     if err := ri.checkActive( "End" ); err != nil { return err }
-    if ri.stack.Len() == 0 { return getTopLevelStructStartExpectError( "end" ) }
+    if ri.stack.Len() == 0 { return ri.getReactorTopTypeError( "end" ) }
     elt := ri.stack.Remove( ri.stack.Front() )
     switch v := elt.( type ) {
     case *reactorImplMap: if err := v.end(); err != nil { return err }
@@ -210,67 +237,72 @@ func ( la *listAcc ) valueReady( mv Value ) {
     la.vals = append( la.vals, mv )
 }
 
-type StructBuilder struct {
-    s *Struct
+type ValueBuilder struct {
+    val Value
     accs *list.List
     impl *ReactorImpl
 }
 
-func NewStructBuilder() *StructBuilder {
-    return &StructBuilder{ accs: &list.List{}, impl: NewReactorImpl() }
+func NewValueBuilder() *ValueBuilder {
+    return &ValueBuilder{ accs: &list.List{}, impl: NewReactorImpl() }
 }
 
-func ( sb *StructBuilder ) Ready() bool { return sb.s != nil }
-
-func ( sb *StructBuilder ) pushAcc( acc valAccumulator ) {
-    sb.accs.PushFront( acc )
+// The result of setting this once reactions have begun is undefined.
+func ( vb *ValueBuilder ) SetTopType( topTyp ReactorTopType ) {
+    vb.impl.topTyp = topTyp
 }
 
-func ( sb *StructBuilder ) peekAcc() ( valAccumulator, bool ) {
-    if sb.accs.Len() == 0 { return nil, false }
-    return sb.accs.Front().Value.( valAccumulator ), true
+func ( vb *ValueBuilder ) Ready() bool { return vb.val != nil }
+
+func ( vb *ValueBuilder ) pushAcc( acc valAccumulator ) {
+    vb.accs.PushFront( acc )
 }
 
-func ( sb *StructBuilder ) popAcc() valAccumulator {
-    res, ok := sb.peekAcc()
+func ( vb *ValueBuilder ) peekAcc() ( valAccumulator, bool ) {
+    if vb.accs.Len() == 0 { return nil, false }
+    return vb.accs.Front().Value.( valAccumulator ), true
+}
+
+func ( vb *ValueBuilder ) popAcc() valAccumulator {
+    res, ok := vb.peekAcc()
     if ! ok { panic( libErrorf( "popAcc() called on empty stack" ) ) }
-    sb.accs.Remove( sb.accs.Front() )
+    vb.accs.Remove( vb.accs.Front() )
     return res
 }
 
-func ( sb *StructBuilder ) valueReady( val Value ) {
-    if acc, ok := sb.peekAcc(); ok {
+func ( vb *ValueBuilder ) valueReady( val Value ) {
+    if acc, ok := vb.peekAcc(); ok {
         acc.valueReady( val )
-    } else { sb.s = val.( *Struct ) }
+    } else { vb.val = val }
 }
 
 // Panics if result of Ready() is false
-func ( sb *StructBuilder ) GetStruct() *Struct {
-    if sb.Ready() { return sb.s }
-    panic( rctErrorf( "Attempt to access incomplete struct" ) )
+func ( vb *ValueBuilder ) GetValue() Value {
+    if vb.Ready() { return vb.val }
+    panic( rctErrorf( "Attempt to access incomplete value" ) )
 }
 
-func ( sb *StructBuilder ) StartStruct( typ TypeReference ) error {
-    if err := sb.impl.StartStruct(); err != nil { return err }
-    sb.pushAcc( newStructAcc( typ ) )
+func ( vb *ValueBuilder ) StartStruct( typ TypeReference ) error {
+    if err := vb.impl.StartStruct(); err != nil { return err }
+    vb.pushAcc( newStructAcc( typ ) )
     return nil
 }
 
-func ( sb *StructBuilder ) StartMap() error {
-    if err := sb.impl.StartMap(); err != nil { return err }
-    sb.pushAcc( newMapAcc() )
+func ( vb *ValueBuilder ) StartMap() error {
+    if err := vb.impl.StartMap(); err != nil { return err }
+    vb.pushAcc( newMapAcc() )
     return nil
 }
 
-func ( sb *StructBuilder ) StartList() error {
-    if err := sb.impl.StartList(); err != nil { return err }
-    sb.pushAcc( newListAcc() )
+func ( vb *ValueBuilder ) StartList() error {
+    if err := vb.impl.StartList(); err != nil { return err }
+    vb.pushAcc( newListAcc() )
     return nil
 }
 
-func ( sb *StructBuilder ) StartField( fld *Identifier ) error {
-    if err := sb.impl.StartField( fld ); err != nil { return err }
-    acc, ok := sb.peekAcc()
+func ( vb *ValueBuilder ) StartField( fld *Identifier ) error {
+    if err := vb.impl.StartField( fld ); err != nil { return err }
+    acc, ok := vb.peekAcc()
     if ok {
         var ma *mapAcc
         switch v := acc.( type ) {
@@ -283,18 +315,18 @@ func ( sb *StructBuilder ) StartField( fld *Identifier ) error {
     return nil
 }
 
-func ( sb *StructBuilder ) End() error {
-    if err := sb.impl.End(); err != nil { return err }
-    acc := sb.popAcc()
+func ( vb *ValueBuilder ) End() error {
+    if err := vb.impl.End(); err != nil { return err }
+    acc := vb.popAcc()
     if val, err := acc.end(); err == nil {
-        sb.valueReady( val )
+        vb.valueReady( val )
     } else { return err }
     return nil
 }
 
-func ( sb *StructBuilder ) Value( mv Value ) error {
-    if err := sb.impl.Value(); err != nil { return err }
-    sb.valueReady( mv ) 
+func ( vb *ValueBuilder ) Value( mv Value ) error {
+    if err := vb.impl.Value(); err != nil { return err }
+    vb.valueReady( mv ) 
     return nil
 }
 
@@ -305,7 +337,7 @@ func visitSymbolMap(
     }
     err := m.EachPairError( func( fld *Identifier, val Value ) error {
         if err := rct.StartField( fld ); err != nil { return err }
-        return visitValue( val, rct )
+        return VisitValue( val, rct )
     })
     if err != nil { return err }
     return rct.End()
@@ -319,20 +351,16 @@ func visitStruct( ms *Struct, rct Reactor ) ( err error ) {
 func visitList( ml *List, rct Reactor ) ( err error ) {
     if err = rct.StartList(); err != nil { return }
     for _, val := range ml.Values() {
-        if err = visitValue( val, rct ); err != nil { return }
+        if err = VisitValue( val, rct ); err != nil { return }
     }
     return rct.End()
 }
 
-func visitValue( mv Value, rct Reactor ) error {
+func VisitValue( mv Value, rct Reactor ) error {
     switch v := mv.( type ) {
     case *Struct: return visitStruct( v, rct )
     case *SymbolMap: return visitSymbolMap( v, true, rct )
     case *List: return visitList( v, rct )
     }
     return rct.Value( mv )
-}
-
-func VisitStruct( ms *Struct, rct Reactor ) error {
-    return visitValue( ms, rct )
 }

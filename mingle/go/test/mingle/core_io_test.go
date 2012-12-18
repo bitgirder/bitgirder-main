@@ -122,3 +122,18 @@ func TestCoreIo( t *testing.T ) {
         la = la.Next()
     }
 }
+
+func TestBinReaderBadInputs( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    for _, fi := range BinWriterFailureInputs {
+        rd := NewReader( bytes.NewBuffer( fi.Input ) )
+        if val, err := rd.ReadValue(); err == nil {
+            la.Fatalf( "Got val: %s", QuoteValue( val ) )
+        } else {
+            if ioe, ok := err.( *BinIoError ); ok {
+                la.Equal( fi.ErrMsg, ioe.Error() )
+            } else { la.Fatal( err ) }
+        }
+        la = la.Next()
+    }
+}

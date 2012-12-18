@@ -271,7 +271,7 @@ func GetDefaultTestEngine() *TestEngine { return stdEngine }
 type CodecFactory func( codecOpts *mgio.Headers ) codec.Codec
 
 type stdTest struct {
-    *gotest.T
+    *assert.PathAsserter
     fact CodecFactory
     spec *TestSpec
 }
@@ -299,7 +299,7 @@ func ( t *stdTest ) callDecodeError() {
     if _, err := codec.DecodeBytes( t.codec(), fd.Input ); err == nil {
         t.Fatalf( "Expected error %q", fd.ErrorMessage )
     } else if ce, ok := err.( *codec.CodecError ); ok {
-        assert.Equal( fd.ErrorMessage, ce.Error() )
+        t.Equal( fd.ErrorMessage, ce.Error() )
     } else { t.Fatal( err ) }
 }
 
@@ -313,13 +313,12 @@ func ( t *stdTest ) callDecodeInput() {
 func ( t *stdTest ) callEncodeValue() {
     ev := t.spec.Action.( *EncodeValue )
     if buf, err := codec.EncodeBytes( ev.Value, t.codec() ); err == nil {
-        a := &assert.Asserter{ t.T }
-        ev.Check( &CheckableEncode{ buf, a } )
+        ev.Check( &CheckableEncode{ buf, &assert.Asserter{ t } } )
     } else { t.Fatal( err ) }
 }
 
 func ( t *stdTest ) call() {
-//    t.Logf( "Calling test on spec %s", t.spec.KeyString() )
+    t.Logf( "Calling test on spec %s", t.spec.KeyString() )
     switch v := t.spec.Action.( type ) {
     case *RoundTrip: t.callRoundTrip()
     case *FailDecode: t.callDecodeError()
@@ -346,8 +345,10 @@ func TestCodecSpecs( codecId *mg.Identifier, t *gotest.T ) {
     sorted := make( []*TestSpec, len( specsOrig ) )
     copy( sorted, specsOrig ) 
     sort.Sort( byNameSorter( sorted ) )
+    la := assert.NewListPathAsserter( t )
     for _, spec := range sorted {
-        (&stdTest{ fact: fact, T: t, spec: spec }).call() 
+        (&stdTest{ fact: fact, PathAsserter: la, spec: spec }).call() 
+        la = la.Next()
     }
 }
 
@@ -356,7 +357,8 @@ func TestCodecSpec( codecId *mg.Identifier, key string, t *gotest.T ) {
     if spec := stdEngine.GetTestSpec( key ); spec == nil {
         t.Fatalf( "No such test spec: %s", key )
     } else {
-        (&stdTest{ fact: fact, T: t, spec: spec }).call()
+        pa := assert.NewPathAsserter( t )
+        (&stdTest{ fact: fact, PathAsserter: pa, spec: spec }).call()
     }
 }
 

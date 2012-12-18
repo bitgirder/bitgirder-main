@@ -3,15 +3,13 @@ package mingle
 import ( 
     "testing"
     "bitgirder/assert"
-//    "log"
 )
 
 type ReactorErrorTest struct {
     Seq []string
     ErrMsg string
+    TopType ReactorTopType
 }
-
-type ReactorErrorTestFactory func() Reactor
 
 var StdReactorErrorTests = []*ReactorErrorTest{
     { Seq: []string{ "start-struct", "start-field1", "start-field2" }, 
@@ -45,35 +43,30 @@ var StdReactorErrorTests = []*ReactorErrorTest{
       ErrMsg: "Expected list value but got start of field 'f1'",
     },
     { Seq: []string{ "value" },
-      ErrMsg: "Expected top-level struct start but got value",
+      ErrMsg: "Expected struct but got value",
+      TopType: ReactorTopTypeStruct,
     },
     { Seq: []string{ "start-list" },
-      ErrMsg: "Expected top-level struct start but got list start",
+      ErrMsg: "Expected struct but got list start",
+      TopType: ReactorTopTypeStruct,
     },
     { Seq: []string{ "start-map" },
-      ErrMsg: "Expected top-level struct start but got map start",
+      ErrMsg: "Expected struct but got map start",
+      TopType: ReactorTopTypeStruct,
     },
     { Seq: []string{ "start-field1" },
-      ErrMsg: "Expected top-level struct start but got field 'f1'",
+      ErrMsg: "Expected struct but got field 'f1'",
+      TopType: ReactorTopTypeStruct,
     },
     { Seq: []string{ "end" },
-      ErrMsg: "Expected top-level struct start but got end",
-    },
-    { Seq: []string{ 
-        "start-struct", 
-        "start-field1", "value",
-        "start-field2", "value",
-        "start-field1", "value",
-        "end",
-      },
-      ErrMsg: "Invalid fields: Multiple entries for key: f1",
+      ErrMsg: "Expected struct but got end",
+      TopType: ReactorTopTypeStruct,
     },
 }
 
 type reactorErrorTestCall struct {
     *assert.PathAsserter
     test *ReactorErrorTest
-    fact ReactorErrorTestFactory
 }
 
 func ( t *reactorErrorTestCall ) feedCall( call string, rct Reactor ) error {
@@ -98,21 +91,21 @@ func ( t *reactorErrorTestCall ) feedSequence( rct Reactor ) error {
 }
 
 func ( t *reactorErrorTestCall ) call() {
-    rct := t.fact()
+    rct := NewValueBuilder()
+    rct.SetTopType( t.test.TopType )
     if err := t.feedSequence( rct ); err == nil {
         t.Fatalf( "Got no err for %#v", t.test.Seq )
     } else {
         if _, ok := err.( *ReactorError ); ok {
-            assert.Equal( t.test.ErrMsg, err.Error() )
+            t.Equal( t.test.ErrMsg, err.Error() )
         } else { t.Fatal( err ) }
     }
 }
 
-func CallReactorErrorTests( 
-    f ReactorErrorTestFactory, tests []*ReactorErrorTest, t *testing.T ) {
+func CallReactorErrorTests( tests []*ReactorErrorTest, t *testing.T ) {
     a := assert.NewPathAsserter( t ).StartList()
     for _, test := range tests {
-        ( &reactorErrorTestCall{ PathAsserter: a, test: test, fact: f } ).call()
+        ( &reactorErrorTestCall{ PathAsserter: a, test: test } ).call()
         a = a.Next()
     }
 }

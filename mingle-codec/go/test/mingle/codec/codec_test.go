@@ -85,7 +85,7 @@ func ( w discardWriter ) Write( p []byte ) ( int, error ) {
 
 func ( f *fixedValueCodec ) DecodeFrom( rd io.Reader, rct mg.Reactor ) error {
     if _, err := io.Copy( discardWriter( 0 ), rd ); err != nil { return err }
-    return mg.VisitStruct( fixedCodecStruct, rct )
+    return mg.VisitValue( fixedCodecStruct, rct )
 }
 
 func TestCodecBufferUtilMethods( t *testing.T ) {
