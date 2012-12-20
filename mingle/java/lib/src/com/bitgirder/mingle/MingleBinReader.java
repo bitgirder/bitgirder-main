@@ -364,14 +364,19 @@ class MingleBinReader
         }
     }
 
+    // read but drop size val
+    private void readSize() throws IOException { rd.readInt(); }
+
     private
     MingleStruct
     processStruct()
         throws IOException
     {
+        readSize();
+
         return new MingleStruct( 
             readAtomicTypeReference(), 
-            (MingleSymbolMap) readNext( "struct fields", TC_SYM_MAP )
+            processSymbolMap()
         );
     }
 
@@ -380,6 +385,8 @@ class MingleBinReader
     processList()
         throws IOException
     {
+        readSize();
+
         List< MingleValue > l = Lang.newList();
 
         while ( true )

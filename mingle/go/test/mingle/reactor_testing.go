@@ -5,13 +5,13 @@ import (
     "bitgirder/assert"
 )
 
-type ReactorErrorTest struct {
+type ReactorSeqErrorTest struct {
     Seq []string
     ErrMsg string
     TopType ReactorTopType
 }
 
-var StdReactorErrorTests = []*ReactorErrorTest{
+var StdReactorSeqErrorTests = []*ReactorSeqErrorTest{
     { Seq: []string{ "start-struct", "start-field1", "start-field2" }, 
       ErrMsg: "Saw start of field 'f2' while expecting a value for 'f1'",
     },
@@ -66,7 +66,7 @@ var StdReactorErrorTests = []*ReactorErrorTest{
 
 type reactorErrorTestCall struct {
     *assert.PathAsserter
-    test *ReactorErrorTest
+    test *ReactorSeqErrorTest
 }
 
 func ( t *reactorErrorTestCall ) feedCall( call string, rct Reactor ) error {
@@ -102,7 +102,7 @@ func ( t *reactorErrorTestCall ) call() {
     }
 }
 
-func CallReactorErrorTests( tests []*ReactorErrorTest, t *testing.T ) {
+func CallReactorSeqErrorTests( tests []*ReactorSeqErrorTest, t *testing.T ) {
     a := assert.NewPathAsserter( t ).StartList()
     for _, test := range tests {
         ( &reactorErrorTestCall{ PathAsserter: a, test: test } ).call()

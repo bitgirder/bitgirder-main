@@ -45,7 +45,7 @@ type BinIoError struct { msg string }
 
 func ( e *BinIoError ) Error() string { return e.msg }
 
-type BinWriter struct { w *bgio.BinWriter }
+type BinWriter struct { *bgio.BinWriter }
 
 func AsWriter( w *bgio.BinWriter ) *BinWriter { return &BinWriter{ w } }
 
@@ -54,7 +54,7 @@ func NewWriter( w io.Writer ) *BinWriter {
 }
 
 func ( w *BinWriter ) WriteTypeCode( tc uint8 ) error {
-    return w.w.WriteUint8( tc )
+    return w.WriteUint8( tc )
 }
 
 func ( w *BinWriter ) WriteNull() error { return w.WriteTypeCode( tcNull ) }
@@ -65,15 +65,15 @@ func ( w *BinWriter ) writeBool( b bool ) ( err error ) {
 
 func ( w *BinWriter ) WriteIdentifier( id *Identifier ) ( err error ) {
     if err = w.WriteTypeCode( tcId ); err != nil { return }
-    if err = w.w.WriteUint8( uint8( len( id.parts ) ) ); err != nil { return }
+    if err = w.WriteUint8( uint8( len( id.parts ) ) ); err != nil { return }
     for _, part := range id.parts {
-        if err = w.w.WriteBuffer32( part ); err != nil { return }
+        if err = w.WriteBuffer32( part ); err != nil { return }
     }
     return
 }
 
 func ( w *BinWriter ) writeIds( ids []*Identifier ) ( err error ) {
-    if err = w.w.WriteUint8( uint8( len( ids ) ) ); err != nil { return }
+    if err = w.WriteUint8( uint8( len( ids ) ) ); err != nil { return }
     for _, id := range ids {
         if err = w.WriteIdentifier( id ); err != nil { return }
     }
@@ -91,7 +91,7 @@ func ( pw pathWriter ) Descend( elt interface{} ) ( err error ) {
 
 func ( pw pathWriter ) List( idx int ) ( err error ) {
     if err = pw.w.WriteTypeCode( tcIdPathListNode ); err != nil { return }
-    return pw.w.w.WriteInt32( int32( idx ) )
+    return pw.w.WriteInt32( int32( idx ) )
 }
 
 func ( w *BinWriter ) WriteIdPath( p objpath.PathNode ) ( err error ) {
@@ -109,7 +109,7 @@ func ( w *BinWriter ) WriteNamespace( ns *Namespace ) ( err error ) {
 func ( w *BinWriter ) WriteDeclaredTypeName( 
     n *DeclaredTypeName ) ( err error ) {
     if err = w.WriteTypeCode( tcDeclNm ); err != nil { return }
-    return w.w.WriteBuffer32( n.nm )
+    return w.WriteBuffer32( n.nm )
 }
 
 func ( w *BinWriter ) WriteQualifiedTypeName( 
@@ -130,7 +130,7 @@ func ( w *BinWriter ) WriteTypeName( nm TypeName ) error {
 func ( w *BinWriter ) writeRegexRestriction( 
     rr *RegexRestriction ) ( err error ) {
     if err = w.WriteTypeCode( tcRegexRestrict ); err != nil { return }
-    return w.w.WriteUtf8( rr.src )
+    return w.WriteUtf8( rr.src )
 }
 
 func ( w *BinWriter ) writeEnum( en *Enum ) ( err error ) {
@@ -144,7 +144,7 @@ type writeReactor struct { *BinWriter }
 
 func ( w writeReactor ) StartStruct( typ TypeReference ) error {
     if err := w.WriteTypeCode( tcStruct ); err != nil { return err }
-    if err := w.w.WriteInt32( int32( -1 ) ); err != nil { return err }
+    if err := w.WriteInt32( int32( -1 ) ); err != nil { return err }
     return w.WriteTypeReference( typ )
 }
 
@@ -155,7 +155,7 @@ func ( w writeReactor ) StartField( fld *Identifier ) error {
 
 func ( w writeReactor ) StartList() error { 
     if err := w.WriteTypeCode( tcList ); err != nil { return err }
-    return w.w.WriteInt32( -1 )
+    return w.WriteInt32( -1 )
 }
 
 func ( w writeReactor ) StartMap() error { return w.WriteTypeCode( tcSymMap ) }
@@ -166,37 +166,37 @@ func ( w writeReactor ) Value( val Value ) error {
     case *Null: return w.WriteNull()
     case Boolean: 
         if err := w.WriteTypeCode( tcBool ); err != nil { return err }
-        return w.w.WriteBool( bool( v ) )
+        return w.WriteBool( bool( v ) )
     case Buffer:
         if err := w.WriteTypeCode( tcBuffer ); err != nil { return err }
-        return w.w.WriteBuffer32( []byte( v ) )
+        return w.WriteBuffer32( []byte( v ) )
     case String:
         if err := w.WriteTypeCode( tcString ); err != nil { return err }
-        return w.w.WriteUtf8( string( v ) )
+        return w.WriteUtf8( string( v ) )
     case Int32:
         if err := w.WriteTypeCode( tcInt32 ); err != nil { return err }
-        return w.w.WriteInt32( int32( v ) )
+        return w.WriteInt32( int32( v ) )
     case Int64:
         if err := w.WriteTypeCode( tcInt64 ); err != nil { return err }
-        return w.w.WriteInt64( int64( v ) )
+        return w.WriteInt64( int64( v ) )
     case Uint32:
         if err := w.WriteTypeCode( tcUint32 ); err != nil { return err }
-        return w.w.WriteUint32( uint32( v ) )
+        return w.WriteUint32( uint32( v ) )
     case Uint64:
         if err := w.WriteTypeCode( tcUint64 ); err != nil { return err }
-        return w.w.WriteUint64( uint64( v ) )
+        return w.WriteUint64( uint64( v ) )
     case Float32:
         if err := w.WriteTypeCode( tcFloat32 ); err != nil { return err }
-        return w.w.WriteFloat32( float32( v ) )
+        return w.WriteFloat32( float32( v ) )
     case Float64:
         if err := w.WriteTypeCode( tcFloat64 ); err != nil { return err }
-        return w.w.WriteFloat64( float64( v ) )
+        return w.WriteFloat64( float64( v ) )
     case Timestamp:
         if err := w.WriteTypeCode( tcTimestamp ); err != nil { return err }
-        if err := w.w.WriteInt64( time.Time( v ).Unix() ); err != nil { 
+        if err := w.WriteInt64( time.Time( v ).Unix() ); err != nil { 
             return err
         }
-        return w.w.WriteInt32( int32( time.Time( v ).Nanosecond() ) )
+        return w.WriteInt32( int32( time.Time( v ).Nanosecond() ) )
     case *Enum: return w.writeEnum( v )
     }
     panic( libErrorf( "%T: Unhandled value: %T", w, val ) )

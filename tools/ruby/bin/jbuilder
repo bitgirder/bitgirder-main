@@ -62,7 +62,7 @@ class App < BitGirder::Core::BitGirderClass
 
     bg_attr :cp_includes_test, processor: :boolean, required: false
 
-    bg_attr :log_to_console, processor: :boolean, required: false
+    bg_attr :log_to_console, processor: :boolean, required: false, default: true
 
     def initialize( *argv )
         

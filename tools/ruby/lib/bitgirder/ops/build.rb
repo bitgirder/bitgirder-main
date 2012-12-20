@@ -505,8 +505,12 @@ module JavaEnvMixin
         if res
             @java_home = file_exists( File.expand_path( res ) )
         else
-            raise "java-home run opt not provided and " \
-                  "#{ENV_JAVA_HOME} is not set"
+            if java = which( "java" )
+                @java_home = File.expand_path( "#{java}/../.." )
+            else
+                raise "java-home run opt not provided and " \
+                      "#{ENV_JAVA_HOME} is not set"
+            end
         end
     end
 

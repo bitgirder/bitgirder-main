@@ -6,6 +6,8 @@ import (
     "fmt"
     "path/filepath"
     "log"
+    "io"
+    mg "mingle"
     bgio "bitgirder/io"
 )
 
@@ -26,6 +28,19 @@ func ( f *OutFile ) SetParseArg() {
     flag.StringVar( &f.fname, "out-file", "", "Dest file for test data" )
 }
 
+func ( f *OutFile ) openIoWriter() ( wr io.Writer, err error ) {
+    if dir := filepath.Dir( f.fname ); dir != "." {
+        if err = os.MkdirAll( dir, os.FileMode( 0755 ) ); err != nil {
+            err = fmt.Errorf( "Couldn't create parent dir %s: %s", dir, err )
+            return
+        }
+    }
+    if wr, err = os.Create( f.fname ); err != nil {
+        err = fmt.Errorf( "Couldn't create %s: %s", f.fname, err )
+    } 
+    return
+}
+
 func ( f *OutFile ) openBinWriter() ( wr *bgio.BinWriter, err error ) {
     if dir := filepath.Dir( f.fname ); dir != "." {
         if err = os.MkdirAll( dir, os.FileMode( 0755 ) ); err != nil {
@@ -41,10 +56,28 @@ func ( f *OutFile ) openBinWriter() ( wr *bgio.BinWriter, err error ) {
     return 
 }
 
+func ( f *OutFile ) openMgWriter() ( *mg.BinWriter, error ) {
+    w, err := f.openIoWriter()
+    if err != nil { return nil, err }
+    return mg.NewWriter( w ), nil
+}
+
 func ( f *OutFile ) WithBinWriter( call func( *bgio.BinWriter ) error ) error {
     wr, err := f.openBinWriter()
     if err != nil { return err }
     defer wr.Close()
     log.Printf( "Writing %s", f.Name() )
     return call( wr )
+}
+
+// Meant to be run as the workhorse of some program's main()
+func WriteOutFile( call func( w *mg.BinWriter ) error ) {
+    tgf := NewOutFile()
+    tgf.SetParseArg()
+    flag.Parse()
+    w, err := tgf.openMgWriter()
+    if err != nil { log.Fatal( err ) }
+    defer w.Close()
+    log.Printf( "Writing %s", tgf.Name() )
+    if err = call( w ); err != nil { log.Fatal( err ) }
 }

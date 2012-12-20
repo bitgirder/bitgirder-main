@@ -313,6 +313,7 @@ class Lang
 
     public static < V > List< V > newList() { return new ArrayList< V >(); }
 
+    @SafeVarargs
     public
     static
     < V >
@@ -580,6 +581,7 @@ class Lang
 
     // arr itself may not be null, but elts may be null according to newSet(
     // Collection )
+    @SafeVarargs
     public
     static
     < V >

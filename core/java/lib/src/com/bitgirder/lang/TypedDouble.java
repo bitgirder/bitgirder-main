@@ -14,7 +14,7 @@ implements Comparable< T >
 
     private final static class SignatureForcer {}
 
-    private final Double d;
+    final Double d;
 
     private 
     TypedDouble( Double d,

@@ -107,6 +107,7 @@ class LangTests
         Lang.newMap( String.class, Integer.class, "one", 1, "two", true );
     }
 
+    @SuppressWarnings( { "unchecked", "varargs" } )
     private
     < V extends Comparable< V > >
     void

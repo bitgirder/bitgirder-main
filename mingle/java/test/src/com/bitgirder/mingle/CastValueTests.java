@@ -205,7 +205,7 @@ class CastValueTests
             addExpectation(
                 new MingleString( "not-a-num" ),
                 typ,
-                new ErrMsg( "Illegal embedded minus sign" )
+                new ErrMsg( "Illegal embedded sign character" )
             );
 
             addExpectation(

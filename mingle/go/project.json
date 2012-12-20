@@ -14,7 +14,8 @@
     ],
     "test-commands": {
         "write-parser-tests": {},
-        "write-cast-value-tests": {}
+        "write-cast-value-tests": {},
+        "write-reactor-seq-error-tests": {}
     },
     "test-data-generators": {
         "core-parser-tests": {
@@ -26,6 +27,13 @@
             "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
             "command": "write-cast-value-tests",
             "argv": [ "--out-file", "${data_gen_dir}/cast-value-tests.bin" ]
+        },
+        "reactor-seq-error-tests": {
+            "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
+            "command": "write-reactor-seq-error-tests",
+            "argv": [ 
+                "--out-file", "${data_gen_dir}/reactor-seq-error-tests.bin"
+            ]
         }
     }
 }

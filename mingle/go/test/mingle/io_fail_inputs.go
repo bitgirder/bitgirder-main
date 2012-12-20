@@ -18,8 +18,8 @@ func appendInput( data interface{}, w *BinWriter ) {
         if err := w.WriteIdentifier( v ); err != nil { panic( err ) }
     case string: 
         if err := w.WriteValue( String( v ) ); err != nil { panic( err ) }
-    case uint8: if err := w.w.WriteUint8( v ); err != nil { panic( err ) }
-    case int32: if err := w.w.WriteInt32( v ); err != nil { panic( err ) }
+    case uint8: if err := w.WriteUint8( v ); err != nil { panic( err ) }
+    case int32: if err := w.WriteInt32( v ); err != nil { panic( err ) }
     case TypeReference: 
         if err := w.WriteTypeReference( v ); err != nil { panic( err ) }
     default: panic( libErrorf( "Unrecognized input elt: %T", v ) )

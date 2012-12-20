@@ -26,7 +26,7 @@ implements CharSequence,
     private static Inputs inputs = new Inputs();
     private static State state = new State();
 
-    private final String s;
+    final String s;
     private final int hashCode;
 
     AbstractTypedString( String s,

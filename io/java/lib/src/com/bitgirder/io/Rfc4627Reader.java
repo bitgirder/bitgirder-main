@@ -27,8 +27,8 @@ class Rfc4627Reader
     {
         private int col;
 
-        private String errMsg;
-        private int errCol;
+        String errMsg;
+        int errCol;
 
         private ReadResult() {}
 

@@ -37,10 +37,10 @@ func TestValueBuilderReactor( t *testing.T ) {
 }
 
 func TestValueBuilderReactorErrors( t *testing.T ) {
-    tests := []*ReactorErrorTest{}
-    tests = append( tests, StdReactorErrorTests... )
+    tests := []*ReactorSeqErrorTest{}
+    tests = append( tests, StdReactorSeqErrorTests... )
     tests = append( tests,
-        &ReactorErrorTest{
+        &ReactorSeqErrorTest{
             Seq: []string{ 
                 "start-struct", 
                 "start-field1", "value",
@@ -51,5 +51,5 @@ func TestValueBuilderReactorErrors( t *testing.T ) {
             ErrMsg: "Invalid fields: Multiple entries for key: f1",
         },
     )
-    CallReactorErrorTests( tests, t )
+    CallReactorSeqErrorTests( tests, t )
 }

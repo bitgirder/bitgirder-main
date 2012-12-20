@@ -3,9 +3,13 @@ package com.bitgirder.io;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.testing.TestData;
+
 import java.nio.ByteBuffer;
 
 import java.util.Random;
+
+import java.io.IOException;
 
 public
 final
@@ -113,5 +117,37 @@ class IoTestFactory
         res.getFile().mkdirs();
 
         return res;
+    }
+
+    public
+    static
+    abstract
+    class LeTestReader< T >
+    extends TestData.TestReader< T >
+    {
+        private BinReader leRd;
+
+        protected LeTestReader( String fileNm ) { super( fileNm ); }
+
+        protected
+        final
+        int
+        expectInt32( int i )
+            throws IOException
+        {
+            int act = leRd().readInt();
+
+            if ( act == i ) return i;
+            throw failf( "Expected 0x%04x but saw 0x%04x", i, act );
+        }
+
+        protected
+        final
+        BinReader
+        leRd()
+        {
+            if ( leRd == null ) leRd = BinReader.asReaderLe( io() );
+            return leRd;
+        }
     }
 }

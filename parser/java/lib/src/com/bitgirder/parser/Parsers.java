@@ -319,6 +319,7 @@ class Parsers
         return Lang.unmodifiableCopy( de.matches );
     }
 
+    @SafeVarargs
     public
     static
     < N, T >
