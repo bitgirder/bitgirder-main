@@ -48,7 +48,9 @@ class App < BitGirder::Core::BitGirderClass
                     end
                 }
     
-    bg_attr :env_cfg, validation: :opt_file_exists, default: ENV[ ENV_ENV_CFG ]
+    bg_attr :env_config, 
+            validation: :opt_file_exists, 
+            default: ENV[ ENV_ENV_CFG ]
  
     bg_attr :dry_run, processor: :boolean, default: false
 
@@ -313,7 +315,7 @@ class App < BitGirder::Core::BitGirderClass
         create_opts = { 
             workspace: create_workspace, 
             run_ctx: run_ctx,
-            env_cfg: @env_cfg,
+            env_config: @env_config,
         }
         task_ctx = get_task_context( create_opts )
         print_build_order( task_ctx.order )

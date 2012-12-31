@@ -1,0 +1,249 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+include BitGirder::Core
+
+require 'bitgirder/ops/java'
+include BitGirder::Ops::Java
+
+require 'bitgirder/io'
+include BitGirder::Io
+
+class CommandImpl < AbstractApplication
+    
+    def self.attr_java_home
+    
+        bg_attr :java_home, 
+                default: lambda { JavaEnvironments.get_java_home },
+                description: "Java installation to use"
+    end
+end
+
+class InstallCrypto < CommandImpl
+    
+    attr_java_home
+
+    bg_attr :prompt_install,
+            processor: :boolean,
+            default: true,
+            description: "Proceed with non-interactive installation"
+ 
+    bg_attr :backup_originals,
+            processor: :boolean,
+            default: true,
+            description: "Make backups of any files replaced"
+
+    SEC_POLICY_FILES = YAML.load <<-END_YAML
+---
+local_policy.jar: !binary |-
+  UEsDBBQACAAIACV0vz4AAAAAAAAAAAAAAAAUAAAATUVUQS1JTkYvTUFOSUZF
+  U1QuTUYVjr0KgzAURveA75CxRSIqRWigQ3+GCrWL1FWiXu1tYyJJRNKnr24f
+  nMPhK4TCHqxjFRiLWnGaRHFArsZPTrPSGVCDe3M6K4kjOug2BmId7OI3OYvi
+  OjnQXTkrWmBrtPXWwWhprtpoH5CAPMUInHbQi1m6WupWyGjSElsfkPJ+TtgN
+  h/UBp2ED1Vctv8w/XiGk4XHIMS0+emmK0xb6A1BLBwim5fIWngAAAKwAAABQ
+  SwMEFAAIAAgAJXS/PgAAAAAAAAAAAAAAABQAAABNRVRBLUlORi9PUkFDTEVf
+  Si5TRm3NTWuDMByA8bvgd8hxO0RiZy0Edqg6WA8JLVLpdhlpGjXDJDX/uNZ9
+  +r30NNjtOf2eWndWhMkr3CgP2lmK0oTEUf28TnGlOwUBM2F1ewtt8ToEr49T
+  UECRgusqq7pdwfmhNLYS+Upe7ZwvMniMo9IrEdQJF/MPmicE3dWTRUxL72CG
+  oAygjZXJ/f87isbqhaWbsVnW5+KD9dsFEHBj//DKyTcfR1wYRdFJtWIawtvg
+  pBiSsxu0nP+IFL1f0l5ss/3Tvvhsy3FpDD/uSGgOF/YLfQFQSwcITlz2PdMA
+  AAAGAQAAUEsDBBQACAAIACV0vz4AAAAAAAAAAAAAAAAVAAAATUVUQS1JTkYv
+  T1JBQ0xFX0ouUlNBM2hiv8/GqdXm0fadl5GdaUET+wWDJvYzTIyMhtwGnGys
+  2nzMTFKsDAbcCEWMC5rYMg2amBYCcfwCZiZGJiYmZkugCnaginMWLMxA5Y0T
+  wNqZQ1nYhJlCg2EcDmEmZ0dDIQMBEIddmDMgMSdfwTGnJN9Q1kAaJMYlLBJc
+  mqfgm5lclF9cWVySmlus4JmXbKhsoAiS5haW8kosS1QIzk8rKU8sSlVwzk9J
+  VQjOTM/LzEs3lDGQAiliFhb2cnZFkVJwdjSQE+c1NDQwAWIzAwMT4ygg1wzI
+  NYFyDRKp4gZpA0mIG4T8ixKTc0CyRQX5RYklmfl5Bo3zDXjh4cjIyMrA3NgL
+  DKtOpsZGhi1Vyyon+96+sc3ii0Ddc0eznTcXvou0NlRi/bcx5tOTMzMK0jwn
+  515QXrt9i7L35GAF27/qW53m/SlL3vU9m6X9AevpbdwP3x52/jCTZ7EsywuG
+  o7pP1K8tSXrGJssdujPdcn9awat6oTs7Zqvbhh8311UNX8Z9tqFVcffR/DuN
+  PN/X9Wrd7GZiZmRgXNzYZ9DYbSDIxpnQ5sHY9sOJkZGFhZmJRcCAD+grWX5G
+  xv8gPusDA1kQn49FjEXkaePrFobvUf0JjhONCiKXvbmgcNbVQB4krcwiYSDW
+  IJL66Evbyct+Hyb6RSzK+nqjImrWwWUGaiAFgizyBrKN0klFiSlp+UUpeuWp
+  Jbn5RakO+eCg00vOz0VJVcz6DAY6TCKhCzlU10w40yy4eUNi0LvGM/lGjxYy
+  iXjNthYOqHdVVnzVJZf9s+3A0h+d4QZNzAeAuA6SSBkFhkIaNQCmUSNTA3MD
+  IACmUSMDJO5gdHIT43Yg1oEFLCOQIw9Kz6/Xm7PInQqUy4zd8Kn/21ZP+WNL
+  ZrJe19xfsj3rq+QNuSfSP7gYZ834X7D6kVdYW07w5j8PTzT2GH448nlD97MC
+  tjffMzNuN/sUaXZqmonHWHuxL1Bg0nKbHihbcIJDgvscT97ssu+sj5//vpxY
+  +TBhlkov29Rmm0CFhwbnLcKblkkV8Z67zCTK0KLq+nDXzpVJqytfRBvs6MyW
+  /l9dCnLa6pMl1SXv3zltzQr2tb47ga0oYyI/9xLNMr1Q66vrfFNj6rSsWJal
+  L7tQuGrp9e2PDhbxLrm4Sm5SiI8CA+eiDZyOksYMmw7HrHP6sbH7VM20GwL1
+  5i7Rq85UnLheVGae7TBzRWjarxXMct1egkyZp312qLLJLCi/dHLNJduXXAK/
+  ygq2/77D3NjCwNTYoMs5I2bNjjnHZ9a9U5DUMpnw8/rq1evuZhdN5U378V69
+  32XTWw2X4//Wb1imns+Q7toUzb4iLMz6kmZgYlym5XW9knKh85JeX3VPnC5K
+  POKX/8vd2V5k9689Emkah26mdVfp6h9KmOQt8i/CTrE+I2lfjofnzwXeca1z
+  JQV+iroGShde+c69OM0gBSOrM7Ab8IOypjAoq7MaMAMpwpkZURhglcaSh7W+
+  n7eZHvuzYhvHdcctN3ldfZ5smcMk4nq2NJNP8Zfstc2am15+N5Y1/vvH07CJ
+  0Q6YpqyANZJB4/RBmAPAlR9STYlawrM0NvRV3587+RvXNRnehiW7FVi+r7by
+  qPBN92OwMpDdYs8krZRQzLhNNG6eb3a9TeWdDEPdYPWnCkyvH9gsyHjyb23i
+  fumJgvIR0z5+uKTy117Y1CxtzyrfN9P+lZ3SenbAQ+Rk3M8+TsPo294B3Cn5
+  xaKWux3DVCse3PXMk/vEGLfmdp96hFskAFBLBwhdY3uWJgUAAOMHAABQSwME
+  FAAIAAgATnG/PgAAAAAAAAAAAAAAAAkABABNRVRBLUlORi/+ygAAAwBQSwcI
+  AAAAAAIAAAAAAAAAUEsDBBQACAAIAGZrvz4AAAAAAAAAAAAAAAAUAAAAZGVm
+  YXVsdF9sb2NhbC5wb2xpY3k9jMsNwjAQBe+u4jWAXUBOKA1woAHL2iSLHNva
+  XT4RonecIPEu7zIzIWCs92KynbRR4okTWs2cNkycCVMVpANgUjzZFpSKzCub
+  ohYk2ZpVqAmV2RbvZonF8HboCwHXhYTAultCHeNk3L3uxLIh5rlKj67qD6OR
+  rKy6E7f4iC//6/vxuHPOlz8wwH0G9wVQSwcIZYv0Y40AAADAAAAAUEsBAhQA
+  FAAIAAgAJXS/Pqbl8haeAAAArAAAABQAAAAAAAAAAAAAAAAAAAAAAE1FVEEt
+  SU5GL01BTklGRVNULk1GUEsBAhQAFAAIAAgAJXS/Pk5c9j3TAAAABgEAABQA
+  AAAAAAAAAAAAAAAA4AAAAE1FVEEtSU5GL09SQUNMRV9KLlNGUEsBAhQAFAAI
+  AAgAJXS/Pl1je5YmBQAA4wcAABUAAAAAAAAAAAAAAAAA9QEAAE1FVEEtSU5G
+  L09SQUNMRV9KLlJTQVBLAQIUABQACAAIAE5xvz4AAAAAAgAAAAAAAAAJAAQA
+  AAAAAAAAAAAAAF4HAABNRVRBLUlORi/+ygAAUEsBAhQAFAAIAAgAZmu/PmWL
+  9GONAAAAwAAAABQAAAAAAAAAAAAAAAAAmwcAAGRlZmF1bHRfbG9jYWwucG9s
+  aWN5UEsFBgAAAAAFAAUARAEAAGoIAAAAAA==
+US_export_policy.jar: !binary |-
+  UEsDBBQACAAIACR0vz4AAAAAAAAAAAAAAAAUAAAATUVUQS1JTkYvTUFOSUZF
+  U1QuTUYVjrEKgzAURfeA/5CxHSIqpUOgQ9VCRdLF1lVCfNpUk9gkQvP31e3C
+  ORwu41oO4DxpwTppNMVpnESosGHxhjTegh79m+JVz1JJD/3OgG+D5GGXz3HS
+  pSd8aFaNmRTWuOA8KIcrLeJjhCL04Aoo7mHg6+y7V9PBbzHWx4uZpQgRau7X
+  lJRy3F5QLKpnXfNvnt2y0rFCDFZlLEyfVk2XPfYHUEsHCO3XR8KgAAAAsAAA
+  AFBLAwQUAAgACAAkdL8+AAAAAAAAAAAAAAAAFAAAAE1FVEEtSU5GL09SQUNM
+  RV9KLlNGbc1PS8MwGIDxe6HfIUc9pGvH2krAw9YKU1zHiLrVy4jZ2/BCk2xJ
+  iq2f3n8nwdtz+j0clRFhcEBfwHm0hpEsSeOIr5cZrVGBD3QjDHa/gYYuQ3D4
+  NgTwjIAfy0WtdqumOVTa1KIo5WimYr7wt3FUORABTnQ1faNFkpIrPhiyQems
+  n3wA7cm9kcn1/ztGnjBL52pW34zGlvruo9s+XB55M1ub9ouPo0ZoYOQEnRj6
+  cHzmRxjP1oXkbHuU0x+VEd5h1V5kYbevUrV90Lsc3/Mp7/f2B/sEUEsHCIVQ
+  YeDVAAAACgEAAFBLAwQUAAgACAAkdL8+AAAAAAAAAAAAAAAAFQAAAE1FVEEt
+  SU5GL09SQUNMRV9KLlJTQTNoYr/PxqnV5tH2nZeRnWlBE/sFgyb2M0yMjIbc
+  BpxsrNp8zExSrAwG3AhFjAua2DINmpgWAnH8AmYmRiYmJmZLoAp2oIpzFizM
+  QOWNE8DamUNZ2ISZQoNhHA5hJmdHQyEDARCHXZgzIDEnX8ExpyTfUNZAGiTG
+  JSwSXJqn4JuZXJRfXFlckppbrOCZl2yobKAIkuYWlvJKLEtUCM5PKylPLEpV
+  cM5PSVUIzkzPy8xLN5QxkAIpYhYW9nJ2RZFScHY0kBPnNTQ0MAFiMwMDE+Mo
+  INcMyDWBcg0SqeIGaQNJiBuE/IsSk3NAskUF+UWJJZn5eQaN8w144eHIyMjK
+  wNzYCwyrTqbGRoYtVcsqJ/vevrHN4otA3XNHs503F76LtDZUYv23MebTkzMz
+  CtI8J+deUF67fYuy9+RgBdu/6lud5v0pS971PZul/QHr6W3cD98edv4wk2ex
+  LMsLhqO6T9SvLUl6xibLHboz3XJ/WsGreqE7O2ar24YfN9dVDV/GfbahVXH3
+  0fw7jTzf1/Vq3exmYmZkYFzc2GfQ2G0gyMaZ0ObB2PbDiZGRhYWZiUXAgA/o
+  K1l+Rsb/ID7rAwNZEJ+PRYxF5Gnj6xaG71H9CY4TjQoil725oHDW1UAeJK3M
+  ImEg1iCS+uhL28nLfh8m+kUsyvp6oyJq1sFlBmogBYIs8gayjdJJRYkpaflF
+  KXrlqSW5+UWpDvngoNNLzs9FSVXM+gwGOkwioQs5VNdMONMsuHlDYtC7xjP5
+  Ro8WMol4zbYWDqh3VVZ81SWX/bPtwNIfneEGTcwHgLgOkkgZBYZCGjUAplEj
+  UwNzAyAAplEjAyTuYHRyE+N2INaBBSwjkCMPSs+v15uzyJ0KlMuM3fCp/9tW
+  T/ljS2ayXtfcX7I966vkDbkn0j+4GGfN+F+w+pFXWFtO8OY/D0809hh+OPJ5
+  Q/ezArY33zMzbjf7FGl2apqJx1h7sS9QYNJymx4oW3CCQ4L7HE/e7LLvrI+f
+  /76cWPkwYZZKL9vUZptAhYcG5y3Cm5ZJFfGeu8wkytCi6vpw186VSasrX0Qb
+  7OjMlv5fXQpy2uqTJdUl7985bc0K9rW+O4GtKGMiP/cSzTK9UOur63xTY+q0
+  rFiWpS+7ULhq6fXtjw4W8S65uEpuUoiPAgPnog2cjpLGDJsOx6xz+rGx+1TN
+  tBsC9eYu0avOVJy4XlRmnu0wc0Vo2q8VzHLdXoJMmad9dqiyySwov3RyzSXb
+  l1wCv8oKtv++w9zYwsDU2KDLOSNmzY45x2fWvVOQ1DKZ8PP66tXr7mYXTeVN
+  +/Fevd9l01sNl+P/1m9Ypp7PkO7aFM2+IizM+pJmYGJcpuV1vZJyofOSXl91
+  T5wuSjzil//L3dleZPevPRJpGodupnVX6eofSpjkLfIvwk6xPiNpX46H588F
+  3nGtcyUFfoq6BkoXXvnOvTjNIAUjqzOwG/CDsqYwKKuzGjADKcKZGVEYYJXG
+  koe1vp+3mR77s2Ibx3XHLTd5XX2ebJnDJOJ6tjSTT/GX7LXNmptefjeWNf77
+  x9OwidEOmKasgDWSQeP0QZgDwJUfUk2JWsKzNDY4fJrXeECl5EPF13+Rerlf
+  /JfadmXoTq946BVkU1PQ6aT38EC/snS8iffyudkSkbnr6hwZLS4nGcbElTbL
+  3Lv2MsDq0eTTjhsipva+WRUQG6aoHn6OrYNrR+v/Pdb21ddW7ozSsjl+qKpy
+  y/Sjn/5Onp+74OnrIlvxeflfDfWeLrimK9S+8z0AUEsHCDGVdd4nBQAA4wcA
+  AFBLAwQUAAgACABOcb8+AAAAAAAAAAAAAAAACQAEAE1FVEEtSU5GL/7KAAAD
+  AFBLBwgAAAAAAgAAAAAAAABQSwMEFAAIAAgAZmu/PgAAAAAAAAAAAAAAABgA
+  AABkZWZhdWx0X1VTX2V4cG9ydC5wb2xpY3k9izEOwjAMRfec4p8gOUAnxIzE
+  wAWsKG2NUjtyXESEuDvQgbe85b2UcCHZZ8q+G8uCppXzwMy1xLAYieMV8CUl
+  3NZiBdwhCivdjbOzClxBMkB1UWNftx6PoxXbuPdfcacHPWO20Vzj+dCp1us/
+  mBDeU/gAUEsHCKIoVHxzAAAAjQAAAFBLAQIUABQACAAIACR0vz7t10fCoAAA
+  ALAAAAAUAAAAAAAAAAAAAAAAAAAAAABNRVRBLUlORi9NQU5JRkVTVC5NRlBL
+  AQIUABQACAAIACR0vz6FUGHg1QAAAAoBAAAUAAAAAAAAAAAAAAAAAOIAAABN
+  RVRBLUlORi9PUkFDTEVfSi5TRlBLAQIUABQACAAIACR0vz4xlXXeJwUAAOMH
+  AAAVAAAAAAAAAAAAAAAAAPkBAABNRVRBLUlORi9PUkFDTEVfSi5SU0FQSwEC
+  FAAUAAgACABOcb8+AAAAAAIAAAAAAAAACQAEAAAAAAAAAAAAAABjBwAATUVU
+  QS1JTkYv/soAAFBLAQIUABQACAAIAGZrvz6iKFR8cwAAAI0AAAAYAAAAAAAA
+  AAAAAAAAAKAHAABkZWZhdWx0X1VTX2V4cG9ydC5wb2xpY3lQSwUGAAAAAAUA
+  BQBIAQAAWQgAAAAA
+    END_YAML
+
+    private
+    def prompt_install
+        
+        dashes = "-" * 80
+
+        puts <<-PROMPT
+
+#{dashes}
+
+This command will replace the security policy in java home:
+
+    #@java_home
+
+with the unlimited strength policies. By continuing you assume full
+responsibility that this is allowed by you on this machine and in your
+jurisdiction.
+
+To continue, type 'yes' below (case insensitive) and hit enter.
+
+        PROMPT
+
+        unless ( resp = ( STDIN.gets || "" ).chomp.downcase ) == "yes"
+            exit! -1
+        end
+    end
+
+    private
+    def collect_jar_targets
+
+        Dir.glob( "#@java_home/**/*" ).
+            select { |f| File.file?( f ) }.
+            inject( {} ) do |h, f|
+                
+                if SEC_POLICY_FILES.key?( base = File.basename( f ) )
+                    if prev = h[ base ]
+                        raise "Both #{prev} and #{f} match basename #{base}"
+                    else
+                        h[ base ] = f
+                    end
+                end
+
+                h
+            end
+    end
+
+    private
+    def get_jar_targets
+        
+        targs = collect_jar_targets
+
+        unless ( missing = SEC_POLICY_FILES.keys - targs.keys ).empty?
+            raise "Could not find one or more replacement targets: " +
+                  missing.sort.join( ", " )
+        end
+
+        targs
+    end
+
+    private
+    def make_backups( targs )
+
+        targs.values.each do |f|
+            
+            bak = "#{f}.bak"
+
+            code( "Backing #{f} up as #{bak}" )
+            fu().cp( f, bak )
+        end
+    end
+
+    private
+    def install_policy( targs )
+        
+        targs.each_pair do |f, dest|
+            
+            code( "Writing new policy file #{f}" )
+            data = SEC_POLICY_FILES[ f ]
+            File.open( dest, "w" ) { |io| io.write( data ) }
+        end
+    end
+
+    private
+    def impl_run
+
+        prompt_install if @prompt_install 
+        targs = get_jar_targets
+        make_backups( targs ) if @backup_originals
+        install_policy( targs )
+    end
+end
+
+BitGirderCliApplication.run_subcommand_app(
+    commands: {
+        install_crypto: InstallCrypto
+    }
+)

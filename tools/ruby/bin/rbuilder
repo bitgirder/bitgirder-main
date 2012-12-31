@@ -42,6 +42,8 @@ class App < BitGirderClass
 
     bg_attr :runtime, default: [], is_list: true
 
+    bg_attr :env_config, validation: :opt_file_exists, required: false
+
     def check_proj
         
         unless @operation == :test_testing
@@ -62,11 +64,17 @@ class App < BitGirderClass
 
     def get_base_argv
         
+        res = []
+
+        ( res << "--env-config" << @env_config ) if @env_config
+
         rt = Array.new( @runtime )
 
         ( rt << "ruby-context=#@ruby_context" ) if @ruby_context
         
-        rt.map { |opt| [ "--runtime", opt ] }.flatten
+        rt.each { |opt| res << "--runtime" << opt }
+
+        res
     end
 
     def get_filter_pattern_argv

@@ -388,7 +388,7 @@ class TaskExecutor < BitGirder::Core::BitGirderClass
 
     bg_attr :target
     bg_attr :workspace
-    bg_attr :env_cfg, required: false
+    bg_attr :env_config, required: false
     bg_attr :run_opts
     bg_attr :run_ctx
 
@@ -449,9 +449,9 @@ class TaskExecutor < BitGirder::Core::BitGirderClass
     end
 
     public
-    def env_cfg
-        if @env_cfg
-            load_mingle_struct_file( @env_cfg )
+    def env_config
+        if @env_config
+            load_mingle_struct_file( @env_config )
         else
             MingleStruct.new( type: TYPE_ENV_CFG )
         end
@@ -459,7 +459,7 @@ class TaskExecutor < BitGirder::Core::BitGirderClass
 
     public
     def build_env
-        @build_env ||= BuildEnv.from_mingle_struct( env_cfg )
+        @build_env ||= BuildEnv.from_mingle_struct( env_config )
     end
 
     public
