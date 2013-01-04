@@ -9,13 +9,13 @@ import (
 )
 
 type Codec interface {
-    EncoderTo( w io.Writer ) mg.Reactor
-    DecodeFrom( rd io.Reader, rct mg.Reactor ) error
+    EncoderTo( w io.Writer ) mg.ReactorEventProcessor
+    DecodeFrom( rd io.Reader, rep mg.ReactorEventProcessor ) error
 }
 
 func Encode( ms *mg.Struct, cdc Codec, w io.Writer ) error {
-    rct := cdc.EncoderTo( w )
-    return mg.VisitValue( ms, rct )
+    rep := cdc.EncoderTo( w )
+    return mg.VisitValue( ms, rep )
 }
 
 func EncodeBytes( ms *mg.Struct, cdc Codec ) ( []byte, error ) {
@@ -26,7 +26,9 @@ func EncodeBytes( ms *mg.Struct, cdc Codec ) ( []byte, error ) {
 
 func Decode( cdc Codec, rd io.Reader ) ( *mg.Struct, error ) {
     rct := mg.NewValueBuilder()
-    if err := cdc.DecodeFrom( rd, rct ); err != nil { return nil, err }
+    pip := mg.InitReactorPipeline( 
+        mg.NewStructuralReactor( mg.ReactorTopTypeStruct ), rct );
+    if err := cdc.DecodeFrom( rd, pip ); err != nil { return nil, err }
     return rct.GetValue().( *mg.Struct ), nil
 }
 

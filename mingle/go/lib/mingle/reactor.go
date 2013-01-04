@@ -6,31 +6,130 @@ import (
 //    "log"
 )
 
-// Misc design note: Reactor is meant to be composable, and the design should
-// lend itself to allow reactor chaining to accomplish specific things. For
-// instance, a binary or json codec may not itself track and generate errors
-// upon being fed a symbol map with duplicate keys, since doing complicates its
-// implementation and incurs memory/cpu cost. However, when callers want to
-// strictly check this, they might wrap the reactor in another one that tracks
-// field names and generates an error on a duplicate, but otherwise passes calls
-// down. Other chaining examples might be reactors which check the call sequence
-// for validity with some known schema or data definition.
-
-type Reactor interface {
-    Value( v Value ) error
-    StartStruct( typ TypeReference ) error
-    StartMap() error
-    StartList() error
-    StartField( fld *Identifier ) error
-    End() error
-}
-
 type ReactorError struct { msg string }
 
 func ( e *ReactorError ) Error() string { return e.msg }
 
+func rctError( msg string ) *ReactorError { return &ReactorError{ msg } }
+
 func rctErrorf( tmpl string, args ...interface{} ) *ReactorError {
-    return &ReactorError{ fmt.Sprintf( tmpl, args... ) }
+    return rctError( fmt.Sprintf( tmpl, args... ) )
+}
+
+type ReactorEvent interface {}
+
+type ValueEvent struct { Val Value }
+type StructStartEvent struct { Type TypeReference }
+
+type MapStartEvent int
+const EvMapStart = MapStartEvent( 0 )
+
+type FieldStartEvent struct { Field *Identifier }
+
+type ListStartEvent int
+const EvListStart = ListStartEvent( 0 )
+
+type EndEvent int
+const EvEnd = EndEvent( 0 )
+
+type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
+
+type ReactorKey string
+
+type ReactorFactory interface { CreateReactor() Reactor }
+
+type Reactor interface {
+    Key() ReactorKey
+    Init( rpi *ReactorPipelineInit )
+    ProcessEvent( ev ReactorEvent ) ( ReactorEvent, error )
+}
+
+type ReactorPipeline struct {
+    reactors []Reactor
+}
+
+type ReactorPipelineInit struct { 
+    rp *ReactorPipeline 
+    reactors []Reactor
+}
+
+func findReactor( reactors []Reactor, key ReactorKey ) ( Reactor, bool ) {
+    for _, rct := range reactors { if rct.Key() == key { return rct, true } }
+    return nil, false
+}
+
+func ( rpi *ReactorPipelineInit ) EnsurePredecessor( 
+    key ReactorKey, rf ReactorFactory ) Reactor {
+    if rct, ok := findReactor( rpi.reactors, key ); ok { return rct }
+    rct := rf.CreateReactor()
+    rpi.reactors = append( rpi.reactors, rct )
+    return rct
+}
+
+// Might make this Init() if needed later
+func ( rp *ReactorPipeline ) init() {
+    rpInit := &ReactorPipelineInit{ 
+        rp: rp, 
+        reactors: make( []Reactor, 0, len( rp.reactors ) ),
+    }
+    for _, rct := range rp.reactors { 
+        rct.Init( rpInit )
+        rpInit.reactors = append( rpInit.reactors, rct )
+    }
+    rp.reactors = rpInit.reactors
+}
+
+// Could break this into separate methods later if needed: NewReactorPipeline()
+// and ReactorPipeline.Init()
+func InitReactorPipeline( reactors ...Reactor ) *ReactorPipeline {
+    res := &ReactorPipeline{ reactors: reactors }
+    res.init()
+    return res
+}
+
+func ( rp *ReactorPipeline ) ProcessEvent( re ReactorEvent ) error {
+    var err error
+    for _, rct := range rp.reactors { 
+        if re, err = rct.ProcessEvent( re ); err != nil { return err }
+    }
+    return nil
+}
+
+func visitSymbolMap( 
+    m *SymbolMap, callStart bool, rep ReactorEventProcessor ) error {
+    if callStart {
+        if err := rep.ProcessEvent( EvMapStart ); err != nil { return err }
+    }
+    err := m.EachPairError( func( fld *Identifier, val Value ) error {
+        ev := FieldStartEvent{ fld }
+        if err := rep.ProcessEvent( ev ); err != nil { return err }
+        return VisitValue( val, rep )
+    })
+    if err != nil { return err }
+    return rep.ProcessEvent( EvEnd )
+}
+
+func visitStruct( ms *Struct, rep ReactorEventProcessor ) error {
+    ev := StructStartEvent{ ms.Type }
+    if err := rep.ProcessEvent( ev ); err != nil { return err }
+    return visitSymbolMap( ms.Fields, false, rep )
+}
+
+func visitList( ml *List, rep ReactorEventProcessor ) error {
+    if err := rep.ProcessEvent( EvListStart ); err != nil { return err }
+    for _, val := range ml.Values() {
+        if err := VisitValue( val, rep ); err != nil { return err }
+    }
+    return rep.ProcessEvent( EvEnd )
+}
+
+func VisitValue( mv Value, rep ReactorEventProcessor ) error {
+    switch v := mv.( type ) {
+    case *Struct: return visitStruct( v, rep )
+    case *SymbolMap: return visitSymbolMap( v, true, rep )
+    case *List: return visitList( v, rep )
+    }
+    return rep.ProcessEvent( ValueEvent{ mv } )
 }
 
 type ReactorTopType int
@@ -58,12 +157,19 @@ func getReactorTopTypeError( valName string, tt ReactorTopType ) error {
 
 type reactorImplMap struct {
     pending *Identifier
+    keys *IdentifierMap
 }
 
-func newReactorImplMap() *reactorImplMap { return &reactorImplMap{} }
+func newReactorImplMap() *reactorImplMap { 
+    return &reactorImplMap{ keys: NewIdentifierMap() } 
+}
 
 func ( m *reactorImplMap ) startField( fld *Identifier ) error {
     if m.pending == nil {
+        if m.keys.HasKey( fld ) {
+            return rctErrorf( "Multiple entries for field: %s", fld )
+        }
+        m.keys.Put( fld, true )
         m.pending = fld
         return nil
     }
@@ -87,67 +193,80 @@ func ( m *reactorImplMap ) end() error {
         "Saw end while expecting value for field '%s'", m.pending )
 }
 
-type ReactorImpl struct {
+type StructuralReactor struct {
     stack *list.List
     topTyp ReactorTopType
     done bool
 }
 
-func NewReactorImpl() *ReactorImpl {
-    return &ReactorImpl{ stack: &list.List{}, topTyp: ReactorTopTypeStruct }
+func NewStructuralReactor( topTyp ReactorTopType ) *StructuralReactor {
+    return &StructuralReactor{ 
+        stack: &list.List{}, 
+        topTyp: ReactorTopTypeStruct,
+    }
 }
 
-func ( ri *ReactorImpl ) getReactorTopTypeError( valName string ) error {
-    return getReactorTopTypeError( valName, ri.topTyp )
+func ( sr *StructuralReactor ) Init( rpi *ReactorPipelineInit ) {}
+
+const ReactorKeyStructuralReactor = ReactorKey( "mingle.StructuralReactor" )
+
+func ( sr *StructuralReactor ) Key() ReactorKey { 
+    return ReactorKeyStructuralReactor
 }
 
-func ( ri *ReactorImpl ) checkActive( call string ) error {
-    if ri.done { return rctErrorf( "%s() called, but struct is built", call ) }
+func ( sr *StructuralReactor ) getReactorTopTypeError( valName string ) error {
+    return getReactorTopTypeError( valName, sr.topTyp )
+}
+
+func ( sr *StructuralReactor ) checkActive( call string ) error {
+    if sr.done { return rctErrorf( "%s() called, but struct is built", call ) }
     return nil
 }
 
-// ri.stack known to be non-empty when this returns without error, unless top
+// sr.stack known to be non-empty when this returns without error, unless top
 // type is value.
-func ( ri *ReactorImpl ) checkValue( valName string ) error {
-    if ri.stack.Len() == 0 {
-        if ri.topTyp == ReactorTopTypeValue { return nil }
-        return ri.getReactorTopTypeError( valName )
+func ( sr *StructuralReactor ) checkValue( valName string ) error {
+    if sr.stack.Len() == 0 {
+        if sr.topTyp == ReactorTopTypeValue { return nil }
+        return sr.getReactorTopTypeError( valName )
     }
-    elt := ri.stack.Front().Value
+    elt := sr.stack.Front().Value
     if m, ok := elt.( *reactorImplMap ); ok { return m.checkValue( valName ) }
     return nil
 }
 
-func ( ri *ReactorImpl ) push( elt interface{} ) { ri.stack.PushFront( elt ) }
+func ( sr *StructuralReactor ) push( elt interface{} ) { 
+    sr.stack.PushFront( elt ) 
+}
 
-func ( ri *ReactorImpl ) StartStruct() error {
-    if err := ri.checkActive( "StartStruct" ); err != nil { return err }
+func ( sr *StructuralReactor ) startStruct() error {
+    if err := sr.checkActive( "StartStruct" ); err != nil { return err }
     // skip check if we're pushing the top level struct
-    if ri.stack.Len() > 0 {
-        if err := ri.checkValue( "struct start" ); err != nil { return err }
+    if sr.stack.Len() > 0 {
+        if err := sr.checkValue( "struct start" ); err != nil { return err }
     }
-    ri.push( newReactorImplMap() )
+    sr.push( newReactorImplMap() )
     return nil
 }
 
-func ( ri *ReactorImpl ) StartMap() error {
-    if err := ri.checkActive( "StartMap" ); err != nil { return err }
-    if err := ri.checkValue( "map start" ); err != nil { return err }
-    ri.push( newReactorImplMap() )
+func ( sr *StructuralReactor ) startMap() error {
+    if err := sr.checkActive( "StartMap" ); err != nil { return err }
+    if err := sr.checkValue( "map start" ); err != nil { return err }
+    sr.push( newReactorImplMap() )
     return nil
 }
 
-func ( ri *ReactorImpl ) StartList() error {
-    if err := ri.checkActive( "StartList" ); err != nil { return err }
-    if err := ri.checkValue( "list start" ); err != nil { return err }
-    ri.push( "list" )
+func ( sr *StructuralReactor ) startList() error {
+    if err := sr.checkActive( "StartList" ); err != nil { return err }
+    if err := sr.checkValue( "list start" ); err != nil { return err }
+    sr.push( "list" )
     return nil
 }
 
-func ( ri *ReactorImpl ) StartField( fld *Identifier ) error {
-    if err := ri.checkActive( "StartField" ); err != nil { return err }
-    if ok := ri.stack.Len() > 0; ok {
-        elt := ri.stack.Front().Value
+func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
+    if err := sr.checkActive( "StartField" ); err != nil { return err }
+    if ok := sr.stack.Len() > 0; ok {
+        elt := sr.stack.Front().Value
         switch v := elt.( type ) {
         case string: 
             tmpl := "Expected list value but got start of field '%s'"
@@ -160,23 +279,36 @@ func ( ri *ReactorImpl ) StartField( fld *Identifier ) error {
     return getReactorTopTypeError( errLoc, ReactorTopTypeStruct )
 }
 
-func ( ri *ReactorImpl ) Value() error {
-    if err := ri.checkActive( "Value" ); err != nil { return err }
-    if err := ri.checkValue( "value" ); err != nil { return err }
+func ( sr *StructuralReactor ) value() error {
+    if err := sr.checkActive( "Value" ); err != nil { return err }
+    if err := sr.checkValue( "value" ); err != nil { return err }
     return nil
 }
 
-func ( ri *ReactorImpl ) End() error {
-    if err := ri.checkActive( "End" ); err != nil { return err }
-    if ri.stack.Len() == 0 { return ri.getReactorTopTypeError( "end" ) }
-    elt := ri.stack.Remove( ri.stack.Front() )
+func ( sr *StructuralReactor ) end() error {
+    if err := sr.checkActive( "End" ); err != nil { return err }
+    if sr.stack.Len() == 0 { return sr.getReactorTopTypeError( "end" ) }
+    elt := sr.stack.Remove( sr.stack.Front() )
     switch v := elt.( type ) {
     case *reactorImplMap: if err := v.end(); err != nil { return err }
     case string: {} // list -- end() is always okay
     default: panic( libErrorf( "Unexpected stack element: %T", elt ) )
     }
-    ri.done = ri.stack.Len() == 0
+    sr.done = sr.stack.Len() == 0
     return nil
+}
+
+func ( sr *StructuralReactor ) ProcessEvent( 
+    ev ReactorEvent ) ( ReactorEvent, error ) {
+    switch v := ev.( type ) {
+    case StructStartEvent: return ev, sr.startStruct()
+    case MapStartEvent: return ev, sr.startMap()
+    case ListStartEvent: return ev, sr.startList()
+    case FieldStartEvent: return ev, sr.startField( v.Field )
+    case ValueEvent: return ev, sr.value()
+    case EndEvent: return ev, sr.end()
+    }
+    panic( libErrorf( "Unhandled event: %T", ev ) )
 }
 
 type valAccumulator interface {
@@ -240,19 +372,17 @@ func ( la *listAcc ) valueReady( mv Value ) {
 type ValueBuilder struct {
     val Value
     accs *list.List
-    impl *ReactorImpl
 }
+
+const ReactorKeyValueBuilder = ReactorKey( "mingle.ValueBuilder" )
 
 func NewValueBuilder() *ValueBuilder {
-    return &ValueBuilder{ accs: &list.List{}, impl: NewReactorImpl() }
+    return &ValueBuilder{ accs: &list.List{} }
 }
 
-// The result of setting this once reactions have begun is undefined.
-func ( vb *ValueBuilder ) SetTopType( topTyp ReactorTopType ) {
-    vb.impl.topTyp = topTyp
-}
+func ( vb *ValueBuilder ) Init( rpi *ReactorPipelineInit ) {}
 
-func ( vb *ValueBuilder ) Ready() bool { return vb.val != nil }
+func ( vb *ValueBuilder ) Key() ReactorKey { return ReactorKeyValueBuilder }
 
 func ( vb *ValueBuilder ) pushAcc( acc valAccumulator ) {
     vb.accs.PushFront( acc )
@@ -276,32 +406,13 @@ func ( vb *ValueBuilder ) valueReady( val Value ) {
     } else { vb.val = val }
 }
 
-// Panics if result of Ready() is false
+// Panics if result of val is not ready
 func ( vb *ValueBuilder ) GetValue() Value {
-    if vb.Ready() { return vb.val }
-    panic( rctErrorf( "Attempt to access incomplete value" ) )
+    if vb.val == nil { panic( rctErrorf( "Value is not yet built" ) ) }
+    return vb.val
 }
 
-func ( vb *ValueBuilder ) StartStruct( typ TypeReference ) error {
-    if err := vb.impl.StartStruct(); err != nil { return err }
-    vb.pushAcc( newStructAcc( typ ) )
-    return nil
-}
-
-func ( vb *ValueBuilder ) StartMap() error {
-    if err := vb.impl.StartMap(); err != nil { return err }
-    vb.pushAcc( newMapAcc() )
-    return nil
-}
-
-func ( vb *ValueBuilder ) StartList() error {
-    if err := vb.impl.StartList(); err != nil { return err }
-    vb.pushAcc( newListAcc() )
-    return nil
-}
-
-func ( vb *ValueBuilder ) StartField( fld *Identifier ) error {
-    if err := vb.impl.StartField( fld ); err != nil { return err }
+func ( vb *ValueBuilder ) startField( fld *Identifier ) {
     acc, ok := vb.peekAcc()
     if ok {
         var ma *mapAcc
@@ -312,11 +423,9 @@ func ( vb *ValueBuilder ) StartField( fld *Identifier ) error {
         }
         if ok { ma.startField( fld ) }
     }
-    return nil
 }
 
-func ( vb *ValueBuilder ) End() error {
-    if err := vb.impl.End(); err != nil { return err }
+func ( vb *ValueBuilder ) end() error {
     acc := vb.popAcc()
     if val, err := acc.end(); err == nil {
         vb.valueReady( val )
@@ -324,43 +433,16 @@ func ( vb *ValueBuilder ) End() error {
     return nil
 }
 
-func ( vb *ValueBuilder ) Value( mv Value ) error {
-    if err := vb.impl.Value(); err != nil { return err }
-    vb.valueReady( mv ) 
-    return nil
-}
-
-func visitSymbolMap( 
-    m *SymbolMap, callStart bool, rct Reactor ) error {
-    if callStart {
-        if err := rct.StartMap(); err != nil { return err }
+func ( vb *ValueBuilder ) ProcessEvent( 
+    ev ReactorEvent ) ( ReactorEvent, error ) {
+    switch v := ev.( type ) {
+    case ValueEvent: vb.valueReady( v.Val )
+    case ListStartEvent: vb.pushAcc( newListAcc() )
+    case MapStartEvent: vb.pushAcc( newMapAcc() )
+    case StructStartEvent: vb.pushAcc( newStructAcc( v.Type ) )
+    case FieldStartEvent: vb.startField( v.Field )
+    case EndEvent: if err := vb.end(); err != nil { return nil, err }
+    default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
-    err := m.EachPairError( func( fld *Identifier, val Value ) error {
-        if err := rct.StartField( fld ); err != nil { return err }
-        return VisitValue( val, rct )
-    })
-    if err != nil { return err }
-    return rct.End()
-}
-
-func visitStruct( ms *Struct, rct Reactor ) ( err error ) {
-    if err = rct.StartStruct( ms.Type ); err != nil { return }
-    return visitSymbolMap( ms.Fields, false, rct )
-}
-
-func visitList( ml *List, rct Reactor ) ( err error ) {
-    if err = rct.StartList(); err != nil { return }
-    for _, val := range ml.Values() {
-        if err = VisitValue( val, rct ); err != nil { return }
-    }
-    return rct.End()
-}
-
-func VisitValue( mv Value, rct Reactor ) error {
-    switch v := mv.( type ) {
-    case *Struct: return visitStruct( v, rct )
-    case *SymbolMap: return visitSymbolMap( v, true, rct )
-    case *List: return visitList( v, rct )
-    }
-    return rct.Value( mv )
+    return ev, nil
 }

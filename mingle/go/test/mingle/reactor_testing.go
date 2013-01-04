@@ -1,111 +1,109 @@
 package mingle
 
-import ( 
-    "testing"
-    "bitgirder/assert"
-)
+type ReactorTest struct {
+    Source interface{}
+    Error error
+}
 
-type ReactorSeqErrorTest struct {
-    Seq []string
-    ErrMsg string
+var StdReactorTests []*ReactorTest
+
+type ValueBuildSource struct { Val Value }
+
+func initValueBuildReactorTests() {
+    s1 := MustStruct( "ns1@v1/S1",
+        "val1", String( "hello" ),
+        "list1", MustList(),
+        "map1", MustSymbolMap(),
+        "struct1", MustStruct( "ns1@v1/S2" ),
+    )
+    mk := func( v Value ) *ReactorTest {
+        return &ReactorTest{ Source: ValueBuildSource{ v } }
+    }
+    StdReactorTests = append( StdReactorTests,
+        mk( String( "hello" ) ),
+        mk( MustList() ),
+        mk( MustList( 1, 2, 3 ) ),
+        mk( MustList( 1, MustList(), MustList( 1, 2 ) ) ),
+        mk( MustSymbolMap() ),
+        mk( MustSymbolMap( "f1", "v1", "f2", MustList(), "f3", s1 ) ),
+        mk( s1 ),
+        mk( MustStruct( "ns1@v1/S3" ) ),
+    )
+}
+
+type StructuralReactorTestSource struct {
+    Events []ReactorEvent
     TopType ReactorTopType
 }
 
-var StdReactorSeqErrorTests = []*ReactorSeqErrorTest{
-    { Seq: []string{ "start-struct", "start-field1", "start-field2" }, 
-      ErrMsg: "Saw start of field 'f2' while expecting a value for 'f1'",
-    },
-    { Seq: []string{ 
-        "start-struct", "start-field1", "start-map", "start-field1",
-        "start-field2" },
-      ErrMsg: "Saw start of field 'f2' while expecting a value for 'f1'",
-    },
-    { Seq: []string{ "start-struct", "end", "start-field1" },
-      ErrMsg: "StartField() called, but struct is built",
-    },
-    { Seq: []string{ "start-struct", "value" },
-      ErrMsg: "Expected field name or end of fields but got value",
-    },
-    { Seq: []string{ "start-struct", "start-list" },
-      ErrMsg: "Expected field name or end of fields but got list start",
-    },
-    { Seq: []string{ "start-struct", "start-map" },
-      ErrMsg: "Expected field name or end of fields but got map start",
-    },
-    { Seq: []string{ "start-struct", "start-struct" },
-      ErrMsg: "Expected field name or end of fields but got struct start",
-    },
-    { Seq: []string{ "start-struct", "start-field1", "end" },
-      ErrMsg: "Saw end while expecting value for field 'f1'",
-    },
-    { Seq: []string{ 
-        "start-struct", "start-field1", "start-list", "start-field1" },
-      ErrMsg: "Expected list value but got start of field 'f1'",
-    },
-    { Seq: []string{ "value" },
-      ErrMsg: "Expected struct but got value",
-      TopType: ReactorTopTypeStruct,
-    },
-    { Seq: []string{ "start-list" },
-      ErrMsg: "Expected struct but got list start",
-      TopType: ReactorTopTypeStruct,
-    },
-    { Seq: []string{ "start-map" },
-      ErrMsg: "Expected struct but got map start",
-      TopType: ReactorTopTypeStruct,
-    },
-    { Seq: []string{ "start-field1" },
-      ErrMsg: "Expected struct but got field 'f1'",
-      TopType: ReactorTopTypeStruct,
-    },
-    { Seq: []string{ "end" },
-      ErrMsg: "Expected struct but got end",
-      TopType: ReactorTopTypeStruct,
-    },
-}
-
-type reactorErrorTestCall struct {
-    *assert.PathAsserter
-    test *ReactorSeqErrorTest
-}
-
-func ( t *reactorErrorTestCall ) feedCall( call string, rct Reactor ) error {
-    switch call {
-    case "start-struct": 
-        return rct.StartStruct( MustTypeReference( "ns1@v1/S1" ) )
-    case "start-map": return rct.StartMap()
-    case "start-list": return rct.StartList()
-    case "start-field1": return rct.StartField( MustIdentifier( "f1" ) )
-    case "start-field2": return rct.StartField( MustIdentifier( "f2" ) )
-    case "value": return rct.Value( Int64( int64( 1 ) ) )
-    case "end": return rct.End()
+func initStructuralReactorTests() {
+    evStartStruct1 := StructStartEvent{ MustTypeReference( "ns1@v1/S1" ) }
+    evStartField1 := FieldStartEvent{ MustIdentifier( "f1" ) }
+    evStartField2 := FieldStartEvent{ MustIdentifier( "f2" ) }
+    evValue1 := ValueEvent{ Int64( int64( 1 ) ) }
+    mk1 := func( errMsg string, evs ...ReactorEvent ) *ReactorTest {
+        return &ReactorTest{
+            Source: &StructuralReactorTestSource{ Events: evs },
+            Error: rctError( errMsg ),
+        }
     }
-    panic( libErrorf( "Unexpected test call: %s", call ) )
+    mk2 := func( 
+        errMsg string, tt ReactorTopType, evs ...ReactorEvent ) *ReactorTest {
+        res := mk1( errMsg, evs... )
+        res.Source.( *StructuralReactorTestSource ).TopType = tt
+        return res
+    }
+    StdReactorTests = append( StdReactorTests,
+        mk1( "Saw start of field 'f2' while expecting a value for 'f1'",
+            evStartStruct1, evStartField1, evStartField2,
+        ),
+        mk1( "Saw start of field 'f2' while expecting a value for 'f1'",
+            evStartStruct1, evStartField1, EvMapStart, evStartField1,
+            evStartField2,
+        ),
+        mk1( "StartField() called, but struct is built",
+            evStartStruct1, EvEnd, evStartField1,
+        ),
+        mk1( "Expected field name or end of fields but got value",
+            evStartStruct1, evValue1,
+        ),
+        mk1( "Expected field name or end of fields but got list start",
+            evStartStruct1, EvListStart,
+        ),
+        mk1( "Expected field name or end of fields but got map start",
+            evStartStruct1, EvMapStart,
+        ),
+        mk1( "Expected field name or end of fields but got struct start",
+            evStartStruct1, evStartStruct1,
+        ),
+        mk1( "Saw end while expecting value for field 'f1'",
+            evStartStruct1, evStartField1, EvEnd,
+        ),
+        mk1( "Expected list value but got start of field 'f1'",
+            evStartStruct1, evStartField1, EvListStart, evStartField1,
+        ),
+        mk2( "Expected struct but got value", ReactorTopTypeStruct, evValue1 ),
+        mk2( "Expected struct but got list start", ReactorTopTypeStruct,
+            EvListStart,
+        ),
+        mk2( "Expected struct but got map start", ReactorTopTypeStruct,
+            EvMapStart,
+        ),
+        mk2( "Expected struct but got field 'f1'", ReactorTopTypeStruct,
+            evStartField1,
+        ),
+        mk2( "Expected struct but got end", ReactorTopTypeStruct, EvEnd ),
+        mk1( "Multiple entries for field: f1",
+            evStartStruct1, 
+            evStartField1, evValue1,
+            evStartField2, evValue1,
+            evStartField1,
+        ),
+    )
 }
 
-func ( t *reactorErrorTestCall ) feedSequence( rct Reactor ) error {
-    for _, call := range t.test.Seq {
-        if err := t.feedCall( call, rct ); err != nil { return err }
-    }
-    return nil
-}
-
-func ( t *reactorErrorTestCall ) call() {
-    rct := NewValueBuilder()
-    rct.SetTopType( t.test.TopType )
-    if err := t.feedSequence( rct ); err == nil {
-        t.Fatalf( "Got no err for %#v", t.test.Seq )
-    } else {
-        if _, ok := err.( *ReactorError ); ok {
-            t.Equal( t.test.ErrMsg, err.Error() )
-        } else { t.Fatal( err ) }
-    }
-}
-
-func CallReactorSeqErrorTests( tests []*ReactorSeqErrorTest, t *testing.T ) {
-    a := assert.NewPathAsserter( t ).StartList()
-    for _, test := range tests {
-        ( &reactorErrorTestCall{ PathAsserter: a, test: test } ).call()
-        a = a.Next()
-    }
+func init() {
+    StdReactorTests = []*ReactorTest{}
+    initValueBuildReactorTests()
+    initStructuralReactorTests()
 }

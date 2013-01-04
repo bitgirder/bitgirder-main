@@ -142,25 +142,25 @@ func ( w *BinWriter ) writeEnum( en *Enum ) ( err error ) {
 
 type writeReactor struct { *BinWriter }
 
-func ( w writeReactor ) StartStruct( typ TypeReference ) error {
+func ( w writeReactor ) startStruct( typ TypeReference ) error {
     if err := w.WriteTypeCode( tcStruct ); err != nil { return err }
     if err := w.WriteInt32( int32( -1 ) ); err != nil { return err }
     return w.WriteTypeReference( typ )
 }
 
-func ( w writeReactor ) StartField( fld *Identifier ) error {
+func ( w writeReactor ) startField( fld *Identifier ) error {
     if err := w.WriteTypeCode( tcField ); err != nil { return err }
     return w.WriteIdentifier( fld )
 }
 
-func ( w writeReactor ) StartList() error { 
+func ( w writeReactor ) startList() error { 
     if err := w.WriteTypeCode( tcList ); err != nil { return err }
     return w.WriteInt32( -1 )
 }
 
-func ( w writeReactor ) StartMap() error { return w.WriteTypeCode( tcSymMap ) }
+func ( w writeReactor ) startMap() error { return w.WriteTypeCode( tcSymMap ) }
 
-func ( w writeReactor ) Value( val Value ) error {
+func ( w writeReactor ) value( val Value ) error {
     switch v := val.( type ) {
     case nil: return w.WriteNull()
     case *Null: return w.WriteNull()
@@ -202,9 +202,21 @@ func ( w writeReactor ) Value( val Value ) error {
     panic( libErrorf( "%T: Unhandled value: %T", w, val ) )
 }
 
-func ( w writeReactor ) End() error { return w.WriteTypeCode( tcEnd ) }
+func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
+    switch v := ev.( type ) {
+    case ValueEvent: return w.value( v.Val )
+    case MapStartEvent: return w.startMap()
+    case StructStartEvent: return w.startStruct( v.Type )
+    case ListStartEvent: return w.startList()
+    case FieldStartEvent: return w.startField( v.Field )
+    case EndEvent: return w.WriteTypeCode( tcEnd )
+    }
+    panic( libErrorf( "Unhandled event type: %T", ev ) )
+}
 
-func ( w *BinWriter ) AsReactor() Reactor { return writeReactor{ w } }
+func ( w *BinWriter ) AsReactor() ReactorEventProcessor { 
+    return writeReactor{ w } 
+}
 
 func ( w *BinWriter ) WriteValue( val Value ) ( err error ) {
     return VisitValue( val, w.AsReactor() )
@@ -452,7 +464,8 @@ func ( r *BinReader ) readEnum() ( en *Enum, err error ) {
     return
 }
 
-func ( r *BinReader ) readScalarValue( tc uint8, rct Reactor ) ( err error ) {
+func ( r *BinReader ) readScalarValue( 
+    tc uint8, rep ReactorEventProcessor ) ( err error ) {
     var val Value
     switch tc {
     case tcNull: val = NullVal
@@ -494,79 +507,86 @@ func ( r *BinReader ) readScalarValue( tc uint8, rct Reactor ) ( err error ) {
     case tcEnum: val, err = r.readEnum()
     default: panic( libErrorf( "Not a scalar val type: 0x%02x", tc ) )
     }
-    if err == nil { err = rct.Value( val ) }
+    if err == nil { err = rep.ProcessEvent( ValueEvent{ val } ) }
     return 
 }
 
-func ( r *BinReader ) readMapFields( rct Reactor ) error {
+func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
     for {
         tc, err := r.ReadTypeCode()
         if err != nil { return err }
         switch tc {
-        case tcEnd: return rct.End()
+        case tcEnd: return rep.ProcessEvent( EvEnd )
         case tcField:
             id, err := r.ReadIdentifier()
-            if err == nil { err = rct.StartField( id ) }
+            if err == nil { err = rep.ProcessEvent( FieldStartEvent{ id } ) }
             if err != nil { return err }
-            if err := r.implReadValue( rct ); err != nil { return err }
+            if err := r.implReadValue( rep ); err != nil { return err }
         default: return r.ioErrorf( "Unexpected map pair code: 0x%02x", tc )
         }
     }
     panic( libErrorf( "unreachable" ) )
 }
 
-func ( r *BinReader ) readSymbolMap( rct Reactor ) error {
-    if err := rct.StartMap(); err != nil { return err }
-    return r.readMapFields( rct )
+func ( r *BinReader ) readSymbolMap( rep ReactorEventProcessor ) error {
+    if err := rep.ProcessEvent( EvMapStart ); err != nil { return err }
+    return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readStruct( rct Reactor ) error {
+func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err }
     if typ, err := r.ReadTypeReference(); err == nil {
-        if err = rct.StartStruct( typ ); err != nil { return err }
+        if err = rep.ProcessEvent( StructStartEvent{ typ } ); err != nil { 
+            return err 
+        }
     } else { return err }
-    return r.readMapFields( rct )
+    return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readList( rct Reactor ) error {
+func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err } // skip size
-    if err := rct.StartList(); err != nil { return err }
+    if err := rep.ProcessEvent( EvListStart ); err != nil { return err }
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
         if tc == tcEnd {
             if _, err = r.ReadTypeCode(); err != nil { return err }
-            return rct.End()
+            return rep.ProcessEvent( EvEnd )
         } else { 
-            if err = r.implReadValue( rct ); err != nil { return err } 
+            if err = r.implReadValue( rep ); err != nil { return err } 
         }
     }
     panic( libErrorf( "Unreachable" ) )
 }
 
-func ( r *BinReader ) implReadValue( rct Reactor ) error {
+func ( r *BinReader ) implReadValue( rep ReactorEventProcessor ) error {
     tc, err := r.ReadTypeCode()
     if err != nil { return err }
     switch tc {
     case tcNull, tcString, tcBuffer, tcTimestamp, tcInt32, tcInt64, tcUint32,
          tcUint64, tcFloat32, tcFloat64, tcBool, tcEnum:
-        return r.readScalarValue( tc, rct )
-    case tcSymMap: return r.readSymbolMap( rct )
-    case tcStruct: return r.readStruct( rct )
-    case tcList: return r.readList( rct )
+        return r.readScalarValue( tc, rep )
+    case tcSymMap: return r.readSymbolMap( rep )
+    case tcStruct: return r.readStruct( rep )
+    case tcList: return r.readList( rep )
     default: return r.ioErrorf( "Unrecognized value code: 0x%02x", tc )
     }
     panic( libErrorf( "Unreachable" ) )
 }
 
-func ( r *BinReader ) ReadReactorValue( rct Reactor ) error {
-    return r.implReadValue( rct )
+func ( r *BinReader ) ReadReactorValue( rep ReactorEventProcessor ) error {
+    return r.implReadValue( rep )
 }
 
 func ( r *BinReader ) ReadValue() ( Value, error ) {
     vb := NewValueBuilder()
-    vb.SetTopType( ReactorTopTypeValue )
-    err := r.ReadReactorValue( vb )
+    pip := InitReactorPipeline( vb )
+//    vb := NewValueBuilder()
+//    vb.SetTopType( ReactorTopTypeValue )
+//    err := r.ReadReactorValue( vb )
+//    if err != nil { return nil, err }
+//    return vb.GetValue(), nil
+    err := r.ReadReactorValue( pip )
     if err != nil { return nil, err }
     return vb.GetValue(), nil
 }

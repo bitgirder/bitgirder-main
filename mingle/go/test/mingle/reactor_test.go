@@ -5,51 +5,56 @@ import (
     "bitgirder/assert"
 )
 
-func assertValueReactorRoundtrip( v Value, a *assert.PathAsserter ) {
-    rct := NewValueBuilder()
-    rct.SetTopType( ReactorTopTypeValue )
-    if err := VisitValue( v, rct ); err == nil {
-        a.Equal( v, rct.GetValue() )
-    } else { a.Fatal( err ) }
+type reactorTestCall struct {
+    *assert.PathAsserter
+    rt *ReactorTest
 }
 
-func TestValueBuilderReactor( t *testing.T ) {
-    a := assert.NewPathAsserter( t ).StartList()
-    s1 := MustStruct( "ns1@v1/S1",
-        "val1", String( "hello" ),
-        "list1", MustList(),
-        "map1", MustSymbolMap(),
-        "struct1", MustStruct( "ns1@v1/S2" ),
-    )
-    for _, val := range []Value{
-        String( "hello" ),
-        MustList(),
-        MustList( 1, 2, 3 ),
-        MustList( 1, MustList(), MustList( 1, 2 ) ),
-        MustSymbolMap(),
-        MustSymbolMap( "f1", "v1", "f2", MustList(), "f3", s1 ),
-        s1,
-        MustStruct( "ns1@v1/S3" ),
-    } {
-        assertValueReactorRoundtrip( val, a )
-        a = a.Next()
+func ( c *reactorTestCall ) processStructural( 
+    ss *StructuralReactorTestSource ) error {
+    rct := NewStructuralReactor( ss.TopType )
+    pip := InitReactorPipeline( rct )
+    for _, ev := range ss.Events { 
+        if err := pip.ProcessEvent( ev ); err != nil { return err }
+    }
+    return nil
+}
+
+func ( c *reactorTestCall ) processValueBuild( vb ValueBuildSource ) error {
+    rct := NewValueBuilder()
+    pip := InitReactorPipeline( rct )
+    if err := VisitValue( vb.Val, pip ); err == nil {
+        c.Equal( vb.Val, rct.GetValue() )
+    } else { c.Fatal( err ) }
+    return nil
+}
+
+func ( c *reactorTestCall ) processSource() error {
+    switch s := c.rt.Source.( type ) {
+    case *StructuralReactorTestSource: return c.processStructural( s )
+    case ValueBuildSource: return c.processValueBuild( s )
+    }
+    panic( libErrorf( "Unhandled test source: %T", c.rt.Source ) )
+}
+
+func ( c *reactorTestCall ) assertErrors( expct, act error ) {
+    c.Equal( expct, act )
+}
+
+func ( c *reactorTestCall ) call() {
+    rtErr := c.rt.Error
+    if err := c.processSource(); err == nil {
+        if rtErr != nil { c.Fatalf( "Expected error (%T): %s", rtErr, rtErr ) }
+    } else { 
+        if rtErr == nil { c.Fatal( err ) }
+        c.assertErrors( rtErr, err )
     }
 }
 
-func TestValueBuilderReactorErrors( t *testing.T ) {
-    tests := []*ReactorSeqErrorTest{}
-    tests = append( tests, StdReactorSeqErrorTests... )
-    tests = append( tests,
-        &ReactorSeqErrorTest{
-            Seq: []string{ 
-                "start-struct", 
-                "start-field1", "value",
-                "start-field2", "value",
-                "start-field1", "value",
-                "end",
-            },
-            ErrMsg: "Invalid fields: Multiple entries for key: f1",
-        },
-    )
-    CallReactorSeqErrorTests( tests, t )
+func TestReactors( t *testing.T ) {
+    a := assert.NewListPathAsserter( t )
+    for _, rt := range StdReactorTests {
+        ( &reactorTestCall{ PathAsserter: a, rt: rt } ).call()
+        a = a.Next()
+    }
 }

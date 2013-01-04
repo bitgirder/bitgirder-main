@@ -6,11 +6,7 @@
         "mingle/parser/lexer", 
         "mingle/parser/loc",
         "mingle/parser/syntax",
-        "mingle/parser/testing",
-        "mingle/types",
-        "mingle/types/testing",
-        "mingle/testing",
-        "mingle/testing/testval"
+        "mingle/types"
     ],
     "test-commands": {
         "write-parser-tests": {},

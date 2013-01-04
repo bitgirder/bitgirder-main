@@ -13,12 +13,13 @@ type BinCodec struct {}
 
 func New() *BinCodec { return &BinCodec{} }
 
-func ( bc *BinCodec ) EncoderTo( w io.Writer ) mg.Reactor {
+func ( bc *BinCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
     return mg.NewWriter( w ).AsReactor()
 }
 
-func ( bc *BinCodec ) DecodeFrom( r io.Reader, rct mg.Reactor ) error {
-    err := mg.NewReader( r ).ReadReactorValue( rct )
+func ( bc *BinCodec ) DecodeFrom( 
+    r io.Reader, rep mg.ReactorEventProcessor ) error {
+    err := mg.NewReader( r ).ReadReactorValue( rep )
     if ioe, ok := err.( *mg.BinIoError ); ok {
         err = codec.Error( ioe.Error() )
     }
