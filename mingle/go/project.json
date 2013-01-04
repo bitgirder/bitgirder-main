@@ -8,6 +8,11 @@
         "mingle/parser/syntax",
         "mingle/types"
     ],
+    "test-packages": [
+        "mingle/testing",
+        "mingle/testing/testval",
+        "mingle/parser/testing"
+    ],
     "test-commands": {
         "write-parser-tests": {},
         "write-cast-value-tests": {},

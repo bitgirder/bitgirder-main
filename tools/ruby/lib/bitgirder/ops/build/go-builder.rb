@@ -94,12 +94,16 @@ module GoEnvMixin
         { ENV_GOPATH => paths.join( ":" ) }
     end
 
-    def go_packages( want_fail = true )
+    def go_packages( opts = {} )
  
-        pd = ws_ctx.proj_def
+        pd = opts[ :proj_def ] || ws_ctx.proj_def
         pkgs = ( pd.fields.get_mingle_list( :packages ) || [] ).to_a
 
-        if pkgs.empty? && want_fail
+        if opts[ :include_test ]
+            pkgs += ( pd.fields.get_mingle_list( :test_packages ) || [] ).to_a
+        end
+
+        if pkgs.empty? && ( ! opts[ :allow_empty ] )
             raise "No packages specified in #{ws_ctx.proj_def_file}" 
         end
 
@@ -271,7 +275,7 @@ class GoModBuilder < StandardModTask
 
         Dir.chdir( link_src_dir( mod(), src_mods ) ) do |src_dir|
  
-            unless ( pkgs = go_packages( false ) ).empty?
+            unless ( pkgs = go_packages( allow_empty: true ) ).empty?
  
                 src_sig, info = get_src_sig( src_dir ), load_build_info
  
@@ -303,7 +307,7 @@ class GoModTestRunner < StandardModTask
         if s = @run_opts.get_string( :test_packages )
             s.split( /,/ )
         else
-            go_packages
+            go_packages( include_test: true )
         end
     end
 
@@ -629,13 +633,15 @@ module GoDistMixin
         "#{dist_build_dir}/work/#{mod}"
     end 
 
-    def get_dist_packages
+    def get_dist_packages( include_test = false )
         
         res = {}
 
         direct_deps.each do |dep|
-            pd = ws_ctx.proj_def( proj: dep )
-            pd[ :packages ].each do |pkg|
+            go_packages( 
+                proj_def: ws_ctx.proj_def( proj: dep ),
+                include_test: include_test 
+            ).each do |pkg|
                 if prev = res[ pkg ]
                     raise "#{pkg} defined in both #{prev} and #{dep}"
                 else
@@ -704,7 +710,7 @@ class GoDistTester < GoDistTask
         cmd = go_cmd( "go" )
 
         argv = [ "test", "-v" ]
-        argv += get_dist_packages
+        argv += get_dist_packages( true )
         
         env = { ENV_GOPATH => work_dir }
 
