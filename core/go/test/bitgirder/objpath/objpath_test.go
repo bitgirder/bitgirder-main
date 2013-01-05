@@ -118,6 +118,14 @@ func TestPathFormatter( t *testing.T ) {
         &fmtTest{
             path: RootedAt( eltType( "p1" ) ).
                   StartList().
+                  SetIndex( 8 ).
+                  Descend( eltType( "p2" ) ),
+            expct: "p1[ 8 ].p2",
+        },
+
+        &fmtTest{
+            path: RootedAt( eltType( "p1" ) ).
+                  StartList().
                   Next().
                   StartList().
                   StartList().
@@ -157,4 +165,19 @@ func TestStringDotFormatter( t *testing.T ) {
         }
     }()
     Format( RootedAt( 1 ), StringDotFormatter )
+}
+
+// We assume for the purposes of this test that StringDotFormatter, as tested
+// elsewhere, is correct.
+func TestDescendAndStartList( t *testing.T ) {
+    np1 := RootedAt( "p1" )
+    chk := func( p PathNode, expct string ) {
+        if act := Format( p, StringDotFormatter ); act != expct {
+            t.Fatalf( "expected %q but got %q", expct, act )
+        }
+    }
+    chk( Descend( nil, "p1" ), "p1" )
+    chk( Descend( np1, "p2" ), "p1.p2" )
+    chk( StartList( nil ), "[ 0 ]" )
+    chk( StartList( np1 ).Next(), "p1[ 1 ]" )
 }

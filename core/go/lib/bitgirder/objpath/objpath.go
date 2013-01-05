@@ -55,6 +55,11 @@ func ( l *ListNode ) Next() *ListNode {
     return &ListNode{ l.parent, l.indx + 1 } 
 }
 
+func ( l *ListNode ) SetIndex( indx int ) *ListNode {
+    l.indx = indx
+    return l
+}
+
 type AppendFunc func( s string )
 
 type Formatter interface {
@@ -146,3 +151,13 @@ func Format( p PathNode, f Formatter ) string {
 func RootedAt( root interface{} ) PathNode { return descend( nil, root ) }
 
 func RootedAtList() *ListNode { return startList( nil ) }
+
+func Descend( p PathNode, elt interface{} ) PathNode {
+    if p == nil { return RootedAt( elt ) }
+    return p.Descend( elt )
+}
+
+func StartList( p PathNode ) *ListNode {
+    if p == nil { return RootedAtList() }
+    return p.StartList()
+}

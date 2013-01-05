@@ -1,13 +1,14 @@
 package mingle
 
-type ReactorTest struct {
-    Source interface{}
-    Error error
-}
+import (
+    "bitgirder/objpath"
+)
 
-var StdReactorTests []*ReactorTest
+type ReactorTest interface {}
 
-type ValueBuildSource struct { Val Value }
+var StdReactorTests []ReactorTest
+
+type ValueBuildTest struct { Val Value }
 
 func initValueBuildReactorTests() {
     s1 := MustStruct( "ns1@v1/S1",
@@ -16,9 +17,7 @@ func initValueBuildReactorTests() {
         "map1", MustSymbolMap(),
         "struct1", MustStruct( "ns1@v1/S2" ),
     )
-    mk := func( v Value ) *ReactorTest {
-        return &ReactorTest{ Source: ValueBuildSource{ v } }
-    }
+    mk := func( v Value ) ReactorTest { return ValueBuildTest{ v } }
     StdReactorTests = append( StdReactorTests,
         mk( String( "hello" ) ),
         mk( MustList() ),
@@ -31,27 +30,41 @@ func initValueBuildReactorTests() {
     )
 }
 
-type StructuralReactorTestSource struct {
+type StructuralReactorErrorTest struct {
     Events []ReactorEvent
+    Error *ReactorError
     TopType ReactorTopType
+}
+
+type StructuralReactorPathTest struct {
+    Events []ReactorEvent
+    Path objpath.PathNode
 }
 
 func initStructuralReactorTests() {
     evStartStruct1 := StructStartEvent{ MustTypeReference( "ns1@v1/S1" ) }
-    evStartField1 := FieldStartEvent{ MustIdentifier( "f1" ) }
-    evStartField2 := FieldStartEvent{ MustIdentifier( "f2" ) }
+    idF1 := MustIdentifier( "f1" )
+    evStartField1 := FieldStartEvent{ idF1 }
+    idF2 := MustIdentifier( "f2" )
+    evStartField2 := FieldStartEvent{ idF2 }
     evValue1 := ValueEvent{ Int64( int64( 1 ) ) }
-    mk1 := func( errMsg string, evs ...ReactorEvent ) *ReactorTest {
-        return &ReactorTest{
-            Source: &StructuralReactorTestSource{ Events: evs },
+    mk1 := func( 
+        errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
+        return &StructuralReactorErrorTest{
+            Events: evs,
             Error: rctError( errMsg ),
         }
     }
     mk2 := func( 
-        errMsg string, tt ReactorTopType, evs ...ReactorEvent ) *ReactorTest {
+        errMsg string, 
+        tt ReactorTopType, 
+        evs ...ReactorEvent ) *StructuralReactorErrorTest {
         res := mk1( errMsg, evs... )
-        res.Source.( *StructuralReactorTestSource ).TopType = tt
+        res.TopType = tt
         return res
+    }
+    mk3 := func( path idPath, evs ...ReactorEvent ) *StructuralReactorPathTest {
+        return &StructuralReactorPathTest{ Events: evs, Path: path }
     }
     StdReactorTests = append( StdReactorTests,
         mk1( "Saw start of field 'f2' while expecting a value for 'f1'",
@@ -99,11 +112,60 @@ func initStructuralReactorTests() {
             evStartField2, evValue1,
             evStartField1,
         ),
+        mk3( nil ),
+        mk3( nil, evValue1 ),
+        mk3( objpath.RootedAt( idF1 ), evStartStruct1, evStartField1 ),
+        mk3( objpath.RootedAt( idF1 ), EvMapStart, evStartField1 ),
+        mk3( nil, evStartStruct1, evStartField1, evValue1 ),
+        mk3( objpath.RootedAtList(), EvListStart ),
+        mk3( objpath.RootedAtList(), EvListStart, EvMapStart ),
+        mk3( objpath.RootedAtList().Next(), EvListStart, evValue1 ),
+        mk3( objpath.RootedAtList().SetIndex( 1 ),
+            EvListStart, evValue1, EvMapStart,
+        ),
+        mk3( objpath.RootedAt( idF1 ), EvMapStart, evStartField1, EvMapStart ),
+        mk3( 
+            objpath.RootedAt( idF1 ).
+                Descend( idF2 ).
+                StartList().
+                Next().
+                Next().
+                StartList().
+                Next().
+                Descend( idF1 ),
+            evStartStruct1, evStartField1,
+            EvMapStart, evStartField2,
+            EvListStart,
+            evValue1,
+            evValue1,
+            EvListStart,
+            evValue1,
+            EvMapStart, evStartField1,
+        ),
+    )
+}
+
+type CastReactorTest struct {
+    In Value
+    Expect Value
+    Path objpath.PathNode
+    Type TypeReference
+}
+
+func initCastReactorTests() {
+    StdReactorTests = append( StdReactorTests,
+        &CastReactorTest{
+            In: Int32( 1 ),
+            Expect: Int64( 1 ),
+            Path: cvtPathDefault,
+            Type: TypeInt64,
+        },
     )
 }
 
 func init() {
-    StdReactorTests = []*ReactorTest{}
+    StdReactorTests = []ReactorTest{}
     initValueBuildReactorTests()
     initStructuralReactorTests()
+    initCastReactorTests()
 }

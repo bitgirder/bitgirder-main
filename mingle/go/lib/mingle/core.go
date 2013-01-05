@@ -1368,6 +1368,9 @@ func castNull(
     return nil, asTypeCastError( at, mgVal, path )
 }
 
+// switch compares based on qname not at itself since we may be dealing with
+// restriction types, meaning that if at is mingle:core@v1/String~"a", it is a
+// string (has qname mingle:core@v1/String) but will not equal TypeString itself
 func castAtomicUnrestricted(
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     if _, ok := mgVal.( *Null ); ok {
@@ -1403,9 +1406,6 @@ func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
         QuoteValue( val ), at.Restriction.ExternalForm() )
 }
 
-// switch compares based on qname not at itself since we may be dealing with
-// restriction types, meaning that if at is mingle:core@v1/String~"a", it is a
-// string (has qname mingle:core@v1/String) but will not equal TypeString itself
 func castAtomic(
     mgVal Value, 
     at *AtomicTypeReference,

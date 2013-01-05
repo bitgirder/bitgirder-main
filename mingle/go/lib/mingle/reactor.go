@@ -3,6 +3,7 @@ package mingle
 import (
     "container/list"
     "fmt"
+    "bitgirder/objpath"
 //    "log"
 )
 
@@ -37,6 +38,14 @@ type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
 type ReactorKey string
 
 type ReactorFactory interface { CreateReactor() Reactor }
+
+type reactorFuncFactory func() Reactor
+
+func ( rff reactorFuncFactory ) CreateReactor() Reactor { return rff() }
+
+func asReactorFactory( f func() Reactor ) ReactorFactory {
+    return reactorFuncFactory( f )
+}
 
 type Reactor interface {
     Key() ReactorKey
@@ -155,16 +164,16 @@ func getReactorTopTypeError( valName string, tt ReactorTopType ) error {
     return rctErrorf( "Expected %s but got %s", tt, valName )
 }
 
-type reactorImplMap struct {
+type structuralMap struct {
     pending *Identifier
     keys *IdentifierMap
 }
 
-func newReactorImplMap() *reactorImplMap { 
-    return &reactorImplMap{ keys: NewIdentifierMap() } 
+func newStructuralMap() *structuralMap { 
+    return &structuralMap{ keys: NewIdentifierMap() } 
 }
 
-func ( m *reactorImplMap ) startField( fld *Identifier ) error {
+func ( m *structuralMap ) startField( fld *Identifier ) error {
     if m.pending == nil {
         if m.keys.HasKey( fld ) {
             return rctErrorf( "Multiple entries for field: %s", fld )
@@ -177,21 +186,23 @@ func ( m *reactorImplMap ) startField( fld *Identifier ) error {
     return rctErrorf( tmpl, fld, m.pending )
 }
 
-// Clears m.pending on nil return val
-func ( m *reactorImplMap ) checkValue( valName string ) error {
+// Clears m.pending on nil return val when valReady
+func ( m *structuralMap ) checkValue( valName string, valReady bool ) error {
     if m.pending == nil {
         tmpl := "Expected field name or end of fields but got %s"
         return rctErrorf( tmpl, valName )
     }
-    m.pending = nil
+    if valReady { m.pending = nil }
     return nil 
 }
 
-func ( m *reactorImplMap ) end() error {
+func ( m *structuralMap ) end() error {
     if m.pending == nil { return nil }
     return rctErrorf( 
         "Saw end while expecting value for field '%s'", m.pending )
 }
+
+type structuralListIndex int
 
 type StructuralReactor struct {
     stack *list.List
@@ -202,7 +213,7 @@ type StructuralReactor struct {
 func NewStructuralReactor( topTyp ReactorTopType ) *StructuralReactor {
     return &StructuralReactor{ 
         stack: &list.List{}, 
-        topTyp: ReactorTopTypeStruct,
+        topTyp: topTyp,
     }
 }
 
@@ -210,8 +221,27 @@ func ( sr *StructuralReactor ) Init( rpi *ReactorPipelineInit ) {}
 
 const ReactorKeyStructuralReactor = ReactorKey( "mingle.StructuralReactor" )
 
+var StructuralReactorFactory = asReactorFactory(
+    func() Reactor { return NewStructuralReactor( ReactorTopTypeValue ) },
+)
+
 func ( sr *StructuralReactor ) Key() ReactorKey { 
     return ReactorKeyStructuralReactor
+}
+
+func ( sr *StructuralReactor ) buildPath( e *list.Element, p idPath ) idPath {
+    if e == nil { return p }
+    switch v := e.Value.( type ) {
+    case *structuralMap: 
+        if fld := v.pending; fld != nil { p = objpath.Descend( p, fld ) }
+    case structuralListIndex: p = objpath.StartList( p ).SetIndex( int( v ) )
+    default: panic( libErrorf( "Unhandled stack element: %T", e.Value ) )
+    }
+    return sr.buildPath( e.Prev(), p )
+}
+
+func ( sr *StructuralReactor ) GetPath() objpath.PathNode {
+    return sr.buildPath( sr.stack.Back(), nil )
 }
 
 func ( sr *StructuralReactor ) getReactorTopTypeError( valName string ) error {
@@ -225,13 +255,16 @@ func ( sr *StructuralReactor ) checkActive( call string ) error {
 
 // sr.stack known to be non-empty when this returns without error, unless top
 // type is value.
-func ( sr *StructuralReactor ) checkValue( valName string ) error {
+func ( sr *StructuralReactor ) checkValue( 
+    valName string, valReady bool ) error {
     if sr.stack.Len() == 0 {
         if sr.topTyp == ReactorTopTypeValue { return nil }
         return sr.getReactorTopTypeError( valName )
     }
     elt := sr.stack.Front().Value
-    if m, ok := elt.( *reactorImplMap ); ok { return m.checkValue( valName ) }
+    if m, ok := elt.( *structuralMap ); ok { 
+        return m.checkValue( valName, valReady ) 
+    }
     return nil
 }
 
@@ -243,23 +276,25 @@ func ( sr *StructuralReactor ) startStruct() error {
     if err := sr.checkActive( "StartStruct" ); err != nil { return err }
     // skip check if we're pushing the top level struct
     if sr.stack.Len() > 0 {
-        if err := sr.checkValue( "struct start" ); err != nil { return err }
+        if err := sr.checkValue( "struct start", false ); err != nil { 
+            return err 
+        }
     }
-    sr.push( newReactorImplMap() )
+    sr.push( newStructuralMap() )
     return nil
 }
 
 func ( sr *StructuralReactor ) startMap() error {
     if err := sr.checkActive( "StartMap" ); err != nil { return err }
-    if err := sr.checkValue( "map start" ); err != nil { return err }
-    sr.push( newReactorImplMap() )
+    if err := sr.checkValue( "map start", false ); err != nil { return err }
+    sr.push( newStructuralMap() )
     return nil
 }
 
 func ( sr *StructuralReactor ) startList() error {
     if err := sr.checkActive( "StartList" ); err != nil { return err }
-    if err := sr.checkValue( "list start" ); err != nil { return err }
-    sr.push( "list" )
+    if err := sr.checkValue( "list start", false ); err != nil { return err }
+    sr.push( structuralListIndex( 0 ) )
     return nil
 }
 
@@ -268,10 +303,10 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
     if ok := sr.stack.Len() > 0; ok {
         elt := sr.stack.Front().Value
         switch v := elt.( type ) {
-        case string: 
+        case structuralListIndex: 
             tmpl := "Expected list value but got start of field '%s'"
             return rctErrorf( tmpl, fld )
-        case *reactorImplMap: return v.startField( fld )
+        case *structuralMap: return v.startField( fld )
         default: panic( libErrorf( "Invalid stack element: %T", elt ) )
         }
     }
@@ -281,7 +316,13 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
 
 func ( sr *StructuralReactor ) value() error {
     if err := sr.checkActive( "Value" ); err != nil { return err }
-    if err := sr.checkValue( "value" ); err != nil { return err }
+    if err := sr.checkValue( "value", true ); err != nil { return err }
+    if sr.stack.Len() > 0 {
+        front := sr.stack.Front()
+        if idx, ok := front.Value.( structuralListIndex ); ok {
+            front.Value = structuralListIndex( idx + 1 )
+        }
+    }
     return nil
 }
 
@@ -290,11 +331,13 @@ func ( sr *StructuralReactor ) end() error {
     if sr.stack.Len() == 0 { return sr.getReactorTopTypeError( "end" ) }
     elt := sr.stack.Remove( sr.stack.Front() )
     switch v := elt.( type ) {
-    case *reactorImplMap: if err := v.end(); err != nil { return err }
-    case string: {} // list -- end() is always okay
+    case *structuralMap: if err := v.end(); err != nil { return err }
+    case structuralListIndex: {} // list -- end() is always okay
     default: panic( libErrorf( "Unexpected stack element: %T", elt ) )
     }
-    sr.done = sr.stack.Len() == 0
+    // if we're not done then we just completed an intermediate value which
+    // needs to be processed
+    if sr.done = sr.stack.Len() == 0; ! sr.done { return sr.value() }
     return nil
 }
 
@@ -445,4 +488,63 @@ func ( vb *ValueBuilder ) ProcessEvent(
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return ev, nil
+}
+
+type castReaction interface {
+    value( ValueEvent ) ( ReactorEvent, error )
+}
+
+type CastReactor struct {
+    path idPath
+    sr *StructuralReactor
+    stack *list.List
+}
+
+func NewCastReactor( expct TypeReference, path objpath.PathNode ) *CastReactor {
+    res := &CastReactor{
+        path: path,
+        stack: &list.List{},
+    }
+    res.stack.PushFront( expct )
+    return res
+}
+
+const ReactorKeyCastReactor = ReactorKey( "mingle.CastReactor" )
+
+func ( cr *CastReactor ) Init( rpi *ReactorPipelineInit ) {
+    cr.sr = rpi.EnsurePredecessor( 
+        ReactorKeyStructuralReactor, 
+        StructuralReactorFactory,
+    ).( *StructuralReactor )
+}
+
+func ( cr *CastReactor ) Key() ReactorKey { return ReactorKeyCastReactor }
+
+func ( cr *CastReactor ) peek() interface{} {
+    if cr.stack.Len() == 0 { panic( libErrorf( "Empty cast reactor stack" ) ) }
+    return cr.stack.Front().Value
+}
+
+func ( cr *CastReactor ) atomicValueEvent( 
+    v Value, at *AtomicTypeReference ) ( ReactorEvent, error ) {
+    valPath := objpath.RootedAt( MustIdentifier( "stub" ) )
+//    v2, err := castAtomic( v, at, cr.sr.GetPath() )
+    v2, err := castAtomic( v, at, valPath )
+    if err == nil { return ValueEvent{ v2 }, nil }
+    return nil, err
+}
+
+func ( cr *CastReactor ) value( ve ValueEvent ) ( ReactorEvent, error ) {
+    switch elt := cr.peek().( type ) {
+    case *AtomicTypeReference: return cr.atomicValueEvent( ve.Val, elt )
+    }
+    panic( libErrorf( "Unimplemented" ) )
+}
+
+func ( cr *CastReactor ) ProcessEvent( 
+    ev ReactorEvent ) ( ReactorEvent, error ) {
+    switch v := ev.( type ) {
+    case ValueEvent: return cr.value( v )
+    }
+    panic( libErrorf( "Unhandled event: %T", ev ) )
 }
