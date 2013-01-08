@@ -581,11 +581,6 @@ func ( r *BinReader ) ReadReactorValue( rep ReactorEventProcessor ) error {
 func ( r *BinReader ) ReadValue() ( Value, error ) {
     vb := NewValueBuilder()
     pip := InitReactorPipeline( vb )
-//    vb := NewValueBuilder()
-//    vb.SetTopType( ReactorTopTypeValue )
-//    err := r.ReadReactorValue( vb )
-//    if err != nil { return nil, err }
-//    return vb.GetValue(), nil
     err := r.ReadReactorValue( pip )
     if err != nil { return nil, err }
     return vb.GetValue(), nil

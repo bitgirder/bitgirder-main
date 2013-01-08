@@ -50,7 +50,7 @@ func asReactorFactory( f func() Reactor ) ReactorFactory {
 type Reactor interface {
     Key() ReactorKey
     Init( rpi *ReactorPipelineInit )
-    ProcessEvent( ev ReactorEvent ) ( ReactorEvent, error )
+    ProcessEvent( ev ReactorEvent, rep ReactorEventProcessor ) error
 }
 
 type ReactorPipeline struct {
@@ -96,12 +96,25 @@ func InitReactorPipeline( reactors ...Reactor ) *ReactorPipeline {
     return res
 }
 
+type pipelineCall struct {
+    rp *ReactorPipeline
+    idx int
+}
+
+func ( pc pipelineCall ) ProcessEvent( re ReactorEvent ) error {
+    if pc.idx == len( pc.rp.reactors ) { return nil }
+    rct := pc.rp.reactors[ pc.idx ]
+    nextPc := pipelineCall{ pc.rp, pc.idx + 1 }
+    return rct.ProcessEvent( re, nextPc )
+}
+
 func ( rp *ReactorPipeline ) ProcessEvent( re ReactorEvent ) error {
-    var err error
-    for _, rct := range rp.reactors { 
-        if re, err = rct.ProcessEvent( re ); err != nil { return err }
-    }
-    return nil
+//    var err error
+//    for _, rct := range rp.reactors { 
+//        if re, err = rct.ProcessEvent( re ); err != nil { return err }
+//    }
+//    return nil
+    return ( pipelineCall{ rp, 0 } ).ProcessEvent( re )
 }
 
 func visitSymbolMap( 
@@ -240,8 +253,29 @@ func ( sr *StructuralReactor ) buildPath( e *list.Element, p idPath ) idPath {
     return sr.buildPath( e.Prev(), p )
 }
 
+func ( sr *StructuralReactor ) appendPath( p idPath ) idPath {
+    return sr.buildPath( sr.stack.Back(), p )
+}
+
 func ( sr *StructuralReactor ) GetPath() objpath.PathNode {
-    return sr.buildPath( sr.stack.Back(), nil )
+    return sr.appendPath( nil )
+}
+
+func ( sr *StructuralReactor ) AppendPath( 
+    p objpath.PathNode ) objpath.PathNode {
+    return sr.appendPath( p )
+}
+
+func ( sr *StructuralReactor ) Error( msg string ) error {
+    if p := sr.GetPath(); p != nil {
+        msg = fmt.Sprintf( "%s: %s", FormatIdPath( p ), msg )
+    }
+    return rctError( msg )
+}
+
+func ( sr *StructuralReactor ) Errorf( 
+    tmpl string, args ...interface{} ) error {
+    return sr.Error( fmt.Sprintf( tmpl, args... ) )
 }
 
 func ( sr *StructuralReactor ) getReactorTopTypeError( valName string ) error {
@@ -317,12 +351,12 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
 func ( sr *StructuralReactor ) value() error {
     if err := sr.checkActive( "Value" ); err != nil { return err }
     if err := sr.checkValue( "value", true ); err != nil { return err }
-    if sr.stack.Len() > 0 {
-        front := sr.stack.Front()
-        if idx, ok := front.Value.( structuralListIndex ); ok {
-            front.Value = structuralListIndex( idx + 1 )
-        }
-    }
+//    if sr.stack.Len() > 0 {
+//        front := sr.stack.Front()
+//        if idx, ok := front.Value.( structuralListIndex ); ok {
+//            front.Value = structuralListIndex( idx + 1 )
+//        }
+//    }
     return nil
 }
 
@@ -341,17 +375,30 @@ func ( sr *StructuralReactor ) end() error {
     return nil
 }
 
-func ( sr *StructuralReactor ) ProcessEvent( 
-    ev ReactorEvent ) ( ReactorEvent, error ) {
-    switch v := ev.( type ) {
-    case StructStartEvent: return ev, sr.startStruct()
-    case MapStartEvent: return ev, sr.startMap()
-    case ListStartEvent: return ev, sr.startList()
-    case FieldStartEvent: return ev, sr.startField( v.Field )
-    case ValueEvent: return ev, sr.value()
-    case EndEvent: return ev, sr.end()
+func ( sr *StructuralReactor ) incrementIfList() {
+    if sr.stack.Len() == 0 { return }
+    front := sr.stack.Front()
+    if idx, ok := front.Value.( structuralListIndex ); ok {
+        front.Value = structuralListIndex( idx + 1 )
     }
-    panic( libErrorf( "Unhandled event: %T", ev ) )
+}
+
+func ( sr *StructuralReactor ) ProcessEvent( 
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    var err error
+    isValue := false
+    switch v := ev.( type ) {
+    case StructStartEvent: err = sr.startStruct()
+    case MapStartEvent: err = sr.startMap()
+    case ListStartEvent: err = sr.startList()
+    case FieldStartEvent: err = sr.startField( v.Field )
+    case ValueEvent: err, isValue = sr.value(), true
+    case EndEvent: err, isValue = sr.end(), true
+    default: panic( libErrorf( "Unhandled event: %T", ev ) )
+    }
+    if err == nil { err = rep.ProcessEvent( ev ) }
+    if err == nil && isValue && ( ! sr.done ) { sr.incrementIfList() }
+    return err
 }
 
 type valAccumulator interface {
@@ -477,27 +524,48 @@ func ( vb *ValueBuilder ) end() error {
 }
 
 func ( vb *ValueBuilder ) ProcessEvent( 
-    ev ReactorEvent ) ( ReactorEvent, error ) {
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
     switch v := ev.( type ) {
     case ValueEvent: vb.valueReady( v.Val )
     case ListStartEvent: vb.pushAcc( newListAcc() )
     case MapStartEvent: vb.pushAcc( newMapAcc() )
     case StructStartEvent: vb.pushAcc( newStructAcc( v.Type ) )
     case FieldStartEvent: vb.startField( v.Field )
-    case EndEvent: if err := vb.end(); err != nil { return nil, err }
+    case EndEvent: if err := vb.end(); err != nil { return err }
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
-    return ev, nil
+    return rep.ProcessEvent( ev )
 }
 
-type castReaction interface {
-    value( ValueEvent ) ( ReactorEvent, error )
+type castContext struct {
+    elt interface{}
+    expct TypeReference
+}
+
+type mapCast struct {}
+
+func ( mc mapCast ) startField( 
+    fse FieldStartEvent, rep ReactorEventProcessor ) error {
+    return rep.ProcessEvent( fse )
+}
+
+func ( mc mapCast ) value( ve ValueEvent, rep ReactorEventProcessor ) error {
+    return rep.ProcessEvent( ve )
+}
+
+func ( mc mapCast ) end( ee EndEvent, rep ReactorEventProcessor ) error {
+    return rep.ProcessEvent( ee )
+}
+
+type listCast struct {
+    lt *ListTypeReference
+    sawVals bool
 }
 
 type CastReactor struct {
     path idPath
     sr *StructuralReactor
-    stack *list.List
+    stack *list.List // stack of castContext
 }
 
 func NewCastReactor( expct TypeReference, path objpath.PathNode ) *CastReactor {
@@ -505,7 +573,7 @@ func NewCastReactor( expct TypeReference, path objpath.PathNode ) *CastReactor {
         path: path,
         stack: &list.List{},
     }
-    res.stack.PushFront( expct )
+    res.stack.PushFront( castContext{ elt: expct, expct: expct } )
     return res
 }
 
@@ -520,31 +588,174 @@ func ( cr *CastReactor ) Init( rpi *ReactorPipelineInit ) {
 
 func ( cr *CastReactor ) Key() ReactorKey { return ReactorKeyCastReactor }
 
-func ( cr *CastReactor ) peek() interface{} {
+func ( cr *CastReactor ) checkStackNonEmpty() {
     if cr.stack.Len() == 0 { panic( libErrorf( "Empty cast reactor stack" ) ) }
-    return cr.stack.Front().Value
 }
 
-func ( cr *CastReactor ) atomicValueEvent( 
-    v Value, at *AtomicTypeReference ) ( ReactorEvent, error ) {
-    valPath := objpath.RootedAt( MustIdentifier( "stub" ) )
-//    v2, err := castAtomic( v, at, cr.sr.GetPath() )
-    v2, err := castAtomic( v, at, valPath )
-    if err == nil { return ValueEvent{ v2 }, nil }
-    return nil, err
+func ( cr *CastReactor ) peek() castContext {
+    cr.checkStackNonEmpty()
+    return cr.stack.Front().Value.( castContext )
 }
 
-func ( cr *CastReactor ) value( ve ValueEvent ) ( ReactorEvent, error ) {
-    switch elt := cr.peek().( type ) {
-    case *AtomicTypeReference: return cr.atomicValueEvent( ve.Val, elt )
+func ( cr *CastReactor ) pop() castContext {
+    cc := cr.peek()
+    cr.stack.Remove( cr.stack.Front() )
+    return cc
+}
+
+func ( cr *CastReactor ) push( cc castContext ) { cr.stack.PushFront( cc ) }
+
+func ( cr *CastReactor ) getPath() idPath { return cr.sr.AppendPath( cr.path ) }
+
+func ( cr *CastReactor ) newTypeCastErrorPath( 
+    act TypeReference, p idPath ) *TypeCastError {
+    return newTypeCastError( cr.peek().expct, act, p )
+}
+
+func ( cr *CastReactor ) newTypeCastError( act TypeReference ) *TypeCastError {
+    return cr.newTypeCastErrorPath( act, cr.getPath() )
+}
+
+func ( cr *CastReactor ) castContextPanic( 
+    cc castContext, desc string ) error {
+    return libErrorf( "Unhandled stack element for %s: %T", desc, cc.elt )
+}
+
+func ( cr *CastReactor ) stackTypePanic( desc string ) error {
+    return cr.castContextPanic( cr.peek(), desc )
+}
+
+func ( cr *CastReactor ) completeValue( 
+    ve ValueEvent, t TypeReference, rep ReactorEventProcessor ) error {
+    switch typVal := t.( type ) {
+    case *AtomicTypeReference: 
+        v2, err := castAtomic( ve.Val, typVal, cr.getPath() )
+        if err == nil { return rep.ProcessEvent( ValueEvent{ v2 } ) }
+        return err
+    case *NullableTypeReference: 
+        if _, ok := ve.Val.( *Null ); ok { return rep.ProcessEvent( ve ) }
+        return cr.completeValue( ve, typVal.Type, rep )
+    case *ListTypeReference: return cr.newTypeCastError( TypeOf( ve.Val ) )
     }
-    panic( libErrorf( "Unimplemented" ) )
+    panic( libErrorf( "Uhandled type: %T", t ) )
+}
+
+func ( cr *CastReactor ) value( 
+    ve ValueEvent, rep ReactorEventProcessor ) error {
+    switch elt := cr.peek().elt.( type ) {
+    case *AtomicTypeReference, *NullableTypeReference, *ListTypeReference:
+        return cr.completeValue( ve, elt.( TypeReference ), rep )
+    case *listCast: 
+        elt.sawVals = true
+        return cr.completeValue( ve, elt.lt.ElementType, rep )
+    case mapCast: return elt.value( ve, rep )
+    }
+    panic( cr.stackTypePanic( "value" ) )
+}
+
+func ( cr *CastReactor ) completeStartList( 
+    typ TypeReference, le ListStartEvent, rep ReactorEventProcessor ) error {
+    switch t := typ.( type ) {
+    case *ListTypeReference:
+        cc := castContext{ expct: t.ElementType, elt: &listCast{ lt: t } }
+        cr.push( cc )
+        return rep.ProcessEvent( le )
+    case *NullableTypeReference: return cr.completeStartList( t.Type, le, rep )
+    case *AtomicTypeReference:
+        p := cr.getPath().Parent()
+        return cr.newTypeCastErrorPath( typeOpaqueList, p )
+    }
+    panic( libErrorf( "Uhandled type: %T", typ ) )
+}
+
+func ( cr *CastReactor ) startList( 
+    le ListStartEvent, rep ReactorEventProcessor ) error {
+    switch elt := cr.peek().elt.( type ) {
+    case *ListTypeReference, *AtomicTypeReference, *NullableTypeReference: 
+        return cr.completeStartList( elt.( TypeReference ), le, rep )
+    case *listCast: return cr.completeStartList( elt.lt.ElementType, le, rep )
+    }
+    panic( cr.stackTypePanic( "list start" ) )
+}
+
+func ( cr *CastReactor ) startMap( 
+    sm MapStartEvent, rep ReactorEventProcessor ) error {
+    switch elt := cr.peek().elt.( type ) {
+    case *AtomicTypeReference:
+        if elt.Equals( TypeSymbolMap ) {
+            cr.push( castContext{ elt: mapCast{}, expct: TypeSymbolMap } )
+            return rep.ProcessEvent( sm )
+        }
+        return cr.newTypeCastError( TypeSymbolMap )
+    }
+    panic( cr.stackTypePanic( "start map" ) )
+}
+
+func ( cr *CastReactor ) completeStartStruct( 
+    ss StructStartEvent, t TypeReference, rep ReactorEventProcessor ) error {
+    if t.Equals( ss.Type ) {
+        cr.push( castContext{ elt: mapCast{}, expct: ss.Type } )
+        return rep.ProcessEvent( ss )
+    }
+    return cr.newTypeCastError( ss.Type )
+}
+
+func ( cr *CastReactor ) startStruct( 
+    ss StructStartEvent, rep ReactorEventProcessor ) error {
+    switch elt := cr.peek().elt.( type ) {
+    case *AtomicTypeReference: return cr.completeStartStruct( ss, elt, rep )
+    case *ListTypeReference, *NullableTypeReference:
+        return cr.newTypeCastError( ss.Type )
+    case *listCast: return cr.completeStartStruct( ss, elt.lt.ElementType, rep )
+    }
+    panic( cr.stackTypePanic( "start struct" ) )
+}
+
+func ( cr *CastReactor ) startField( 
+    fse FieldStartEvent, rep ReactorEventProcessor ) error {
+    mc := cr.peek().elt.( mapCast ) // okay since structure check precedes
+    return mc.startField( fse, rep )
+}
+
+func ( cr *CastReactor ) noteEndAsValIfList() {
+    if cr.stack.Len() == 0 { return }
+    if lc, ok := cr.peek().elt.( *listCast ); ok { lc.sawVals = true }
+}
+
+func ( cr *CastReactor ) end( ee EndEvent, rep ReactorEventProcessor ) error {
+    cc := cr.pop()
+    cr.noteEndAsValIfList()
+    switch v := cc.elt.( type ) {
+    case mapCast: return v.end( ee, rep )
+    case *listCast:
+        if ! ( v.sawVals || v.lt.AllowsEmpty ) {
+            return newValueCastErrorf( cr.getPath(), "List is empty" )
+        }
+        return rep.ProcessEvent( ee )
+    }
+    panic( cr.castContextPanic( cc, "end" ) )
 }
 
 func ( cr *CastReactor ) ProcessEvent( 
-    ev ReactorEvent ) ( ReactorEvent, error ) {
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
     switch v := ev.( type ) {
-    case ValueEvent: return cr.value( v )
+    case ValueEvent: return cr.value( v, rep )
+    case ListStartEvent: return cr.startList( v, rep )
+    case MapStartEvent: return cr.startMap( v, rep )
+    case StructStartEvent: return cr.startStruct( v, rep )
+    case FieldStartEvent: return cr.startField( v, rep )
+    case EndEvent: return cr.end( v, rep )
     }
     panic( libErrorf( "Unhandled event: %T", ev ) )
+}
+
+func CastValue( 
+    mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
+    vb := NewValueBuilder()
+    pip := InitReactorPipeline( NewCastReactor( typ, path ), vb )
+    if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
+    return vb.GetValue(), nil
+//    if path == nil { return nil, errors.New( "path arg is nil" ) }
+//    if mgVal == nil { return nil, errors.New( "mgVal is nil" ) }
+//    return castValue( mgVal, typ, path )
 }

@@ -16,7 +16,7 @@ func ( e *PathElementError ) Error() string {
 type PathNode interface {
     Descend( elt interface{} ) PathNode
     StartList() *ListNode
-    parentOf() PathNode // nil when root
+    Parent() PathNode // nil when root
 }
 
 type dictNode struct {
@@ -35,7 +35,7 @@ func descend( parent PathNode, elt interface{} ) PathNode {
 
 func startList( parent PathNode ) *ListNode { return &ListNode{ parent, 0 } }
 
-func ( n *dictNode ) parentOf() PathNode { return n.parent }
+func ( n *dictNode ) Parent() PathNode { return n.parent }
 
 func ( n *dictNode ) Descend( elt interface{} ) PathNode {
     return descend( n, elt ) 
@@ -43,7 +43,7 @@ func ( n *dictNode ) Descend( elt interface{} ) PathNode {
 
 func ( n *dictNode ) StartList() *ListNode { return startList( n ) }
 
-func ( l *ListNode ) parentOf() PathNode { return l.parent }
+func ( l *ListNode ) Parent() PathNode { return l.parent }
 
 func ( l *ListNode ) Descend( elt interface{} ) PathNode {
     return descend( l, elt )
@@ -94,7 +94,7 @@ func init() {
 
 func ascentOrderFor( n PathNode ) []interface{} {
     res := make( []interface{}, 0, 5 )
-    for elt := n; elt != nil; elt = elt.parentOf() { res = append( res, elt ) }
+    for elt := n; elt != nil; elt = elt.Parent() { res = append( res, elt ) }
     return res
 }
 
