@@ -310,22 +310,33 @@ func ( c *JsonCodec ) visitFields(
     return rep.ProcessEvent( mg.EvEnd )
 }
 
+func parseAtomicType( 
+    typStr string, 
+    path objpath.PathNode, 
+    key string ) ( *mg.AtomicTypeReference, error ) {
+    typ, err := mg.ParseTypeReference( typStr )
+    if err == nil {
+        if at, atOk := typ.( *mg.AtomicTypeReference ); atOk { return at, nil }
+        errPath := descendInbound( path, key )
+        return nil, visitError( errPath, "not an atomic type" )
+    }
+    errStr := parseErrorMessageOf( err )
+    return nil, visitError( descendInbound( path, key ), errStr )
+}
+
 func ( c *JsonCodec ) visitMap( 
     m map[ string ]interface{}, 
     path objpath.PathNode, 
     rep mg.ReactorEventProcessor ) error {
     if typVal, ok := m[ jsonKeyType ]; ok {
         if typStr, ok2 := typVal.( string ); ok2 {
-            if typ, err := mg.ParseTypeReference( typStr ); err == nil {
-                if _, ok3 := m[ jsonKeyConstant ]; ok3 {
-                    return c.visitEnum( typ, m, path, rep )
-                }
-                ev := mg.StructStartEvent{ typ }
-                if err = rep.ProcessEvent( ev ); err != nil { return err }
-            } else {
-                errStr := parseErrorMessageOf( err )
-                return visitError( descendInbound( path, jsonKeyType ), errStr )
+            at, err := parseAtomicType( typStr, path, jsonKeyType )
+            if err != nil { return err }
+            if _, ok4 := m[ jsonKeyConstant ]; ok4 {
+                return c.visitEnum( at, m, path, rep )
             }
+            ev := mg.StructStartEvent{ at }
+            if err = rep.ProcessEvent( ev ); err != nil { return err }
         }
     } else {
         if path == nil {

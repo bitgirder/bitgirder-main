@@ -215,6 +215,11 @@ func init() {
             `f1.$constant: Invalid enum value "2bad": Illegal start of ` +
                 `identifier part: "2" (U+0032)`,
         ),
+        initFailDecode(
+            "invalid-non-atomic-type",
+            `{ "$type": "ns1@v1/S1?" }`,
+            `$type: not an atomic type`,
+        ),
         initFailDecode( "empty-document", "{}", `Missing type key ("$type")` ),
         initFailDecode( 
             "toplevel-array", "[]", "Unexpected top level JSON value" ),

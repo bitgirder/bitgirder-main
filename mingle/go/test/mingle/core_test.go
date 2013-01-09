@@ -10,9 +10,6 @@ import (
 //    "log"
 )
 
-func typeRef( s string ) TypeReference { return MustTypeReference( s ) }
-func id( s string ) *Identifier { return MustIdentifier( s ) }
-
 type notAMingleValue struct {}
 
 func assertAsIntValues( t *testing.T ) {
@@ -50,7 +47,7 @@ func assertAsBufferValues( t *testing.T ) {
 func assertCompositeTypesAsValue( t *testing.T ) {
     m := MustSymbolMap( "key1", "val1" )
     assert.Equal( m, MustValue( m ) )
-    typ := MustTypeReference( "ns1@v1/T1" )
+    typ := atomicRef( "ns1@v1/T1" )
     s := &Struct{ Type: typ, Fields: m }
     assert.Equal( s, MustValue( s ) )
     l := MustList( 1, 2 )
@@ -385,7 +382,7 @@ func TestTypeOf( t *testing.T ) {
     assert.Equal( TypeTimestamp, TypeOf( Now() ) )
     assert.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
     assert.Equal( typeRef( "mingle:core@v1/Value*" ), TypeOf( MustList() ) )
-    typ := typeRef( "ns1@v1/T1" )
+    typ := atomicRef( "ns1@v1/T1" )
     assert.Equal( typ, TypeOf( &Enum{ Type: typ } ) )
     assert.Equal( typ, TypeOf( &Struct{ Type: typ } ) )
 }
@@ -498,7 +495,7 @@ func TestQuoteValue( t *testing.T ) {
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
     map1 := MustSymbolMap( "k", 1 )
     expct := `ns1@v1/T1{k:1}`
-    f( &Struct{ Type: typeRef( "ns1@v1/T1" ), Fields: map1 }, expct )
+    f( &Struct{ Type: atomicRef( "ns1@v1/T1" ), Fields: map1 }, expct )
 }
 
 func TestIsNull( t *testing.T ) {

@@ -871,14 +871,17 @@ func MustEnum( typ, val string ) *Enum {
 }
 
 type Struct struct {
-    Type TypeReference
+    Type *AtomicTypeReference
     Fields *SymbolMap
 }
 
 func CreateStruct(
     typ TypeReferenceInitializer, pairs ...interface{} ) ( *Struct, error ) {
     res := new( Struct )
-    res.Type = asTypeReference( typ )
+    typRef := asTypeReference( typ )
+    if at, ok := typRef.( *AtomicTypeReference ); ok { 
+        res.Type = at 
+    } else { return nil, libErrorf( "Not an atomic type: %s", typRef ) }
     if flds, err := CreateSymbolMap( pairs... ); err == nil {
         res.Fields = flds
     } else { return nil, err }
@@ -919,6 +922,11 @@ func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
     }
     return false
 }
+
+// Useful in place of passing actual path objects in instances when the path may
+// be expensive to generate and is only useful in certain situations (as when
+// generating error messages or conditional debugging)
+type PathGetter interface { GetPath() objpath.PathNode }
 
 type idPath objpath.PathNode // elts are *Identifier
 

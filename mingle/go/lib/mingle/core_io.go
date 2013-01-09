@@ -535,7 +535,7 @@ func ( r *BinReader ) readSymbolMap( rep ReactorEventProcessor ) error {
 
 func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err }
-    if typ, err := r.ReadTypeReference(); err == nil {
+    if typ, err := r.ReadAtomicTypeReference(); err == nil {
         if err = rep.ProcessEvent( StructStartEvent{ typ } ); err != nil { 
             return err 
         }

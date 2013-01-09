@@ -45,7 +45,7 @@ type StructuralReactorPathTest struct {
 }
 
 func initStructuralReactorTests() {
-    evStartStruct1 := StructStartEvent{ MustTypeReference( "ns1@v1/S1" ) }
+    evStartStruct1 := StructStartEvent{ atomicRef( "ns1@v1/S1" ) }
     idF1 := MustIdentifier( "f1" )
     evStartField1 := FieldStartEvent{ idF1 }
     idF2 := MustIdentifier( "f2" )
@@ -163,6 +163,7 @@ type CastReactorTest struct {
     Path objpath.PathNode
     Type TypeReference
     Err error
+    Profile string
 }
 
 var crtPathDefault = objpath.RootedAt( MustIdentifier( "inVal" ) )
@@ -183,24 +184,27 @@ func ( t *crtInit ) initStdVals() {
     t.struct1 = MustStruct( "ns1@v1/S1", "key1", "val1" )
 }
 
-func ( t *crtInit ) addCvt( crt *CastReactorTest ) { 
+func ( t *crtInit ) addCrt( crt *CastReactorTest ) { 
     StdReactorTests = append( StdReactorTests, crt ) 
 }
 
-func ( t *crtInit ) addCvtDefault( crt *CastReactorTest ) {
+func ( t *crtInit ) addCrtDefault( crt *CastReactorTest ) {
     crt.Path = crtPathDefault
-    t.addCvt( crt )
+    t.addCrt( crt )
+}
+
+func ( t *crtInit ) createSucc(
+    in, expct interface{}, typ TypeReferenceInitializer ) *CastReactorTest {
+    return &CastReactorTest{ 
+        In: MustValue( in ), 
+        Expect: MustValue( expct ), 
+        Type: asTypeReference( typ ),
+    }
 }
 
 func ( t *crtInit ) addSucc( 
     in, expct interface{}, typ TypeReferenceInitializer ) {
-    t.addCvtDefault( 
-        &CastReactorTest{ 
-            In: MustValue( in ), 
-            Expect: MustValue( expct ), 
-            Type: asTypeReference( typ ),
-        },
-    )
+    t.addCrtDefault( t.createSucc( in, expct, typ ) )
 }
 
 func ( t *crtInit ) addIdent( in interface{}, typ TypeReferenceInitializer ) {
@@ -238,20 +242,38 @@ func ( t *crtInit ) addBaseTypeTests() {
     t.addSucc( false, "false", TypeString )
 }
 
-func ( t *crtInit ) addTcError(
-    in interface{}, typExpct, typAct TypeReferenceInitializer ) {
+func ( t *crtInit ) createTcError0(
+    in interface{}, 
+    typExpct, typAct, callTyp TypeReferenceInitializer, 
+    p idPath ) *CastReactorTest {
     err := newTypeCastError( 
         asTypeReference( typExpct ),
         asTypeReference( typAct ),
-        crtPathDefault,
+        p,
     )
-    t.addCvtDefault( 
-        &CastReactorTest{
-            In: MustValue( in ),
-            Type: asTypeReference( typExpct ),
-            Err: err,
-        },
-    )
+    return &CastReactorTest{
+        In: MustValue( in ),
+        Type: asTypeReference( callTyp ),
+        Err: err,
+    }
+}
+
+func ( t *crtInit ) addTcError0(
+    in interface{}, 
+    typExpct, typAct, callTyp TypeReferenceInitializer, 
+    p idPath ) {
+    t.addCrtDefault( t.createTcError0( in, typExpct, typAct, callTyp, p ) )
+}
+
+func ( t *crtInit ) createTcError(
+    in interface{}, 
+    typExpct, typAct TypeReferenceInitializer ) *CastReactorTest {
+    return t.createTcError0( in, typExpct, typAct, typExpct, crtPathDefault )
+}
+
+func ( t *crtInit ) addTcError(
+    in interface{}, typExpct, typAct TypeReferenceInitializer ) {
+    t.addTcError0( in, typExpct, typAct, typExpct, crtPathDefault )
 }
 
 func ( t *crtInit ) addMiscTcErrors() {
@@ -261,7 +283,7 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( MustList( 1, 2 ), TypeString, "Value*" )
     t.addTcError( MustList(), "String?", "Value*" )
     t.addTcError( "s", "String*", "String" )
-    t.addCvtDefault(
+    t.addCrtDefault(
         &CastReactorTest{
             In: MustList( 1, t.struct1 ),
             Type: asTypeReference( "Int32*" ),
@@ -281,16 +303,22 @@ func ( t *crtInit ) addMiscTcErrors() {
     }
 }
 
+func ( t *crtInit ) createVcError0(
+    val interface{}, 
+    typ TypeReferenceInitializer, 
+    path idPath, 
+    msg string ) *CastReactorTest {
+    return &CastReactorTest{
+        In: MustValue( val ),
+        Type: asTypeReference( typ ),
+        Err: newValueCastError( path, msg ),
+    }
+}
+    
+
 func ( t *crtInit ) addVcError0( 
     val interface{}, typ TypeReferenceInitializer, path idPath, msg string ) {
-    typRef := asTypeReference( typ )
-    t.addCvtDefault(
-        &CastReactorTest{
-            In: MustValue( val ),
-            Type: typRef,
-            Err: newValueCastError( path, msg ),
-        },
-    )
+    t.addCrtDefault( t.createVcError0( val, typ, path, msg ) )
 }
 
 func ( t *crtInit ) addVcError( 
@@ -479,6 +507,112 @@ func ( t *crtInit ) addListTests() {
         MustList( "1", nil, "hi" ),
         "String?*",
     )
+    t.addSucc( MustList(), MustList(), TypeValue )
+    intList1 := MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
+    t.addSucc( intList1, intList1, TypeValue )
+    t.addSucc( intList1, intList1, typeOpaqueList )
+    t.addSucc( intList1, intList1, "Int32*?" )
+}
+
+func ( t *crtInit ) addMapTests() {
+    m1 := MustSymbolMap()
+    m2 := MustSymbolMap( "f1", int32( 1 ) )
+    t.addSucc( m1, m1, TypeSymbolMap )
+    t.addSucc( m1, m1, TypeValue )
+    t.addSucc( m2, m2, TypeSymbolMap )
+    t.addSucc( m2, m2, &NullableTypeReference{ TypeSymbolMap } )
+    s2 := &Struct{ Type: atomicRef( "ns2@v1/S1" ), Fields: m2 }
+    t.addSucc( s2, m2, TypeSymbolMap )
+    l1 := MustList()
+    l2 := MustList( m1, m2 )
+    lt1 := &ListTypeReference{ TypeSymbolMap, true }
+    lt2 := &ListTypeReference{ TypeSymbolMap, false }
+    t.addSucc( l1, l1, lt1 )
+    t.addSucc( l2, l2, lt2 )
+    t.addSucc( MustList( s2, s2 ), MustList( m2, m2 ), lt2 )
+    t.addTcError( int32( 1 ), TypeSymbolMap, TypeInt32 )
+    t.addTcError0(
+        MustList( m1, int32( 1 ) ),
+        TypeSymbolMap,
+        TypeInt32,
+        lt2,
+        crtPathDefault.StartList().SetIndex( 1 ),
+    )
+    nester := MustSymbolMap( "f1", MustSymbolMap( "f2", int32( 1 ) ) )
+    t.addSucc( nester, nester, TypeSymbolMap )
+}
+
+func ( t *crtInit ) addStructTests() {
+    t1 := MustTypeReference( "ns1@v1/T1" )
+    s1 := MustStruct( t1 )
+    s2 := MustStruct( t1, "f1", int32( 1 ) )
+    t2 := MustTypeReference( "ns1@v1/T2" )
+    s3 := MustStruct( t2,
+        "f1", int32( 1 ),
+        "f2", s1,
+        "f3", s2,
+        "f4", MustList( s1, s2 ),
+    )
+    t.addSucc( s1, s1, TypeValue )
+    t.addSucc( s1, s1, t1 )
+    t.addSucc( s2, s2, t1 )
+    t.addSucc( s1, s1, &NullableTypeReference{ t1 } )
+    t.addSucc( s3, s3, t2 )
+    l1 := MustList( s1, s2 )
+    t.addSucc( l1, l1, &ListTypeReference{ t1, false } )
+    t.addSucc( l1, l1, &ListTypeReference{ t1, true } )
+    f1 := func( in interface{}, inTyp TypeReferenceInitializer ) {
+        t.addTcError0(
+            MustList( s1, in ),
+            t1,
+            inTyp,
+            &ListTypeReference{ t1, false },
+            crtPathDefault.StartList().SetIndex( 1 ),
+        )
+    }
+    f1( s3, t2 )
+    f1( int32( 1 ), "Int32" )
+}
+
+func ( t *crtInit ) addInterfaceImplTests() {
+    add := func( crt *CastReactorTest ) {
+        crt.Profile = "interface-impl"
+        t.addCrtDefault( crt )
+    }
+    addSucc := func( in, expct interface{}, typ TypeReferenceInitializer ) {
+        add( t.createSucc( in, expct, typ ) )
+    }
+    addTcErr := func( in interface{}, expct, act TypeReferenceInitializer ) {
+        add( t.createTcError( in, expct, act ) )
+    }
+    t1 := atomicRef( "ns1@v1/T1" )
+    t2 := atomicRef( "ns1@v1/T2" )
+    s1 := MustStruct( t1, "f1", int32( 1 ) )
+    addSucc( MustStruct( t1, "f1", "1" ), s1, t1 )
+    addSucc( MustSymbolMap( "f1", "1" ), s1, t1 )
+    arb := MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
+    addSucc( arb, arb, arb.Type )
+    s2InFlds := MustSymbolMap( "f1", "1", "f2", MustSymbolMap( "f1", "1" ) )
+    s2 := MustStruct( t2, "f1", int32( 1 ), "f2", s1 )
+    addSucc( &Struct{ Type: t2, Fields: s2InFlds }, s2, t2 )
+    addSucc( s2InFlds, s2, t2 )
+    addTcErr( MustStruct( t2, "f1", int32( 1 ) ), t1, t2 )
+    extraFlds1 := MustSymbolMap( "f1", int32( 1 ), "x1", int32( 0 ) )
+    failExtra1 := func( val interface{} ) {
+        msg := "unrecognized field: x1"
+        add( t.createVcError0( val, t1, crtPathDefault, msg ) )
+    } 
+    failExtra1( &Struct{ Type: t1, Fields: extraFlds1 } )
+    failExtra1( extraFlds1 )
+    failTyp := atomicRef( "ns1@v1/FailType" )
+    add(
+        t.createVcError0(
+            MustStruct( failTyp ), 
+            failTyp, 
+            crtPathDefault,
+            "test-message-fail-type",
+        ),
+    )
 }
 
 func ( t *crtInit ) call() {
@@ -493,6 +627,9 @@ func ( t *crtInit ) call() {
     t.addEnumTests()
     t.addNullableTests()
     t.addListTests()
+    t.addMapTests()
+    t.addStructTests()
+    t.addInterfaceImplTests()
 }
 
 func initCastReactorTests() { ( &crtInit{} ).call() }
