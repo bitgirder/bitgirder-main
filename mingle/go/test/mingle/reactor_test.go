@@ -50,8 +50,6 @@ func ( foc *eventExpectCheck ) ProcessEvent(
     ev ReactorEvent, rep ReactorEventProcessor ) error {
     defer func() { foc.idx++ }()
     expct := foc.expect[ foc.idx ]
-    foc.Logf( "Receiving event (%T) at %s: %v (expecting %T: %v)", 
-        ev, FormatIdPath( foc.pg.GetPath() ), ev, expct.Event, expct.Event )
     foc.Equal( ev, expct.Event )
     foc.Equal( FormatIdPath( expct.Path ), FormatIdPath( foc.pg.GetPath() ) )
     return nil
@@ -319,7 +317,7 @@ func ( c *reactorTestCall ) callCast( ct *CastReactorTest ) {
 }
 
 func ( c *reactorTestCall ) call() {
-    c.Logf( "Calling reactor test of type %T", c.rt )
+//    c.Logf( "Calling reactor test of type %T", c.rt )
     switch s := c.rt.( type ) {
     case *StructuralReactorErrorTest: c.callStructuralError( s )
     case *StructuralReactorPathTest: c.callStructuralPath( s )

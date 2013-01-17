@@ -4,7 +4,7 @@ import (
     "container/list"
     "fmt"
     "bitgirder/objpath"
-    "log"
+//    "log"
 )
 
 type ReactorError struct { msg string }
@@ -726,8 +726,7 @@ func ( cr *CastReactor ) completeStartList(
         if t.Equals( TypeValue ) { 
             return cr.completeStartList( typeOpaqueList, le, rep )
         }
-        p := cr.GetPath().Parent()
-        return cr.newTypeCastErrorPath( typeOpaqueList, p )
+        return cr.newTypeCastErrorPath( typeOpaqueList, cr.GetPath() )
     }
     panic( libErrorf( "Uhandled type: %T", typ ) )
 }
@@ -857,10 +856,21 @@ func CastValue(
     return vb.GetValue(), nil
 }
 
+// Returns a field ordering for use by a FieldOrderReactor. The ordering is such
+// that for any fields f1, f2 such that f1 appears before f2 in the ordering, f1
+// will be sent to the associated FieldOrderReactor's downstream processors
+// ahead of f2. For fields not appearing in an ordering, there are no guarantees
+// as to when they will appear relative to ordered fields. 
 type FieldOrderGetter interface {
     FieldOrderFor( at *AtomicTypeReference ) []*Identifier
 }
 
+// Reorders events for selected struct types according to an order determined by
+// a FieldOrderGetter.
+//
+// The implementation is based on a stack of *fieldOrder instances, each of
+// which tracks field orderings for some struct type. In cases where a struct
+// has no specified order, the *fieldOrder tracks the trivial empty ordering.
 type FieldOrderReactor struct {
     fog FieldOrderGetter
     stack *list.List
@@ -1054,7 +1064,6 @@ func ( ord *fieldOrder ) fieldCompleted( rep ReactorEventProcessor ) error {
 
 func ( ord *fieldOrder ) processEvent(
     ev ReactorEvent, rep ReactorEventProcessor ) error {
-    log.Printf( "ord processing %T: %v, idx: %d", ev, ev, ord.idx )
     if fs, ok := ev.( FieldStartEvent ); ok && ord.accFld == nil {
         ord.startField( fs.Field )
     }

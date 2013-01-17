@@ -1078,6 +1078,7 @@ type valueErrorImpl struct {
 }
 
 func ( e valueErrorImpl ) Location() objpath.PathNode { 
+    if e.path == nil { return nil }
     return e.path.( objpath.PathNode )
 }
 
