@@ -4,7 +4,7 @@ import (
     "container/list"
     "fmt"
     "bitgirder/objpath"
-//    "log"
+    "log"
 )
 
 type ReactorError struct { msg string }
@@ -75,6 +75,10 @@ func ( rpi *ReactorPipelineInit ) EnsurePredecessor(
     return rct
 }
 
+func ( rpi *ReactorPipelineInit ) VisitPredecessors( f func( Reactor ) ) {
+    for _, rct := range rpi.reactors { f( rct ) }
+}
+
 // Might make this Init() if needed later
 func ( rp *ReactorPipeline ) init() {
     rpInit := &ReactorPipelineInit{ 
@@ -110,6 +114,15 @@ func ( pc pipelineCall ) ProcessEvent( re ReactorEvent ) error {
 
 func ( rp *ReactorPipeline ) ProcessEvent( re ReactorEvent ) error {
     return ( pipelineCall{ rp, 0 } ).ProcessEvent( re )
+}
+
+func ( rp *ReactorPipeline ) ReactorForKey( k ReactorKey ) ( Reactor, bool ) {
+    return findReactor( rp.reactors, k )
+}
+
+func ( rp *ReactorPipeline ) MustReactorForKey( k ReactorKey ) Reactor {
+    if rct, ok := rp.ReactorForKey( k ); ok { return rct }
+    panic( libErrorf( "No reactor for key %q", k ) )
 }
 
 func visitSymbolMap( 
@@ -194,15 +207,15 @@ func ( m *structuralMap ) startField( fld *Identifier ) error {
     return rctErrorf( tmpl, fld, m.pending )
 }
 
-// Clears m.pending on nil return val when valReady
-func ( m *structuralMap ) checkValue( valName string, valReady bool ) error {
+func ( m *structuralMap ) checkValue( valName string ) error {
     if m.pending == nil {
         tmpl := "Expected field name or end of fields but got %s"
         return rctErrorf( tmpl, valName )
     }
-    if valReady { m.pending = nil }
     return nil 
 }
+
+func ( m *structuralMap ) value() { m.pending = nil }
 
 func ( m *structuralMap ) end() error {
     if m.pending == nil { return nil }
@@ -282,17 +295,22 @@ func ( sr *StructuralReactor ) checkActive( call string ) error {
     return nil
 }
 
+func ( sr *StructuralReactor ) mapIsTop() *structuralMap {
+    if sr.stack.Len() == 0 { return nil }
+    elt := sr.stack.Front().Value
+    if m, ok := elt.( *structuralMap ); ok { return m }
+    return nil
+}
+
 // sr.stack known to be non-empty when this returns without error, unless top
 // type is value.
-func ( sr *StructuralReactor ) checkValue( 
-    valName string, valReady bool ) error {
+func ( sr *StructuralReactor ) checkValue( valName string ) error {
     if sr.stack.Len() == 0 {
         if sr.topTyp == ReactorTopTypeValue { return nil }
         return sr.getReactorTopTypeError( valName )
     }
-    elt := sr.stack.Front().Value
-    if m, ok := elt.( *structuralMap ); ok { 
-        return m.checkValue( valName, valReady ) 
+    if m := sr.mapIsTop(); m != nil { 
+        if err := m.checkValue( valName ); err != nil { return err }
     }
     return nil
 }
@@ -305,7 +323,7 @@ func ( sr *StructuralReactor ) startStruct() error {
     if err := sr.checkActive( "StartStruct" ); err != nil { return err }
     // skip check if we're pushing the top level struct
     if sr.stack.Len() > 0 {
-        if err := sr.checkValue( "struct start", false ); err != nil { 
+        if err := sr.checkValue( "struct start" ); err != nil { 
             return err 
         }
     }
@@ -315,15 +333,14 @@ func ( sr *StructuralReactor ) startStruct() error {
 
 func ( sr *StructuralReactor ) startMap() error {
     if err := sr.checkActive( "StartMap" ); err != nil { return err }
-    if err := sr.checkValue( "map start", false ); err != nil { return err }
+    if err := sr.checkValue( "map start" ); err != nil { return err }
     sr.push( newStructuralMap() )
     return nil
 }
 
 func ( sr *StructuralReactor ) startList() error {
     if err := sr.checkActive( "StartList" ); err != nil { return err }
-    if err := sr.checkValue( "list start", false ); err != nil { return err }
-    sr.push( structuralListIndex( 0 ) )
+    if err := sr.checkValue( "list start" ); err != nil { return err }
     return nil
 }
 
@@ -345,7 +362,7 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
 
 func ( sr *StructuralReactor ) value() error {
     if err := sr.checkActive( "Value" ); err != nil { return err }
-    if err := sr.checkValue( "value", true ); err != nil { return err }
+    if err := sr.checkValue( "value" ); err != nil { return err }
     return nil
 }
 
@@ -372,6 +389,17 @@ func ( sr *StructuralReactor ) incrementIfList() {
     }
 }
 
+func ( sr *StructuralReactor ) downstreamDone( ev ReactorEvent, isValue bool ) {
+    if sr.done { return }
+    if isValue { 
+        sr.incrementIfList()
+        if m := sr.mapIsTop(); m != nil { m.value() }
+    }
+    switch ev.( type ) {
+    case ListStartEvent: sr.push( structuralListIndex( 0 ) )
+    }
+}
+
 func ( sr *StructuralReactor ) ProcessEvent( 
     ev ReactorEvent, rep ReactorEventProcessor ) error {
     var err error
@@ -385,12 +413,13 @@ func ( sr *StructuralReactor ) ProcessEvent(
     case EndEvent: err, isValue = sr.end(), true
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
-    if err == nil { err = rep.ProcessEvent( ev ) }
-    if err == nil && isValue && ( ! sr.done ) { sr.incrementIfList() }
-    return err
+    if err != nil { return err }
+    if err = rep.ProcessEvent( ev ); err != nil { return err }
+    sr.downstreamDone( ev, isValue )
+    return nil
 }
 
-type valAccumulator interface {
+type accImpl interface {
     valueReady( val Value ) 
     end() ( Value, error )
 }
@@ -448,51 +477,46 @@ func ( la *listAcc ) valueReady( mv Value ) {
     la.vals = append( la.vals, mv )
 }
 
-type ValueBuilder struct {
+// Can make this public if needed
+type valueAccumulator struct {
     val Value
     accs *list.List
 }
 
-const ReactorKeyValueBuilder = ReactorKey( "mingle.ValueBuilder" )
-
-func NewValueBuilder() *ValueBuilder {
-    return &ValueBuilder{ accs: &list.List{} }
+func newValueAccumulator() *valueAccumulator {
+    return &valueAccumulator{ accs: &list.List{} }
 }
 
-func ( vb *ValueBuilder ) Init( rpi *ReactorPipelineInit ) {}
-
-func ( vb *ValueBuilder ) Key() ReactorKey { return ReactorKeyValueBuilder }
-
-func ( vb *ValueBuilder ) pushAcc( acc valAccumulator ) {
-    vb.accs.PushFront( acc )
+func ( va *valueAccumulator ) pushAcc( acc accImpl ) {
+    va.accs.PushFront( acc )
 }
 
-func ( vb *ValueBuilder ) peekAcc() ( valAccumulator, bool ) {
-    if vb.accs.Len() == 0 { return nil, false }
-    return vb.accs.Front().Value.( valAccumulator ), true
+func ( va *valueAccumulator ) peekAcc() ( accImpl, bool ) {
+    if va.accs.Len() == 0 { return nil, false }
+    return va.accs.Front().Value.( accImpl ), true
 }
 
-func ( vb *ValueBuilder ) popAcc() valAccumulator {
-    res, ok := vb.peekAcc()
+func ( va *valueAccumulator ) popAcc() accImpl {
+    res, ok := va.peekAcc()
     if ! ok { panic( libErrorf( "popAcc() called on empty stack" ) ) }
-    vb.accs.Remove( vb.accs.Front() )
+    va.accs.Remove( va.accs.Front() )
     return res
 }
 
-func ( vb *ValueBuilder ) valueReady( val Value ) {
-    if acc, ok := vb.peekAcc(); ok {
+func ( va *valueAccumulator ) valueReady( val Value ) {
+    if acc, ok := va.peekAcc(); ok {
         acc.valueReady( val )
-    } else { vb.val = val }
+    } else { va.val = val }
 }
 
 // Panics if result of val is not ready
-func ( vb *ValueBuilder ) GetValue() Value {
-    if vb.val == nil { panic( rctErrorf( "Value is not yet built" ) ) }
-    return vb.val
+func ( va *valueAccumulator ) getValue() Value {
+    if va.val == nil { panic( rctErrorf( "Value is not yet built" ) ) }
+    return va.val
 }
 
-func ( vb *ValueBuilder ) startField( fld *Identifier ) {
-    acc, ok := vb.peekAcc()
+func ( va *valueAccumulator ) startField( fld *Identifier ) {
+    acc, ok := va.peekAcc()
     if ok {
         var ma *mapAcc
         switch v := acc.( type ) {
@@ -504,25 +528,46 @@ func ( vb *ValueBuilder ) startField( fld *Identifier ) {
     }
 }
 
-func ( vb *ValueBuilder ) end() error {
-    acc := vb.popAcc()
+func ( va *valueAccumulator ) end() error {
+    acc := va.popAcc()
     if val, err := acc.end(); err == nil {
-        vb.valueReady( val )
+        va.valueReady( val )
     } else { return err }
     return nil
 }
 
-func ( vb *ValueBuilder ) ProcessEvent( 
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
+func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
-    case ValueEvent: vb.valueReady( v.Val )
-    case ListStartEvent: vb.pushAcc( newListAcc() )
-    case MapStartEvent: vb.pushAcc( newMapAcc() )
-    case StructStartEvent: vb.pushAcc( newStructAcc( v.Type ) )
-    case FieldStartEvent: vb.startField( v.Field )
-    case EndEvent: if err := vb.end(); err != nil { return err }
+    case ValueEvent: va.valueReady( v.Val )
+    case ListStartEvent: va.pushAcc( newListAcc() )
+    case MapStartEvent: va.pushAcc( newMapAcc() )
+    case StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
+    case FieldStartEvent: va.startField( v.Field )
+    case EndEvent: if err := va.end(); err != nil { return err }
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
+    return nil
+}
+
+type ValueBuilder struct {
+    acc *valueAccumulator
+}
+
+const ReactorKeyValueBuilder = ReactorKey( "mingle.ValueBuilder" )
+
+func NewValueBuilder() *ValueBuilder {
+    return &ValueBuilder{ acc: newValueAccumulator() }
+}
+
+func ( vb *ValueBuilder ) Init( rpi *ReactorPipelineInit ) {}
+
+func ( vb *ValueBuilder ) Key() ReactorKey { return ReactorKeyValueBuilder }
+
+func ( vb *ValueBuilder ) GetValue() Value { return vb.acc.getValue() }
+
+func ( vb *ValueBuilder ) ProcessEvent( 
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    if err := vb.acc.ProcessEvent( ev ); err != nil { return err }
     return rep.ProcessEvent( ev )
 }
 
@@ -810,4 +855,273 @@ func CastValue(
     pip := InitReactorPipeline( NewDefaultCastReactor( typ, path ), vb )
     if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
     return vb.GetValue(), nil
+}
+
+type FieldOrderGetter interface {
+    FieldOrderFor( at *AtomicTypeReference ) []*Identifier
+}
+
+type FieldOrderReactor struct {
+    fog FieldOrderGetter
+    stack *list.List
+    pg PathGetter
+}
+
+func NewFieldOrderReactor( fog FieldOrderGetter ) *FieldOrderReactor {
+    return &FieldOrderReactor{
+        fog: fog,
+        stack: &list.List{},
+    }
+}
+
+func ( fo *FieldOrderReactor ) Init( rpi *ReactorPipelineInit ) {
+    rpi.EnsurePredecessor(
+        ReactorKeyStructuralReactor, StructuralReactorFactory )
+    rpi.VisitPredecessors( func ( rct Reactor ) {
+        if pg, ok := rct.( PathGetter ); ok { fo.pg = pg }
+    })
+}
+
+const ReactorKeyFieldOrderReactor = ReactorKey( "mingle.FieldOrderReactor" )
+
+func ( fo *FieldOrderReactor ) Key() ReactorKey {
+    return ReactorKeyFieldOrderReactor
+}
+
+type fieldOrder struct {
+    parent *fieldOrder
+    ord []*Identifier
+    valStates *IdentifierMap
+    idx int
+    acc []ReactorEvent
+    accFld *Identifier
+    valDepth int
+    feedStack *list.List
+}
+
+func ( ord *fieldOrder ) failRepeated( fld *Identifier ) error {
+    return libErrorf( "repeated field: %s", fld )
+}
+
+func ( ord *fieldOrder ) nextField() *Identifier {
+    if ord.idx < len( ord.ord ) { return ord.ord[ ord.idx ] }
+    panic( libErrorf( "no next field in order" ) )
+}
+
+func ( ord *fieldOrder ) checkAccNil( errLoc string ) {
+    if ord.acc != nil { panic( libErrorf( "acc is non-nil %s", errLoc ) ) }
+}
+
+func ( ord *fieldOrder ) sendEvent( 
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    if ord.acc == nil {
+        if ord.parent == nil { return rep.ProcessEvent( ev ) }
+        return ord.parent.sendEvent( ev, rep )
+    }
+    ord.acc = append( ord.acc, ev )
+    return nil
+}
+
+func ( ord *fieldOrder ) startField( fld *Identifier ) {
+    ord.checkAccNil( fmt.Sprintf( "at start of field %s", fld ) )
+    ord.accFld = fld
+    if ! ord.valStates.HasKey( fld ) { return }
+    switch vs := ord.valStates.Get( fld ).( type ) {
+    case bool:
+        if vs { panic( ord.failRepeated( fld ) ) }
+        if nxt := ord.nextField(); nxt.Equals( fld ) { return }
+        ord.acc = []ReactorEvent{}
+    case []ReactorEvent: panic( ord.failRepeated( fld ) )
+    default: panic( libErrorf( "Unhandled val state: %T", vs ) )
+    }
+}
+
+func ( ord *fieldOrder ) updateValDepth( ev ReactorEvent ) {
+    switch ev.( type ) {
+    case MapStartEvent, ListStartEvent: ord.valDepth++
+    case EndEvent: ord.valDepth--
+    }
+}
+
+func ( ord *fieldOrder ) completeEvent( 
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    ord.updateValDepth( ev )
+    if ord.valDepth == 0 && ord.isFieldCompleter( ev ) { 
+        return ord.fieldCompleted( rep ) 
+    }
+    return nil
+}
+
+func ( ord *fieldOrder ) appendFeedPath( p objpath.PathNode ) objpath.PathNode {
+    if _, ok := p.( *objpath.ListNode ); ok {
+        panic( libErrorf( "Unexpected list node: %s", FormatIdPath( p ) ) )
+    }
+    p = p.Parent() // It's a field, but we're feeding a sibling field
+    for e := ord.feedStack.Front(); e != nil; e = e.Next() {
+        switch v := e.Value.( type ) {
+        case *Identifier: p = objpath.Descend( p, v )
+        case string: {} // placeholder for struct/map
+        case int: if v >= 0 { p = objpath.StartList( p ).SetIndex( v ) }
+        default: panic( libErrorf( "Unhandled feed stack elt: %T", v ) )
+        }
+    }
+    return p
+}
+
+func ( ord *fieldOrder ) pushFeed( val interface{} ) {
+    ord.feedStack.PushBack( val )
+}
+
+func ( ord *fieldOrder ) pushFeedValue() {
+    bk := ord.feedStack.Back()
+    if i, ok := bk.Value.( int ); ok { bk.Value = i + 1 }
+}
+
+func ( ord *fieldOrder ) popFeed() interface{} { 
+    return ord.feedStack.Remove( ord.feedStack.Back() )
+}
+
+func ( ord *fieldOrder ) feedValueReady() {
+    if ord.feedStack.Len() == 0 { return }
+    bk := ord.feedStack.Back()
+    switch v := bk.Value.( type ) {
+    case *Identifier, string: ord.popFeed()
+    case int: {}
+    default: panic( libErrorf( "Uhandled feed stack element: %T", v ) )
+    }
+}
+
+func ( ord *fieldOrder ) updateFeedStack( ev ReactorEvent ) {
+    switch v := ev.( type ) {
+    case FieldStartEvent: ord.pushFeed( v.Field )
+    case MapStartEvent: ord.pushFeed( "map" )
+    case ListStartEvent: ord.pushFeed( -1 )
+    case StructStartEvent: ord.pushFeed( "struct" )
+    case EndEvent: ord.popFeed()
+    case ValueEvent: ord.pushFeedValue()
+    default: panic( libErrorf( "Uhandled event: %T", ev ) )
+    }
+}
+
+func ( ord *fieldOrder ) feedValue(
+    fld *Identifier, acc []ReactorEvent, rep ReactorEventProcessor ) error {
+    ord.checkAccNil( "at feedValue()" )
+    ord.feedStack = &list.List{}
+    defer func() { ord.feedStack = nil }()
+    for _, ev := range acc {
+        ord.updateFeedStack( ev )
+        if err := ord.sendEvent( ev, rep ); err != nil { return err }
+        switch ev.( type ) {
+        case ValueEvent, EndEvent: ord.feedValueReady()
+        }
+    }
+    return nil
+}
+
+func ( ord *fieldOrder ) sendReadyValues( rep ReactorEventProcessor ) error {
+    for ord.idx < len( ord.ord ) {
+        fld := ord.nextField()
+        vs := ord.valStates.Get( fld )
+        if acc, ok := vs.( []ReactorEvent ); ok {
+            if err := ord.feedValue( fld, acc, rep ); err != nil { return err }
+            ord.valStates.Put( fld, true )
+            ord.idx++
+        } else { break }
+    }
+    return nil
+}
+
+func ( ord *fieldOrder ) isFieldCompleter( ev ReactorEvent ) bool {
+    switch ev.( type ) {
+    case EndEvent, ValueEvent: return true
+    }
+    return false
+}
+
+func ( ord *fieldOrder ) fieldCompleted( rep ReactorEventProcessor ) error {
+    if ord.idx < len( ord.ord ) && ord.accFld.Equals( ord.nextField() ) {
+        ord.idx++
+    }
+    fld := ord.accFld
+    ord.accFld = nil
+    if ord.acc != nil {
+        ord.valStates.Put( fld, ord.acc )
+        ord.acc = nil 
+        return nil
+    }
+    return ord.sendReadyValues( rep )
+}
+
+func ( ord *fieldOrder ) processEvent(
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    log.Printf( "ord processing %T: %v, idx: %d", ev, ev, ord.idx )
+    if fs, ok := ev.( FieldStartEvent ); ok && ord.accFld == nil {
+        ord.startField( fs.Field )
+    }
+    if err := ord.sendEvent( ev, rep ); err != nil { return err }
+    return ord.completeEvent( ev, rep )
+}
+
+func ( ord *fieldOrder ) endStruct( 
+    ee EndEvent, rep ReactorEventProcessor ) error {
+    ord.checkAccNil( "at end of struct" )
+    for i, e := ord.idx, len( ord.ord ); i < e; i++ {
+        fld := ord.ord[ i ]
+        vs := ord.valStates.Get( fld )
+        if acc, ok := vs.( []ReactorEvent ); ok {
+            if err := ord.feedValue( fld, acc, rep ); err != nil { return err }
+        }
+    }
+    return ord.sendEvent( ee, rep )
+}
+
+func ( fo *FieldOrderReactor ) peek() *fieldOrder {
+    if fo.stack.Len() == 0 { 
+        panic( libErrorf( "field order stack is empty" ) ) 
+    }
+    return fo.stack.Front().Value.( *fieldOrder )
+}
+
+func ( fo *FieldOrderReactor ) pop() *fieldOrder {
+    res := fo.peek()
+    fo.stack.Remove( fo.stack.Front() )
+    return res
+}
+
+var emptyIdSlice = []*Identifier{}
+
+func ( fo *FieldOrderReactor ) startStruct( at *AtomicTypeReference ) {
+    flds := fo.fog.FieldOrderFor( at )
+    if flds == nil { flds = emptyIdSlice }
+    valStates := NewIdentifierMap()
+    for _, id := range flds { valStates.Put( id, false ) }
+    ord := &fieldOrder{ ord: flds, valStates: valStates }
+    if fo.stack.Len() > 0 { ord.parent = fo.peek() }
+    // since parent won't see this event directly, we account for it here:
+    if ord.parent != nil { ord.parent.valDepth++ }
+    fo.stack.PushFront( ord )
+}
+
+func ( fo *FieldOrderReactor ) ProcessEvent(
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    if ss, ok := ev.( StructStartEvent ); ok { fo.startStruct( ss.Type ) }
+    if fo.stack.Len() == 0 { return rep.ProcessEvent( ev ) }
+    ord := fo.peek()
+    if ee, ok := ev.( EndEvent ); ok && ord.valDepth == 0 {
+        fo.pop()
+        if err := ord.endStruct( ee, rep ); err != nil { return err }
+        if ord.parent == nil { return nil }
+        return ord.parent.completeEvent( ev, rep )
+    }
+    return ord.processEvent( ev, rep )
+}
+
+func ( fo *FieldOrderReactor ) GetPath() objpath.PathNode {
+    res := fo.pg.GetPath()
+    if fo.stack.Len() == 0 { return res }
+    for e := fo.stack.Front(); e != nil; e = e.Next() {
+        ord := e.Value.( *fieldOrder )
+        if ord.feedStack != nil { return ord.appendFeedPath( res ) }
+    }
+    return res
 }
