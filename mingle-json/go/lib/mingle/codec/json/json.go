@@ -154,7 +154,7 @@ func ( e *encoder ) pop() accumulator {
     return res
 }
 
-func ( e *encoder ) startStruct( typ mg.TypeReference ) {
+func ( e *encoder ) startStruct( typ *mg.QualifiedTypeName ) {
     acc := e.newMapAcc()
     if ! e.c.opts.OmitTypeFields { acc.m[ jsonKeyType ] = typ.ExternalForm() }
     e.push( acc )
@@ -265,7 +265,7 @@ func ( c *JsonCodec ) visitList(
 
 // m[ $constant ] known to be present, though not necessarily valid
 func ( c *JsonCodec ) visitEnum(
-    typ mg.TypeReference,
+    typ *mg.QualifiedTypeName,
     m map[ string ]interface{},
     path objpath.PathNode,
     rep mg.ReactorEventProcessor ) error {
@@ -310,16 +310,12 @@ func ( c *JsonCodec ) visitFields(
     return rep.ProcessEvent( mg.EvEnd )
 }
 
-func parseAtomicType( 
-    typStr string, 
+func parseQname( 
+    qnStr string, 
     path objpath.PathNode, 
-    key string ) ( *mg.AtomicTypeReference, error ) {
-    typ, err := mg.ParseTypeReference( typStr )
-    if err == nil {
-        if at, atOk := typ.( *mg.AtomicTypeReference ); atOk { return at, nil }
-        errPath := descendInbound( path, key )
-        return nil, visitError( errPath, "not an atomic type" )
-    }
+    key string ) ( *mg.QualifiedTypeName, error ) {
+    qn, err := mg.ParseQualifiedTypeName( qnStr )
+    if err == nil { return qn, nil }
     errStr := parseErrorMessageOf( err )
     return nil, visitError( descendInbound( path, key ), errStr )
 }
@@ -330,12 +326,12 @@ func ( c *JsonCodec ) visitMap(
     rep mg.ReactorEventProcessor ) error {
     if typVal, ok := m[ jsonKeyType ]; ok {
         if typStr, ok2 := typVal.( string ); ok2 {
-            at, err := parseAtomicType( typStr, path, jsonKeyType )
+            qn, err := parseQname( typStr, path, jsonKeyType )
             if err != nil { return err }
             if _, ok4 := m[ jsonKeyConstant ]; ok4 {
-                return c.visitEnum( at, m, path, rep )
+                return c.visitEnum( qn, m, path, rep )
             }
-            ev := mg.StructStartEvent{ at }
+            ev := mg.StructStartEvent{ qn }
             if err = rep.ProcessEvent( ev ); err != nil { return err }
         }
     } else {

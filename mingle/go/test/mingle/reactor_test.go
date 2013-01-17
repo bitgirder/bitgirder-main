@@ -113,8 +113,8 @@ func ( c *reactorTestCall ) callValueBuild( vb ValueBuildTest ) {
 // simple fixed impl of FieldOrderGetter
 type fogImpl []*Identifier
 
-func ( fog fogImpl ) FieldOrderFor( at *AtomicTypeReference ) []*Identifier {
-    if at.Equals( atomicRef( "ns1@v1/S1" ) ) { return fog }
+func ( fog fogImpl ) FieldOrderFor( qn *QualifiedTypeName ) []*Identifier {
+    if qn.Equals( MustQualifiedTypeName( "ns1@v1/S1" ) ) { return fog }
     return nil
 }
 
@@ -171,8 +171,8 @@ func ( ot *orderTracker ) checkField( fld *Identifier ) {
     }
 }
 
-func ( ocr *orderCheckReactor ) startStruct( at *AtomicTypeReference ) {
-    if at.Equals( atomicRef( "ns1@v1/S1" ) ) {
+func ( ocr *orderCheckReactor ) startStruct( qn *QualifiedTypeName ) {
+    if qn.Equals( MustQualifiedTypeName( "ns1@v1/S1" ) ) {
         ocr.push( &orderTracker{ ocr: ocr, idx: 0 } )
     } else { ocr.push( "struct" ) }
 }
@@ -294,8 +294,8 @@ func ( ci *castInterfaceImpl ) FieldTyperFor(
     return nil, nil
 }
 
-func ( ci *castInterfaceImpl ) InferStructFor( at *AtomicTypeReference ) bool {
-    return ci.typers.HasKey( at.Name.( *QualifiedTypeName ) )
+func ( ci *castInterfaceImpl ) InferStructFor( qn *QualifiedTypeName ) bool {
+    return ci.typers.HasKey( qn )
 }
 
 func ( c *reactorTestCall ) createCastReactor( 

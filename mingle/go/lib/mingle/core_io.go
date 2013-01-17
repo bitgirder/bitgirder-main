@@ -135,17 +135,17 @@ func ( w *BinWriter ) writeRegexRestriction(
 
 func ( w *BinWriter ) writeEnum( en *Enum ) ( err error ) {
     if err = w.WriteTypeCode( tcEnum ); err != nil { return }
-    if err = w.WriteTypeReference( en.Type ); err != nil { return }
+    if err = w.WriteQualifiedTypeName( en.Type ); err != nil { return }
     if err = w.WriteIdentifier( en.Value ); err != nil { return }
     return
 }
 
 type writeReactor struct { *BinWriter }
 
-func ( w writeReactor ) startStruct( typ TypeReference ) error {
+func ( w writeReactor ) startStruct( qn *QualifiedTypeName ) error {
     if err := w.WriteTypeCode( tcStruct ); err != nil { return err }
     if err := w.WriteInt32( int32( -1 ) ); err != nil { return err }
-    return w.WriteTypeReference( typ )
+    return w.WriteQualifiedTypeName( qn )
 }
 
 func ( w writeReactor ) startField( fld *Identifier ) error {
@@ -459,7 +459,7 @@ func ( r *BinReader ) readRegexRestriction() ( rr *RegexRestriction,
 
 func ( r *BinReader ) readEnum() ( en *Enum, err error ) {
     en = &Enum{}
-    if en.Type, err = r.ReadTypeReference(); err != nil { return }
+    if en.Type, err = r.ReadQualifiedTypeName(); err != nil { return }
     if en.Value, err = r.ReadIdentifier(); err != nil { return }
     return
 }
@@ -535,8 +535,8 @@ func ( r *BinReader ) readSymbolMap( rep ReactorEventProcessor ) error {
 
 func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err }
-    if typ, err := r.ReadAtomicTypeReference(); err == nil {
-        if err = rep.ProcessEvent( StructStartEvent{ typ } ); err != nil { 
+    if qn, err := r.ReadQualifiedTypeName(); err == nil {
+        if err = rep.ProcessEvent( StructStartEvent{ qn } ); err != nil { 
             return err 
         }
     } else { return err }

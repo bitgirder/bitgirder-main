@@ -488,10 +488,7 @@ service Service1 {
                     makeFieldDef( 
                         "enum2",
                         "ns1@v1/Enum1",
-                        &mg.Enum{
-                            Type: mg.MustTypeReference( "ns1@v1/Enum1" ),
-                            Value: mg.MustIdentifier( "green" ),
-                        },
+                        mg.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
                 },
                 []*types.ConstructorDefinition{
@@ -700,10 +697,7 @@ service Service1 {
                     makeFieldDef( "f12", "mingle:core@v1/String", "a" ),
                     makeFieldDef( "f13", `mingle:core@v1/String~"a"`, "a" ),
                     makeFieldDef( "f14", "ns1@v1/Enum1",
-                        &mg.Enum{
-                            Type: mkTyp( "ns1@v1/Enum1" ), 
-                            Value: mkId( "green" ),
-                        },
+                        mg.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
                     makeFieldDef( "f15", "mingle:core@v1/Timestamp",
                         mg.MustTimestamp( 

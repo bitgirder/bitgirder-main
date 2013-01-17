@@ -20,7 +20,7 @@ func rctErrorf( tmpl string, args ...interface{} ) *ReactorError {
 type ReactorEvent interface {}
 
 type ValueEvent struct { Val Value }
-type StructStartEvent struct { Type *AtomicTypeReference }
+type StructStartEvent struct { Type *QualifiedTypeName }
 
 type MapStartEvent int
 const EvMapStart = MapStartEvent( 0 )
@@ -445,11 +445,11 @@ func ( ma *mapAcc ) startField( fld *Identifier ) {
 func ( ma *mapAcc ) valueReady( mv Value ) { ma.arr = append( ma.arr, mv ) }
 
 type structAcc struct {
-    typ *AtomicTypeReference
+    typ *QualifiedTypeName
     flds *mapAcc
 }
 
-func newStructAcc( typ *AtomicTypeReference ) *structAcc {
+func newStructAcc( typ *QualifiedTypeName ) *structAcc {
     return &structAcc{ typ: typ, flds: newMapAcc() }
 }
 
@@ -593,7 +593,7 @@ type listCast struct {
 }
 
 type CastInterface interface {
-    InferStructFor( at *AtomicTypeReference ) bool
+    InferStructFor( at *QualifiedTypeName ) bool
     FieldTyperFor( qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error )
 }
 
@@ -611,7 +611,7 @@ func ( i castInterfaceDefault ) FieldTyperFor(
     return valueFieldTyper( 1 ), nil
 }
 
-func ( i castInterfaceDefault ) InferStructFor( at *AtomicTypeReference ) bool {
+func ( i castInterfaceDefault ) InferStructFor( at *QualifiedTypeName ) bool {
     return false
 }
 
@@ -743,9 +743,11 @@ func ( cr *CastReactor ) startList(
 }
 
 func ( cr *CastReactor ) inferredStructTypeOf( 
-    typ TypeReference ) *AtomicTypeReference {
+    typ TypeReference ) *QualifiedTypeName {
     switch t := typ.( type ) {
-    case *AtomicTypeReference: if cr.iface.InferStructFor( t ) { return t }
+    case *AtomicTypeReference: 
+        qn := t.Name.( *QualifiedTypeName )
+        if cr.iface.InferStructFor( qn ) { return qn }
     case *NullableTypeReference: return cr.inferredStructTypeOf( t.Type )
     }
     return nil
@@ -758,8 +760,9 @@ func ( cr *CastReactor ) completeStartMap(
         cr.push( castContext{ elt: mc, expct: TypeSymbolMap } )
         return rep.ProcessEvent( sm )
     }
-    if at := cr.inferredStructTypeOf( typ ); at != nil {
-        return cr.completeStartStruct( StructStartEvent{ at }, at, rep )
+    if qn := cr.inferredStructTypeOf( typ ); qn != nil {
+        at := &AtomicTypeReference{ Name: qn }
+        return cr.completeStartStruct( StructStartEvent{ qn }, at, rep )
     }
     return cr.newTypeCastError( TypeSymbolMap )
 }
@@ -782,13 +785,14 @@ func ( cr *CastReactor ) completeStartStruct(
     }
     var expctTyp TypeReference
     var ev ReactorEvent
+    at := &AtomicTypeReference{ Name: ss.Type }
     switch {
-    case t.Equals( ss.Type ) || t.Equals( TypeValue ):
-        expctTyp, ev = ss.Type, ss
+    case t.Equals( at ) || t.Equals( TypeValue ):
+        expctTyp, ev = at, ss
     case t.Equals( TypeSymbolMap ): expctTyp, ev = TypeSymbolMap, EvMapStart
-    default: return cr.newTypeCastError( ss.Type )
+    default: return cr.newTypeCastError( at )
     }
-    ft, err := cr.iface.FieldTyperFor( ss.Type.Name.( *QualifiedTypeName ), cr )
+    ft, err := cr.iface.FieldTyperFor( ss.Type, cr )
     if err != nil { return err }
     if ft == nil { ft = valueFieldTyper( 1 ) }
     cr.push( castContext{ elt: newMapCast( ft ), expct: expctTyp } )
@@ -800,7 +804,8 @@ func ( cr *CastReactor ) startStruct(
     switch elt := cr.peek().elt.( type ) {
     case *AtomicTypeReference, *NullableTypeReference: 
         return cr.completeStartStruct( ss, elt.( TypeReference ), rep )
-    case *ListTypeReference: return cr.newTypeCastError( ss.Type )
+    case *ListTypeReference: 
+        return cr.newTypeCastError( &AtomicTypeReference{ Name: ss.Type } )
     case *listCast: return cr.completeStartStruct( ss, elt.lt.ElementType, rep )
     case *mapCast: return cr.completeStartStruct( ss, elt.fldType, rep )
     }
@@ -862,7 +867,7 @@ func CastValue(
 // ahead of f2. For fields not appearing in an ordering, there are no guarantees
 // as to when they will appear relative to ordered fields. 
 type FieldOrderGetter interface {
-    FieldOrderFor( at *AtomicTypeReference ) []*Identifier
+    FieldOrderFor( qn *QualifiedTypeName ) []*Identifier
 }
 
 // Reorders events for selected struct types according to an order determined by
@@ -1099,8 +1104,8 @@ func ( fo *FieldOrderReactor ) pop() *fieldOrder {
 
 var emptyIdSlice = []*Identifier{}
 
-func ( fo *FieldOrderReactor ) startStruct( at *AtomicTypeReference ) {
-    flds := fo.fog.FieldOrderFor( at )
+func ( fo *FieldOrderReactor ) startStruct( qn *QualifiedTypeName ) {
+    flds := fo.fog.FieldOrderFor( qn )
     if flds == nil { flds = emptyIdSlice }
     valStates := NewIdentifierMap()
     for _, id := range flds { valStates.Put( id, false ) }

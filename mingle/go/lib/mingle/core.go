@@ -230,6 +230,10 @@ func ( qn *QualifiedTypeName ) Equals( n2 TypeName ) bool {
     return false
 }
 
+func ( qn *QualifiedTypeName ) AsAtomicType() *AtomicTypeReference {
+    return &AtomicTypeReference{ Name: qn }
+}
+
 // (atomic|list|nullable)
 type TypeReference interface {
     ExternalForm() string
@@ -422,8 +426,10 @@ func asTypeReference( typ TypeReferenceInitializer ) TypeReference {
     switch v := typ.( type ) {
     case string: return MustTypeReference( v )
     case TypeReference: return v
+    case *QualifiedTypeName, *DeclaredTypeName:
+        return &AtomicTypeReference{ Name: v.( TypeName ) }
     }
-    panic( fmt.Sprintf( "Unhandled type ref initializer: %v", typ ) )
+    panic( libErrorf( "Unhandled type ref initializer: %T", typ ) )
 }
 
 func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
@@ -862,26 +868,30 @@ func ( acc *SymbolMapAccessor ) MustValueByString( id string ) Value {
 }
 
 type Enum struct {
-    Type TypeReference
+    Type *QualifiedTypeName
     Value *Identifier
 }
 
 func MustEnum( typ, val string ) *Enum {
-    return &Enum{ MustTypeReference( typ ), MustIdentifier( val ) }
+    return &Enum{ MustQualifiedTypeName( typ ), MustIdentifier( val ) }
 }
 
 type Struct struct {
-    Type *AtomicTypeReference
+    Type *QualifiedTypeName
     Fields *SymbolMap
 }
 
 func CreateStruct(
-    typ TypeReferenceInitializer, pairs ...interface{} ) ( *Struct, error ) {
+    typ interface{}, pairs ...interface{} ) ( *Struct, error ) {
     res := new( Struct )
-    typRef := asTypeReference( typ )
-    if at, ok := typRef.( *AtomicTypeReference ); ok { 
-        res.Type = at 
-    } else { return nil, libErrorf( "Not an atomic type: %s", typRef ) }
+    switch v := typ.( type ) {
+    case *QualifiedTypeName: res.Type = v
+    case string: 
+        if qn, err := ParseQualifiedTypeName( v ); err == nil {
+            res.Type = qn
+        } else { return nil, err }
+    default: return nil, libErrorf( "Not a qname: %s", typ )
+    }
     if flds, err := CreateSymbolMap( pairs... ); err == nil {
         res.Fields = flds
     } else { return nil, err }
@@ -1058,9 +1068,9 @@ func TypeOf( mgVal Value ) TypeReference {
     case Float32: return TypeFloat32
     case Float64: return TypeFloat64
     case Timestamp: return TypeTimestamp
-    case *Enum: return v.Type
+    case *Enum: return v.Type.AsAtomicType()
     case *SymbolMap: return TypeSymbolMap
-    case *Struct: return v.Type
+    case *Struct: return v.Type.AsAtomicType()
     case *List: return typeOpaqueList
     case *Null: return TypeNull
     }

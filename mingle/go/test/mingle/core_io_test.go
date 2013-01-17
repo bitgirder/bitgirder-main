@@ -30,10 +30,7 @@ func TestCoreIo( t *testing.T ) {
         Float32( float32( 1 ) ),
         Float64( float64( 1 ) ),
         Now(),
-        &Enum{ 
-            Type: MustTypeReference( "ns1@v1/E1" ),
-            Value: MustIdentifier( "val1" ),
-        },
+        MustEnum( "ns1@v1/E1", "val1" ),
         MustSymbolMap(),
         MustSymbolMap( "k1", int32( 1 ) ),
         MustStruct( "ns1@v1/T1" ),

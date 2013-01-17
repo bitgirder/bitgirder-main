@@ -21,10 +21,7 @@ func init() {
 }
 
 func init() {
-    TestEnum1Inst1 = &mg.Enum{
-        Type: mg.MustTypeReference( "mingle:test@v1/TestEnum1" ),
-        Value: mg.MustIdentifier( "constant1" ),
-    }
+    TestEnum1Inst1 = mg.MustEnum( "mingle:test@v1/TestEnum1", "constant1" )
     Timestamp1 = mg.MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
     Timestamp2 = mg.MustTimestamp( "2007-08-24T13:15:43-08:00" )
     list1Vals := make( []interface{}, 5 )

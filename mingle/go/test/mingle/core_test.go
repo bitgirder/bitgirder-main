@@ -47,7 +47,7 @@ func assertAsBufferValues( t *testing.T ) {
 func assertCompositeTypesAsValue( t *testing.T ) {
     m := MustSymbolMap( "key1", "val1" )
     assert.Equal( m, MustValue( m ) )
-    typ := atomicRef( "ns1@v1/T1" )
+    typ := qname( "ns1@v1/T1" )
     s := &Struct{ Type: typ, Fields: m }
     assert.Equal( s, MustValue( s ) )
     l := MustList( 1, 2 )
@@ -146,7 +146,9 @@ func assertMapLiteralError(
     assert.AssertError(
         f,
         func( err error ) {
-            assert.Equal( expctStr, err.( *MapLiteralError ).Error() )
+            if mle, ok := err.( *MapLiteralError ); ok {
+                assert.Equal( expctStr, mle.Error() )
+            } else { assert.Fatal( err ) }
         },
     )
 }
@@ -213,8 +215,8 @@ func TestAsTypeReference( t *testing.T ) {
     assert.AssertPanic( 
         func() { f( asTypeReference( 12 ) ) }, 
         func( err interface{} ) { 
-            msg := "Unhandled type ref initializer: 12"
-            assert.Equal( msg, err.( string ) )
+            msg := "mingle: Unhandled type ref initializer: int"
+            assert.Equal( msg, err.( error ).Error() )
         },
     )
 }
@@ -322,14 +324,14 @@ func TestCreateStructError( t *testing.T ) {
         t,
         "Invalid pairs len: 1",
         func() ( interface{}, error ) {
-            return CreateStruct( "T1", "missingVal" )
+            return CreateStruct( "ns1@v1/T1", "missingVal" )
         },
     )
 }
 
 func TestExpectStructError( t *testing.T ) {
     assert.AssertPanic(
-        func() { MustStruct( "T1", "missingVal" ) },
+        func() { MustStruct( "ns1@v1/T1", "missingVal" ) },
         func( err interface{} ) {
             assert.Equal(
                 "Invalid pairs len: 1", 
@@ -382,9 +384,10 @@ func TestTypeOf( t *testing.T ) {
     assert.Equal( TypeTimestamp, TypeOf( Now() ) )
     assert.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
     assert.Equal( typeRef( "mingle:core@v1/Value*" ), TypeOf( MustList() ) )
-    typ := atomicRef( "ns1@v1/T1" )
-    assert.Equal( typ, TypeOf( &Enum{ Type: typ } ) )
-    assert.Equal( typ, TypeOf( &Struct{ Type: typ } ) )
+    qn := qname( "ns1@v1/T1" )
+    typ := &AtomicTypeReference{ Name: qn }
+    assert.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
+    assert.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
@@ -495,7 +498,7 @@ func TestQuoteValue( t *testing.T ) {
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
     map1 := MustSymbolMap( "k", 1 )
     expct := `ns1@v1/T1{k:1}`
-    f( &Struct{ Type: atomicRef( "ns1@v1/T1" ), Fields: map1 }, expct )
+    f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
 }
 
 func TestIsNull( t *testing.T ) {
@@ -520,7 +523,7 @@ func TestIdentifierCompare( t *testing.T ) {
 
 func TestMustEnum( t *testing.T ) {
     assert.Equal(
-        &Enum{ typeRef( "ns1@v1/E1" ), MustIdentifier( "val1" ) },
+        &Enum{ qname( "ns1@v1/E1" ), MustIdentifier( "val1" ) },
         MustEnum( "ns1@v1/E1", "val1" ),
     )
 }

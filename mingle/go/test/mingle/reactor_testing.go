@@ -54,7 +54,7 @@ type StructuralReactorPathTest struct {
 }
 
 func initStructuralReactorTests() {
-    evStartStruct1 := StructStartEvent{ atomicRef( "ns1@v1/S1" ) }
+    evStartStruct1 := StructStartEvent{ qname( "ns1@v1/S1" ) }
     idF1 := MustIdentifier( "f1" )
     evStartField1 := FieldStartEvent{ idF1 }
     idF2 := MustIdentifier( "f2" )
@@ -225,7 +225,7 @@ func initFieldOrderValueTests() {
     }
     i1 := Int32( int32( 1 ) )
     val1 := ValueEvent{ i1 }
-    t1, t2 := atomicRef( "ns1@v1/S1" ), atomicRef( "ns1@v1/S2" )
+    t1, t2 := qname( "ns1@v1/S1" ), qname( "ns1@v1/S2" )
     ss1, ss2 := StructStartEvent{ t1 }, StructStartEvent{ t2 }
     ss2Val1 := MustStruct( t2, ids[ 0 ], i1 )
     // expct sequences for instance of ns1@v1/S1 by field f0 ...
@@ -331,8 +331,8 @@ func initFieldOrderPathTests() {
     id := func( i int ) *Identifier {
         return MustIdentifier( fmt.Sprintf( "f%d", i ) )
     }
-    typ := func( i int ) *AtomicTypeReference {
-        return atomicRef( fmt.Sprintf( "ns1@v1/S%d", i ) )
+    typ := func( i int ) *QualifiedTypeName {
+        return qname( fmt.Sprintf( "ns1@v1/S%d", i ) )
     }
     ss := func( i int ) StructStartEvent { return StructStartEvent{ typ( i ) } }
     fld := func( i int ) FieldStartEvent { return FieldStartEvent{ id( i ) } }
@@ -539,7 +539,7 @@ func ( t *crtInit ) addMiscTcErrors() {
             Type: asTypeReference( "Int32*" ),
             Err: newTypeCastError(
                 asTypeReference( "Int32" ),
-                t.struct1.Type,
+                &AtomicTypeReference{ Name: t.struct1.Type },
                 crtPathDefault.StartList().Next(),
             ),
         },
@@ -771,7 +771,7 @@ func ( t *crtInit ) addMapTests() {
     t.addSucc( m1, m1, TypeValue )
     t.addSucc( m2, m2, TypeSymbolMap )
     t.addSucc( m2, m2, &NullableTypeReference{ TypeSymbolMap } )
-    s2 := &Struct{ Type: atomicRef( "ns2@v1/S1" ), Fields: m2 }
+    s2 := &Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2 }
     t.addSucc( s2, m2, TypeSymbolMap )
     l1 := MustList()
     l2 := MustList( m1, m2 )
@@ -793,11 +793,13 @@ func ( t *crtInit ) addMapTests() {
 }
 
 func ( t *crtInit ) addStructTests() {
-    t1 := MustTypeReference( "ns1@v1/T1" )
-    s1 := MustStruct( t1 )
-    s2 := MustStruct( t1, "f1", int32( 1 ) )
-    t2 := MustTypeReference( "ns1@v1/T2" )
-    s3 := MustStruct( t2,
+    qn1 := qname( "ns1@v1/T1" )
+    t1 := qn1.AsAtomicType()
+    s1 := MustStruct( qn1 )
+    s2 := MustStruct( qn1, "f1", int32( 1 ) )
+    qn2 := qname( "ns1@v1/T2" )
+    t2 := qn2.AsAtomicType()
+    s3 := MustStruct( qn2,
         "f1", int32( 1 ),
         "f2", s1,
         "f3", s2,
@@ -835,8 +837,8 @@ func ( t *crtInit ) addInterfaceImplTests() {
     addTcErr := func( in interface{}, expct, act TypeReferenceInitializer ) {
         add( t.createTcError( in, expct, act ) )
     }
-    t1 := atomicRef( "ns1@v1/T1" )
-    t2 := atomicRef( "ns1@v1/T2" )
+    t1 := qname( "ns1@v1/T1" )
+    t2 := qname( "ns1@v1/T2" )
     s1 := MustStruct( t1, "f1", int32( 1 ) )
     addSucc( MustStruct( t1, "f1", "1" ), s1, t1 )
     addSucc( MustSymbolMap( "f1", "1" ), s1, t1 )
@@ -854,7 +856,7 @@ func ( t *crtInit ) addInterfaceImplTests() {
     } 
     failExtra1( &Struct{ Type: t1, Fields: extraFlds1 } )
     failExtra1( extraFlds1 )
-    failTyp := atomicRef( "ns1@v1/FailType" )
+    failTyp := qname( "ns1@v1/FailType" )
     add(
         t.createVcError0(
             MustStruct( failTyp ), 

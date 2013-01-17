@@ -178,24 +178,21 @@ type EnumDefinition struct {
     Values []*mg.Identifier
 }
 
-func ( ed *EnumDefinition ) atype() *mg.AtomicTypeReference {
-    return &mg.AtomicTypeReference{ Name: ed.GetName() }
-}
-
 func ( ed *EnumDefinition ) GetName() *mg.QualifiedTypeName { return ed.Name }
 
 func ( ed *EnumDefinition ) GetValueMap() *EnumValueMap {
     res := &EnumValueMap{ mg.NewIdentifierMap() }
-    typ := ed.atype()
     for _, val := range ed.Values {
-        res.m.Put( val, &mg.Enum{ Type: typ, Value: val } )
+        res.m.Put( val, &mg.Enum{ Type: ed.GetName(), Value: val } )
     }
     return res
 }
 
 func ( ed *EnumDefinition ) GetValue( id *mg.Identifier ) *mg.Enum {
     for _, val := range ed.Values {
-        if val.Equals( id ) { return &mg.Enum{ Type: ed.atype(), Value: val } }
+        if val.Equals( id ) { 
+            return &mg.Enum{ Type: ed.GetName(), Value: val } 
+        }
     }
     return nil
 }

@@ -20,8 +20,8 @@ func appendInput( data interface{}, w *BinWriter ) {
         if err := w.WriteValue( String( v ) ); err != nil { panic( err ) }
     case uint8: if err := w.WriteUint8( v ); err != nil { panic( err ) }
     case int32: if err := w.WriteInt32( v ); err != nil { panic( err ) }
-    case TypeReference: 
-        if err := w.WriteTypeReference( v ); err != nil { panic( err ) }
+    case *QualifiedTypeName: 
+        if err := w.WriteQualifiedTypeName( v ); err != nil { panic( err ) }
     default: panic( libErrorf( "Unrecognized input elt: %T", v ) )
     }
 }
@@ -41,17 +41,17 @@ var BinWriterFailureInputs = []*BinWriterFailureInput{
     },
     &BinWriterFailureInput{
         Id: MustIdentifier( "unexpected-symmap-val-type-code" ),
-        ErrMsg: `[offset 41]: Unrecognized value code: 0x64`,
+        ErrMsg: `[offset 39]: Unrecognized value code: 0x64`,
         Input: makeBinWriterFailureInput(
-            tcStruct, int32( -1 ), MustTypeReference( "ns@v1/S" ),
+            tcStruct, int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
             tcField, MustIdentifier( "f1" ), binWriterTcFail,
         ),
     },
     &BinWriterFailureInput{
         Id: MustIdentifier( "unexpected-list-val-type-code" ),
-        ErrMsg: `[offset 51]: Unrecognized value code: 0x64`,
+        ErrMsg: `[offset 49]: Unrecognized value code: 0x64`,
         Input: makeBinWriterFailureInput(
-            tcStruct, int32( -1 ), MustTypeReference( "ns@v1/S" ),
+            tcStruct, int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
             tcField, MustIdentifier( "f1" ),
             tcList, int32( -1 ),
             tcInt32, int32( 10 ), // an okay list val

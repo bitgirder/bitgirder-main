@@ -265,7 +265,7 @@ func castTimestamp(
 func castEnum( 
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     switch v := mgVal.( type ) {
-    case *Enum: if v.Type.Equals( at ) { return v, nil }
+    case *Enum: if v.Type.Equals( at.Name ) { return v, nil }
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
