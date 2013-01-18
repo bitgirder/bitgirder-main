@@ -40,15 +40,15 @@ type ValueCastError struct {
 func ( e *ValueCastError ) Message() string { return e.msg }
 func ( e *ValueCastError ) Error() string { return e.makeError( e.msg ) }
 
-func newValueCastError( path idPath, msg string ) *ValueCastError {
+func NewValueCastError( path idPath, msg string ) *ValueCastError {
     res := &ValueCastError{ msg: msg }
     res.path = path
     return res
 }
 
-func newValueCastErrorf(
+func NewValueCastErrorf(
     path idPath, tmpl string, args ...interface{} ) *ValueCastError {
-    return newValueCastError( path, fmt.Sprintf( tmpl, args... ) )
+    return NewValueCastError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 func strToBool( 
@@ -59,7 +59,7 @@ func strToBool(
     }
     errTmpl :="Invalid boolean value: %s"
     errStr := QuoteValue( s )
-    return nil, newValueCastErrorf( path, errTmpl, errStr )
+    return nil, NewValueCastErrorf( path, errTmpl, errStr )
 }
 
 func castBoolean( 
@@ -79,7 +79,7 @@ func castBuffer(
         buf, err := base64.StdEncoding.DecodeString( string( v ) )
         if err == nil { return Buffer( buf ), nil }
         msg := "Invalid base64 string: %s"
-        return nil, newValueCastErrorf( path, msg, err.Error() )
+        return nil, NewValueCastErrorf( path, msg, err.Error() )
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
@@ -100,7 +100,7 @@ func castString(
 
 func valueCastErrorForNumError(
     path idPath, at *AtomicTypeReference, err *strconv.NumError ) error {
-    return newValueCastErrorf( path, "%s: %s", err.Err.Error(), err.Num )
+    return NewValueCastErrorf( path, "%s: %s", err.Err.Error(), err.Num )
 }
 
 func parseIntInitial(
@@ -138,13 +138,13 @@ func parseInt(
         case TypeUint64: return Uint64( uInt ), nil
         default:
             msg := "Unhandled number type: %s"
-            panic( newValueCastErrorf( path, msg, numTyp ) )
+            panic( NewValueCastErrorf( path, msg, numTyp ) )
         }
     } 
     if ne, ok := err.( *strconv.NumError ); ok {
         return nil, valueCastErrorForNumError( path, at, ne )
     }
-    return nil, newValueCastErrorf( path, err.Error() )
+    return nil, NewValueCastErrorf( path, err.Error() )
 }
 
 func castInt32( 
@@ -218,7 +218,7 @@ func parseFloat32(
     case TypeFloat32: return Float32( f ), nil
     case TypeFloat64: return Float64( f ), nil
     }
-    panic( newValueCastErrorf( path, "Unhandled num type: %s", numTyp ) )
+    panic( NewValueCastErrorf( path, "Unhandled num type: %s", numTyp ) )
 }
 
 func castFloat32( 
@@ -257,7 +257,7 @@ func castTimestamp(
         tm, err := ParseTimestamp( string( v ) )
         if err == nil { return tm, nil }
         msg := "Invalid timestamp: %s"
-        return nil, newValueCastErrorf( path, msg, err.Error() )
+        return nil, NewValueCastErrorf( path, msg, err.Error() )
     }
     return nil, asTypeCastError( at, mgVal, path )
 }
@@ -291,7 +291,7 @@ func castAtomicUnrestricted(
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     if _, ok := mgVal.( *Null ); ok {
         if at.Equals( TypeNull ) { return mgVal, nil }
-        return nil, newValueCastErrorf( path, "Value is null" )
+        return nil, NewValueCastErrorf( path, "Value is null" )
     }
     switch nm := at.Name; {
     case nm.Equals( QnameBoolean ): return castBoolean( mgVal, at, path )
@@ -314,7 +314,7 @@ func castAtomicUnrestricted(
 
 func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
     if at.Restriction.AcceptsValue( val ) { return nil }
-    return newValueCastErrorf( 
+    return NewValueCastErrorf( 
         path, "Value %s does not satisfy restriction %s",
         QuoteValue( val ), at.Restriction.ExternalForm() )
 }

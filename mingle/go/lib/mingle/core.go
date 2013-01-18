@@ -848,7 +848,7 @@ func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
 func ( acc *SymbolMapAccessor ) GetValueById( id *Identifier ) ( Value, error ) {
     val, err := acc.m.GetById( id ), error( nil )
     if val == nil { 
-        err = newValueCastError( acc.descend( id ), "value is null" )
+        err = NewValueCastError( acc.descend( id ), "value is null" )
     }
     return val, err
 }

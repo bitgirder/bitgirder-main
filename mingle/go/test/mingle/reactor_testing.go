@@ -561,7 +561,7 @@ func ( t *crtInit ) createVcError0(
     return &CastReactorTest{
         In: MustValue( val ),
         Type: asTypeReference( typ ),
-        Err: newValueCastError( path, msg ),
+        Err: NewValueCastError( path, msg ),
     }
 }
     

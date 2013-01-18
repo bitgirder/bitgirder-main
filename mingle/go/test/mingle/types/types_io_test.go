@@ -1,33 +1,32 @@
-package testing
+package types
 
 import (
     gotest "testing"
     mg "mingle"
-    "mingle/types"
     "bitgirder/assert"
     "bytes"
 )
 
 func TestTypesIo( t *gotest.T ) {
-    m1 := types.NewDefinitionMap()
-    for _, def := range []types.Definition{
-        &types.PrimitiveDefinition{ mkQn( "ns1@v1/Prim1" ) },
-        &types.AliasedTypeDefinition{
+    m1 := NewDefinitionMap()
+    for _, def := range []Definition{
+        &PrimitiveDefinition{ mkQn( "ns1@v1/Prim1" ) },
+        &AliasedTypeDefinition{
             Name: mkQn( "ns1@v1/A1" ),
             AliasedType: mkTyp( "ns1@v2/T1" ),
         },
-        &types.PrototypeDefinition{
+        &PrototypeDefinition{
             Name: mkQn( "ns1@v1/Proto1" ),
             Signature: MakeCallSig(
-                []*types.FieldDefinition{},
+                []*FieldDefinition{},
                 "ns1@v1/T1",
                 []string{},
             ),
         },
-        &types.PrototypeDefinition{
+        &PrototypeDefinition{
             Name: mkQn( "ns1@v1/Proto2" ),
             Signature: MakeCallSig(
-                []*types.FieldDefinition{
+                []*FieldDefinition{
                     MakeFieldDef( "f1", "ns1@v1/T", nil ),
                     MakeFieldDef( "f2", "ns1@v1/T", int32( 1 ) ),
                 },
@@ -35,27 +34,27 @@ func TestTypesIo( t *gotest.T ) {
                 []string{ "ns1@v1/T1", "ns1@v1/T2" },
             ),
         },
-        MakeStructDef( "ns1@v1/Struct1", "", []*types.FieldDefinition{} ),
+        MakeStructDef( "ns1@v1/Struct1", "", []*FieldDefinition{} ),
         MakeStructDef2( 
             "ns1@v1/Struct2",
             "ns1@v1/Struct1",
-            []*types.FieldDefinition{
+            []*FieldDefinition{
                 MakeFieldDef( "f1", "ns1@v1/T", int32( 1 ) ),
             },
-            []*types.ConstructorDefinition{ { Type: mkTyp( "ns1@v1/T" ) } },
+            []*ConstructorDefinition{ { Type: mkTyp( "ns1@v1/T" ) } },
         ),
-        &types.EnumDefinition{
+        &EnumDefinition{
             Name: mkQn( "ns1@v1/En1" ),
             Values: []*mg.Identifier{ mkId( "e1" ), mkId( "e2" ) },
         },
-        MakeServiceDef( "ns1@v1/Svc1", "", []*types.OperationDefinition{}, "" ),
+        MakeServiceDef( "ns1@v1/Svc1", "", []*OperationDefinition{}, "" ),
         MakeServiceDef(
             "ns1@v1/Svc2",
             "ns1@v1/Svc1",
-            []*types.OperationDefinition{
+            []*OperationDefinition{
                 {   Name: mkId( "op1" ),
                     Signature: MakeCallSig(
-                        []*types.FieldDefinition{
+                        []*FieldDefinition{
                             MakeFieldDef( "f1", "ns1@v1/T", nil ),
                             MakeFieldDef( "f2", "ns1@v1/T", int32( 1 ) ),
                         },
@@ -65,7 +64,7 @@ func TestTypesIo( t *gotest.T ) {
                 },
                 {   Name: mkId( "op2" ),
                     Signature: MakeCallSig(
-                        []*types.FieldDefinition{},
+                        []*FieldDefinition{},
                         "ns1@v1/T",
                         []string{},
                     ),
@@ -77,7 +76,7 @@ func TestTypesIo( t *gotest.T ) {
         m1.MustAdd( def )
     }
     bb := &bytes.Buffer{}
-    rd, wr := types.NewBinReader( bb ), types.NewBinWriter( bb )
+    rd, wr := NewBinReader( bb ), NewBinWriter( bb )
     tailExpct := "trailing-data"
     if err := wr.WriteDefinitionMap( m1 ); err == nil {
         bb.WriteString( tailExpct )

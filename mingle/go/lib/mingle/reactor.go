@@ -593,7 +593,7 @@ type listCast struct {
 }
 
 type CastInterface interface {
-    InferStructFor( at *QualifiedTypeName ) bool
+    InferStructFor( qn *QualifiedTypeName ) bool
     FieldTyperFor( qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error )
 }
 
@@ -833,7 +833,7 @@ func ( cr *CastReactor ) end( ee EndEvent, rep ReactorEventProcessor ) error {
     case *mapCast: return rep.ProcessEvent( ee )
     case *listCast:
         if ! ( v.sawVals || v.lt.AllowsEmpty ) {
-            return newValueCastErrorf( cr.GetPath(), "List is empty" )
+            return NewValueCastErrorf( cr.GetPath(), "List is empty" )
         }
         return rep.ProcessEvent( ee )
     }

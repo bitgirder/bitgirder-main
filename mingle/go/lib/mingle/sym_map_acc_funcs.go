@@ -522,7 +522,7 @@ func ( acc *SymbolMapAccessor ) GetEnumById(
         } else {
             tmpl := "Expected %s but found %s"
             msg := fmt.Sprintf( tmpl, "*Enum", TypeOf( val ) )
-            val, err = nil, newValueCastError( acc.descend( id ), msg )
+            val, err = nil, NewValueCastError( acc.descend( id ), msg )
         }
         if err == nil { res = val.( *Enum ) }
     }
@@ -584,7 +584,7 @@ func ( acc *SymbolMapAccessor ) GetStructById(
         } else {
             tmpl := "Expected %s but found %s"
             msg := fmt.Sprintf( tmpl, "*Struct", TypeOf( val ) )
-            val, err = nil, newValueCastError( acc.descend( id ), msg )
+            val, err = nil, NewValueCastError( acc.descend( id ), msg )
         }
         if err == nil { res = val.( *Struct ) }
     }
@@ -635,7 +635,6 @@ func ( acc *SymbolMapAccessor ) MustListByString(
     id string ) *List {
     return acc.MustListById( MustIdentifier( id ) )
 }
-
 
 // # This script generates various type-specific (mingle and go) accessors. When
 // # run, it will output the various functions it generates, followed by this
@@ -722,7 +721,7 @@ func ( acc *SymbolMapAccessor ) MustListByString(
 //             "} else {",
 //             '    tmpl := "Expected %s but found %s"',
 //             %{    msg := fmt.Sprintf( tmpl, "#{typ}", TypeOf( val ) )},
-//             "    val, err = nil, newValueCastError( acc.descend( id ), msg )",
+//             "    val, err = nil, NewValueCastError( acc.descend( id ), msg )",
 //             "}"
 //         ]
 //     else
