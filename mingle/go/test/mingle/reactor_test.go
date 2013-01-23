@@ -3,6 +3,7 @@ package mingle
 import (
     "testing"
     "bitgirder/assert"
+    "bitgirder/objpath"
     "container/list"
     "fmt"
 )
@@ -73,6 +74,7 @@ type reactorTestCall struct {
 func ( c *reactorTestCall ) feedStructureEvents( 
     evs []ReactorEvent, tt ReactorTopType ) ( *StructuralReactor, error ) {
     rct := NewStructuralReactor( tt )
+//    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
     pip := InitReactorPipeline( rct )
     for _, ev := range evs { 
         if err := pip.ProcessEvent( ev ); err != nil { return nil, err }
@@ -94,12 +96,47 @@ func ( c *reactorTestCall ) assertEventExpectations(
     return assertEventExpectations( src, expct, rcts, c.PathAsserter )
 }
 
+type pathCheckReactor struct {
+    expct []EventExpectation
+    pg PathGetter
+    *assert.PathAsserter
+    idx int
+}
+
+func ( r *pathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
+    ee := r.expct[ r.idx ]
+    r.Equal( ee.Event, ev )
+    r.Equal( ee.Path, r.pg.GetPath() )
+    r.idx++
+    return nil
+}
+
+// Used as to verify that an EventPathReactor would, when used as a PathGetter
+// for its wrapped processor, present the expected event paths. We use this
+// separate method both to check that EventPathReactor behaves consistently with
+// other path getters on the same input stream and also to have explicit
+// coverage of EventPathReactor (testing FieldOrderReactor and others gives
+// implicit coverage)
+func assertEventPathReactorOn( 
+    src reactorEventSource, expct []EventExpectation, a *assert.PathAsserter ) {
+    a.Equal( src.Len(), len( expct ) )
+    pcr := &pathCheckReactor{ expct: expct, PathAsserter: a }
+    epr := NewEventPathReactor( pcr )
+    pcr.pg = epr
+    for i, e := 0, src.Len(); i < e; i++ {
+        ev := src.EventAt( i )
+        if err := epr.ProcessEvent( ev ); err != nil { a.Fatal( err ) }
+    }
+}
+
 func ( c *reactorTestCall ) callEventPath(
     pt *EventPathTest ) {
     src := eventExpectSource( pt.Events )
+    assertEventPathReactorOn( src, pt.Events, c.Descend( "epRctChk" ) )
     pip := c.assertEventExpectations( src, pt.Events, []interface{}{} )
     sr := pip.MustFindByKey( ReactorKeyStructuralReactor ).
               ( *StructuralReactor )
+//    c.Logf( "Checking final paths, start path: %v", pt.StartPath )
     var act idPath
     if pt.StartPath == nil { 
         act = sr.GetPath() 
@@ -121,20 +158,6 @@ type fogImpl []*Identifier
 func ( fog fogImpl ) FieldOrderFor( qn *QualifiedTypeName ) []*Identifier {
     if qn.Equals( MustQualifiedTypeName( "ns1@v1/S1" ) ) { return fog }
     return nil
-}
-
-type logReactor struct {
-    key string
-    a *assert.PathAsserter
-}
-
-func ( r logReactor ) Init( rpi *ReactorPipelineInit ) {}
-func ( r logReactor ) Key() ReactorKey { return ReactorKey( r.key ) }
-
-func ( r logReactor ) ProcessEvent( 
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
-    r.a.Logf( "Receiving event (%T) %v", ev, ev ) 
-    return rep.ProcessEvent( ev )
 }
 
 type orderCheckReactor struct {
@@ -335,4 +358,27 @@ func TestReactors( t *testing.T ) {
         ( &reactorTestCall{ PathAsserter: a, rt: rt } ).call()
         a = a.Next()
     }
+}
+
+func TestEventStackGetAndAppendPath( t *testing.T ) {
+    get := func( s *eventStack, expct idPath ) {
+        assert.Equal( expct, s.GetPath() )
+    }
+    apnd := func( s *eventStack, start, expct idPath ) {
+        assert.Equal( expct, s.AppendPath( start ) )
+    }
+    s := newEventStack()
+    p1 := objpath.RootedAt( id( "f1" ) )
+    lp1 := objpath.RootedAtList()
+    chkRoot := func() {
+        get( s, nil )
+        apnd( s, nil, nil )
+        apnd( s, p1, p1 )
+    }
+    chkRoot()
+    s.pushMap( "" )
+    chkRoot()
+    s.pushList( listIndex( 1 ) )
+    get( s, lp1.Next() )
+    apnd( s, p1, p1.StartList().Next() )
 }

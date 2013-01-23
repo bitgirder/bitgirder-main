@@ -19,7 +19,7 @@ type PathNode interface {
     Parent() PathNode // nil when root
 }
 
-type dictNode struct {
+type DictNode struct {
     parent PathNode
     elt interface{}
 }
@@ -30,18 +30,18 @@ type ListNode struct {
 }
 
 func descend( parent PathNode, elt interface{} ) PathNode {
-    return &dictNode{ parent, elt }
+    return &DictNode{ parent, elt }
 }
 
 func startList( parent PathNode ) *ListNode { return &ListNode{ parent, 0 } }
 
-func ( n *dictNode ) Parent() PathNode { return n.parent }
+func ( n *DictNode ) Parent() PathNode { return n.parent }
 
-func ( n *dictNode ) Descend( elt interface{} ) PathNode {
+func ( n *DictNode ) Descend( elt interface{} ) PathNode {
     return descend( n, elt ) 
 }
 
-func ( n *dictNode ) StartList() *ListNode { return startList( n ) }
+func ( n *DictNode ) StartList() *ListNode { return startList( n ) }
 
 func ( l *ListNode ) Parent() PathNode { return l.parent }
 
@@ -107,7 +107,7 @@ func Visit( p PathNode, v Visitor ) error {
     elts := ascentOrderFor( p )
     for i := len( elts ); i > 0; i-- {
         switch n := elts[ i - 1 ].( type ) {
-        case *dictNode:
+        case *DictNode:
             if err := v.Descend( n.elt ); err != nil { return err }
         case *ListNode:
             if err := v.List( n.indx ); err != nil { return err }

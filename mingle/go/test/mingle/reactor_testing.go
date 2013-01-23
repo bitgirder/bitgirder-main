@@ -143,12 +143,12 @@ func initStructuralReactorTests() {
              EventExpectation{ evStartField1, idPath1 },
              EventExpectation{ evValue1, idPath1 },
         ),
-        mk3( lpRoot(), EventExpectation{ EvListStart, nil } ),
+        mk3( nil, EventExpectation{ EvListStart, nil } ),
         mk3( lpRoot(),
              EventExpectation{ EvListStart, nil },
              EventExpectation{ EvMapStart, lpRoot() },
         ),
-        mk3( lpRoot().SetIndex( 1 ),
+        mk3( lpRoot().SetIndex( 0 ),
              EventExpectation{ EvListStart, nil },
              EventExpectation{ evValue1, lpRoot() },
         ),
@@ -996,33 +996,6 @@ func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
     ca.Call()
 }
 
-type eventExpectCheck struct {
-    idx int
-    expect []EventExpectation
-    *assert.PathAsserter
-    pg PathGetter
-}
-
-func ( foc *eventExpectCheck ) Key() ReactorKey {
-    return ReactorKey( "mingle.eventExpectCheck" )
-}
-
-func ( foc *eventExpectCheck ) Init( rpi *ReactorPipelineInit ) {
-    rpi.VisitPredecessors( func( rct interface{} ) {
-        if pg, ok := rct.( PathGetter ); ok { foc.pg = pg }
-    })
-    foc.Falsef( foc.pg == nil, "No path getter predecessor found" )
-}
-
-func ( foc *eventExpectCheck ) ProcessEvent(
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
-    defer func() { foc.idx++ }()
-    expct := foc.expect[ foc.idx ]
-    foc.Equal( ev, expct.Event )
-    foc.Equal( FormatIdPath( expct.Path ), FormatIdPath( foc.pg.GetPath() ) )
-    return nil
-}
-
 type reactorEventSource interface {
     Len() int
     EventAt( int ) ReactorEvent
@@ -1040,12 +1013,48 @@ func ( src eventExpectSource ) EventAt( i int ) ReactorEvent {
     return src[ i ].Event
 }
 
+func assertEventExpectation(
+    ev ReactorEvent, 
+    ee EventExpectation, 
+    pg PathGetter, 
+    a *assert.PathAsserter ) {
+    a.Equal( ev, ee.Event )
+    a.Equal( FormatIdPath( ee.Path ), FormatIdPath( pg.GetPath() ) )
+}
+
+type eventExpectCheck struct {
+    idx int
+    expect []EventExpectation
+    *assert.PathAsserter
+    pg PathGetter
+}
+
+func ( eec *eventExpectCheck ) Init( rpi *ReactorPipelineInit ) {
+    rpi.VisitPredecessors( func( rct interface{} ) {
+        if pg, ok := rct.( PathGetter ); ok { eec.pg = pg }
+    })
+    eec.Falsef( eec.pg == nil, "No path getter predecessor found" )
+}
+
+func ( eec *eventExpectCheck ) ProcessEvent(
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    defer func() { eec.idx++ }()
+    assertEventExpectation( 
+        ev, eec.expect[ eec.idx ], eec.pg, eec.PathAsserter )
+//    expct := eec.expect[ eec.idx ]
+//    eec.Equal( ev, expct.Event )
+//    eec.Equal( FormatIdPath( expct.Path ), FormatIdPath( eec.pg.GetPath() ) )
+    return nil
+}
+
 func assertEventExpectations( 
     src reactorEventSource, 
     expct []EventExpectation,
     rcts []interface{},
     pa *assert.PathAsserter ) *ReactorPipeline {
     rcts2 := []interface{}{ NewStructuralReactor( ReactorTopTypeValue ) }
+//    rcts2 := []interface{}{ 
+//        NewDebugReactor( pa ), NewStructuralReactor( ReactorTopTypeValue ) }
     rcts2 = append( rcts2, rcts... )
     chk := &eventExpectCheck{ expect: expct, PathAsserter: pa }
     rcts2 = append( rcts2, chk )

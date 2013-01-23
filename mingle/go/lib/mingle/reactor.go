@@ -216,46 +216,134 @@ func newStructuralMap() *structuralMap {
     return &structuralMap{ keys: NewIdentifierMap() } 
 }
 
-func ( m *structuralMap ) startField( fld *Identifier ) error {
-    if m.pending == nil {
-        if m.keys.HasKey( fld ) {
-            return rctErrorf( "Multiple entries for field: %s", fld )
+type listIndex int
+
+type eventStack struct {
+    *list.List
+}
+
+func newEventStack() *eventStack {
+    return &eventStack{ List: &list.List{} }
+}
+
+func ( s *eventStack ) buildPath( e *list.Element, p idPath ) idPath {
+//    log.Printf( "building path, e: %v, p: %v", e, p )
+    if e == nil { return p }
+    switch v := e.Value.( type ) {
+    case *Identifier: p = objpath.Descend( p, v )
+    case listIndex: 
+        if v >= 0 { p = objpath.StartList( p ).SetIndex( int( v ) ) }
+    }
+//    log.Printf( "After check, p: %v", p )
+    return s.buildPath( e.Prev(), p )
+}
+
+func ( s *eventStack ) AppendPath( p idPath ) idPath {
+    return s.buildPath( s.Back(), p )
+}
+
+func ( s *eventStack ) GetPath() objpath.PathNode { return s.AppendPath( nil ) }
+
+func ( s *eventStack ) isEmpty() bool { return s.Len() == 0 }
+
+func ( s *eventStack ) peekElt() *list.Element { return s.Front() }
+
+func ( s *eventStack ) peek() interface{} {
+    if elt := s.peekElt(); elt != nil { return elt.Value }
+    return nil
+}
+
+func ( s *eventStack ) pop() interface{} { return s.Remove( s.Front() ) }
+
+func ( s *eventStack ) pushMap( val interface{} ) { s.PushFront( val ) }
+
+func ( s *eventStack ) pushField( fld *Identifier, val interface{} ) { 
+    s.PushFront( val ) 
+}
+
+func ( s *eventStack ) pushList( val interface{} ) { s.PushFront( val ) }
+
+// Increments the list index if the top of stack is a list
+func ( s *eventStack ) prepareListVal() {
+    if elt := s.peekElt(); elt != nil {
+        if idx, ok := elt.Value.( listIndex ); ok {
+            elt.Value = listIndex( idx + 1 )
         }
-        m.keys.Put( fld, true )
-        m.pending = fld
-        return nil
     }
-    tmpl := "Saw start of field '%s' while expecting a value for '%s'"
-    return rctErrorf( tmpl, fld, m.pending )
 }
 
-func ( m *structuralMap ) checkValue( valName string ) error {
-    if m.pending == nil {
-        tmpl := "Expected field name or end of fields but got %s"
-        return rctErrorf( tmpl, valName )
+// ReactorEventProcessor that keeps track of the path inherent in an event
+// stream. This processor does not check that the stream of events itself
+// represents a valid object.
+type EventPathReactor struct {
+    stack *eventStack
+    rep ReactorEventProcessor
+}
+
+func NewEventPathReactor( rep ReactorEventProcessor ) *EventPathReactor {
+    return &EventPathReactor{ rep: rep, stack: newEventStack() }
+}
+
+func ( epr *EventPathReactor ) GetPath() objpath.PathNode {
+    return epr.stack.GetPath()
+}
+
+func ( epr *EventPathReactor ) AppendPath( 
+    src objpath.PathNode ) objpath.PathNode {
+    return epr.stack.AppendPath( src )
+}
+
+func ( epr *EventPathReactor ) preProcessValue() {
+    epr.stack.prepareListVal()
+}
+
+func ( epr *EventPathReactor ) preProcess( ev ReactorEvent ) {
+    switch v := ev.( type ) {
+    case FieldStartEvent: epr.stack.pushField( v.Field, v.Field )
+    case MapStartEvent, StructStartEvent: 
+        epr.preProcessValue()
+        epr.stack.pushMap( "map" )
+    case ListStartEvent: 
+        epr.preProcessValue()
+        epr.stack.pushList( listIndex( -1 ) )
+    case EndEvent: epr.stack.pop()
+    case ValueEvent: epr.preProcessValue()
+    default: panic( libErrorf( "Uhandled event: %T", ev ) )
     }
-    return nil 
 }
 
-func ( m *structuralMap ) value() { m.pending = nil }
-
-func ( m *structuralMap ) end() error {
-    if m.pending == nil { return nil }
-    return rctErrorf( 
-        "Saw end while expecting value for field '%s'", m.pending )
+func ( epr *EventPathReactor ) completeValue() {
+    if epr.stack.isEmpty() { return }
+    switch v := epr.stack.peek().( type ) {
+    case *Identifier, string: epr.stack.pop()
+    case listIndex: {}
+    default: panic( libErrorf( "Uhandled feed stack element: %T", v ) )
+    }
 }
 
-type structuralListIndex int
+func ( epr *EventPathReactor ) postProcess( ev ReactorEvent ) error {
+    switch ev.( type ) {
+    case ValueEvent, EndEvent: epr.completeValue()
+    }
+    return nil
+}
+
+func ( epr *EventPathReactor ) ProcessEvent( ev ReactorEvent ) error {
+    epr.preProcess( ev )
+    if err := epr.rep.ProcessEvent( ev ); err != nil { return err }
+    epr.postProcess( ev )
+    return nil
+}
 
 type StructuralReactor struct {
-    stack *list.List
+    stack *eventStack
     topTyp ReactorTopType
     done bool
 }
 
 func NewStructuralReactor( topTyp ReactorTopType ) *StructuralReactor {
     return &StructuralReactor{ 
-        stack: &list.List{}, 
+        stack: newEventStack(),
         topTyp: topTyp,
     }
 }
@@ -266,40 +354,13 @@ func ( sr *StructuralReactor ) Key() ReactorKey {
     return ReactorKeyStructuralReactor
 }
 
-func ( sr *StructuralReactor ) buildPath( e *list.Element, p idPath ) idPath {
-    if e == nil { return p }
-    switch v := e.Value.( type ) {
-    case *structuralMap: 
-        if fld := v.pending; fld != nil { p = objpath.Descend( p, fld ) }
-    case structuralListIndex: p = objpath.StartList( p ).SetIndex( int( v ) )
-    default: panic( libErrorf( "Unhandled stack element: %T", e.Value ) )
-    }
-    return sr.buildPath( e.Prev(), p )
-}
-
-func ( sr *StructuralReactor ) appendPath( p idPath ) idPath {
-    return sr.buildPath( sr.stack.Back(), p )
-}
-
 func ( sr *StructuralReactor ) GetPath() objpath.PathNode {
-    return sr.appendPath( nil )
+    return sr.stack.GetPath()
 }
 
 func ( sr *StructuralReactor ) AppendPath( 
     p objpath.PathNode ) objpath.PathNode {
-    return sr.appendPath( p )
-}
-
-func ( sr *StructuralReactor ) Error( msg string ) error {
-    if p := sr.GetPath(); p != nil {
-        msg = fmt.Sprintf( "%s: %s", FormatIdPath( p ), msg )
-    }
-    return rctError( msg )
-}
-
-func ( sr *StructuralReactor ) Errorf( 
-    tmpl string, args ...interface{} ) error {
-    return sr.Error( fmt.Sprintf( tmpl, args... ) )
+    return sr.stack.AppendPath( p )
 }
 
 func ( sr *StructuralReactor ) getReactorTopTypeError( valName string ) error {
@@ -312,126 +373,158 @@ func ( sr *StructuralReactor ) checkActive( call string ) error {
 }
 
 func ( sr *StructuralReactor ) mapIsTop() *structuralMap {
-    if sr.stack.Len() == 0 { return nil }
-    elt := sr.stack.Front().Value
-    if m, ok := elt.( *structuralMap ); ok { return m }
+    if elt := sr.stack.peek(); elt != nil {
+        if m, ok := elt.( *structuralMap ); ok { return m }
+    }
     return nil
+}
+
+func ( sr *StructuralReactor ) checkMapValue( 
+    valName string, m *structuralMap ) error {
+    if m.pending != nil { return nil }
+    tmpl := "Expected field name or end of fields but got %s"
+    return rctErrorf( tmpl, valName )
 }
 
 // sr.stack known to be non-empty when this returns without error, unless top
 // type is value.
 func ( sr *StructuralReactor ) checkValue( valName string ) error {
-    if sr.stack.Len() == 0 {
+    if sr.stack.isEmpty() {
         if sr.topTyp == ReactorTopTypeValue { return nil }
         return sr.getReactorTopTypeError( valName )
     }
-    if m := sr.mapIsTop(); m != nil { 
-        if err := m.checkValue( valName ); err != nil { return err }
+    switch v := sr.stack.peek().( type ) {
+    case *Identifier: {}
+    case listIndex: {}
+    case *structuralMap:
+        if err := sr.checkMapValue( valName, v ); err != nil { return err }
+    default: panic( libErrorf( "Unexpected stack elt for value: %T", v ) )
     }
     return nil
 }
 
-func ( sr *StructuralReactor ) push( elt interface{} ) { 
-    sr.stack.PushFront( elt ) 
+func ( sr *StructuralReactor ) prepareListVal() {
+    sr.stack.prepareListVal()
+}
+
+func ( sr *StructuralReactor ) implStartMap() error {
+    sr.prepareListVal()
+    sr.stack.pushMap( newStructuralMap() )
+    return nil
 }
 
 func ( sr *StructuralReactor ) startStruct() error {
     if err := sr.checkActive( "StartStruct" ); err != nil { return err }
     // skip check if we're pushing the top level struct
-    if sr.stack.Len() > 0 {
+    if ! sr.stack.isEmpty() {
         if err := sr.checkValue( "struct start" ); err != nil { 
             return err 
         }
     }
-    sr.push( newStructuralMap() )
-    return nil
+    return sr.implStartMap()
 }
 
 func ( sr *StructuralReactor ) startMap() error {
     if err := sr.checkActive( "StartMap" ); err != nil { return err }
     if err := sr.checkValue( "map start" ); err != nil { return err }
-    sr.push( newStructuralMap() )
-    return nil
+    return sr.implStartMap()
 }
 
+// Note about the prepareListVal() call below: it has nothing to do with the
+// list we're starting; it pertains to the (possible) list to which we're adding
+// the current list as a value.
 func ( sr *StructuralReactor ) startList() error {
     if err := sr.checkActive( "StartList" ); err != nil { return err }
     if err := sr.checkValue( "list start" ); err != nil { return err }
+    sr.prepareListVal() 
+    sr.stack.pushList( listIndex( -1 ) )
+    return nil
+}
+
+func ( sr *StructuralReactor ) startMapField( 
+    fld *Identifier, m *structuralMap ) error {
+    if m.pending != nil {
+        panic( libErrorf( "startMapField while pending: %s", m.pending ) )
+    }
+    if m.keys.HasKey( fld ) {
+        return rctErrorf( "Multiple entries for field: %s", fld )
+    }
+    m.keys.Put( fld, true )
+    m.pending = fld
     return nil
 }
 
 func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
     if err := sr.checkActive( "StartField" ); err != nil { return err }
-    if ok := sr.stack.Len() > 0; ok {
-        elt := sr.stack.Front().Value
+    if elt := sr.stack.peek(); elt != nil {
         switch v := elt.( type ) {
-        case structuralListIndex: 
+        case listIndex: 
             tmpl := "Expected list value but got start of field '%s'"
             return rctErrorf( tmpl, fld )
-        case *structuralMap: return v.startField( fld )
-        default: panic( libErrorf( "Invalid stack element: %T", elt ) )
+        case *structuralMap: 
+            if err := sr.startMapField( fld, v ); err != nil { return err }
+            sr.stack.pushField( fld, fld )
+            return nil
+        case *Identifier:
+            tmpl := "Saw start of field '%s' while expecting a value for '%s'"
+            return rctErrorf( tmpl, fld, v )
+        default: panic( libErrorf( "Invalid stack element: %v (%T)", v, v ) )
         }
     }
     errLoc := fmt.Sprintf( "field '%s'", fld )
     return getReactorTopTypeError( errLoc, ReactorTopTypeStruct )
 }
 
-func ( sr *StructuralReactor ) value() error {
+func ( sr *StructuralReactor ) value( isAtomic bool ) error {
     if err := sr.checkActive( "Value" ); err != nil { return err }
     if err := sr.checkValue( "value" ); err != nil { return err }
+    if isAtomic { sr.prepareListVal() }
     return nil
 }
 
 func ( sr *StructuralReactor ) end() error {
     if err := sr.checkActive( "End" ); err != nil { return err }
-    if sr.stack.Len() == 0 { return sr.getReactorTopTypeError( "end" ) }
-    elt := sr.stack.Remove( sr.stack.Front() )
-    switch v := elt.( type ) {
-    case *structuralMap: if err := v.end(); err != nil { return err }
-    case structuralListIndex: {} // list -- end() is always okay
-    default: panic( libErrorf( "Unexpected stack element: %T", elt ) )
+    if sr.stack.isEmpty() { return sr.getReactorTopTypeError( "end" ) }
+    switch v := sr.stack.pop().( type ) {
+    case *Identifier:
+        return rctErrorf( "Saw end while expecting value for field '%s'", v )
+    case *structuralMap, listIndex: {} // end() is always okay
+    default: panic( libErrorf( "Unexpected stack element: %T", v ) )
     }
     // if we're not done then we just completed an intermediate value which
     // needs to be processed
-    if sr.done = sr.stack.Len() == 0; ! sr.done { return sr.value() }
+    if sr.done = sr.stack.isEmpty(); ! sr.done { return sr.value( false ) }
     return nil
 }
 
-func ( sr *StructuralReactor ) incrementIfList() {
-    if sr.stack.Len() == 0 { return }
-    front := sr.stack.Front()
-    if idx, ok := front.Value.( structuralListIndex ); ok {
-        front.Value = structuralListIndex( idx + 1 )
+func ( sr *StructuralReactor ) update( ev ReactorEvent ) ( bool, error ) {
+    switch v := ev.( type ) {
+    case StructStartEvent: return false, sr.startStruct()
+    case MapStartEvent: return false, sr.startMap()
+    case ListStartEvent: return false, sr.startList()
+    case FieldStartEvent: return false, sr.startField( v.Field )
+    case ValueEvent: return true, sr.value( true )
+    case EndEvent: return true, sr.end()
     }
+    panic( libErrorf( "Unhandled event: %T", ev ) )
 }
+
+func ( sr *StructuralReactor ) mapValue( m *structuralMap ) { m.pending = nil }
 
 func ( sr *StructuralReactor ) downstreamDone( ev ReactorEvent, isValue bool ) {
-    if sr.done { return }
-    if isValue { 
-        sr.incrementIfList()
-        if m := sr.mapIsTop(); m != nil { m.value() }
-    }
-    switch ev.( type ) {
-    case ListStartEvent: sr.push( structuralListIndex( 0 ) )
+    if isValue {
+        if _, ok := sr.stack.peek().( *Identifier ); ok { sr.stack.pop() }
+        if m := sr.mapIsTop(); m != nil { sr.mapValue( m ) }
     }
 }
 
-func ( sr *StructuralReactor ) ProcessEvent( 
+func ( sr *StructuralReactor ) ProcessEvent(
     ev ReactorEvent, rep ReactorEventProcessor ) error {
-    var err error
-    isValue := false
-    switch v := ev.( type ) {
-    case StructStartEvent: err = sr.startStruct()
-    case MapStartEvent: err = sr.startMap()
-    case ListStartEvent: err = sr.startList()
-    case FieldStartEvent: err = sr.startField( v.Field )
-    case ValueEvent: err, isValue = sr.value(), true
-    case EndEvent: err, isValue = sr.end(), true
-    default: panic( libErrorf( "Unhandled event: %T", ev ) )
-    }
-    if err != nil { return err }
-    if err = rep.ProcessEvent( ev ); err != nil { return err }
-    sr.downstreamDone( ev, isValue )
+    if isValue, err := sr.update( ev ); err == nil {
+        if err = rep.ProcessEvent( ev ); err == nil {
+            sr.downstreamDone( ev, isValue )
+        } else { return err }
+    } else { return err }
     return nil
 }
 
@@ -730,7 +823,6 @@ func ( cr *CastReactor ) completeValue(
     ve ValueEvent, t TypeReference, rep ReactorEventProcessor ) error {
     switch typVal := t.( type ) {
     case *AtomicTypeReference: 
-//        v2, err := castAtomic( ve.Val, typVal, cr.GetPath() )
         v2, err := cr.castAtomic( ve.Val, typVal )
         if err == nil { return rep.ProcessEvent( ValueEvent{ v2 } ) }
         return err
@@ -940,7 +1032,7 @@ type fieldOrder struct {
     acc []ReactorEvent
     accFld *Identifier
     valDepth int
-    feedStack *list.List
+    epRct *EventPathReactor
 }
 
 func ( ord *fieldOrder ) failRepeated( fld *Identifier ) error {
@@ -996,68 +1088,23 @@ func ( ord *fieldOrder ) completeEvent(
     return nil
 }
 
+// Initial sanity check of p being a DictNode: we should only ever be feeding
+// fields of a map/struct
 func ( ord *fieldOrder ) appendFeedPath( p objpath.PathNode ) objpath.PathNode {
-    if _, ok := p.( *objpath.ListNode ); ok {
-        panic( libErrorf( "Unexpected list node: %s", FormatIdPath( p ) ) )
+    if _, ok := p.( *objpath.DictNode ); ! ok {
+        panic( libErrorf( "Not a dict node: %s", FormatIdPath( p ) ) )
     }
     p = p.Parent() // It's a field, but we're feeding a sibling field
-    for e := ord.feedStack.Front(); e != nil; e = e.Next() {
-        switch v := e.Value.( type ) {
-        case *Identifier: p = objpath.Descend( p, v )
-        case string: {} // placeholder for struct/map
-        case int: if v >= 0 { p = objpath.StartList( p ).SetIndex( v ) }
-        default: panic( libErrorf( "Unhandled feed stack elt: %T", v ) )
-        }
-    }
-    return p
-}
-
-func ( ord *fieldOrder ) pushFeed( val interface{} ) {
-    ord.feedStack.PushBack( val )
-}
-
-func ( ord *fieldOrder ) pushFeedValue() {
-    bk := ord.feedStack.Back()
-    if i, ok := bk.Value.( int ); ok { bk.Value = i + 1 }
-}
-
-func ( ord *fieldOrder ) popFeed() interface{} { 
-    return ord.feedStack.Remove( ord.feedStack.Back() )
-}
-
-func ( ord *fieldOrder ) feedValueReady() {
-    if ord.feedStack.Len() == 0 { return }
-    bk := ord.feedStack.Back()
-    switch v := bk.Value.( type ) {
-    case *Identifier, string: ord.popFeed()
-    case int: {}
-    default: panic( libErrorf( "Uhandled feed stack element: %T", v ) )
-    }
-}
-
-func ( ord *fieldOrder ) updateFeedStack( ev ReactorEvent ) {
-    switch v := ev.( type ) {
-    case FieldStartEvent: ord.pushFeed( v.Field )
-    case MapStartEvent: ord.pushFeed( "map" )
-    case ListStartEvent: ord.pushFeed( -1 )
-    case StructStartEvent: ord.pushFeed( "struct" )
-    case EndEvent: ord.popFeed()
-    case ValueEvent: ord.pushFeedValue()
-    default: panic( libErrorf( "Uhandled event: %T", ev ) )
-    }
+    return ord.epRct.stack.AppendPath( p )
 }
 
 func ( ord *fieldOrder ) feedValue(
     fld *Identifier, acc []ReactorEvent, rep ReactorEventProcessor ) error {
     ord.checkAccNil( "at feedValue()" )
-    ord.feedStack = &list.List{}
-    defer func() { ord.feedStack = nil }()
+    ord.epRct = NewEventPathReactor( rep )
+    defer func() { ord.epRct = nil }()
     for _, ev := range acc {
-        ord.updateFeedStack( ev )
-        if err := ord.sendEvent( ev, rep ); err != nil { return err }
-        switch ev.( type ) {
-        case ValueEvent, EndEvent: ord.feedValueReady()
-        }
+        if err := ord.sendEvent( ev, ord.epRct ); err != nil { return err }
     }
     return nil
 }
@@ -1164,7 +1211,7 @@ func ( fo *FieldOrderReactor ) GetPath() objpath.PathNode {
     if fo.stack.Len() == 0 { return res }
     for e := fo.stack.Front(); e != nil; e = e.Next() {
         ord := e.Value.( *fieldOrder )
-        if ord.feedStack != nil { return ord.appendFeedPath( res ) }
+        if ord.epRct != nil { return ord.appendFeedPath( res ) }
     }
     return res
 }
@@ -1178,7 +1225,6 @@ type debugReactor struct {
 }
 
 func ( dr *debugReactor ) Init( rpi *ReactorPipelineInit ) {
-    EnsureStructuralReactor( rpi )
     dr.pg = LastPathGetter( rpi )
 }
 

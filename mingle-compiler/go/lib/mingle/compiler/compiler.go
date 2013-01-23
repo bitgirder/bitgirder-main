@@ -664,9 +664,16 @@ func ( c *Compilation ) buildAliasedTypes( ctxs []buildContext ) {
 }
 
 func ( c *Compilation ) getSuperType(
-    ti *tree.TypeDeclInfo, bs *buildScope ) mg.TypeReference {
+    ti *tree.TypeDeclInfo, bs *buildScope ) *mg.QualifiedTypeName {
     if ti.SuperType == nil { return nil }
-    return bs.resolveType( ti.SuperType, ti.SuperTypeLoc )
+    res := bs.resolveType( ti.SuperType, ti.SuperTypeLoc )
+    if res == nil { return nil }
+    if at, ok := res.( *mg.AtomicTypeReference ); ok { 
+        return at.Name.( *mg.QualifiedTypeName )
+    } 
+    c.addErrorf( 
+        ti.SuperTypeLoc, "Non-atomic supertype for %s: %s", ti.Name, res )
+    return nil
 }
 
 func ( c * Compilation ) checkKeyedElements(
@@ -790,15 +797,14 @@ func ( c *Compilation ) addPrevFieldDefs(
 }
 
 func ( c *Compilation ) prevFieldsFor( 
-    decl tree.TypeDecl, sprTyp mg.TypeReference ) *mg.IdentifierMap {
+    decl tree.TypeDecl, sprTyp *mg.QualifiedTypeName ) *mg.IdentifierMap {
     res := mg.NewIdentifierMap()
     for sprTyp != nil {
-        qn := qnameIn( sprTyp )
-        if def := c.superTypeDefFor( qn, decl ); def == nil {
+        if def := c.superTypeDefFor( sprTyp, decl ); def == nil {
             sprTyp = nil
         } else {
             fs := def.( types.FieldContainer ).GetFields()
-            c.addPrevFieldDefs( res, fs, qn )
+            c.addPrevFieldDefs( res, fs, sprTyp )
             sprTyp = def.( types.Descendant ).GetSuperType()
         }
     }

@@ -190,19 +190,22 @@ type castReactor struct {
     castBase *mg.CastReactor
     dm *DefinitionMap
     stack *list.List
+    deflFeed *mg.EventPathReactor
 }
 
 func ( cr *castReactor ) Init( rpi *mg.ReactorPipelineInit ) {
     rpi.AddPipelineProcessor( cr.castBase )
 }
 
-func ( cr *castReactor ) getPath() objpath.PathNode {
-    return cr.castBase.GetPath()
+func ( cr *castReactor ) GetPath() objpath.PathNode {
+    res := cr.castBase.GetPath()
+    if cr.deflFeed != nil { res = cr.deflFeed.AppendPath( res ) }
+    return res
 }
 
 func ( cr *castReactor ) newValueCastErrorf( 
     tmpl string, args ...interface{} ) error {
-    return mg.NewValueCastErrorf( cr.getPath(), tmpl, args... )
+    return mg.NewValueCastErrorf( cr.GetPath(), tmpl, args... )
 }
 
 func ( cr *castReactor ) newUnrecognizedTypeError( 
@@ -215,7 +218,7 @@ func notAStructError( qn *mg.QualifiedTypeName, p objpath.PathNode ) error {
 }
 
 func ( cr *castReactor ) notAStructError( qn *mg.QualifiedTypeName ) error {
-    return notAStructError( qn, cr.getPath() )
+    return notAStructError( qn, cr.GetPath() )
 }
 
 type fieldCtx struct {
@@ -269,10 +272,11 @@ func ( cr *castReactor ) startField( fld *mg.Identifier ) {
 
 func ( cr *castReactor ) feedDefault( 
     fld *mg.Identifier, defl mg.Value, rep mg.ReactorEventProcessor ) error {
-    if err := rep.ProcessEvent( mg.FieldStartEvent{ fld } ); err != nil {
-        return err
-    }
-    return mg.VisitValue( defl, rep )
+    cr.deflFeed = mg.NewEventPathReactor( rep )
+    defer func() { cr.deflFeed = nil }()
+    fs := mg.FieldStartEvent{ fld }
+    if err := cr.deflFeed.ProcessEvent( fs ); err != nil { return err }
+    return mg.VisitValue( defl, cr.deflFeed )
 }
 
 func ( cr *castReactor ) processDefaults(

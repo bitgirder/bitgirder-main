@@ -418,10 +418,16 @@ func TestCompiler( t *testing.T ) {
         expectError( 5, 46, `Invalid RFC3339 time: "2001-01-02.12"` ),
  
         newCompilerTest( "invalid-supertypes" ).
-        addLib( "p1Src1", p1Sources[ 0 ] ).
-        setSource( `@version v1; namespace ns2; struct S1 < String {}` ).
+        setSource( `
+            @version v1 
+            namespace ns1 
+            struct S1 < String {}
+            struct S2 {}
+            struct S3 < S2+ {}
+        ` ).
         expectError( 
-            1, 29, "S1 cannot descend from type mingle:core@v1/String" ),
+            4, 13, "S1 cannot descend from type mingle:core@v1/String" ).
+        expectError( 6, 25, "Non-atomic supertype for S3: ns1@v1/S2+" ),
     
         newCompilerTest( "type-self-descent" ).
         setSource( "@version v1; namespace ns1; struct S1 < S1 {}" ).

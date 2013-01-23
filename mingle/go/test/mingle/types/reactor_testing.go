@@ -180,10 +180,6 @@ func ( rti *rtInit ) addStructValCastTests() {
     }
     addFail( mg.MustStruct( "ns1@v1/S2" ), tcErr1( "ns1@v1/S2", nil ) )
     addFail( int32( 1 ), tcErr1( "Int32", nil ) )
-//    addFail( 
-//        mg.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 2 ) ),
-//        newVcErr( nil, "STUB" ),
-//    )
     addFail( mg.MustEnum( "ns1@v1/E1", "e" ), tcErr1( "ns1@v1/E1", nil ) )
     addFail( 
         mg.MustEnum( "ns1@v1/S1", "e" ), 
@@ -230,80 +226,6 @@ func ( rti *rtInit ) addInferredStructCastTests() {
             "f2", mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ) ),
     )
 }
-
-//func ( rti *rtInit ) addEnumValCastTests() {
-//    dm := MakeV1DefMap(
-//        MakeStructDef( 
-//            "ns1@v1/S1", "", 
-//            []*FieldDefinition{ MakeFieldDef( "f1", "ns1@v1/E1", nil ) },
-//        ),
-//        MakeStructDef( "ns1@v1/S2", "", []*FieldDefinition{} ),
-//        MakeStructDef(
-//            "ns1@v1/S3", "",
-//            []*FieldDefinition{ 
-//                MakeFieldDef( "f1", "ns1@v1/E1*", nil ),
-//                MakeFieldDef( "f2", "ns1@v1/E1?", nil ),
-//            },
-//        ),
-//        MakeEnumDef( "ns1@v1/E1", "c1", "c2" ),
-//        MakeEnumDef( "ns1@v1/E2", "c1", "c2" ),
-//    )
-//    addTest := func( in, expct interface{}, err error ) {
-//        t := &CastReactorTest{
-//            Map: dm,
-//            In: mg.MustStruct( "ns1@v1/S1", "f1", in ), 
-//            Type: mg.MustTypeReference( "ns1@v1/S1" ),
-//        }
-//        if expct != nil { t.Expect = mg.MustStruct( "ns1@v1/S1", "f1", expct ) }
-//        if err != nil { t.Err = err }
-//        rti.addTests( t )
-//    }
-//    addSucc := func( in, expct interface{} ) { addTest( in, expct, nil ) }
-//    addFail := func( in interface{}, err error ) { addTest( in, nil, err ) }
-//    e1 := mg.MustEnum( "ns1@v1/E1", "c1" )
-//    addSucc( e1, e1 )
-//    addSucc( "c1", e1 )
-//    errStub := newVcErr( nil, "STUB" )
-//    addFail( mg.MustEnum( "ns1@v1/E1", "c3" ), errStub )
-//    addFail( "2bad", errStub )
-//    addFail( mg.MustEnum( "ns1@v1/E2", "c1" ), errStub )
-//    addFail( mg.MustStruct( "ns1@v1/E1" ), errStub )
-//    addFail( int32( 1 ), errStub )
-//    addFail( mg.MustList(), errStub )
-//    addFail( mg.MustSymbolMap(), errStub )
-//    addFail( mg.MustStruct( "ns1@v1/S2" ), errStub )
-//    q3 := mg.MustQualifiedTypeName( "ns1@v1/S3" )
-//    t3 := q3.AsAtomicType()
-//    s3Fail := func( in mg.Value, err error ) *CastReactorTest {
-//        return &CastReactorTest{ Map: dm, In: in, Type: t3, Err: err }
-//    }
-//    rti.addTests(
-//        &CastReactorTest{
-//            Map: dm,
-//            In: mg.MustStruct( "ns1@v1/S3",
-//                "f1", "c1",
-//                "f2", mg.MustList( e1, "c2" ),
-//            ),
-//            Expect: mg.MustStruct( "ns1@v1/S3", 
-//                "f1", e1, 
-//                "f2", mg.MustList( e1, mg.MustEnum( "ns1@v1/E1", "c2" ) ),
-//            ),
-//            Type: t3,
-//        },
-//        s3Fail( 
-//            mg.MustStruct( q3, "f1", int32( 1 ) ),
-//            errStub,
-//        ),
-//        s3Fail(
-//            mg.MustStruct( q3, "f2", mg.MustList( e1, int32( 1 ) ) ),
-//            errStub,
-//        ),
-//        s3Fail(
-//            mg.MustStruct( q3, "f2", int32( 1 ) ),
-//            errStub,
-//        ),
-//    )
-//}
 
 func ( rti *rtInit ) addEnumValCastTests() {
     dm := MakeV1DefMap(
@@ -630,7 +552,7 @@ func ( rti *rtInit ) init() {
     rti.addEnumValCastTests()
     rti.addDeepCatchallTests()
     rti.addDefaultCastTests()
-//    rti.addDefaultPathTests()
+    rti.addDefaultPathTests()
 }
 
 // The tests returned might normally be created during an init() block, but

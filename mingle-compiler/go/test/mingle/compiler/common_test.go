@@ -39,7 +39,7 @@ func makeStructDef(
     if flds == nil { flds = []*types.FieldDefinition{} }
     res := types.NewStructDefinition()
     res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustTypeReference( sprTyp ) }
+    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
     for _, fld := range flds { res.Fields.MustAdd( fld ) }
     return res
 }
@@ -81,7 +81,7 @@ func makeServiceDef(
     secQn string ) *types.ServiceDefinition {
     res := types.NewServiceDefinition()
     res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustTypeReference( sprTyp ) }
+    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
     res.Operations = append( res.Operations, opDefs... )
     if secQn != "" { res.Security = mg.MustQualifiedTypeName( secQn ) }
     return res

@@ -983,6 +983,7 @@ func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
 // be expensive to generate and is only useful in certain situations (as when
 // generating error messages or conditional debugging)
 type PathGetter interface { GetPath() objpath.PathNode }
+type PathAppender interface { AppendPath( objpath.PathNode ) objpath.PathNode }
 
 type idPath objpath.PathNode // elts are *Identifier
 
