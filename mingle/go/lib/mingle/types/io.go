@@ -36,10 +36,11 @@ func ( w *BinWriter ) writeLen( i int ) error {
     return w.w.WriteUint32( uint32( i ) )
 }
 
-func ( w *BinWriter ) writeOptType( typ mg.TypeReference ) ( err error ) {
-    if err = w.w.WriteBool( typ != nil ); err != nil { return }
-    if typ != nil {
-        if err = w.mgw.WriteTypeReference( typ ); err != nil { return }
+func ( w *BinWriter ) writeOptSuperType( d Descendant ) ( err error ) {
+    spr := d.GetSuperType()
+    if err = w.w.WriteBool( spr != nil ); err != nil { return }
+    if spr != nil {
+        if err = w.mgw.WriteQualifiedTypeName( spr ); err != nil { return }
     }
     return
 }
@@ -102,7 +103,7 @@ func ( w *BinWriter ) writeConstructor(
 
 func ( w *BinWriter ) writeStructDef( sd *StructDefinition ) ( err error ) {
     if err = w.startDef( tcStructDef, sd ); err != nil { return }
-    if err = w.writeOptType( sd.SuperType ); err != nil { return }
+    if err = w.writeOptSuperType( sd ); err != nil { return }
     if err = w.writeFields( sd.Fields ); err != nil { return }
     if err = w.writeLen( len( sd.Constructors ) ); err != nil { return }
     for _, cons := range sd.Constructors {
@@ -129,7 +130,7 @@ func ( w *BinWriter ) writeOperationDef(
 
 func ( w *BinWriter ) writeServiceDef( sd *ServiceDefinition ) ( err error ) {
     if err = w.startDef( tcServiceDef, sd ); err != nil { return }
-    if err = w.writeOptType( sd.SuperType ); err != nil { return }
+    if err = w.writeOptSuperType( sd ); err != nil { return }
     if err = w.writeLen( len( sd.Operations ) ); err != nil { return }
     for _, od := range sd.Operations {
         if err = w.writeOperationDef( od ); err != nil { return }
@@ -178,11 +179,12 @@ func ( r *BinReader ) readLen() ( int, error ) {
     return int( i ), nil
 }
 
-func ( r *BinReader ) readOptType() ( typ mg.TypeReference, err error ) {
+func ( r *BinReader ) readOptSuperType() ( typ *mg.QualifiedTypeName, 
+                                           err error ) {
     var ok bool
     if ok, err = r.mgr.ReadBool(); err != nil { return }
     if ok {
-        if typ, err = r.mgr.ReadTypeReference(); err != nil { return }
+        if typ, err = r.mgr.ReadQualifiedTypeName(); err != nil { return }
     }
     return
 }
@@ -254,7 +256,7 @@ func ( r *BinReader ) readConstructorDef() ( cd *ConstructorDefinition,
 func ( r *BinReader ) readStructDef() ( sd *StructDefinition, err error ) {
     sd = NewStructDefinition()
     if sd.Name, err = r.mgr.ReadQualifiedTypeName(); err != nil { return }
-    if sd.SuperType, err = r.readOptType(); err != nil { return }
+    if sd.SuperType, err = r.readOptSuperType(); err != nil { return }
     if err = r.readFields( sd.Fields ); err != nil { return }
     var sz int
     if sz, err = r.readLen(); err != nil { return }
@@ -289,7 +291,7 @@ func ( r *BinReader ) readOperationDef() (
 func ( r *BinReader ) readServiceDef() ( sd *ServiceDefinition, err error ) {
     sd = NewServiceDefinition()
     if sd.Name, err = r.mgr.ReadQualifiedTypeName(); err != nil { return }
-    if sd.SuperType, err = r.readOptType(); err != nil { return }
+    if sd.SuperType, err = r.readOptSuperType(); err != nil { return }
     var sz int
     if sz, err = r.readLen(); err != nil { return }
     for i := 0; i < sz; i++ {

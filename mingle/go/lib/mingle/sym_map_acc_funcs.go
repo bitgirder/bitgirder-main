@@ -613,7 +613,7 @@ func ( acc *SymbolMapAccessor ) GetListById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, typeOpaqueList, acc.descend( id ) )
+        val, err = CastValue( val, TypeOpaqueList, acc.descend( id ) )
         if err == nil { res = val.( *List ) }
     }
     return 

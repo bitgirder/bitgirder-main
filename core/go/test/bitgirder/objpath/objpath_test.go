@@ -181,3 +181,17 @@ func TestDescendAndStartList( t *testing.T ) {
     chk( StartList( nil ), "[ 0 ]" )
     chk( StartList( np1 ).Next(), "p1[ 1 ]" )
 }
+
+func TestParentOfUtilMethod( t *testing.T ) {
+    if p := ParentOf( nil ); p != nil { t.Fatalf( "ParentOf( nil ) is %v", p ) }
+    p1 := RootedAt( "p1" )
+    chk := func( p PathNode ) {
+        if par := ParentOf( p ); par != p1 {
+            t.Fatalf( "Parent of %v is not %v: %v", p, p1, par )
+        }
+    }
+    chk( p1.Descend( "p2" ) )
+    chk( p1.StartList() )
+    chk( p1.StartList().SetIndex( 3 ) )
+    chk( p1.StartList().Next() )
+}

@@ -37,65 +37,80 @@ type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
 
 type ReactorKey string
 
-type ReactorFactory interface { CreateReactor() Reactor }
+type PipelineInitializer interface { Init( rpi *ReactorPipelineInit ) }
 
-type reactorFuncFactory func() Reactor
-
-func ( rff reactorFuncFactory ) CreateReactor() Reactor { return rff() }
-
-func asReactorFactory( f func() Reactor ) ReactorFactory {
-    return reactorFuncFactory( f )
-}
-
-type Reactor interface {
-    Key() ReactorKey
-    Init( rpi *ReactorPipelineInit )
+type PipelineProcessor interface {
     ProcessEvent( ev ReactorEvent, rep ReactorEventProcessor ) error
 }
 
+type KeyedProcessor interface { Key() ReactorKey }
+
 type ReactorPipeline struct {
-    reactors []Reactor
+    elts []interface{}
 }
 
 type ReactorPipelineInit struct { 
     rp *ReactorPipeline 
-    reactors []Reactor
+    elts []interface{}
 }
 
-func findReactor( reactors []Reactor, key ReactorKey ) ( Reactor, bool ) {
-    for _, rct := range reactors { if rct.Key() == key { return rct, true } }
+func findReactor( 
+    elts []interface{}, key ReactorKey ) ( KeyedProcessor, bool ) {
+    for _, rct := range elts { 
+        if kr, ok := rct.( KeyedProcessor ); ok {
+            if kr.Key() == key { return kr, true }
+        }
+    }
     return nil, false
 }
 
-func ( rpi *ReactorPipelineInit ) EnsurePredecessor( 
-    key ReactorKey, rf ReactorFactory ) Reactor {
-    if rct, ok := findReactor( rpi.reactors, key ); ok { return rct }
-    rct := rf.CreateReactor()
-    rpi.reactors = append( rpi.reactors, rct )
-    return rct
+func ( rpi *ReactorPipelineInit ) FindByKey( 
+    k ReactorKey ) ( KeyedProcessor, bool ) {
+    return findReactor( rpi.elts, k )
 }
 
-func ( rpi *ReactorPipelineInit ) VisitPredecessors( f func( Reactor ) ) {
-    for _, rct := range rpi.reactors { f( rct ) }
+// public frontends enforce that elt is of a valid type for a pipeline
+// (AddEventProcessor(), etc)
+func ( rpi *ReactorPipelineInit ) implAdd( elt interface{} ) {
+    if ri, ok := elt.( PipelineInitializer ); ok { ri.Init( rpi ) }
+    rpi.elts = append( rpi.elts, elt )
+}
+
+func ( rpi *ReactorPipelineInit ) AddEventProcessor( 
+    rep ReactorEventProcessor ) {
+    rpi.implAdd( rep )
+}
+
+func ( rpi *ReactorPipelineInit ) AddPipelineProcessor( pp PipelineProcessor ) {
+    rpi.implAdd( pp )
+}
+
+func ( rpi *ReactorPipelineInit ) VisitPredecessors( f func( interface{} ) ) {
+    for _, rct := range rpi.elts { f( rct ) }
 }
 
 // Might make this Init() if needed later
 func ( rp *ReactorPipeline ) init() {
     rpInit := &ReactorPipelineInit{ 
-        rp: rp, 
-        reactors: make( []Reactor, 0, len( rp.reactors ) ),
-    }
-    for _, rct := range rp.reactors { 
-        rct.Init( rpInit )
-        rpInit.reactors = append( rpInit.reactors, rct )
-    }
-    rp.reactors = rpInit.reactors
+        rp: rp,
+        elts: make( []interface{}, 0, len( rp.elts ) ),
+    } 
+    for _, elt := range rp.elts { rpInit.implAdd( elt ) }
+    rp.elts = rpInit.elts
+}
+
+func LastPathGetter( rpi *ReactorPipelineInit ) PathGetter {
+    var res PathGetter
+    rpi.VisitPredecessors( func( rct interface{} ) {
+        if pg, ok := rct.( PathGetter ); ok { res = pg }
+    })
+    return res
 }
 
 // Could break this into separate methods later if needed: NewReactorPipeline()
 // and ReactorPipeline.Init()
-func InitReactorPipeline( reactors ...Reactor ) *ReactorPipeline {
-    res := &ReactorPipeline{ reactors: reactors }
+func InitReactorPipeline( elts ...interface{} ) *ReactorPipeline {
+    res := &ReactorPipeline{ elts: elts }
     res.init()
     return res
 }
@@ -106,22 +121,29 @@ type pipelineCall struct {
 }
 
 func ( pc pipelineCall ) ProcessEvent( re ReactorEvent ) error {
-    if pc.idx == len( pc.rp.reactors ) { return nil }
-    rct := pc.rp.reactors[ pc.idx ]
+    if pc.idx == len( pc.rp.elts ) { return nil }
     nextPc := pipelineCall{ pc.rp, pc.idx + 1 }
-    return rct.ProcessEvent( re, nextPc )
+    elt := pc.rp.elts[ pc.idx ]
+    switch v := elt.( type ) {
+    case PipelineProcessor: return v.ProcessEvent( re, nextPc )
+    case ReactorEventProcessor:
+        if err := v.ProcessEvent( re ); err != nil { return err }
+        return nextPc.ProcessEvent( re )
+    }
+    panic( libErrorf( "Unhandled pipeline element: %T", elt ) )
 }
 
 func ( rp *ReactorPipeline ) ProcessEvent( re ReactorEvent ) error {
     return ( pipelineCall{ rp, 0 } ).ProcessEvent( re )
 }
 
-func ( rp *ReactorPipeline ) ReactorForKey( k ReactorKey ) ( Reactor, bool ) {
-    return findReactor( rp.reactors, k )
+func ( rp *ReactorPipeline ) FindByKey( 
+    k ReactorKey ) ( KeyedProcessor, bool ) {
+    return findReactor( rp.elts, k )
 }
 
-func ( rp *ReactorPipeline ) MustReactorForKey( k ReactorKey ) Reactor {
-    if rct, ok := rp.ReactorForKey( k ); ok { return rct }
+func ( rp *ReactorPipeline ) MustFindByKey( k ReactorKey ) KeyedProcessor {
+    if rct, ok := rp.FindByKey( k ); ok { return rct }
     panic( libErrorf( "No reactor for key %q", k ) )
 }
 
@@ -238,13 +260,7 @@ func NewStructuralReactor( topTyp ReactorTopType ) *StructuralReactor {
     }
 }
 
-func ( sr *StructuralReactor ) Init( rpi *ReactorPipelineInit ) {}
-
 const ReactorKeyStructuralReactor = ReactorKey( "mingle.StructuralReactor" )
-
-var StructuralReactorFactory = asReactorFactory(
-    func() Reactor { return NewStructuralReactor( ReactorTopTypeValue ) },
-)
 
 func ( sr *StructuralReactor ) Key() ReactorKey { 
     return ReactorKeyStructuralReactor
@@ -419,6 +435,18 @@ func ( sr *StructuralReactor ) ProcessEvent(
     return nil
 }
 
+func EnsureStructuralReactor( rpi *ReactorPipelineInit ) *StructuralReactor {
+    k := ReactorKeyStructuralReactor
+    if elt, ok := rpi.FindByKey( k ); ok {
+        if sr, ok := elt.( *StructuralReactor ); ok { return sr }
+        tmpl := "Element keyed at %s is not a *StructuralReactor: %T"
+        panic( libErrorf( tmpl, k, elt ) )
+    }
+    sr := NewStructuralReactor( ReactorTopTypeValue )
+    rpi.AddPipelineProcessor( sr )
+    return sr
+}
+
 type accImpl interface {
     valueReady( val Value ) 
     end() ( Value, error )
@@ -553,22 +581,15 @@ type ValueBuilder struct {
     acc *valueAccumulator
 }
 
-const ReactorKeyValueBuilder = ReactorKey( "mingle.ValueBuilder" )
-
 func NewValueBuilder() *ValueBuilder {
     return &ValueBuilder{ acc: newValueAccumulator() }
 }
 
-func ( vb *ValueBuilder ) Init( rpi *ReactorPipelineInit ) {}
-
-func ( vb *ValueBuilder ) Key() ReactorKey { return ReactorKeyValueBuilder }
-
 func ( vb *ValueBuilder ) GetValue() Value { return vb.acc.getValue() }
 
-func ( vb *ValueBuilder ) ProcessEvent( 
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
+func ( vb *ValueBuilder ) ProcessEvent( ev ReactorEvent ) error {
     if err := vb.acc.ProcessEvent( ev ); err != nil { return err }
-    return rep.ProcessEvent( ev )
+    return nil
 }
 
 type castContext struct {
@@ -593,8 +614,15 @@ type listCast struct {
 }
 
 type CastInterface interface {
+
     InferStructFor( qn *QualifiedTypeName ) bool
+
     FieldTyperFor( qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error )
+
+    CastAtomic( 
+        in Value, 
+        at *AtomicTypeReference, 
+        pg PathGetter ) ( Value, error, bool )
 }
 
 type castInterfaceDefault struct {}
@@ -613,6 +641,11 @@ func ( i castInterfaceDefault ) FieldTyperFor(
 
 func ( i castInterfaceDefault ) InferStructFor( at *QualifiedTypeName ) bool {
     return false
+}
+
+func ( i castInterfaceDefault ) CastAtomic( 
+    v Value, at *AtomicTypeReference, pg PathGetter ) ( Value, error, bool ) {
+    return nil, nil, false
 }
 
 type CastReactor struct {
@@ -636,16 +669,9 @@ func NewDefaultCastReactor(
     return NewCastReactor( expct, castInterfaceDefault{}, path )
 }
 
-const ReactorKeyCastReactor = ReactorKey( "mingle.CastReactor" )
-
 func ( cr *CastReactor ) Init( rpi *ReactorPipelineInit ) {
-    cr.sr = rpi.EnsurePredecessor( 
-        ReactorKeyStructuralReactor, 
-        StructuralReactorFactory,
-    ).( *StructuralReactor )
+    cr.sr = EnsureStructuralReactor( rpi )
 }
-
-func ( cr *CastReactor ) Key() ReactorKey { return ReactorKeyCastReactor }
 
 func ( cr *CastReactor ) checkStackNonEmpty() {
     if cr.stack.Len() == 0 { panic( libErrorf( "Empty cast reactor stack" ) ) }
@@ -668,9 +694,15 @@ func ( cr *CastReactor ) GetPath() objpath.PathNode {
     return cr.sr.AppendPath( cr.path ) 
 }
 
+func ( cr *CastReactor ) expectedType() TypeReference {
+    cc := cr.peek()
+    if mc, ok := cc.elt.( *mapCast ); ok { return mc.fldType }
+    return cc.expct
+}
+
 func ( cr *CastReactor ) newTypeCastErrorPath( 
     act TypeReference, p idPath ) *TypeCastError {
-    return newTypeCastError( cr.peek().expct, act, p )
+    return NewTypeCastError( cr.expectedType(), act, p )
 }
 
 func ( cr *CastReactor ) newTypeCastError( act TypeReference ) *TypeCastError {
@@ -686,11 +718,20 @@ func ( cr *CastReactor ) stackTypePanic( desc string ) error {
     return cr.castContextPanic( cr.peek(), desc )
 }
 
+func ( cr *CastReactor ) castAtomic(
+    v Value, at *AtomicTypeReference ) ( Value, error ) {
+    if val, err, done := cr.iface.CastAtomic( v, at, cr ); done {
+        return val, err
+    }
+    return castAtomic( v, at, cr.GetPath() )
+}
+
 func ( cr *CastReactor ) completeValue( 
     ve ValueEvent, t TypeReference, rep ReactorEventProcessor ) error {
     switch typVal := t.( type ) {
     case *AtomicTypeReference: 
-        v2, err := castAtomic( ve.Val, typVal, cr.GetPath() )
+//        v2, err := castAtomic( ve.Val, typVal, cr.GetPath() )
+        v2, err := cr.castAtomic( ve.Val, typVal )
         if err == nil { return rep.ProcessEvent( ValueEvent{ v2 } ) }
         return err
     case *NullableTypeReference: 
@@ -704,8 +745,7 @@ func ( cr *CastReactor ) completeValue(
 func ( cr *CastReactor ) value(
     ve ValueEvent, rep ReactorEventProcessor ) error {
     switch elt := cr.peek().elt.( type ) {
-    case *AtomicTypeReference, *NullableTypeReference, *ListTypeReference:
-        return cr.completeValue( ve, elt.( TypeReference ), rep )
+    case TypeReference: return cr.completeValue( ve, elt, rep )
     case *listCast: 
         elt.sawVals = true
         return cr.completeValue( ve, elt.lt.ElementType, rep )
@@ -724,9 +764,9 @@ func ( cr *CastReactor ) completeStartList(
     case *NullableTypeReference: return cr.completeStartList( t.Type, le, rep )
     case *AtomicTypeReference:
         if t.Equals( TypeValue ) { 
-            return cr.completeStartList( typeOpaqueList, le, rep )
+            return cr.completeStartList( TypeOpaqueList, le, rep )
         }
-        return cr.newTypeCastErrorPath( typeOpaqueList, cr.GetPath() )
+        return cr.newTypeCastErrorPath( TypeOpaqueList, cr.GetPath() )
     }
     panic( libErrorf( "Uhandled type: %T", typ ) )
 }
@@ -734,8 +774,7 @@ func ( cr *CastReactor ) completeStartList(
 func ( cr *CastReactor ) startList( 
     le ListStartEvent, rep ReactorEventProcessor ) error {
     switch elt := cr.peek().elt.( type ) {
-    case *ListTypeReference, *AtomicTypeReference, *NullableTypeReference: 
-        return cr.completeStartList( elt.( TypeReference ), le, rep )
+    case TypeReference: return cr.completeStartList( elt, le, rep )
     case *listCast: return cr.completeStartList( elt.lt.ElementType, le, rep )
     case *mapCast: return cr.completeStartList( elt.fldType, le, rep )
     }
@@ -787,8 +826,7 @@ func ( cr *CastReactor ) completeStartStruct(
     var ev ReactorEvent
     at := &AtomicTypeReference{ Name: ss.Type }
     switch {
-    case t.Equals( at ) || t.Equals( TypeValue ):
-        expctTyp, ev = at, ss
+    case t.Equals( at ) || t.Equals( TypeValue ): expctTyp, ev = at, ss
     case t.Equals( TypeSymbolMap ): expctTyp, ev = TypeSymbolMap, EvMapStart
     default: return cr.newTypeCastError( at )
     }
@@ -890,17 +928,8 @@ func NewFieldOrderReactor( fog FieldOrderGetter ) *FieldOrderReactor {
 }
 
 func ( fo *FieldOrderReactor ) Init( rpi *ReactorPipelineInit ) {
-    rpi.EnsurePredecessor(
-        ReactorKeyStructuralReactor, StructuralReactorFactory )
-    rpi.VisitPredecessors( func ( rct Reactor ) {
-        if pg, ok := rct.( PathGetter ); ok { fo.pg = pg }
-    })
-}
-
-const ReactorKeyFieldOrderReactor = ReactorKey( "mingle.FieldOrderReactor" )
-
-func ( fo *FieldOrderReactor ) Key() ReactorKey {
-    return ReactorKeyFieldOrderReactor
+    EnsureStructuralReactor( rpi )
+    fo.pg = LastPathGetter( rpi )
 }
 
 type fieldOrder struct {
@@ -1138,4 +1167,30 @@ func ( fo *FieldOrderReactor ) GetPath() objpath.PathNode {
         if ord.feedStack != nil { return ord.appendFeedPath( res ) }
     }
     return res
+}
+
+type DebugLogger interface { Logf( tmpl string, args ...interface{} ) }
+
+type debugReactor struct { 
+    l DebugLogger 
+    key ReactorKey
+    pg PathGetter
+}
+
+func ( dr *debugReactor ) Init( rpi *ReactorPipelineInit ) {
+    EnsureStructuralReactor( rpi )
+    dr.pg = LastPathGetter( rpi )
+}
+
+func ( dr *debugReactor ) ProcessEvent( ev ReactorEvent ) error {
+    var path string
+    if dr.pg == nil { 
+        path = "< path unknown >" 
+    } else { path = FormatIdPath( dr.pg.GetPath() ) }
+    dr.l.Logf( "%s: %v (%T)", path, ev, ev )
+    return nil
+}
+
+func NewDebugReactor( l DebugLogger ) ReactorEventProcessor { 
+    return &debugReactor{ l: l }
 }

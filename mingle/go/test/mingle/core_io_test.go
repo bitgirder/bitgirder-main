@@ -16,7 +16,6 @@ func TestCoreIo( t *testing.T ) {
     p4 := p3.Descend( id( "id3" ) )
     p5 := objpath.RootedAtList().Descend( id( "id1" ) )
     for _, obj := range []interface{} {
-        nil,
         NullVal,
         String( "hello" ),
         Boolean( true ),
@@ -72,9 +71,7 @@ func TestCoreIo( t *testing.T ) {
         wr := NewWriter( bb )
         var err error
         switch v := obj.( type ) {
-        case nil, *Null, Buffer, String, Int32, Int64, Uint32, Uint64, Float32,
-             Float64, Boolean, Timestamp, *Enum, *SymbolMap, *Struct, *List:
-            err = wr.WriteValue( Value( obj ) )
+        case Value: err = wr.WriteValue( v )
         case *Identifier: err = wr.WriteIdentifier( v )
         case objpath.PathNode: err = wr.WriteIdPath( v )
         case *Namespace: err = wr.WriteNamespace( v )
@@ -86,8 +83,7 @@ func TestCoreIo( t *testing.T ) {
         trailExpct := "this-should-be-left-after-read"
         bb.WriteString( trailExpct )
         switch v := obj.( type ) {
-        case nil, *Null, Boolean, Buffer, String, Int32, Int64, Uint32, Uint64,
-             Float32, Float64, Timestamp, *Enum, *SymbolMap, *Struct, *List:
+        case Value:
             if val, err := rd.ReadValue(); err == nil {
                 obj2 := obj
                 if obj == nil { obj2 = NullVal }

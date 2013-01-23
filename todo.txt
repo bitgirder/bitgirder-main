@@ -23,6 +23,8 @@ Go:
     - remove mingle:core@v1/(Enum|Struct|List) as types (can readd if needed);
       make mingle:core@v1/SymbolMap a primitive type
 
+    - add version to serialized type def map
+
 Java:
     
     - add and test utils like Lang.compareUint(32|64) and
@@ -30,3 +32,7 @@ Java:
 
     - remove com.bitgirder.parser and com.bitgirder.io.Rfc4627Recognizer (after
       refactory com.bitgirder.json)
+
+All:
+    
+    - make error messages start with lc

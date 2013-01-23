@@ -4,7 +4,66 @@ import (
     "testing"
     "bitgirder/assert"
     "container/list"
+    "fmt"
 )
+
+type noOpProcessor struct {
+    initCalled bool
+}
+
+func ( p *noOpProcessor ) ProcessEvent( ev ReactorEvent ) error { return nil }
+
+func ( p *noOpProcessor ) Init( rpi *ReactorPipelineInit ) {
+    p.initCalled = true
+}
+
+type keyedNoOpProcessor struct {
+    *noOpProcessor
+    k ReactorKey
+}
+
+func ( kp *keyedNoOpProcessor ) Key() ReactorKey { return kp.k }
+
+type initProcessor struct {
+    find ReactorKey
+    add interface{} 
+    elt interface{}
+}
+
+func ( ip *initProcessor ) ProcessEvent( 
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    return rep.ProcessEvent( ev )
+}
+
+func ( ip *initProcessor ) Init( rpi *ReactorPipelineInit ) {
+    switch v := ip.add.( type ) {
+    case ReactorEventProcessor: rpi.AddEventProcessor( v )
+    case PipelineProcessor: rpi.AddPipelineProcessor( v )
+    default: panic( libErrorf( "Bad add: %T", ip.add ) )
+    }
+    if elt, ok := rpi.FindByKey( ip.find ); ok { ip.elt = elt }
+}
+
+func TestReactorPipelineImpl( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    p1 := &noOpProcessor{}
+    p2 := &keyedNoOpProcessor{ 
+        noOpProcessor: &noOpProcessor{}, 
+        k: ReactorKey( "p2" ),
+    }
+    p3 := &noOpProcessor{}
+    p4 := &initProcessor{ find: ReactorKey( "p2" ), add: p3 }
+    p5 := &initProcessor{ find: ReactorKey( "p2" ), add: p4 }
+    pip := InitReactorPipeline( p1, p2, p5 )
+    a.Descend( "p1" ).True( p1.initCalled )
+    a.Descend( "p2" ).True( p2.initCalled )
+    a.Equal( p2, pip.MustFindByKey( ReactorKey( "p2" ) ) )
+    a.Equal( p3, pip.elts[ 2 ] )
+    a.Descend( "p3" ).True( p3.initCalled )
+    a.Equal( p4, pip.elts[ 3 ] )
+    a.Equal( p2, p4.elt )
+    a.Equal( p2, p5.elt )
+}
 
 type reactorTestCall struct {
     *assert.PathAsserter
@@ -28,72 +87,18 @@ func ( c *reactorTestCall ) callStructuralError(
     } else { c.Equal( ss.Error, err ) }
 }
 
-type eventExpectCheck struct {
-    idx int
-    expect []EventExpectation
-    *assert.PathAsserter
-    pg PathGetter
-}
-
-func ( foc *eventExpectCheck ) Key() ReactorKey {
-    return ReactorKey( "mingle.eventExpectCheck" )
-}
-
-func ( foc *eventExpectCheck ) Init( rpi *ReactorPipelineInit ) {
-    rpi.VisitPredecessors( func( rct Reactor ) {
-        if pg, ok := rct.( PathGetter ); ok { foc.pg = pg }
-    })
-    foc.Falsef( foc.pg == nil, "No path getter predecessor found" )
-}
-
-func ( foc *eventExpectCheck ) ProcessEvent(
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
-    defer func() { foc.idx++ }()
-    expct := foc.expect[ foc.idx ]
-    foc.Equal( ev, expct.Event )
-    foc.Equal( FormatIdPath( expct.Path ), FormatIdPath( foc.pg.GetPath() ) )
-    return nil
-}
-
-type reactorEventSource interface {
-    Len() int
-    EventAt( int ) ReactorEvent
-}
-
-type eventSliceSource []ReactorEvent
-func ( src eventSliceSource ) Len() int { return len( src ) }
-func ( src eventSliceSource ) EventAt( i int ) ReactorEvent { return src[ i ] }
-
-type eventExpectSource []EventExpectation
-
-func ( src eventExpectSource ) Len() int { return len( src ) }
-
-func ( src eventExpectSource ) EventAt( i int ) ReactorEvent {
-    return src[ i ].Event
-}
-
 func ( c *reactorTestCall ) assertEventExpectations( 
     src reactorEventSource, 
     expct []EventExpectation,
-    rcts []Reactor ) *ReactorPipeline {
-    rcts2 := []Reactor{ NewStructuralReactor( ReactorTopTypeValue ) }
-    rcts2 = append( rcts2, rcts... )
-    chk := &eventExpectCheck{ expect: expct, PathAsserter: c.PathAsserter }
-    rcts2 = append( rcts2, chk )
-    pip := InitReactorPipeline( rcts2... )
-    for i, e := 0, src.Len(); i < e; i++ {
-        ev := src.EventAt( i )
-        if err := pip.ProcessEvent( ev ); err != nil { c.Fatal( err ) }
-    }
-    c.Equal( len( expct ), chk.idx )
-    return pip
+    rcts []interface{} ) *ReactorPipeline {
+    return assertEventExpectations( src, expct, rcts, c.PathAsserter )
 }
 
-func ( c *reactorTestCall ) callStructuralPath(
-    pt *StructuralReactorPathTest ) {
+func ( c *reactorTestCall ) callEventPath(
+    pt *EventPathTest ) {
     src := eventExpectSource( pt.Events )
-    pip := c.assertEventExpectations( src, pt.Events, []Reactor{} )
-    sr := pip.MustReactorForKey( ReactorKeyStructuralReactor ).
+    pip := c.assertEventExpectations( src, pt.Events, []interface{}{} )
+    sr := pip.MustFindByKey( ReactorKeyStructuralReactor ).
               ( *StructuralReactor )
     var act idPath
     if pt.StartPath == nil { 
@@ -217,51 +222,14 @@ func ( c *reactorTestCall ) callFieldOrderPath( fo *FieldOrderPathTest ) {
     c.assertEventExpectations(
         eventSliceSource( fo.Source ),
         fo.Expect,
-        []Reactor{ NewFieldOrderReactor( fogImpl( fo.Order ) ) },
+        []interface{}{ NewFieldOrderReactor( fogImpl( fo.Order ) ) },
     )
 }
 
-type castErrorAssert struct {
-    ct *CastReactorTest
-    err error
-    *assert.PathAsserter
+type castInterfaceImpl struct { 
+    typers *QnameMap
+    c *reactorTestCall
 }
-
-// Returns a path asserter that can be used further
-func ( cea castErrorAssert ) assertValueError( 
-    expct, act ValueError ) *assert.PathAsserter {
-    a := cea.Descend( "Err" )
-    a.Descend( "Error()" ).Equal( expct.Error(), act.Error() )
-    a.Descend( "Message()" ).Equal( expct.Message(), act.Message() )
-    a.Descend( "Location()" ).Equal( expct.Location(), act.Location() )
-    return a
-}
-
-func ( cea castErrorAssert ) assertTcError() {
-    if act, ok := cea.err.( *TypeCastError ); ok {
-        expct := cea.ct.Err.( *TypeCastError )
-        a := cea.assertValueError( expct, act )
-        a.Descend( "expcted" ).Equal( expct.Expected, act.Expected )
-        a.Descend( "actual" ).Equal( expct.Actual, act.Actual )
-    } else { cea.Fatal( cea.err ) }
-}
-
-func ( cea castErrorAssert ) assertVcError() {
-    if act, ok := cea.err.( *ValueCastError ); ok {
-        cea.assertValueError( cea.ct.Err.( *ValueCastError ), act )
-    } else { cea.Fatal( cea.err ) }
-}
-
-func ( cea castErrorAssert ) call() {
-    switch cea.ct.Err.( type ) {
-    case nil: cea.Fatal( cea.err )
-    case *TypeCastError: cea.assertTcError()
-    case *ValueCastError: cea.assertVcError()
-    default: cea.Fatalf( "Unhandled Err type: %T", cea.ct.Err )
-    }
-}
-
-type castInterfaceImpl struct { typers *QnameMap }
 
 type castInterfaceTyper struct { *IdentifierMap }
 
@@ -269,11 +237,11 @@ func ( t castInterfaceTyper ) FieldTypeOf(
     fld *Identifier, pg PathGetter ) ( TypeReference, error ) {
     if t.HasKey( fld ) { return t.Get( fld ).( TypeReference ), nil }
     errPath := pg.GetPath().Parent()
-    return nil, newValueCastErrorf( errPath, "unrecognized field: %s", fld )
+    return nil, NewValueCastErrorf( errPath, "unrecognized field: %s", fld )
 }
 
-func newCastInterfaceImpl() *castInterfaceImpl {
-    res := &castInterfaceImpl{ typers: NewQnameMap() }
+func newCastInterfaceImpl( c *reactorTestCall ) *castInterfaceImpl {
+    res := &castInterfaceImpl{ typers: NewQnameMap(), c: c }
     m1 := castInterfaceTyper{ NewIdentifierMap() }
     m1.Put( MustIdentifier( "f1" ), TypeInt32 )
     qn := MustQualifiedTypeName
@@ -289,7 +257,7 @@ func ( ci *castInterfaceImpl ) FieldTyperFor(
     qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error ) {
     if ci.typers.HasKey( qn ) { return ci.typers.Get( qn ).( FieldTyper ), nil }
     if qn.ExternalForm() == "ns1@v1/FailType" {
-        return nil, newValueCastErrorf( pg.GetPath(), "test-message-fail-type" )
+        return nil, NewValueCastErrorf( pg.GetPath(), "test-message-fail-type" )
     }
     return nil, nil
 }
@@ -298,29 +266,61 @@ func ( ci *castInterfaceImpl ) InferStructFor( qn *QualifiedTypeName ) bool {
     return ci.typers.HasKey( qn )
 }
 
+func ( ci *castInterfaceImpl ) CastAtomic(
+    v Value,
+    at *AtomicTypeReference,
+    pg PathGetter ) ( Value, error, bool ) {
+    if _, ok := v.( *Null ); ok {
+        return nil, fmt.Errorf( "Unexpected null val in cast impl" ), true
+    }
+    if ! at.Equals( MustTypeReference( "ns1@v1/S3" ) ) {
+        return nil, nil, false
+    }
+    if s, ok := v.( String ); ok {
+        switch s {
+        case "cast1": return Int32( 1 ), nil, true
+        case "cast2": return Int32( -1 ), nil, true
+        case "cast3":
+            p := pg.GetPath()
+            return nil, NewValueCastErrorf( p, "test-message-cast3" ), true
+        }
+        p := pg.GetPath()
+        return nil, NewValueCastErrorf( p, "Unexpected val: %s", s ), true
+    }
+    return nil, NewTypeCastErrorValue( at, v, pg.GetPath() ), true
+}
+
 func ( c *reactorTestCall ) createCastReactor( 
     ct *CastReactorTest ) *CastReactor {
     switch ct.Profile {
     case "": return NewDefaultCastReactor( ct.Type, ct.Path )
     case "interface-impl": 
-        return NewCastReactor( ct.Type, newCastInterfaceImpl(), ct.Path )
+        return NewCastReactor( ct.Type, newCastInterfaceImpl( c ), ct.Path )
     }
     panic( libErrorf( "Unhandled profile: %s", ct.Profile ) )
 }
 
 func ( c *reactorTestCall ) callCast( ct *CastReactorTest ) {
     rct := NewValueBuilder()
-    pip := InitReactorPipeline( c.createCastReactor( ct ), rct )
+    pip := InitReactorPipeline( 
+//        NewDebugReactor( c ),
+        c.createCastReactor( ct ), 
+        rct,
+    )
+//    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
     if err := VisitValue( ct.In, pip ); err == nil { 
+        if errExpct := ct.Err; errExpct != nil {
+            c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
+        }
         c.Equal( ct.Expect, rct.GetValue() )
-    } else { ( castErrorAssert{ ct, err, c.PathAsserter } ).call() }
+    } else { AssertCastError( ct.Err, err, c.PathAsserter ) }
 }
 
 func ( c *reactorTestCall ) call() {
 //    c.Logf( "Calling reactor test of type %T", c.rt )
     switch s := c.rt.( type ) {
     case *StructuralReactorErrorTest: c.callStructuralError( s )
-    case *StructuralReactorPathTest: c.callStructuralPath( s )
+    case *EventPathTest: c.callEventPath( s )
     case ValueBuildTest: c.callValueBuild( s )
     case *FieldOrderReactorTest: c.callFieldOrderReactor( s )
     case *FieldOrderPathTest: c.callFieldOrderPath( s )

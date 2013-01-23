@@ -5,10 +5,11 @@ import (
     "strconv"
     "encoding/base64"
     "fmt"
+    "bitgirder/objpath"
 )
 
 type TypeCastError struct {
-    valueErrorImpl
+    ve ValueErrorImpl
     Expected TypeReference
     Actual TypeReference
 }
@@ -19,30 +20,41 @@ func ( e *TypeCastError ) Message() string {
 }
 
 func ( e *TypeCastError ) Error() string {
-    return e.makeError( e.Message() )
+    return e.ve.MakeError( e.Message() )
 }
 
-func newTypeCastError( expct, act TypeReference, path idPath ) *TypeCastError {
-    res := &TypeCastError{ Expected: expct, Actual: act }
-    res.path = path
+func ( e *TypeCastError ) Location() objpath.PathNode { return e.ve.Location() }
+
+func NewTypeCastError( 
+    expct, act TypeReference, path objpath.PathNode ) *TypeCastError {
+    res := &TypeCastError{ Expected: expct, Actual: act, ve: ValueErrorImpl{} }
+    res.ve.Path = path
     return res
 }
 
-func asTypeCastError( t TypeReference, val Value, path idPath ) *TypeCastError {
-    return newTypeCastError( t, TypeOf( val ), path )
+func NewTypeCastErrorValue( 
+    t TypeReference, val Value, path objpath.PathNode ) *TypeCastError {
+    return NewTypeCastError( t, TypeOf( val ), path )
 }
 
 type ValueCastError struct {
-    valueErrorImpl
+    ve ValueErrorImpl
     msg string
 }
 
 func ( e *ValueCastError ) Message() string { return e.msg }
-func ( e *ValueCastError ) Error() string { return e.makeError( e.msg ) }
+
+func ( e *ValueCastError ) Error() string { 
+    return e.ve.MakeError( e.Message() ) 
+}
+
+func ( e *ValueCastError ) Location() objpath.PathNode { 
+    return e.ve.Location() 
+}
 
 func NewValueCastError( path idPath, msg string ) *ValueCastError {
-    res := &ValueCastError{ msg: msg }
-    res.path = path
+    res := &ValueCastError{ msg: msg, ve: ValueErrorImpl{} }
+    res.ve.Path = path
     return res
 }
 
@@ -68,7 +80,7 @@ func castBoolean(
     case Boolean: return v, nil
     case String: return strToBool( v, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castBuffer( 
@@ -81,7 +93,7 @@ func castBuffer(
         msg := "Invalid base64 string: %s"
         return nil, NewValueCastErrorf( path, msg, err.Error() )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castString( 
@@ -95,7 +107,7 @@ func castString(
         return String( base64.StdEncoding.EncodeToString( []byte( v ) ) ), nil
     case *Enum: return String( v.Value.ExternalForm() ), nil
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func valueCastErrorForNumError(
@@ -158,7 +170,7 @@ func castInt32(
     case Float64: return Int32( int32( v ) ), nil
     case String: return parseInt( v, 32, TypeInt32, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castInt64( 
@@ -172,7 +184,7 @@ func castInt64(
     case Float64: return Int64( int64( v ) ), nil
     case String: return parseInt( v, 64, TypeInt64, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castUint32(
@@ -186,7 +198,7 @@ func castUint32(
     case Float64: return Uint32( uint32( v ) ), nil
     case String: return parseInt( v, 32, TypeUint32, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castUint64(
@@ -200,7 +212,7 @@ func castUint64(
     case Float64: return Uint64( uint64( v ) ), nil
     case String: return parseInt( v, 64, TypeUint64, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func parseFloat32(
@@ -232,7 +244,7 @@ func castFloat32(
     case Float64: return Float32( float32( v ) ), nil
     case String: return parseFloat32( string( v ), 32, TypeFloat32, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castFloat64( 
@@ -246,7 +258,7 @@ func castFloat64(
     case Float64: return v, nil
     case String: return parseFloat32( string( v ), 64, TypeFloat64, at, path )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castTimestamp( 
@@ -259,7 +271,7 @@ func castTimestamp(
         msg := "Invalid timestamp: %s"
         return nil, NewValueCastErrorf( path, msg, err.Error() )
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castEnum( 
@@ -267,7 +279,7 @@ func castEnum(
     switch v := mgVal.( type ) {
     case *Enum: if v.Type.Equals( at.Name ) { return v, nil }
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castSymbolMap( 
@@ -275,13 +287,13 @@ func castSymbolMap(
     switch v := mgVal.( type ) {
     case *SymbolMap: return v, nil
     }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func castNull( 
     mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
     if _, ok := mgVal.( *Null ); ok { return mgVal, nil }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 // switch compares based on qname not at itself since we may be dealing with
@@ -309,7 +321,7 @@ func castAtomicUnrestricted(
     case nm.Equals( QnameValue ): return mgVal, nil
     }
     if _, ok := mgVal.( *Enum ); ok { return castEnum( mgVal, at, path ) }
-    return nil, asTypeCastError( at, mgVal, path )
+    return nil, NewTypeCastErrorValue( at, mgVal, path )
 }
 
 func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {

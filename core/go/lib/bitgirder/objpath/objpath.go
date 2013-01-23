@@ -161,3 +161,8 @@ func StartList( p PathNode ) *ListNode {
     if p == nil { return RootedAtList() }
     return p.StartList()
 }
+
+func ParentOf( p PathNode ) PathNode {
+    if p == nil { return nil }
+    return p.Parent()
+}

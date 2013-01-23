@@ -2,6 +2,7 @@ package mingle
 
 import (
     "bitgirder/objpath"
+    "bitgirder/assert"
     "fmt"
     "encoding/base64"
 )
@@ -47,7 +48,7 @@ type EventExpectation struct {
     Path objpath.PathNode
 }
 
-type StructuralReactorPathTest struct {
+type EventPathTest struct {
     Events []EventExpectation
     StartPath objpath.PathNode
     FinalPath objpath.PathNode
@@ -76,8 +77,8 @@ func initStructuralReactorTests() {
         return res
     }
     mk3 := func( finalPath idPath, 
-                 evs ...EventExpectation ) *StructuralReactorPathTest {
-        return &StructuralReactorPathTest{ Events: evs, FinalPath: finalPath }
+                 evs ...EventExpectation ) *EventPathTest {
+        return &EventPathTest{ Events: evs, FinalPath: finalPath }
     }
     idPath1 := objpath.RootedAt( idF1 )
     lpRoot := func() *objpath.ListNode { return objpath.RootedAtList() }
@@ -195,7 +196,7 @@ func initStructuralReactorTests() {
                         StartList().SetIndex( 1 ).Descend( idF1 ),
              },
         ),
-        &StructuralReactorPathTest{
+        &EventPathTest{
             Events: []EventExpectation{ 
                 { EvMapStart, nil },
                 { evStartField1, idPath1 },
@@ -496,7 +497,7 @@ func ( t *crtInit ) createTcError0(
     in interface{}, 
     typExpct, typAct, callTyp TypeReferenceInitializer, 
     p idPath ) *CastReactorTest {
-    err := newTypeCastError( 
+    err := NewTypeCastError( 
         asTypeReference( typExpct ),
         asTypeReference( typAct ),
         p,
@@ -537,7 +538,7 @@ func ( t *crtInit ) addMiscTcErrors() {
         &CastReactorTest{
             In: MustList( 1, t.struct1 ),
             Type: asTypeReference( "Int32*" ),
-            Err: newTypeCastError(
+            Err: NewTypeCastError(
                 asTypeReference( "Int32" ),
                 &AtomicTypeReference{ Name: t.struct1.Type },
                 crtPathDefault.StartList().Next(),
@@ -547,7 +548,8 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( t.struct1, "Int32?", t.struct1.Type )
     t.addTcError( 12, t.struct1.Type, "Int64" )
     for _, prim := range PrimitiveTypes {
-        if prim != TypeValue { // Value would actually be valid cast
+        // not an err for prims Value and SymbolMap
+        if ! ( prim == TypeValue || prim == TypeSymbolMap ) { 
             t.addTcError( t.struct1, prim, t.struct1.Type )
         }
     }
@@ -569,6 +571,13 @@ func ( t *crtInit ) createVcError0(
 func ( t *crtInit ) addVcError0( 
     val interface{}, typ TypeReferenceInitializer, path idPath, msg string ) {
     t.addCrtDefault( t.createVcError0( val, typ, path, msg ) )
+}
+
+func ( t *crtInit ) createVcError(
+    val interface{}, 
+    typ TypeReferenceInitializer, 
+    msg string ) *CastReactorTest {
+    return t.createVcError0( val, typ, crtPathDefault, msg )
 }
 
 func ( t *crtInit ) addVcError( 
@@ -760,7 +769,7 @@ func ( t *crtInit ) addListTests() {
     t.addSucc( MustList(), MustList(), TypeValue )
     intList1 := MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
     t.addSucc( intList1, intList1, TypeValue )
-    t.addSucc( intList1, intList1, typeOpaqueList )
+    t.addSucc( intList1, intList1, TypeOpaqueList )
     t.addSucc( intList1, intList1, "Int32*?" )
 }
 
@@ -834,26 +843,69 @@ func ( t *crtInit ) addInterfaceImplTests() {
     addSucc := func( in, expct interface{}, typ TypeReferenceInitializer ) {
         add( t.createSucc( in, expct, typ ) )
     }
-    addTcErr := func( in interface{}, expct, act TypeReferenceInitializer ) {
-        add( t.createTcError( in, expct, act ) )
-    }
     t1 := qname( "ns1@v1/T1" )
     t2 := qname( "ns1@v1/T2" )
     s1 := MustStruct( t1, "f1", int32( 1 ) )
     addSucc( MustStruct( t1, "f1", "1" ), s1, t1 )
     addSucc( MustSymbolMap( "f1", "1" ), s1, t1 )
+    addSucc( "cast1", int32( 1 ), "ns1@v1/S3" )
+    addSucc( "cast2", int32( -1 ), "ns1@v1/S3" )
+    addSucc( 
+        MustList( "cast1", "cast2" ), 
+        MustList( int32( 1 ), int32( -1 ) ),
+        "ns1@v1/S3*",
+    )
+    addSucc( nil, nil, "ns1@v1/S3?" )
     arb := MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
     addSucc( arb, arb, arb.Type )
+    add( t.createTcError( int32( 1 ), "ns1@v1/S3", TypeInt32 ) )
+    add( 
+        t.createTcError0( 
+            int32( 1 ), 
+            "ns1@v1/S3", 
+            TypeInt32, 
+            "ns1@v1/S3?", 
+            crtPathDefault,
+        ),
+    )
+    add( 
+        t.createTcError0( 
+            MustList( int32( 1 ) ),
+            "ns1@v1/S3",
+            TypeInt32,
+            "ns1@v1/S3*",
+            crtPathDefault.StartList(),
+        ),
+    )
+    add( t.createVcError( "cast3", "ns1@v1/S3", "test-message-cast3" ) )
+    add( t.createVcError( "cast3", "ns1@v1/S3?", "test-message-cast3" ) )
+    add(
+        t.createVcError0( 
+            MustList( "cast2", "cast3" ),
+            "ns1@v1/S3+",
+            crtPathDefault.StartList().SetIndex( 1 ),
+            "test-message-cast3",
+        ),
+    )
     s2InFlds := MustSymbolMap( "f1", "1", "f2", MustSymbolMap( "f1", "1" ) )
     s2 := MustStruct( t2, "f1", int32( 1 ), "f2", s1 )
     addSucc( &Struct{ Type: t2, Fields: s2InFlds }, s2, t2 )
     addSucc( s2InFlds, s2, t2 )
-    addTcErr( MustStruct( t2, "f1", int32( 1 ) ), t1, t2 )
+    add( t.createTcError( MustStruct( t2, "f1", int32( 1 ) ), t1, t2 ) )
+    add( 
+        t.createTcError0(
+            MustStruct( t1, "f1", MustList( 1, 2 ) ),
+            TypeInt32,
+            TypeOpaqueList,
+            t1,
+            crtPathDefault.Descend( id( "f1" ) ),
+        ),
+    )
     extraFlds1 := MustSymbolMap( "f1", int32( 1 ), "x1", int32( 0 ) )
     failExtra1 := func( val interface{} ) {
         msg := "unrecognized field: x1"
         add( t.createVcError0( val, t1, crtPathDefault, msg ) )
-    } 
+    }
     failExtra1( &Struct{ Type: t1, Fields: extraFlds1 } )
     failExtra1( extraFlds1 )
     failTyp := qname( "ns1@v1/FailType" )
@@ -892,4 +944,129 @@ func init() {
     initStructuralReactorTests()
     initFieldOrderReactorTests()
     initCastReactorTests()
+}
+
+type CastErrorAssert struct {
+    ErrExpect, ErrAct error
+    *assert.PathAsserter
+}
+
+func ( cea CastErrorAssert ) FailActErrType() {
+    cea.Fatalf(
+        "Expected error of type %T but got %T: %s",
+        cea.ErrExpect, cea.ErrAct, cea.ErrAct )
+}
+
+// Returns a path asserter that can be used further
+func ( cea CastErrorAssert ) assertValueError( 
+    expct, act ValueError ) *assert.PathAsserter {
+    a := cea.Descend( "Err" )
+    a.Descend( "Error()" ).Equal( expct.Error(), act.Error() )
+    a.Descend( "Message()" ).Equal( expct.Message(), act.Message() )
+    a.Descend( "Location()" ).Equal( expct.Location(), act.Location() )
+    return a
+}
+
+func ( cea CastErrorAssert ) assertTcError() {
+    if act, ok := cea.ErrAct.( *TypeCastError ); ok {
+        expct := cea.ErrExpect.( *TypeCastError )
+        a := cea.assertValueError( expct, act )
+        a.Descend( "expcted" ).Equal( expct.Expected, act.Expected )
+        a.Descend( "actual" ).Equal( expct.Actual, act.Actual )
+    } else { cea.FailActErrType() }
+}
+
+func ( cea CastErrorAssert ) assertVcError() {
+    if act, ok := cea.ErrAct.( *ValueCastError ); ok {
+        cea.assertValueError( cea.ErrExpect.( *ValueCastError ), act )
+    } else { cea.FailActErrType() }
+}
+
+func ( cea CastErrorAssert ) Call() {
+    switch cea.ErrExpect.( type ) {
+    case nil: cea.Fatal( cea.ErrAct )
+    case *TypeCastError: cea.assertTcError()
+    case *ValueCastError: cea.assertVcError()
+    default: cea.Fatalf( "Unhandled Err type: %T", cea.ErrExpect )
+    }
+}
+
+func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
+    ca := CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
+    ca.Call()
+}
+
+type eventExpectCheck struct {
+    idx int
+    expect []EventExpectation
+    *assert.PathAsserter
+    pg PathGetter
+}
+
+func ( foc *eventExpectCheck ) Key() ReactorKey {
+    return ReactorKey( "mingle.eventExpectCheck" )
+}
+
+func ( foc *eventExpectCheck ) Init( rpi *ReactorPipelineInit ) {
+    rpi.VisitPredecessors( func( rct interface{} ) {
+        if pg, ok := rct.( PathGetter ); ok { foc.pg = pg }
+    })
+    foc.Falsef( foc.pg == nil, "No path getter predecessor found" )
+}
+
+func ( foc *eventExpectCheck ) ProcessEvent(
+    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    defer func() { foc.idx++ }()
+    expct := foc.expect[ foc.idx ]
+    foc.Equal( ev, expct.Event )
+    foc.Equal( FormatIdPath( expct.Path ), FormatIdPath( foc.pg.GetPath() ) )
+    return nil
+}
+
+type reactorEventSource interface {
+    Len() int
+    EventAt( int ) ReactorEvent
+}
+
+type eventSliceSource []ReactorEvent
+func ( src eventSliceSource ) Len() int { return len( src ) }
+func ( src eventSliceSource ) EventAt( i int ) ReactorEvent { return src[ i ] }
+
+type eventExpectSource []EventExpectation
+
+func ( src eventExpectSource ) Len() int { return len( src ) }
+
+func ( src eventExpectSource ) EventAt( i int ) ReactorEvent {
+    return src[ i ].Event
+}
+
+func assertEventExpectations( 
+    src reactorEventSource, 
+    expct []EventExpectation,
+    rcts []interface{},
+    pa *assert.PathAsserter ) *ReactorPipeline {
+    rcts2 := []interface{}{ NewStructuralReactor( ReactorTopTypeValue ) }
+    rcts2 = append( rcts2, rcts... )
+    chk := &eventExpectCheck{ expect: expct, PathAsserter: pa }
+    rcts2 = append( rcts2, chk )
+    pip := InitReactorPipeline( rcts2... )
+    for i, e := 0, src.Len(); i < e; i++ {
+        ev := src.EventAt( i )
+        if err := pip.ProcessEvent( ev ); err != nil { pa.Fatal( err ) }
+    }
+    pa.Equal( len( expct ), chk.idx )
+    return pip
+}
+
+func AssertEventPaths(
+    src []ReactorEvent,
+    expct []EventExpectation,
+    rcts []interface{},
+    pa *assert.PathAsserter ) *ReactorPipeline {
+    return assertEventExpectations( 
+        eventSliceSource( src ), 
+        expct, 
+        rcts, 
+        pa,
+    )
 }

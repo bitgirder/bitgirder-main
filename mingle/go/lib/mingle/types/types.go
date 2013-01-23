@@ -14,10 +14,24 @@ func NewDefinitionMap() *DefinitionMap {
     return &DefinitionMap{ mg.NewQnameMap() }
 }
 
+// package note: not safe to call before completion of package init
+func NewV1DefinitionMap() *DefinitionMap {
+    res := NewDefinitionMap()
+    res.MustAddFrom( CoreTypesV1() )
+    return res
+}
+
 func ( m *DefinitionMap ) Len() int { return m.m.Len() }
 
+func ( m *DefinitionMap ) GetOk( 
+    qn *mg.QualifiedTypeName ) ( Definition, bool ) {
+    d, ok := m.m.GetOk( qn  )
+    if ok { return d.( Definition ), true }
+    return nil, false
+}
+
 func ( m *DefinitionMap ) Get( qn *mg.QualifiedTypeName ) Definition {
-    if d := m.m.Get( qn ); d != nil { return d.( Definition ) }
+    if d, ok := m.GetOk( qn ); ok { return d }
     return nil
 }
 
@@ -49,7 +63,7 @@ func ( m *DefinitionMap ) EachDefinition( f func( d Definition ) ) {
 
 type Descendant interface { 
     // Can return nil to indicate no super type
-    GetSuperType() mg.TypeReference 
+    GetSuperType() *mg.QualifiedTypeName
 }
 
 type Definition interface {
@@ -66,6 +80,16 @@ type FieldDefinition struct {
     Name *mg.Identifier
     Type mg.TypeReference
     Default mg.Value
+}
+
+func ( fd *FieldDefinition ) GetDefault() mg.Value {
+    if fd.Default == nil {
+        if lt, ok := fd.Type.( *mg.ListTypeReference ); ok {
+            if lt.AllowsEmpty { return mg.EmptyList() }
+        }
+        return nil
+    }
+    return fd.Default // may still be nil
 }
 
 type FieldSet struct {
@@ -135,7 +159,7 @@ type ConstructorDefinition struct { Type mg.TypeReference }
 
 type StructDefinition struct {
     Name *mg.QualifiedTypeName
-    SuperType mg.TypeReference
+    SuperType *mg.QualifiedTypeName
     Fields *FieldSet
     Constructors []*ConstructorDefinition
 }
@@ -151,7 +175,7 @@ func ( sd *StructDefinition ) GetName() *mg.QualifiedTypeName {
     return sd.Name
 }
 
-func ( sd *StructDefinition ) GetSuperType() mg.TypeReference {
+func ( sd *StructDefinition ) GetSuperType() *mg.QualifiedTypeName {
     return sd.SuperType
 }
 
@@ -210,7 +234,7 @@ func OpDefsByName( defs []*OperationDefinition ) *mg.IdentifierMap {
 
 type ServiceDefinition struct {
     Name *mg.QualifiedTypeName
-    SuperType mg.TypeReference
+    SuperType *mg.QualifiedTypeName
     Operations []*OperationDefinition
     Security *mg.QualifiedTypeName
 }
@@ -221,6 +245,10 @@ func NewServiceDefinition() *ServiceDefinition {
 
 func ( sd *ServiceDefinition ) GetName() *mg.QualifiedTypeName {
     return sd.Name
+}
+
+func ( sd *ServiceDefinition ) GetSuperType() *mg.QualifiedTypeName {
+    return sd.SuperType
 }
 
 var coreTypesV1 *DefinitionMap

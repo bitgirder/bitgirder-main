@@ -133,6 +133,16 @@ func ( id *Identifier ) Equals( id2 *Identifier ) bool {
     return id2 != nil && id.Compare( id2 ) == 0
 }
 
+type idSort []*Identifier
+func ( s idSort ) Len() int { return len( s ) }
+func ( s idSort ) Less( i, j int ) bool { return s[ i ].Compare( s[ j ] ) < 0 }
+func ( s idSort ) Swap( i, j int ) { s[ j ], s[ i ] = s[ i ], s[ j ] }
+
+func SortIds( ids []*Identifier ) []*Identifier { 
+    sort.Sort( idSort( ids ) ) 
+    return ids
+}
+
 type Namespace struct {
     Parts []*Identifier
     Version *Identifier
@@ -172,6 +182,7 @@ func ( ns *Namespace ) Equals( ns2 *Namespace ) bool {
 type TypeName interface{
     ExternalForm() string
     Equals( n TypeName ) bool
+    typeNameImpl()
 }
 
 type DeclaredTypeName struct {
@@ -181,6 +192,8 @@ type DeclaredTypeName struct {
 func NewDeclaredTypeNameUnsafe( nm []byte ) *DeclaredTypeName {
     return &DeclaredTypeName{ nm }
 }
+
+func ( n *DeclaredTypeName ) typeNameImpl() {}
 
 func ( n *DeclaredTypeName ) String() string { return string( n.nm ) }
 
@@ -211,6 +224,8 @@ type QualifiedTypeName struct {
     Name *DeclaredTypeName
 }
 
+func ( qn *QualifiedTypeName ) typeNameImpl() {}
+
 func ( qn *QualifiedTypeName ) ExternalForm() string {
     res := make( []byte, 0, 32 )
     res = append( res, []byte( qn.Namespace.ExternalForm() )... )
@@ -239,6 +254,7 @@ type TypeReference interface {
     ExternalForm() string
     Equals( t TypeReference ) bool
     String() string
+    typeRefImpl()
 }
 
 type ValueRestriction interface {
@@ -350,6 +366,8 @@ type AtomicTypeReference struct {
     Restriction ValueRestriction
 }
 
+func ( t *AtomicTypeReference ) typeRefImpl() {}
+
 func ( t *AtomicTypeReference ) ExternalForm() string {
     nm := t.Name.ExternalForm()
     if t.Restriction == nil { return nm }
@@ -375,6 +393,8 @@ type ListTypeReference struct {
     AllowsEmpty bool
 }
 
+func ( t *ListTypeReference ) typeRefImpl() {}
+
 func ( t *ListTypeReference ) ExternalForm() string {
     var quant string
     if t.AllowsEmpty { quant = "*" } else { quant = "+" }
@@ -395,6 +415,8 @@ func ( t *ListTypeReference ) Equals( ref TypeReference ) bool {
 type NullableTypeReference struct {
     Type TypeReference
 }
+
+func ( t *NullableTypeReference ) typeRefImpl() {}
 
 func ( t *NullableTypeReference ) ExternalForm() string {
     return t.Type.ExternalForm() + "?"
@@ -441,7 +463,7 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     panic( fmt.Errorf( "No atomic type in %s (%T)", ref, ref ) )
 }
 
-type Value interface{}
+type Value interface{ valImpl() }
 
 func appendQuotedList( buf *bytes.Buffer, l *List ) {
     buf.WriteRune( '[' )
@@ -471,7 +493,7 @@ func appendQuotedStruct( buf *bytes.Buffer, ms *Struct ) {
 func appendQuotedValue( buf *bytes.Buffer, val Value ) {
     switch v := val.( type ) {
     case String: fmt.Fprintf( buf, "%q", string( v ) )
-    case Buffer: fmt.Fprintf( buf, "%x", []byte( v ) )
+    case Buffer: fmt.Fprintf( buf, "buf[%x]", []byte( v ) )
     case Timestamp: fmt.Fprintf( buf, "%s", v.Rfc3339Nano() )
     case *Null: buf.WriteString( "null" )
     case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:
@@ -503,6 +525,7 @@ type ValueTypeError struct {
 }
 
 var goValPathFormatter objpath.Formatter
+
 func init() {
     goValPathFormatter = 
         objpath.DotFormatter(
@@ -526,6 +549,7 @@ type Comparer interface {
 }
 
 type String string
+func ( s String ) valImpl() {}
 func ( s String ) String() string { return string( s ) }
 
 func ( s String ) Compare( val interface{} ) int {
@@ -537,9 +561,11 @@ func ( s String ) Compare( val interface{} ) int {
 }
 
 type Boolean bool
+func ( b Boolean ) valImpl() {}
 func ( b Boolean ) String() string { return fmt.Sprint( bool( b ) ) }
 
 type Int64 int64
+func ( i Int64 ) valImpl() {}
 func ( i Int64 ) String() string { return fmt.Sprint( int64( i ) ) }
 
 func ( i Int64 ) Compare( val interface{} ) int {
@@ -551,6 +577,7 @@ func ( i Int64 ) Compare( val interface{} ) int {
 }
 
 type Int32 int32
+func ( i Int32 ) valImpl() {}
 func ( i Int32 ) String() string { return fmt.Sprint( int32( i ) ) }
 
 func ( i Int32 ) Compare( val interface{} ) int {
@@ -558,6 +585,7 @@ func ( i Int32 ) Compare( val interface{} ) int {
 }
 
 type Uint64 uint64
+func ( i Uint64 ) valImpl() {}
 func ( i Uint64 ) String() string { return fmt.Sprint( uint64( i ) ) }
 
 func ( i Uint64 ) Compare( val interface{} ) int {
@@ -569,6 +597,7 @@ func ( i Uint64 ) Compare( val interface{} ) int {
 }
 
 type Uint32 uint32
+func ( i Uint32 ) valImpl() {}
 func ( i Uint32 ) String() string { return fmt.Sprint( uint32( i ) ) }
 
 func ( i Uint32 ) Compare( val interface{} ) int {
@@ -576,6 +605,7 @@ func ( i Uint32 ) Compare( val interface{} ) int {
 }
 
 type Float64 float64
+func ( d Float64 ) valImpl() {}
 func ( d Float64 ) String() string { return fmt.Sprint( float64( d ) ) }
 
 func ( d Float64 ) Compare ( val interface{} ) int {
@@ -587,6 +617,7 @@ func ( d Float64 ) Compare ( val interface{} ) int {
 }
 
 type Float32 float32
+func ( f Float32 ) valImpl() {}
 func ( f Float32 ) String() string { return fmt.Sprint( float32( f ) ) }
 
 func ( f Float32 ) Compare( val interface{} ) int {
@@ -594,8 +625,10 @@ func ( f Float32 ) Compare( val interface{} ) int {
 }
 
 type Buffer []byte
+func ( b Buffer ) valImpl() {}
 
 type Null struct {}
+func ( n Null ) valImpl() {}
 var NullVal *Null
 func init() { NullVal = &Null{} }
 
@@ -605,6 +638,8 @@ func IsNull( val Value ) bool {
 }
 
 type Timestamp time.Time
+
+func ( t Timestamp ) valImpl() {}
 
 func Now() Timestamp { return Timestamp( time.Now() ) }
 
@@ -696,6 +731,11 @@ type List struct {
     vals []Value
 }
 
+var constEmptyList = &List{ []Value{} }
+func EmptyList() *List { return constEmptyList }
+
+func ( l *List ) valImpl() {}
+
 func ( l *List ) Values() []Value { return l.vals }
 
 func ( l *List ) Len() int { return len( l.vals ) }
@@ -726,6 +766,8 @@ type fieldEntry struct {
 type SymbolMap struct {
     fields []fieldEntry
 }
+
+func ( m SymbolMap ) valImpl() {}
 
 func ( m *SymbolMap ) Len() int { return len( m.fields ) }
 
@@ -872,6 +914,8 @@ type Enum struct {
     Value *Identifier
 }
 
+func ( e *Enum ) valImpl() {}
+
 func MustEnum( typ, val string ) *Enum {
     return &Enum{ MustQualifiedTypeName( typ ), MustIdentifier( val ) }
 }
@@ -880,6 +924,8 @@ type Struct struct {
     Type *QualifiedTypeName
     Fields *SymbolMap
 }
+
+func ( s *Struct ) valImpl() {}
 
 func CreateStruct(
     typ interface{}, pairs ...interface{} ) ( *Struct, error ) {
@@ -1025,6 +1071,7 @@ func init() {
         TypeBoolean,
         TypeTimestamp,
         TypeBuffer,
+        TypeSymbolMap,
     }
     NumericTypes = []*AtomicTypeReference{
         TypeInt32,
@@ -1053,8 +1100,8 @@ func IsIntegerType( typ TypeReference ) bool {
            typ.Equals( TypeUint64 )
 }
 
-var typeOpaqueList *ListTypeReference
-func init() { typeOpaqueList = &ListTypeReference{ TypeValue, true } }
+var TypeOpaqueList *ListTypeReference
+func init() { TypeOpaqueList = &ListTypeReference{ TypeValue, true } }
 
 func TypeOf( mgVal Value ) TypeReference {
     switch v := mgVal.( type ) {
@@ -1071,7 +1118,7 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Enum: return v.Type.AsAtomicType()
     case *SymbolMap: return TypeSymbolMap
     case *Struct: return v.Type.AsAtomicType()
-    case *List: return typeOpaqueList
+    case *List: return TypeOpaqueList
     case *Null: return TypeNull
     }
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
@@ -1083,18 +1130,18 @@ type ValueError interface {
     error
 }
 
-type valueErrorImpl struct {
-    path idPath
+type ValueErrorImpl struct {
+    Path idPath
 }
 
-func ( e valueErrorImpl ) Location() objpath.PathNode { 
-    if e.path == nil { return nil }
-    return e.path.( objpath.PathNode )
+func ( e ValueErrorImpl ) Location() objpath.PathNode { 
+    if e.Path == nil { return nil }
+    return e.Path.( objpath.PathNode )
 }
 
-func ( e valueErrorImpl ) makeError( msg string ) string {
-    if e.path == nil { return msg }
-    return fmt.Sprintf( "%s: %s", FormatIdPath( e.path ), msg )
+func ( e ValueErrorImpl ) MakeError( msg string ) string {
+    if e.Path == nil { return msg }
+    return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
 }
 
 type mapImplKey interface { ExternalForm() string }
@@ -1114,8 +1161,14 @@ func newMapImpl() *mapImpl {
 
 func ( m *mapImpl ) Len() int { return len( m.m ) }
 
+func ( m *mapImpl ) implGetOk( k mapImplKey ) ( interface{}, bool ) {
+    res, ok := m.m[ k.ExternalForm() ]
+    if ok { return res.val, ok }
+    return nil, false
+}
+
 func ( m *mapImpl ) implGet( k mapImplKey ) interface{} {
-    if e, ok := m.m[ k.ExternalForm() ]; ok { return e.val }
+    if val, ok := m.implGetOk( k ); ok { return val }
     return nil
 }
 
@@ -1160,6 +1213,10 @@ type IdentifierMap struct { *mapImpl }
 
 func NewIdentifierMap() *IdentifierMap { return &IdentifierMap{ newMapImpl() } }
 
+func ( m *IdentifierMap ) GetOk( id *Identifier ) ( interface{}, bool ) {
+    return m.implGetOk( id )
+}
+
 func ( m *IdentifierMap ) Get( id *Identifier ) interface{} {
     return m.implGet( id )
 }
@@ -1197,6 +1254,10 @@ type QnameMap struct { *mapImpl }
 
 func NewQnameMap() *QnameMap { return &QnameMap{ newMapImpl() } }
 
+func ( m *QnameMap ) GetOk( qn *QualifiedTypeName ) ( interface{}, bool ) {
+    return m.implGetOk( qn )
+}
+
 func ( m *QnameMap ) Get( qn *QualifiedTypeName ) interface{} {
     return m.implGet( qn )
 }
@@ -1227,6 +1288,10 @@ func ( m *QnameMap ) EachPair(
 type NamespaceMap struct { *mapImpl }
 
 func NewNamespaceMap() *NamespaceMap { return &NamespaceMap{ newMapImpl() } }
+
+func ( m *NamespaceMap ) GetOk( ns *Namespace ) ( interface{}, bool ) {
+    return m.implGetOk( ns )
+}
 
 func ( m *NamespaceMap ) Get( ns *Namespace ) interface{} {
     return m.implGet( ns )

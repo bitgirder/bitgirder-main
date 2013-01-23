@@ -365,9 +365,9 @@ func TestTypeCastFormatting( t *testing.T ) {
     t1 := typeRef( "ns1@v1/T1" )
     t2 := typeRef( "ns1@v1/T2" )
     suff := "Expected value of type ns1@v1/T1 but found ns1@v1/T2"
-    err := newTypeCastError( t1, t2, nil )
+    err := NewTypeCastError( t1, t2, nil )
     assert.Equal( suff, err.Error() )
-    err = newTypeCastError( t1, t2, path )
+    err = NewTypeCastError( t1, t2, path )
     assert.Equal( FormatIdPath( path ) + ": " + suff, err.Error() )
 }
 
@@ -478,7 +478,7 @@ func TestQuoteValue( t *testing.T ) {
     }
     f( Boolean( true ), "true" )
     f( Boolean( false ), "false" )
-    f( Buffer( []byte{ 0, 1, 2 } ), "000102" )
+    f( Buffer( []byte{ 0, 1, 2 } ), "buf[000102]" )
     f( String( "s" ), `"s"` )
     f( Int32( 1 ), "1" )
     f( Int64( 1 ), "1" )
@@ -680,25 +680,29 @@ func TestMapImpl( t *testing.T ) {
     val1 := 1
     val2 := 2
     m := NewIdentifierMap()
-    chk := func( id *Identifier, okExpct bool, expct interface{} ) {
-        assert.Equal( expct, m.Get( id ) )
-    }
     assert.Equal( 0, m.Len() )
-    chk( id1, false, nil )
+    assert.False( m.HasKey( id1 ) )
+    chkGet := func( id *Identifier, okExpct bool, expct interface{} ) {
+        assert.Equal( expct, m.Get( id ) )
+        act, ok := m.GetOk( id )
+        assert.Equal( okExpct, ok )
+        assert.Equal( act, expct )
+    }
+    chkGet( id1, false, nil )
     m.Put( id1, val1 )
-    chk( id1, true, val1 )
+    chkGet( id1, true, val1 )
     if err := m.PutSafe( id1, val2 ); err == nil {
         t.Fatalf( "Was able to put val2 at id1" )
     } else {
         assert.Equal( 
             "mingle: map already contains an entry for key: id1", err.Error() )
-        chk( id1, true, val1 )
+        chkGet( id1, true, val1 )
     }
-    chk( id2, false, nil )
+    chkGet( id2, false, nil )
     m.Put( id1, val2 )
-    chk( id1, true, val2 )
+    chkGet( id1, true, val2 )
     m.Delete( id1 )
-    chk( id1, false, nil )
+    chkGet( id1, false, nil )
     assert.Equal( 0, m.Len() )
 }
 
@@ -745,3 +749,17 @@ func TestTypeNameIn( t *testing.T ) {
     }
 }
 
+func TestSortIds( t *testing.T ) {
+    chk := func( in, expct []*Identifier ) {
+        assert.Equal( expct, SortIds( in ) )
+    }
+    chk( []*Identifier{}, []*Identifier{} )
+    ids := []*Identifier{ id( "i1" ), id( "i2" ), id( "i3" ) }
+    for _, in := range [][]*Identifier{
+        []*Identifier{ ids[ 0 ], ids[ 1 ], ids[ 2 ] },
+        []*Identifier{ ids[ 2 ], ids[ 1 ], ids[ 0 ] },
+        []*Identifier{ ids[ 2 ], ids[ 0 ], ids[ 1 ] },
+    } {
+        chk( in, ids )
+    }
+}

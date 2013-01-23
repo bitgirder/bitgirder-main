@@ -8,7 +8,7 @@ import (
 
 func TestCastValueErrorFormatting( t *testing.T ) {
     path := objpath.RootedAt( id( "f1" ) )
-    err := newValueCastErrorf( path, "Blah %s", "X" )
+    err := NewValueCastErrorf( path, "Blah %s", "X" )
     assert.Equal( "f1: Blah X", err.Error() )
 }
 

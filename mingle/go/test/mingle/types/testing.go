@@ -41,7 +41,7 @@ func MakeStructDef(
     if flds == nil { flds = []*FieldDefinition{} }
     res := NewStructDefinition()
     res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustTypeReference( sprTyp ) }
+    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
     for _, fld := range flds { res.Fields.MustAdd( fld ) }
     return res
 }
@@ -83,16 +83,23 @@ func MakeServiceDef(
     secQn string ) *ServiceDefinition {
     res := NewServiceDefinition()
     res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustTypeReference( sprTyp ) }
+    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
     res.Operations = append( res.Operations, opDefs... )
     if secQn != "" { res.Security = mg.MustQualifiedTypeName( secQn ) }
     return res
 }
 
+func mustAddDefs( dm *DefinitionMap, defs []Definition ) *DefinitionMap {
+    for _, d := range defs { dm.MustAdd( d ) }
+    return dm
+}
+
 func MakeDefMap( defs ...Definition ) *DefinitionMap {
-    res := NewDefinitionMap()
-    for _, d := range defs { res.MustAdd( d ) }
-    return res
+    return mustAddDefs( NewDefinitionMap(), defs )
+}
+
+func MakeV1DefMap( defs ...Definition ) *DefinitionMap {
+    return mustAddDefs( NewV1DefinitionMap(), defs )
 }
 
 type DefAsserter struct {
