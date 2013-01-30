@@ -3,6 +3,8 @@ require 'bitgirder/testing'
 require 'bitgirder/io'
 require 'bitgirder/io/testing'
 
+require 'digest/md5'
+
 module BitGirder
 module Io
 
@@ -358,6 +360,35 @@ class IoTests < BitGirderClass
             Io.can_connect?( Object.new )
         end
     end
+
+    def test_digest_file
+        
+        buf = "hello"
+        md5_bin = Digest::MD5.new.digest( buf )
+        md5_b64 = Io.strict_encode64( md5_bin )
+        
+        Io.open_tempfile do |tmp|
+            
+            tmp.write( buf )
+            tmp.close
+
+            call_base = { file: tmp.path, digest_type: Digest::MD5 }
+
+            [ 
+                { call: call_base, expect: md5_bin },
+
+                { call: call_base.merge( buffer_size: 2 ), expect: md5_bin },
+
+                { call: call_base.merge( output_type: :base64 ), 
+                  expect: md5_b64 
+                },
+            ].
+            each do |test|
+                assert_equal( test[ :expect ], Io.digest_file( test[ :call ] ) )
+            end
+        end
+    end
+
 end
 
 # Used to check that we are correctly converting everything to String before

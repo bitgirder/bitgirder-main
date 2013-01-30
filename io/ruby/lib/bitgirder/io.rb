@@ -68,6 +68,33 @@ end
 
 module_function :strict_decode64
 
+def digest_file( opts )
+    
+    dig_cls, file = has_keys( opts, :digest_type, :file )
+    buf_sz = opts[ :buffer_size ] || 50 * ( 1 << 10 )
+
+    # Set this now so we can fail before reading file if need be
+    out_func = case ot = opts[ :output_type ]
+        when nil, :binary then lambda { |dig| dig }
+        when :base64 then lambda { |dig| strict_encode64( dig ) }
+        else raise "Unhandled output type: #{ot}"
+    end
+
+    dig = dig_cls.new
+
+    File.open( file ) do |io|
+        
+        buf = ""
+        while buf = io.read( buf_sz, buf ) 
+            dig.update( buf ) 
+        end
+    end
+
+    out_func.call( dig.digest )
+end
+
+module_function :digest_file
+
 # Returns i as a little-endian 2's complement byte array; Algorithm is from
 # http://stackoverflow.com/questions/5284369/ruby-return-byte-array-containing-twos-complement-representation-of-bignum-fi
 # (with some cosmetic differences, including the return val's endianness).
