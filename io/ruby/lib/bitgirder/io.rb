@@ -399,7 +399,7 @@ def can_connect?( *argv )
     begin
         TCPSocket::new( host, port ).close
         true
-    rescue Errno::ECONNREFUSED
+    rescue Errno::ECONNREFUSED, Errno::ECONNRESET
         false
     end
 end

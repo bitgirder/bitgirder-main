@@ -52,11 +52,11 @@ func makeHeader() http.Header {
     return http.Header( make( map[ string ][]string ) )
 }
 
-type AccessKeyId string
+type AccessKey string
 type SecretKey string
 
 type Credentials struct {
-    AccessKeyId
+    AccessKey
     SecretKey
 }
 
@@ -274,7 +274,7 @@ type S3RemoteError struct {
     HttpStatusCode int
     Message string 
     HostId string 
-    AWSAccessKeyId string 
+    AWSAccessKey string 
 }
 
 const (
@@ -385,7 +385,7 @@ func ( c *Client ) completeRequestSign( buf []byte, req *http.Request ) {
     h := hmac.New( func() hash.Hash { return sha1.New() }, key )
     sig := hashes.HashOfBytes( h, buf )
     b64 := base64.StdEncoding.EncodeToString( sig )
-    authStr := "AWS " + string( c.Credentials.AccessKeyId ) + ":" + b64
+    authStr := "AWS " + string( c.Credentials.AccessKey ) + ":" + b64
     req.Header.Set( hdrAuth, authStr )
 }
 
