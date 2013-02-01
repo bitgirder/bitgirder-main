@@ -128,7 +128,8 @@ class Install < Command
             if @wipe_install 
                 fu().rm_rf( @install_to )
             else
-                raise "Install dir #@install_to exists (--wipe-install?)"
+                Dir.glob( "#@install_to/*" ).empty? or 
+                    raise "Install dir #@install_to exists (--wipe-install?)"
             end
         end
 
@@ -506,7 +507,12 @@ class Daemon < RuntimeCommand
         
         unless await_proc_exit( pid = get_current_pid )
             code( "Server appears to still be running; sending KILL to #{pid}" )
-            Process.kill( "KILL", pid )
+
+            # Quietly squash ESRCH since it may be that tomcat exits
+            # concurrently with our kill
+            begin
+                Process.kill( "KILL", pid )
+            rescue Errno::ESRCH; end
         end
 
         fu().rm( pid_file )

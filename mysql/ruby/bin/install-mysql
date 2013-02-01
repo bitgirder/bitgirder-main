@@ -100,7 +100,8 @@ class App < BitGirderClass
             if @wipe_install_dir 
                 do_wipe_install
             else
-                raise "#@install_to already exists"
+                Dir.glob( "#@install_to/*" ).empty? or
+                    raise "#@install_to already exists"
             end
         end
     end
