@@ -438,7 +438,7 @@ class Daemon < RuntimeCommand
         code( "Awaiting connection on ports: #{ports}" )
 
         ports.each do |p|
-            WaitCondition.wait_backoff( seed: 1, max_tries: 4 ) do
+            WaitCondition.wait_backoff( seed: 1, max_tries: 6 ) do
                 res = can_connect?( p )
                 code( "Got conn on :#{p}: #{res}" )
                 res
