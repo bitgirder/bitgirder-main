@@ -17,20 +17,30 @@ func rctErrorf( tmpl string, args ...interface{} ) *ReactorError {
     return rctError( fmt.Sprintf( tmpl, args... ) )
 }
 
-type ReactorEvent interface {}
+type ReactorEvent interface { reactorEventImpl() }
 
 type ValueEvent struct { Val Value }
+func ( ve ValueEvent ) reactorEventImpl() {}
+
 type StructStartEvent struct { Type *QualifiedTypeName }
+func ( sse StructStartEvent ) reactorEventImpl() {}
 
 type MapStartEvent int
+func ( mse MapStartEvent ) reactorEventImpl() {}
+
 const EvMapStart = MapStartEvent( 0 )
 
 type FieldStartEvent struct { Field *Identifier }
+func ( fse FieldStartEvent ) reactorEventImpl() {}
 
 type ListStartEvent int
+func( lse ListStartEvent ) reactorEventImpl() {}
+
 const EvListStart = ListStartEvent( 0 )
 
 type EndEvent int
+func ( ee EndEvent ) reactorEventImpl() {}
+
 const EvEnd = EndEvent( 0 )
 
 type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }

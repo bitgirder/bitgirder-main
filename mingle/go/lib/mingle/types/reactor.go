@@ -5,7 +5,6 @@ import (
     "bitgirder/objpath"
     "fmt"
     "container/list"
-    "strings"
 //    "log"
 )
 
@@ -299,11 +298,12 @@ func ( cr *castReactor ) createMissingFieldsError( fldCtx *fieldCtx ) error {
     fldCtx.await.EachPair( func( fld *mg.Identifier, _ interface{} ) {
         flds = append( flds, fld )
     })
-    mg.SortIds( flds )
-    strs := make( []string, len( flds ) )
-    for i, fld := range flds { strs[ i ] = fld.ExternalForm() }
-    fldsStr := strings.Join( strs, ", " )
-    return cr.newValueCastErrorf( "missing field(s): %s", fldsStr )
+    return mg.NewMissingFieldsError( cr.GetPath(), flds )
+//    mg.SortIds( flds )
+//    strs := make( []string, len( flds ) )
+//    for i, fld := range flds { strs[ i ] = fld.ExternalForm() }
+//    fldsStr := strings.Join( strs, ", " )
+//    return cr.newValueCastErrorf( "missing field(s): %s", fldsStr )
 }
 
 func ( cr *castReactor ) end( 

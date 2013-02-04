@@ -9,6 +9,7 @@ import (
     "sort"
     "bytes"
     "unicode"
+    "strings"
 )
 
 type IdentifierFormat uint
@@ -767,6 +768,8 @@ type SymbolMap struct {
     fields []fieldEntry
 }
 
+func EmptySymbolMap() *SymbolMap { return MustSymbolMap() }
+
 func ( m SymbolMap ) valImpl() {}
 
 func ( m *SymbolMap ) Len() int { return len( m.fields ) }
@@ -1030,35 +1033,66 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
+    QnameServiceRequest *QualifiedTypeName
+    TypeServiceRequest *AtomicTypeReference
+    QnameServiceResponse *QualifiedTypeName
+    TypeServiceResponse *AtomicTypeReference
+    IdNamespace *Identifier
+    IdService *Identifier
+    IdOperation *Identifier
+    IdParameters *Identifier
+    IdAuthentication *Identifier
+    IdResult *Identifier
+    IdError *Identifier
 )
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
 var PrimitiveTypes []*AtomicTypeReference
 var NumericTypes []*AtomicTypeReference
 
-var CoreNsV1 = MustNamespace( "mingle:core@v1" )
+var CoreNsV1 *Namespace
+var ServiceNsV1 *Namespace
 
 func init() {
+    id := func( strs []string ) *Identifier {
+        parts := make( []idPart, len( strs ) )
+        for i, str := range strs { parts[ i ] = idPart( []byte( str ) ) }
+        return &Identifier{ parts }
+    }
+    ns := func( parts [][]string, ver []string ) *Namespace {
+        ids := make( []*Identifier, len( parts ) )
+        for i, part := range parts { ids[ i ] = id( part ) }
+        return &Namespace{ Parts: ids, Version: id( ver ) }
+    }
+    CoreNsV1 = ns( 
+        [][]string{ []string{ "mingle" }, []string{ "core" } },
+        []string{ "v1" },
+    )
+    ServiceNsV1 = ns(
+        [][]string{ []string{ "mingle" }, []string{ "service" } },
+        []string{ "v1" },
+    )
     coreQnameResolver = make( map[ string ]*QualifiedTypeName )
-    f := func( s string ) ( *QualifiedTypeName, *AtomicTypeReference ) {
-        qn := ( &DeclaredTypeName{ []byte( s ) } ).ResolveIn( CoreNsV1 )
+    f1 := func( 
+        s string, ns *Namespace ) ( *QualifiedTypeName, *AtomicTypeReference ) {
+        qn := ( &DeclaredTypeName{ []byte( s ) } ).ResolveIn( ns )
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
         at := &AtomicTypeReference{ Name: qn }
         return qn, at
     }
-    QnameValue, TypeValue = f( "Value" )
-    QnameBoolean, TypeBoolean = f( "Boolean" )
-    QnameBuffer, TypeBuffer = f( "Buffer" )
-    QnameString, TypeString = f( "String" )
-    QnameInt32, TypeInt32 = f( "Int32" )
-    QnameInt64, TypeInt64 = f( "Int64" )
-    QnameUint32, TypeUint32 = f( "Uint32" )
-    QnameUint64, TypeUint64 = f( "Uint64" )
-    QnameFloat32, TypeFloat32 = f( "Float32" )
-    QnameFloat64, TypeFloat64 = f( "Float64" )
-    QnameTimestamp, TypeTimestamp = f( "Timestamp" )
-    QnameSymbolMap, TypeSymbolMap = f( "SymbolMap" )
-    QnameNull, TypeNull = f( "Null" )
+    QnameValue, TypeValue = f1( "Value", CoreNsV1 )
+    QnameBoolean, TypeBoolean = f1( "Boolean", CoreNsV1 )
+    QnameBuffer, TypeBuffer = f1( "Buffer", CoreNsV1 )
+    QnameString, TypeString = f1( "String", CoreNsV1 )
+    QnameInt32, TypeInt32 = f1( "Int32", CoreNsV1 )
+    QnameInt64, TypeInt64 = f1( "Int64", CoreNsV1 )
+    QnameUint32, TypeUint32 = f1( "Uint32", CoreNsV1 )
+    QnameUint64, TypeUint64 = f1( "Uint64", CoreNsV1 )
+    QnameFloat32, TypeFloat32 = f1( "Float32", CoreNsV1 )
+    QnameFloat64, TypeFloat64 = f1( "Float64", CoreNsV1 )
+    QnameTimestamp, TypeTimestamp = f1( "Timestamp", CoreNsV1 )
+    QnameSymbolMap, TypeSymbolMap = f1( "SymbolMap", CoreNsV1 )
+    QnameNull, TypeNull = f1( "Null", CoreNsV1 )
     PrimitiveTypes = []*AtomicTypeReference{
         TypeValue,
         TypeNull,
@@ -1082,6 +1116,15 @@ func init() {
         TypeFloat32,
         TypeFloat64,
     }
+    QnameServiceRequest, TypeServiceRequest = f1( "Request", ServiceNsV1 )
+    QnameServiceResponse, TypeServiceResponse = f1( "Response", ServiceNsV1 )
+    IdNamespace = id( []string{ "namespace" } )
+    IdService = id( []string{ "service" } )
+    IdOperation = id( []string{ "operation" } )
+    IdParameters = id( []string{ "parameters" } )
+    IdAuthentication = id( []string{ "authentication" } )
+    IdResult = id( []string{ "result" } )
+    IdError =id( []string{ "error" } )
 }
 
 func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {
@@ -1143,6 +1186,30 @@ func ( e ValueErrorImpl ) Location() objpath.PathNode {
 func ( e ValueErrorImpl ) MakeError( msg string ) string {
     if e.Path == nil { return msg }
     return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
+}
+
+type MissingFieldsError struct {
+    impl ValueErrorImpl
+    flds []*Identifier // stored sorted
+}
+
+func NewMissingFieldsError( 
+    path objpath.PathNode, flds []*Identifier ) *MissingFieldsError {
+    flds2 := make( []*Identifier, len( flds ) )
+    for i, e := 0, len( flds ); i < e; i++ { flds2[ i ] = flds[ i ] }
+    SortIds( flds2 )
+    return &MissingFieldsError{ impl: ValueErrorImpl{ path }, flds: flds2 }
+}
+
+func ( e *MissingFieldsError ) Error() string {
+    strs := make( []string, len( e.flds ) )
+    for i, fld := range e.flds { strs[ i ] = fld.ExternalForm() }
+    fldsStr := strings.Join( strs, ", " )
+    return e.impl.MakeError( fmt.Sprintf( "missing field(s): %s", fldsStr ) )
+}
+
+func ( e *MissingFieldsError ) Location() objpath.PathNode { 
+    return e.impl.Location() 
 }
 
 type mapImplKey interface { ExternalForm() string }

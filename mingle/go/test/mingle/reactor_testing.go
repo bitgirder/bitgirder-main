@@ -5,6 +5,7 @@ import (
     "bitgirder/assert"
     "fmt"
     "encoding/base64"
+    "bytes"
 )
 
 type ReactorTest interface {}
@@ -13,6 +14,19 @@ var StdReactorTests []ReactorTest
 
 func AddStdReactorTests( t ...ReactorTest ) {
     StdReactorTests = append( StdReactorTests, t... )
+}
+
+func flattenEvs( evs ...interface{} ) []ReactorEvent {
+    res := make( []ReactorEvent, 0, len( evs ) )
+    for _, ev := range evs {
+        switch v := ev.( type ) {
+        case ReactorEvent: res = append( res, v )
+        case []ReactorEvent: res = append( res, v... )
+        case []interface{}: res = append( res, flattenEvs( res )... )
+        default: panic( libErrorf( "Uhandled ev type for flatten: %T", v ) )
+        }
+    }
+    return res
 }
 
 type ValueBuildTest struct { Val Value }
@@ -320,6 +334,72 @@ func initFieldOrderValueTests() {
     for i := 0; i < 4; i++ { addTest1( fldEvs[ i ], fldVals[ i ] ) }
 }
 
+type FieldOrder []*Identifier
+
+type FixedOrderFieldCheckTest struct {
+    Order FieldOrder
+    Source []ReactorEvent
+    Expect Value
+    Error error
+}
+
+func initFieldOrderMissingFieldTests() {
+    fldId := func( i int ) *Identifier { return id( fmt.Sprintf( "f%d", i ) ) }
+    fldsLen := 5
+    ord := FieldOrder( make( []*Identifier, fldsLen ) )
+    for i := 0; i < fldsLen; i++ { ord[ i ] = fldId( i ) }
+    t1 := qname( "ns1@v1/S1" )
+    mkSrc := func( flds []int ) []ReactorEvent {
+        evs := []interface{}{ StructStartEvent{ t1 } }
+        for _, fld := range flds {
+            evs = append( evs, FieldStartEvent{ fldId( fld ) } )
+            evs = append( evs, ValueEvent{ Int32( fld ) } )
+        }
+        evs = append( evs, EvEnd )
+        return flattenEvs( evs )
+    }
+    mkVal := func( flds []int ) *Struct {
+        pairs := make( []interface{}, 2 * len( flds ) )
+        for i, e := 0, len( flds ); i < e; i++ {
+            pairs[ i * 2 ] = fldId( i )
+            pairs[ ( i * 2 ) + 1 ] = Int32( i )
+        }
+        return MustStruct( t1, pairs... )
+    }
+    addSucc := func( flds ...int ) {
+        AddStdReactorTests(
+            &FixedOrderFieldCheckTest{
+                Order: ord,
+                Source: mkSrc( flds ),
+                Expect: mkVal( flds ),
+            },
+        )
+    }
+    addSucc( 1, 2, 5 )
+    addSucc( 5, 1, 2 )
+    addSucc( 1, 2, 4, 5 )
+    addSucc( 1, 4, 2, 5 )
+    addSucc( 1, 2, 5, 4, 3 )
+    addErr := func( errFld int, flds ...int ) {
+        AddStdReactorTests(
+            &FixedOrderFieldCheckTest{
+                Order: ord,
+                Source: mkSrc( flds ),
+                Error: NewMissingFieldsError(
+                    crtPathDefault, 
+                    []*Identifier{ fldId( errFld ) },
+                ),
+            },
+        )
+    }
+    addErr( 1, 2, 3, 4, 5 )
+    addErr( 1, 5 )
+    addErr( 2, 1 )
+    addErr( 5, 2 )
+    addErr( 5, 2, 1 )
+    addErr( 2, 5, 4, 1, 3 )
+}
+
 type FieldOrderPathTest struct {
     Source []ReactorEvent
     Expect []EventExpectation
@@ -405,7 +485,286 @@ func initFieldOrderPathTests() {
 
 func initFieldOrderReactorTests() {
     initFieldOrderValueTests()
+    initFieldOrderMissingFieldTests()
     initFieldOrderPathTests()
+}
+
+type ServiceRequestTest struct {
+    Source interface{}
+    Namespace *Namespace
+    Service *Identifier
+    Operation *Identifier
+    Parameters *SymbolMap
+    Authentication Value
+    Error error
+}
+
+func initServiceRequestTests() {
+    ns1 := MustNamespace( "ns1@v1" )
+    svc1 := id( "service1" )
+    op1 := id( "op1" )
+    params1 := MustSymbolMap( "f1", int32( 1 ) )
+    authQn := qname( "ns1@v1/Auth1" )
+    auth1 := MustStruct( authQn, "f1", int32( 1 ) )
+    evFldNs := FieldStartEvent{ IdNamespace }
+    evFldSvc := FieldStartEvent{ IdService }
+    evFldOp := FieldStartEvent{ IdOperation }
+    evFldParams := FieldStartEvent{ IdParameters }
+    evFldAuth := FieldStartEvent{ IdAuthentication }
+    evFldF1 := FieldStartEvent{ id( "f1" ) }
+    evReqTyp := StructStartEvent{ QnameServiceRequest }
+    evNs1 := ValueEvent{ String( ns1.ExternalForm() ) }
+    evSvc1 := ValueEvent{ String( svc1.ExternalForm() ) }
+    evOp1 := ValueEvent{ String( op1.ExternalForm() ) }
+    i32Val1 := ValueEvent{ Int32( 1 ) }
+    evParams1 := []ReactorEvent{ EvMapStart, evFldF1, i32Val1, EvEnd }
+    evAuth1 := 
+        []ReactorEvent{  StructStartEvent{ authQn }, evFldF1, i32Val1, EvEnd }
+    addSucc1 := func( evs ...interface{} ) {
+        AddStdReactorTests(
+            ServiceRequestTest{
+                Source: flattenEvs( evs... ),
+                Namespace: ns1,
+                Service: svc1,
+                Operation: op1,
+                Parameters: params1,
+                Authentication: auth1,
+            },
+        )
+    }
+    fullOrderedReq1Flds := []interface{}{
+        evFldNs, evNs1,
+        evFldSvc, evSvc1,
+        evFldOp, evOp1,
+        evFldParams, evParams1,
+        evFldAuth, evAuth1,
+    }
+    addSucc1( evReqTyp, fullOrderedReq1Flds, EvEnd )
+    addSucc1( EvMapStart, fullOrderedReq1Flds, EvEnd )
+    addSucc1( evReqTyp,
+        evFldAuth, evAuth1,
+        evFldOp, evOp1,
+        evFldParams, evParams1,
+        evFldNs, evNs1,
+        evFldSvc, evSvc1,
+        EvEnd,
+    )
+    mkReq1 := func( params, auth Value ) *Struct {
+        pairs := []interface{}{ 
+            IdNamespace, ns1.ExternalForm(),
+            IdService, svc1.ExternalForm(),
+            IdOperation, op1.ExternalForm(),
+        }
+        if params != nil { pairs = append( pairs, IdParameters, params ) }
+        if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }
+        return MustStruct( QnameServiceRequest, pairs... )
+    }
+    addSucc2 := func( src interface{}, authExpct Value ) {
+        AddStdReactorTests(
+            &ServiceRequestTest{
+                Namespace: ns1,
+                Service: svc1,
+                Operation: op1,
+                Parameters: EmptySymbolMap(),
+                Authentication: authExpct,
+                Source: src,
+            },
+        )
+    } 
+    // check implicit params with(out) auth and using undetermined event
+    // ordering
+    addSucc2( mkReq1( nil, nil ), nil )
+    addSucc2( mkReq1( nil, auth1 ), auth1 )
+    // check implicit params with and without auth and with need for reordering
+    addSucc2(
+        []interface{}{ evReqTyp, 
+            evFldSvc, evSvc1, 
+            evFldOp, evOp1, 
+            evFldNs, evNs1,
+        },
+        nil,
+    )
+    addSucc2(
+        []interface{}{ evReqTyp,
+            evFldSvc, evSvc1,
+            evFldAuth, evAuth1,
+            evFldOp, evOp1,
+            evFldNs, evNs1,
+        },
+        auth1,
+    )
+    writeMgIo := func( f func( w *BinWriter ) ) Buffer {
+        bb := &bytes.Buffer{}
+        w := NewWriter( bb )
+        f( w )
+        return Buffer( bb.Bytes() )
+    }
+    nsBuf := func( ns *Namespace ) Buffer {
+        return writeMgIo( func( w *BinWriter ) { w.WriteNamespace( ns ) } )
+    }
+    idBuf := func( id *Identifier ) Buffer {
+        return writeMgIo( func( w *BinWriter ) { w.WriteIdentifier( id ) } )
+    }
+    AddStdReactorTests(
+        &ServiceRequestTest{
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Parameters: EmptySymbolMap(),
+            Source: MustStruct( QnameServiceRequest,
+                IdNamespace, nsBuf( ns1 ),
+                IdService, idBuf( svc1 ),
+                IdOperation, idBuf( op1 ),
+            ),
+        },
+    )
+    addReqVcErr := func( val interface{}, path idPath, msg string ) {
+        AddStdReactorTests(
+            &ServiceRequestTest{
+                Source: MustValue( val ),
+                Error: NewValueCastError( path, msg ),
+            },
+        )
+    }
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, true ), 
+        objpath.RootedAt( IdNamespace ),
+        "STUB",
+    )
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, true ),
+        objpath.RootedAt( IdService ),
+        "STUB",
+    )
+    addReqVcErr(
+        MustSymbolMap( 
+            IdNamespace, ns1.ExternalForm(),
+            IdService, svc1.ExternalForm(),
+            IdOperation, true,
+        ),
+        objpath.RootedAt( IdOperation ),
+        "STUB",
+    )
+    addReqVcErr(
+        MustSymbolMap(
+            IdNamespace, ns1.ExternalForm(),
+            IdService, svc1.ExternalForm(),
+            IdOperation, op1.ExternalForm(),
+            IdParameters, true,
+        ),
+        objpath.RootedAt( IdParameters ),
+        "STUB",
+    )
+    // Check that errors are bubbled up from
+    // *BinWriter.Read(Identfier|Namespace) when parsing invalid
+    // namespace/service/operation Buffers
+    addBinRdErr := func( path *Identifier, msg string, pairs ...interface{} ) {
+        addReqVcErr(
+            MustSymbolMap( pairs... ),
+            objpath.RootedAt( path ),
+            msg,
+        )
+    }
+    badBuf := []byte{ 0x0f }
+    addBinRdErr( IdNamespace, "STUB", IdNamespace, badBuf )
+    addBinRdErr( IdService, "STUB", 
+        IdNamespace, ns1.ExternalForm(), 
+        IdService, badBuf,
+    )
+    addBinRdErr( IdOperation, "STUB",
+        IdNamespace, ns1.ExternalForm(),
+        IdService, svc1.ExternalForm(),
+        IdOperation, badBuf,
+    )
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, "ns1::ns2" ),
+        objpath.RootedAt( IdNamespace ),
+        "STUB",
+    )
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, "2bad" ),
+        objpath.RootedAt( IdService ),
+        "STUB",
+    )
+    addReqVcErr(
+        MustSymbolMap(
+            IdNamespace, ns1.ExternalForm(),
+            IdService, svc1.ExternalForm(),
+            IdOperation, "2bad",
+        ),
+        objpath.RootedAt( IdOperation ),
+        "STUB",
+    )
+    t1Bad := qname( "foo@v1/Request" )
+    AddStdReactorTests(
+        &ServiceRequestTest{
+            Source: MustStruct( t1Bad ),
+            Error: NewTypeCastError(
+                TypeServiceRequest, t1Bad.AsAtomicType(), nil ),
+        },
+    )
+    // Not exhaustively re-testing all ways a field could be missing (assume for
+    // now that field order tests will handle that). Instead, we are just
+    // getting basic coverage that the field order supplied by the request
+    // reactor is in fact being set up correctly and that we have set up the
+    // right required fields.
+    AddStdReactorTests(
+        &ServiceRequestTest{
+            Source: MustSymbolMap( 
+                IdNamespace, ns1.ExternalForm(),
+                IdOperation, op1.ExternalForm(),
+            ),
+            Error: NewMissingFieldsError(
+                crtPathDefault, []*Identifier{ IdOperation } ),
+        },
+    )
+}
+
+type ServiceResponseTest struct {
+    In Value
+    ResVal Value
+    ErrVal Value
+    Error error
+}
+
+func initServiceResponseTests() {
+    addSucc := func( in, res, err Value ) {
+        AddStdReactorTests(
+            &ServiceResponseTest{ In: in, ResVal: res, ErrVal: err } )
+    }
+    i32Val1 := Int32( 1 )
+    err1 := MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
+    addSucc( MustStruct( QnameServiceResponse ), nil, nil )
+    addSucc( MustSymbolMap(), nil, nil )
+    addSucc( MustSymbolMap( IdResult, NullVal ), NullVal, nil )
+    addSucc( MustSymbolMap( IdResult, i32Val1 ), i32Val1, nil )
+    addSucc( MustSymbolMap( IdError, NullVal ), nil, NullVal )
+    addSucc( MustSymbolMap( IdError, err1 ), nil, err1 )
+    addFail := func( in Value, err error ) {
+        AddStdReactorTests( &ServiceResponseTest{ In: in, Error: err } )
+    }
+    errPath := objpath.RootedAt( IdError )
+    addFail( 
+        MustSymbolMap( IdError, i32Val1 ), 
+        NewValueCastError( errPath, "STUB" ),
+    )
+    addFail(
+        err1.Fields,
+        NewValueCastError( errPath, "STUB" ),
+    )
+    addFail(
+        MustStruct( "ns1@v1/ServiceResponse" ),
+        NewValueCastError( nil, "STUB" ),
+    )
+    addFail(
+        MustSymbolMap( IdResult, i32Val1, IdError, err1 ),
+        NewValueCastError( nil, "STUB" ),
+    )
+}
+
+func initServiceTests() {
+    initServiceRequestTests()
+    initServiceResponseTests()
 }
 
 type CastReactorTest struct {
@@ -943,6 +1302,7 @@ func init() {
     initValueBuildReactorTests()
     initStructuralReactorTests()
     initFieldOrderReactorTests()
+    initServiceTests()
     initCastReactorTests()
 }
 

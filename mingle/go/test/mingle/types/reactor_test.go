@@ -19,6 +19,10 @@ func ( tc testCall ) assertCastError( ct *CastReactorTest, err error ) {
         if ufe, ok := err.( *UnrecognizedFieldError ); ok {
             tc.Equal( ct.Err, ufe )
         } else { cae.FailActErrType() }
+    case *mg.MissingFieldsError:
+        if mfe, ok := err.( *mg.MissingFieldsError ); ok {
+            tc.Equal( ct.Err, mfe )
+        } else { cae.FailActErrType() }
     default: cae.Call()
     }
 }

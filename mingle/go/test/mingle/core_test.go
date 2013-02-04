@@ -763,3 +763,12 @@ func TestSortIds( t *testing.T ) {
         chk( in, ids )
     }
 }
+
+func TestMissingFieldsErrorFormatting( t *testing.T ) {
+    chk := func( msg string, flds ...*Identifier ) {
+        err := NewMissingFieldsError( nil, flds )
+        assert.Equal( msg, err.Error() )
+    }
+    chk( "missing field(s): f1", id( "f1" ) )
+    chk( "missing field(s): f1, f2", id( "f2" ), id( "f1" ) ) // check sorted
+}

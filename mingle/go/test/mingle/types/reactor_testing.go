@@ -134,19 +134,25 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     addSucc( mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
     addSucc( mg.MustStruct( "ns1@v1/S3" ) )
     addSucc( mg.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
+    id := mg.MustIdentifier
+    ids := func( strs ...string ) []*mg.Identifier {
+        res := make( []*mg.Identifier, len( strs ) )
+        for i, str := range strs { res[ i ] = id( str ) }
+        return res
+    }
     addFail(
         mg.MustStruct( "ns1@v1/S1" ),
-        newVcErr( nil, "missing field(s): f1" ),
+        mg.NewMissingFieldsError( nil, ids( "f1" ) ),
     )
     addFail(
         mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ),
-        newVcErr( nil, "missing field(s): f2" ),
+        mg.NewMissingFieldsError( nil, ids( "f2" ) ),
     )
     addFail(
         mg.MustStruct( "ns1@v1/S2" ),
-        newVcErr( nil, "missing field(s): f1, f2" ),
+        mg.NewMissingFieldsError( nil, ids( "f1", "f2" ) ),
     )
-    addFail( 
+    addFail(
         mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 2 ) ),
         newUnrecognizedFieldError( mg.MustIdentifier( "f2" ), nil ),
     )
