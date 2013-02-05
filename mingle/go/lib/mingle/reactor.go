@@ -4,7 +4,8 @@ import (
     "container/list"
     "fmt"
     "bitgirder/objpath"
-//    "log"
+    "bytes"
+    "log"
 )
 
 type ReactorError struct { msg string }
@@ -318,7 +319,7 @@ func ( epr *EventPathReactor ) preProcess( ev ReactorEvent ) {
         epr.stack.pushList( listIndex( -1 ) )
     case EndEvent: epr.stack.pop()
     case ValueEvent: epr.preProcessValue()
-    default: panic( libErrorf( "Uhandled event: %T", ev ) )
+    default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
 }
 
@@ -327,7 +328,7 @@ func ( epr *EventPathReactor ) completeValue() {
     switch v := epr.stack.peek().( type ) {
     case *Identifier, string: epr.stack.pop()
     case listIndex: {}
-    default: panic( libErrorf( "Uhandled feed stack element: %T", v ) )
+    default: panic( libErrorf( "Unhandled feed stack element: %T", v ) )
     }
 }
 
@@ -841,7 +842,7 @@ func ( cr *CastReactor ) completeValue(
         return cr.completeValue( ve, typVal.Type, rep )
     case *ListTypeReference: return cr.newTypeCastError( TypeOf( ve.Val ) )
     }
-    panic( libErrorf( "Uhandled type: %T", t ) )
+    panic( libErrorf( "Unhandled type: %T", t ) )
 }
 
 func ( cr *CastReactor ) value(
@@ -870,7 +871,7 @@ func ( cr *CastReactor ) completeStartList(
         }
         return cr.newTypeCastErrorPath( TypeOpaqueList, cr.GetPath() )
     }
-    panic( libErrorf( "Uhandled type: %T", typ ) )
+    panic( libErrorf( "Unhandled type: %T", typ ) )
 }
 
 func ( cr *CastReactor ) startList( 
@@ -1001,21 +1002,28 @@ func CastValue(
     return vb.GetValue(), nil
 }
 
+type FieldOrderSpecification struct {
+    Field *Identifier
+    Required bool
+}
+
+type FieldOrder []FieldOrderSpecification
+
 // Returns a field ordering for use by a FieldOrderReactor. The ordering is such
 // that for any fields f1, f2 such that f1 appears before f2 in the ordering, f1
 // will be sent to the associated FieldOrderReactor's downstream processors
 // ahead of f2. For fields not appearing in an ordering, there are no guarantees
 // as to when they will appear relative to ordered fields. 
 type FieldOrderGetter interface {
-    FieldOrderFor( qn *QualifiedTypeName ) []*Identifier
+    FieldOrderFor( qn *QualifiedTypeName ) FieldOrder
 }
 
 // Reorders events for selected struct types according to an order determined by
 // a FieldOrderGetter.
 //
-// The implementation is based on a stack of *fieldOrder instances, each of
+// The implementation is based on a stack of *fieldOrderCtx instances, each of
 // which tracks field orderings for some struct type. In cases where a struct
-// has no specified order, the *fieldOrder tracks the trivial empty ordering.
+// has no specified order, the *fieldOrderCtx tracks the trivial empty ordering.
 type FieldOrderReactor struct {
     fog FieldOrderGetter
     stack *list.List
@@ -1034,196 +1042,467 @@ func ( fo *FieldOrderReactor ) Init( rpi *ReactorPipelineInit ) {
     fo.pg = LastPathGetter( rpi )
 }
 
-type fieldOrder struct {
-    parent *fieldOrder
-    ord []*Identifier
+type fieldOrderCtx struct {
+    parent *fieldOrderCtx
+    ord FieldOrder
     valStates *IdentifierMap
     idx int
     acc []ReactorEvent
     accFld *Identifier
     valDepth int
     epRct *EventPathReactor
+    encl *FieldOrderReactor // The enclosing reactor
 }
 
-func ( ord *fieldOrder ) failRepeated( fld *Identifier ) error {
+func ( foc *fieldOrderCtx ) failRepeated( fld *Identifier ) error {
     return libErrorf( "repeated field: %s", fld )
 }
 
-func ( ord *fieldOrder ) nextField() *Identifier {
-    if ord.idx < len( ord.ord ) { return ord.ord[ ord.idx ] }
+func ( foc *fieldOrderCtx ) nextFieldSpec() FieldOrderSpecification {
+    if foc.idx < len( foc.ord ) { return foc.ord[ foc.idx ] }
     panic( libErrorf( "no next field in order" ) )
 }
 
-func ( ord *fieldOrder ) checkAccNil( errLoc string ) {
-    if ord.acc != nil { panic( libErrorf( "acc is non-nil %s", errLoc ) ) }
+func ( foc *fieldOrderCtx ) nextFieldId() *Identifier {
+    return foc.nextFieldSpec().Field
 }
 
-func ( ord *fieldOrder ) sendEvent( 
+func ( foc *fieldOrderCtx ) checkAccNil( errLoc string ) {
+    if foc.acc != nil { panic( libErrorf( "acc is non-nil %s", errLoc ) ) }
+}
+
+func ( foc *fieldOrderCtx ) sendEvent( 
     ev ReactorEvent, rep ReactorEventProcessor ) error {
-    if ord.acc == nil {
-        if ord.parent == nil { return rep.ProcessEvent( ev ) }
-        return ord.parent.sendEvent( ev, rep )
+    if foc.acc == nil {
+        if foc.parent == nil { return rep.ProcessEvent( ev ) }
+        return foc.parent.sendEvent( ev, rep )
     }
-    ord.acc = append( ord.acc, ev )
+    foc.acc = append( foc.acc, ev )
     return nil
 }
 
-func ( ord *fieldOrder ) startField( fld *Identifier ) {
-    ord.checkAccNil( fmt.Sprintf( "at start of field %s", fld ) )
-    ord.accFld = fld
-    if ! ord.valStates.HasKey( fld ) { return }
-    switch vs := ord.valStates.Get( fld ).( type ) {
+//func ( foc *fieldOrderCtx ) startField( fld *Identifier ) error {
+//    foc.checkAccNil( fmt.Sprintf( "at start of field %s", fld ) )
+//    foc.accFld = fld
+//    if ! foc.valStates.HasKey( fld ) { return nil }
+//    vs := foc.valStates.Get( fld )
+//    switch v := vs.( type ) {
+//    case bool:
+//        if v { panic( foc.failRepeated( fld ) ) }
+//        nxt := foc.nextFieldSpec()
+//        if nxt.Field.Equals( fld ) { return nil }
+//        if nxt.Required {
+//            return NewMissingFieldsError(   
+//                foc.encl.GetPath(), []*Identifier{ nxt.Field } )
+//        }
+//        foc.acc = []ReactorEvent{}
+//        return nil
+//    case []ReactorEvent: panic( foc.failRepeated( fld ) )
+//    }
+//    panic( libErrorf( "Unhandled val state: %T", vs ) )
+//}
+
+func ( foc *fieldOrderCtx ) startField( fld *Identifier ) {
+    foc.checkAccNil( fmt.Sprintf( "at start of field %s", fld ) )
+    foc.accFld = fld
+    if ! foc.valStates.HasKey( fld ) { return }
+    switch vs := foc.valStates.Get( fld ).( type ) {
     case bool:
-        if vs { panic( ord.failRepeated( fld ) ) }
-        if nxt := ord.nextField(); nxt.Equals( fld ) { return }
-        ord.acc = []ReactorEvent{}
-    case []ReactorEvent: panic( ord.failRepeated( fld ) )
+        if vs { panic( foc.failRepeated( fld ) ) }
+        if nxt := foc.nextFieldId(); nxt.Equals( fld ) { return }
+        foc.acc = []ReactorEvent{}
+    case []ReactorEvent: panic( foc.failRepeated( fld ) )
     default: panic( libErrorf( "Unhandled val state: %T", vs ) )
     }
 }
 
-func ( ord *fieldOrder ) updateValDepth( ev ReactorEvent ) {
+func ( foc *fieldOrderCtx ) updateValDepth( ev ReactorEvent ) {
     switch ev.( type ) {
-    case MapStartEvent, ListStartEvent: ord.valDepth++
-    case EndEvent: ord.valDepth--
+    case MapStartEvent, ListStartEvent: foc.valDepth++
+    case EndEvent: foc.valDepth--
     }
 }
 
-func ( ord *fieldOrder ) completeEvent( 
+func ( foc *fieldOrderCtx ) completeEvent( 
     ev ReactorEvent, rep ReactorEventProcessor ) error {
-    ord.updateValDepth( ev )
-    if ord.valDepth == 0 && ord.isFieldCompleter( ev ) { 
-        return ord.fieldCompleted( rep ) 
+    foc.updateValDepth( ev )
+    if foc.valDepth == 0 && foc.isFieldCompleter( ev ) { 
+        return foc.fieldCompleted( rep ) 
     }
     return nil
 }
 
 // Initial sanity check of p being a DictNode: we should only ever be feeding
 // fields of a map/struct
-func ( ord *fieldOrder ) appendFeedPath( p objpath.PathNode ) objpath.PathNode {
+func ( foc *fieldOrderCtx ) appendFeedPath( 
+    p objpath.PathNode ) objpath.PathNode {
     if _, ok := p.( *objpath.DictNode ); ! ok {
         panic( libErrorf( "Not a dict node: %s", FormatIdPath( p ) ) )
     }
     p = p.Parent() // It's a field, but we're feeding a sibling field
-    return ord.epRct.stack.AppendPath( p )
+    return foc.epRct.stack.AppendPath( p )
 }
 
-func ( ord *fieldOrder ) feedValue(
+func ( foc *fieldOrderCtx ) feedValue(
     fld *Identifier, acc []ReactorEvent, rep ReactorEventProcessor ) error {
-    ord.checkAccNil( "at feedValue()" )
-    ord.epRct = NewEventPathReactor( rep )
-    defer func() { ord.epRct = nil }()
+    foc.checkAccNil( "at feedValue()" )
+    foc.epRct = NewEventPathReactor( rep )
+    defer func() { foc.epRct = nil }()
     for _, ev := range acc {
-        if err := ord.sendEvent( ev, ord.epRct ); err != nil { return err }
+        if err := foc.sendEvent( ev, foc.epRct ); err != nil { return err }
     }
     return nil
 }
 
-func ( ord *fieldOrder ) sendReadyValues( rep ReactorEventProcessor ) error {
-    for ord.idx < len( ord.ord ) {
-        fld := ord.nextField()
-        vs := ord.valStates.Get( fld )
+func ( foc *fieldOrderCtx ) sendReadyValues( rep ReactorEventProcessor ) error {
+    for foc.idx < len( foc.ord ) {
+        fld := foc.nextFieldId()
+        vs := foc.valStates.Get( fld )
         if acc, ok := vs.( []ReactorEvent ); ok {
-            if err := ord.feedValue( fld, acc, rep ); err != nil { return err }
-            ord.valStates.Put( fld, true )
-            ord.idx++
+            if err := foc.feedValue( fld, acc, rep ); err != nil { return err }
+            foc.valStates.Put( fld, true )
+            foc.idx++
         } else { break }
     }
     return nil
 }
 
-func ( ord *fieldOrder ) isFieldCompleter( ev ReactorEvent ) bool {
+func ( foc *fieldOrderCtx ) isFieldCompleter( ev ReactorEvent ) bool {
     switch ev.( type ) {
     case EndEvent, ValueEvent: return true
     }
     return false
 }
 
-func ( ord *fieldOrder ) fieldCompleted( rep ReactorEventProcessor ) error {
-    if ord.idx < len( ord.ord ) && ord.accFld.Equals( ord.nextField() ) {
-        ord.idx++
+// Upon entry, we are in one of two states, as indicated by whether foc.accFld
+// == foc.nextFieldId()
+//
+//  - 'live': we just sent all field value events directly to the downstream
+//  processors; there is no accumulator foc.acc
+//
+//  - 'accumulating': we saw the current field foc.accFld out of order and
+//  accumulated events into foc.acc
+//
+// If we were live then we bump foc.idx and set the valState to true and, before
+// returning, send any previously accumulated and now-order-appropriate values
+// via sendReadyValues(). 
+//
+// If we were accumulating an out-of-order field, we set the accumulated events
+// for later and return, and do not attempt to send any previously accumulated
+// fields
+func ( foc *fieldOrderCtx ) fieldCompleted( rep ReactorEventProcessor ) error {
+    if foc.idx < len( foc.ord ) && foc.accFld.Equals( foc.nextFieldId() ) {
+        foc.idx++
+        foc.valStates.Put( foc.accFld, true )
     }
-    fld := ord.accFld
-    ord.accFld = nil
-    if ord.acc != nil {
-        ord.valStates.Put( fld, ord.acc )
-        ord.acc = nil 
+    fld := foc.accFld // Save before we nil it in case we enter branch below
+    foc.accFld = nil
+    if foc.acc != nil {
+        foc.valStates.Put( fld, foc.acc )
+        foc.acc = nil 
         return nil
     }
-    return ord.sendReadyValues( rep )
+    return foc.sendReadyValues( rep )
 }
 
-func ( ord *fieldOrder ) processEvent(
+func ( foc *fieldOrderCtx ) processEvent(
     ev ReactorEvent, rep ReactorEventProcessor ) error {
-    if fs, ok := ev.( FieldStartEvent ); ok && ord.accFld == nil {
-        ord.startField( fs.Field )
+    if fs, ok := ev.( FieldStartEvent ); ok && foc.accFld == nil {
+//        if err := foc.startField( fs.Field ); err != nil { return err }
+        foc.startField( fs.Field )
     }
-    if err := ord.sendEvent( ev, rep ); err != nil { return err }
-    return ord.completeEvent( ev, rep )
+    if err := foc.sendEvent( ev, rep ); err != nil { return err }
+    return foc.completeEvent( ev, rep )
 }
 
-func ( ord *fieldOrder ) endStruct( 
-    ee EndEvent, rep ReactorEventProcessor ) error {
-    ord.checkAccNil( "at end of struct" )
-    for i, e := ord.idx, len( ord.ord ); i < e; i++ {
-        fld := ord.ord[ i ]
-        vs := ord.valStates.Get( fld )
-        if acc, ok := vs.( []ReactorEvent ); ok {
-            if err := ord.feedValue( fld, acc, rep ); err != nil { return err }
+func ( foc *fieldOrderCtx ) checkRequiredFields() error {
+    miss := []*Identifier{}
+    for _, spec := range foc.ord {
+        switch v := foc.valStates.Get( spec.Field ).( type ) {
+        case bool: 
+            if spec.Required && ( ! v ) { miss = append( miss, spec.Field ) }
+        case []ReactorEvent: {}
+        default: panic( libErrorf( "Unhandled val state: %T", v ) )
         }
     }
-    return ord.sendEvent( ee, rep )
+    if len( miss ) > 0 {
+        return NewMissingFieldsError( foc.encl.GetPath(), miss )
+    }
+    return nil
 }
 
-func ( fo *FieldOrderReactor ) peek() *fieldOrder {
+func ( foc *fieldOrderCtx ) endStruct( 
+    ee EndEvent, rep ReactorEventProcessor ) error {
+    foc.checkAccNil( "at end of struct" )
+    if err := foc.checkRequiredFields(); err != nil { return err }
+    for i, e := foc.idx, len( foc.ord ); i < e; i++ {
+        fld := foc.ord[ i ].Field
+        vs := foc.valStates.Get( fld )
+        if acc, ok := vs.( []ReactorEvent ); ok {
+            if err := foc.feedValue( fld, acc, rep ); err != nil { return err }
+        }
+    }
+    return foc.sendEvent( ee, rep )
+}
+
+func ( fo *FieldOrderReactor ) peek() *fieldOrderCtx {
     if fo.stack.Len() == 0 { 
         panic( libErrorf( "field order stack is empty" ) ) 
     }
-    return fo.stack.Front().Value.( *fieldOrder )
+    return fo.stack.Front().Value.( *fieldOrderCtx )
 }
 
-func ( fo *FieldOrderReactor ) pop() *fieldOrder {
+func ( fo *FieldOrderReactor ) pop() *fieldOrderCtx {
     res := fo.peek()
     fo.stack.Remove( fo.stack.Front() )
     return res
 }
 
-var emptyIdSlice = []*Identifier{}
+var emptyFieldOrder = FieldOrder( []FieldOrderSpecification{} )
 
 func ( fo *FieldOrderReactor ) startStruct( qn *QualifiedTypeName ) {
-    flds := fo.fog.FieldOrderFor( qn )
-    if flds == nil { flds = emptyIdSlice }
+    ord := fo.fog.FieldOrderFor( qn )
+    if ord == nil { ord = emptyFieldOrder }
     valStates := NewIdentifierMap()
-    for _, id := range flds { valStates.Put( id, false ) }
-    ord := &fieldOrder{ ord: flds, valStates: valStates }
-    if fo.stack.Len() > 0 { ord.parent = fo.peek() }
+    for _, spec := range ord { valStates.Put( spec.Field, false ) }
+    foc := &fieldOrderCtx{ encl: fo, ord: ord, valStates: valStates }
+    if fo.stack.Len() > 0 { foc.parent = fo.peek() }
     // since parent won't see this event directly, we account for it here:
-    if ord.parent != nil { ord.parent.valDepth++ }
-    fo.stack.PushFront( ord )
+    if foc.parent != nil { foc.parent.valDepth++ }
+    fo.stack.PushFront( foc )
 }
 
 func ( fo *FieldOrderReactor ) ProcessEvent(
     ev ReactorEvent, rep ReactorEventProcessor ) error {
     if ss, ok := ev.( StructStartEvent ); ok { fo.startStruct( ss.Type ) }
     if fo.stack.Len() == 0 { return rep.ProcessEvent( ev ) }
-    ord := fo.peek()
-    if ee, ok := ev.( EndEvent ); ok && ord.valDepth == 0 {
+    foc := fo.peek()
+    if ee, ok := ev.( EndEvent ); ok && foc.valDepth == 0 {
         fo.pop()
-        if err := ord.endStruct( ee, rep ); err != nil { return err }
-        if ord.parent == nil { return nil }
-        return ord.parent.completeEvent( ev, rep )
+        if err := foc.endStruct( ee, rep ); err != nil { return err }
+        if foc.parent == nil { return nil }
+        return foc.parent.completeEvent( ev, rep )
     }
-    return ord.processEvent( ev, rep )
+    return foc.processEvent( ev, rep )
 }
 
 func ( fo *FieldOrderReactor ) GetPath() objpath.PathNode {
     res := fo.pg.GetPath()
     if fo.stack.Len() == 0 { return res }
     for e := fo.stack.Front(); e != nil; e = e.Next() {
-        ord := e.Value.( *fieldOrder )
-        if ord.epRct != nil { return ord.appendFeedPath( res ) }
+        foc := e.Value.( *fieldOrderCtx )
+        if foc.epRct != nil { return foc.appendFeedPath( res ) }
     }
     return res
+}
+
+type ServiceRequestReactorInterface interface {
+    Namespace( ns *Namespace, pg PathGetter ) error
+    Service( svc *Identifier, pg PathGetter ) error
+    Operation( op *Identifier, pg PathGetter ) error
+    GetAuthenticationProcessor() ReactorEventProcessor
+    GetParametersProcessor() ReactorEventProcessor
+}
+
+type requestFieldType int
+
+const (
+    reqFieldNone = requestFieldType( iota )
+    reqFieldNs
+    reqFieldSvc
+    reqFieldOp
+    reqFieldAuth
+    reqFieldParams
+)
+
+type ServiceRequestReactor struct {
+
+    iface ServiceRequestReactorInterface
+
+    evProc ReactorEventProcessor
+
+    // 0: before StartStruct{ QnameServiceRequest } and after final EndEvent
+    // 1: when reading a service request field (namespace, service, etc)
+    // > 1: accumulating some nested value for 'parameters' or 'authentication' 
+    depth int 
+
+    fld requestFieldType
+
+    pg PathGetter
+}
+
+func NewServiceRequestReactor( 
+    iface ServiceRequestReactorInterface ) *ServiceRequestReactor {
+    return &ServiceRequestReactor{ iface: iface }
+}
+
+func ( sr *ServiceRequestReactor ) getPath() objpath.PathNode {
+    return sr.pg.GetPath()
+}
+
+func ( sr *ServiceRequestReactor ) updateEvProc( ev ReactorEvent ) {
+    switch ev.( type ) {
+    case StructStartEvent, ListStartEvent, MapStartEvent: sr.depth++
+    case EndEvent: 
+        sr.depth--
+        if sr.depth == 1 { sr.evProc, sr.fld = nil, reqFieldNone } 
+    }
+}
+
+type svcReqCastIface int
+
+func ( c svcReqCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
+    return qn.Equals( QnameServiceRequest )
+}
+
+type svcReqFieldTyper int
+
+func ( t svcReqFieldTyper ) FieldTypeOf( 
+    fld *Identifier, pg PathGetter ) ( TypeReference, error ) {
+    if fld.Equals( IdParameters ) { return TypeSymbolMap, nil }
+    return TypeValue, nil
+}
+
+func ( c svcReqCastIface ) FieldTyperFor( 
+    qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error ) {
+    if qn.Equals( QnameServiceRequest ) { return svcReqFieldTyper( 1 ), nil }
+    return nil, nil
+}
+
+func ( c svcReqCastIface ) CastAtomic( 
+    in Value, at *AtomicTypeReference, pg PathGetter ) ( Value, error, bool ) {
+    return nil, nil, false
+}
+
+type svcReqFieldOrderGetter int
+
+func ( g svcReqFieldOrderGetter ) FieldOrderFor( 
+    qn *QualifiedTypeName ) FieldOrder {
+    if qn.Equals( QnameServiceRequest ) { return svcReqFieldOrder }
+    return nil
+}
+
+func ( sr *ServiceRequestReactor ) Init( rpi *ReactorPipelineInit ) {
+    EnsureStructuralReactor( rpi ) 
+    cr := NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ), nil )
+    rpi.AddPipelineProcessor( cr )
+    fo := NewFieldOrderReactor( svcReqFieldOrderGetter( 1 ) )
+    rpi.AddPipelineProcessor( fo )
+    sr.pg = LastPathGetter( rpi )
+}
+
+func ( sr *ServiceRequestReactor ) invalidValueErr( desc string ) error {
+    return NewValueCastErrorf( sr.getPath(), "invalid value: %s", desc )
+}
+
+func ( sr *ServiceRequestReactor ) startStruct( ev StructStartEvent ) error {
+    if sr.fld == reqFieldNone { // we're at the top of the request
+        if ev.Type.Equals( QnameServiceRequest ) { return nil }
+        // panic because upstream cast should have checked already
+        panic( libErrorf( "Unexpected service request type: %s", ev.Type ) )
+    }
+    return sr.invalidValueErr( ev.Type.ExternalForm() )
+}
+
+func ( sr *ServiceRequestReactor ) startField( fs FieldStartEvent ) error {
+    if sr.fld != reqFieldNone {
+        panic( libErrorf( 
+            "Saw field start '%s' while sr.fld is %d", fs.Field, sr.fld ) )
+    }
+    switch fld := fs.Field; {
+    case fld.Equals( IdNamespace ): sr.fld = reqFieldNs
+    case fld.Equals( IdService ): sr.fld = reqFieldSvc
+    case fld.Equals( IdOperation ): sr.fld = reqFieldOp
+    case fld.Equals( IdAuthentication ): 
+        sr.fld, sr.evProc = reqFieldAuth, sr.iface.GetAuthenticationProcessor()
+    case fld.Equals( IdParameters ): 
+        sr.fld, sr.evProc = reqFieldParams, sr.iface.GetParametersProcessor()
+    }
+    if sr.fld == reqFieldNone {
+        return NewUnrecognizedFieldError( sr.getPath(), fs.Field )
+    }
+    return nil
+}
+
+func ( sr *ServiceRequestReactor ) getFieldValueForString(
+    s string, reqFld requestFieldType ) ( res interface{}, err error ) {
+    switch reqFld {
+    case reqFieldNs: res, err = ParseNamespace( s )
+    case reqFieldSvc, reqFieldOp: res, err = ParseIdentifier( s )
+    default:
+        panic( libErrorf( "Unhandled req fld type for string: %d", reqFld ) )
+    }
+    if err != nil { err = NewValueCastError( sr.getPath(), err.Error() ) }
+    return
+}
+
+func ( sr *ServiceRequestReactor ) getFieldValueForBuffer(
+    buf []byte, reqFld requestFieldType ) ( res interface{}, err error ) {
+    bin := NewReader( bytes.NewReader( buf ) )
+    switch reqFld {
+    case reqFieldNs: res, err = bin.ReadNamespace()
+    case reqFieldSvc, reqFieldOp: res, err = bin.ReadIdentifier()
+    default:
+        panic( libErrorf( "Unhandled req fld type for buffer: %d", reqFld ) )
+    }
+    if err != nil { err = NewValueCastError( sr.getPath(), err.Error() ) }
+    return
+}
+
+func ( sr *ServiceRequestReactor ) getFieldValue( 
+    val Value, reqFld requestFieldType ) ( interface{}, error ) {
+    switch v := val.( type ) {
+    case String: return sr.getFieldValueForString( string( v ), reqFld )
+    case Buffer: return sr.getFieldValueForBuffer( []byte( v ), reqFld )
+    }
+    return nil, sr.invalidValueErr( TypeOf( val ).ExternalForm() )
+}
+
+func ( sr *ServiceRequestReactor ) namespace( val Value ) error {
+    ns, err := sr.getFieldValue( val, reqFieldNs )
+    if err == nil { return sr.iface.Namespace( ns.( *Namespace ), sr.pg ) }
+    return err
+}
+
+func ( sr *ServiceRequestReactor ) readIdent( 
+    val Value, reqFld requestFieldType ) error {
+    v2, err := sr.getFieldValue( val, reqFld )
+    if err == nil {
+        id := v2.( *Identifier )
+        switch reqFld {
+        case reqFieldSvc: return sr.iface.Service( id, sr.pg )
+        case reqFieldOp: return sr.iface.Operation( id, sr.pg )
+        default: panic( libErrorf( "Unhandled req fld type: %d", reqFld ) )
+        }
+    }
+    return err
+}
+
+func ( sr *ServiceRequestReactor ) value( val Value ) error {
+    defer func() { sr.fld = reqFieldNone }()
+    switch sr.fld {
+    case reqFieldNs: return sr.namespace( val )
+    case reqFieldSvc, reqFieldOp: return sr.readIdent( val, sr.fld )
+    }
+    panic( libErrorf( "Unhandled req field type: %d", sr.fld ) )
+}
+
+func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
+    log.Printf( "Entering ProcessEvent, depth: %d", sr.depth )
+    defer sr.updateEvProc( ev )
+    if sr.evProc != nil { return sr.evProc.ProcessEvent( ev ) }
+    switch v := ev.( type ) {
+    case FieldStartEvent: return sr.startField( v )
+    case StructStartEvent: return sr.startStruct( v )
+    case ValueEvent: return sr.value( v.Val )
+    case ListStartEvent: 
+        return sr.invalidValueErr( TypeOpaqueList.ExternalForm() )
+    case MapStartEvent: 
+        return sr.invalidValueErr( TypeSymbolMap.ExternalForm() )
+    case EndEvent: {} // nothing to do: updateEvProc() will handle
+    default: panic( libErrorf( "Unhandled event: %T", v ) )
+    }
+    return nil
 }
 
 type DebugLogger interface { Logf( tmpl string, args ...interface{} ) }

@@ -1042,6 +1042,7 @@ var (
     IdOperation *Identifier
     IdParameters *Identifier
     IdAuthentication *Identifier
+    svcReqFieldOrder FieldOrder // initialized in same scope as Ids above
     IdResult *Identifier
     IdError *Identifier
 )
@@ -1123,6 +1124,15 @@ func init() {
     IdOperation = id( []string{ "operation" } )
     IdParameters = id( []string{ "parameters" } )
     IdAuthentication = id( []string{ "authentication" } )
+    svcReqFieldOrder = FieldOrder(
+        []FieldOrderSpecification{
+            { IdNamespace, true },
+            { IdService, true },
+            { IdOperation, true },
+            { IdAuthentication, false },
+            { IdParameters, false },
+        },
+    )
     IdResult = id( []string{ "result" } )
     IdError =id( []string{ "error" } )
 }
@@ -1210,6 +1220,24 @@ func ( e *MissingFieldsError ) Error() string {
 
 func ( e *MissingFieldsError ) Location() objpath.PathNode { 
     return e.impl.Location() 
+}
+
+type UnrecognizedFieldError struct {
+    impl ValueErrorImpl
+    fld *Identifier
+}
+
+func NewUnrecognizedFieldError( 
+    p objpath.PathNode, fld *Identifier ) *UnrecognizedFieldError {
+    return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, fld: fld }
+}
+
+func ( e *UnrecognizedFieldError ) Error() string {
+    return e.impl.MakeError( fmt.Sprintf( "unrecognized field: %s", e.fld ) )
+}
+
+func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {
+    return e.impl.Location()
 }
 
 type mapImplKey interface { ExternalForm() string }

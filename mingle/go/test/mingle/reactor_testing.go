@@ -6,6 +6,7 @@ import (
     "fmt"
     "encoding/base64"
     "bytes"
+//    "log"
 )
 
 type ReactorTest interface {}
@@ -16,13 +17,13 @@ func AddStdReactorTests( t ...ReactorTest ) {
     StdReactorTests = append( StdReactorTests, t... )
 }
 
-func flattenEvs( evs ...interface{} ) []ReactorEvent {
-    res := make( []ReactorEvent, 0, len( evs ) )
-    for _, ev := range evs {
-        switch v := ev.( type ) {
+func flattenEvs( vals ...interface{} ) []ReactorEvent {
+    res := make( []ReactorEvent, 0, len( vals ) )
+    for _, val := range vals {
+        switch v := val.( type ) {
         case ReactorEvent: res = append( res, v )
         case []ReactorEvent: res = append( res, v... )
-        case []interface{}: res = append( res, flattenEvs( res )... )
+        case []interface{}: res = append( res, flattenEvs( v... )... )
         default: panic( libErrorf( "Uhandled ev type for flatten: %T", v ) )
         }
     }
@@ -334,20 +335,24 @@ func initFieldOrderValueTests() {
     for i := 0; i < 4; i++ { addTest1( fldEvs[ i ], fldVals[ i ] ) }
 }
 
-type FieldOrder []*Identifier
-
-type FixedOrderFieldCheckTest struct {
+type FieldOrderMissingFieldsTest struct {
     Order FieldOrder
     Source []ReactorEvent
     Expect Value
-    Error error
+    Error *MissingFieldsError
 }
 
 func initFieldOrderMissingFieldTests() {
     fldId := func( i int ) *Identifier { return id( fmt.Sprintf( "f%d", i ) ) }
-    fldsLen := 5
-    ord := FieldOrder( make( []*Identifier, fldsLen ) )
-    for i := 0; i < fldsLen; i++ { ord[ i ] = fldId( i ) }
+    ord := FieldOrder( 
+        []FieldOrderSpecification{
+            { fldId( 0 ), true },
+            { fldId( 1 ), true },
+            { fldId( 2 ), false },
+            { fldId( 3 ), false },
+            { fldId( 4 ), true },
+        },
+    )
     t1 := qname( "ns1@v1/S1" )
     mkSrc := func( flds []int ) []ReactorEvent {
         evs := []interface{}{ StructStartEvent{ t1 } }
@@ -355,49 +360,48 @@ func initFieldOrderMissingFieldTests() {
             evs = append( evs, FieldStartEvent{ fldId( fld ) } )
             evs = append( evs, ValueEvent{ Int32( fld ) } )
         }
-        evs = append( evs, EvEnd )
-        return flattenEvs( evs )
+        return flattenEvs( append( evs, EvEnd ) )
     }
     mkVal := func( flds []int ) *Struct {
-        pairs := make( []interface{}, 2 * len( flds ) )
-        for i, e := 0, len( flds ); i < e; i++ {
-            pairs[ i * 2 ] = fldId( i )
-            pairs[ ( i * 2 ) + 1 ] = Int32( i )
+        pairs := make( []interface{}, 0, 2 * len( flds ) )
+        for _, fld := range flds {
+            pairs = append( pairs, fldId( fld ), Int32( fld ) )
         }
         return MustStruct( t1, pairs... )
     }
     addSucc := func( flds ...int ) {
         AddStdReactorTests(
-            &FixedOrderFieldCheckTest{
+            &FieldOrderMissingFieldsTest{
                 Order: ord,
                 Source: mkSrc( flds ),
                 Expect: mkVal( flds ),
             },
         )
     }
-    addSucc( 1, 2, 5 )
-    addSucc( 5, 1, 2 )
-    addSucc( 1, 2, 4, 5 )
-    addSucc( 1, 4, 2, 5 )
-    addSucc( 1, 2, 5, 4, 3 )
-    addErr := func( errFld int, flds ...int ) {
+    addSucc( 0, 1, 4 )
+    addSucc( 4, 0, 1 )
+    addSucc( 0, 1, 3, 4 )
+    addSucc( 0, 3, 1, 4 )
+    addSucc( 0, 1, 4, 3, 2 )
+    addErr := func( missIds []int, flds ...int ) {
+        miss := make( []*Identifier, len( missIds ) )
+        for i, missId := range missIds { miss[ i ] = fldId( missId ) }
         AddStdReactorTests(
-            &FixedOrderFieldCheckTest{
+            &FieldOrderMissingFieldsTest{
                 Order: ord,
                 Source: mkSrc( flds ),
-                Error: NewMissingFieldsError(
-                    crtPathDefault, 
-                    []*Identifier{ fldId( errFld ) },
-                ),
+                Error: NewMissingFieldsError( nil, miss ),
             },
         )
     }
-    addErr( 1, 2, 3, 4, 5 )
-    addErr( 1, 5 )
-    addErr( 2, 1 )
-    addErr( 5, 2 )
-    addErr( 5, 2, 1 )
-    addErr( 2, 5, 4, 1, 3 )
+    addErr( []int{ 0 }, 1, 2, 3, 4 )
+    addErr( []int{ 1 }, 0, 4, 3, 2 )
+    addErr( []int{ 4 }, 3, 2, 1, 0 )
+    addErr( []int{ 0, 1 }, 4 )
+    addErr( []int{ 1, 4 }, 0 )
+    addErr( []int{ 0, 4 }, 1 )
+    addErr( []int{ 4 }, 1, 0 )
+    addErr( []int{ 1 }, 4, 3, 0, 2 )
 }
 
 type FieldOrderPathTest struct {
@@ -489,7 +493,7 @@ func initFieldOrderReactorTests() {
     initFieldOrderPathTests()
 }
 
-type ServiceRequestTest struct {
+type ServiceRequestReactorTest struct {
     Source interface{}
     Namespace *Namespace
     Service *Identifier
@@ -522,7 +526,7 @@ func initServiceRequestTests() {
         []ReactorEvent{  StructStartEvent{ authQn }, evFldF1, i32Val1, EvEnd }
     addSucc1 := func( evs ...interface{} ) {
         AddStdReactorTests(
-            ServiceRequestTest{
+            &ServiceRequestReactorTest{
                 Source: flattenEvs( evs... ),
                 Namespace: ns1,
                 Service: svc1,
@@ -561,7 +565,7 @@ func initServiceRequestTests() {
     }
     addSucc2 := func( src interface{}, authExpct Value ) {
         AddStdReactorTests(
-            &ServiceRequestTest{
+            &ServiceRequestReactorTest{
                 Namespace: ns1,
                 Service: svc1,
                 Operation: op1,
@@ -577,20 +581,20 @@ func initServiceRequestTests() {
     addSucc2( mkReq1( nil, auth1 ), auth1 )
     // check implicit params with and without auth and with need for reordering
     addSucc2(
-        []interface{}{ evReqTyp, 
+        flattenEvs( evReqTyp, 
             evFldSvc, evSvc1, 
             evFldOp, evOp1, 
             evFldNs, evNs1,
-        },
+        ),
         nil,
     )
     addSucc2(
-        []interface{}{ evReqTyp,
+        flattenEvs( evReqTyp,
             evFldSvc, evSvc1,
             evFldAuth, evAuth1,
             evFldOp, evOp1,
             evFldNs, evNs1,
-        },
+        ),
         auth1,
     )
     writeMgIo := func( f func( w *BinWriter ) ) Buffer {
@@ -606,7 +610,7 @@ func initServiceRequestTests() {
         return writeMgIo( func( w *BinWriter ) { w.WriteIdentifier( id ) } )
     }
     AddStdReactorTests(
-        &ServiceRequestTest{
+        &ServiceRequestReactorTest{
             Namespace: ns1,
             Service: svc1,
             Operation: op1,
@@ -620,7 +624,7 @@ func initServiceRequestTests() {
     )
     addReqVcErr := func( val interface{}, path idPath, msg string ) {
         AddStdReactorTests(
-            &ServiceRequestTest{
+            &ServiceRequestReactorTest{
                 Source: MustValue( val ),
                 Error: NewValueCastError( path, msg ),
             },
@@ -629,12 +633,27 @@ func initServiceRequestTests() {
     addReqVcErr(
         MustSymbolMap( IdNamespace, true ), 
         objpath.RootedAt( IdNamespace ),
-        "STUB",
+        "invalid value: mingle:core@v1/Boolean",
+    )
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, MustSymbolMap() ),
+        objpath.RootedAt( IdNamespace ),
+        "invalid value: mingle:core@v1/SymbolMap",
+    )
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, MustStruct( "ns1@v1/S1" ) ),
+        objpath.RootedAt( IdNamespace ),
+        "invalid value: ns1@v1/S1",
+    )
+    addReqVcErr(
+        MustSymbolMap( IdNamespace, MustList() ),
+        objpath.RootedAt( IdNamespace ),
+        "invalid value: mingle:core@v1/Value*",
     )
     addReqVcErr(
         MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, true ),
         objpath.RootedAt( IdService ),
-        "STUB",
+        "invalid value: mingle:core@v1/Boolean",
     )
     addReqVcErr(
         MustSymbolMap( 
@@ -643,17 +662,22 @@ func initServiceRequestTests() {
             IdOperation, true,
         ),
         objpath.RootedAt( IdOperation ),
-        "STUB",
+        "invalid value: mingle:core@v1/Boolean",
     )
-    addReqVcErr(
-        MustSymbolMap(
-            IdNamespace, ns1.ExternalForm(),
-            IdService, svc1.ExternalForm(),
-            IdOperation, op1.ExternalForm(),
-            IdParameters, true,
-        ),
-        objpath.RootedAt( IdParameters ),
-        "STUB",
+    AddStdReactorTests(
+        &ServiceRequestReactorTest{
+            Source: MustSymbolMap(
+                IdNamespace, ns1.ExternalForm(),
+                IdService, svc1.ExternalForm(),
+                IdOperation, op1.ExternalForm(),
+                IdParameters, true,
+            ),
+            Error: NewTypeCastError(
+                TypeSymbolMap,
+                TypeBoolean,
+                objpath.RootedAt( IdParameters ),
+            ),
+        },
     )
     // Check that errors are bubbled up from
     // *BinWriter.Read(Identfier|Namespace) when parsing invalid
@@ -666,12 +690,19 @@ func initServiceRequestTests() {
         )
     }
     badBuf := []byte{ 0x0f }
-    addBinRdErr( IdNamespace, "STUB", IdNamespace, badBuf )
-    addBinRdErr( IdService, "STUB", 
+    addBinRdErr( 
+        IdNamespace, 
+        "Expected type code 0x02 but got 0x0f",
+        IdNamespace, badBuf )
+    addBinRdErr( 
+        IdService, 
+        "Expected type code 0x01 but got 0x0f",
         IdNamespace, ns1.ExternalForm(), 
         IdService, badBuf,
     )
-    addBinRdErr( IdOperation, "STUB",
+    addBinRdErr( 
+        IdOperation, 
+        "Expected type code 0x01 but got 0x0f",
         IdNamespace, ns1.ExternalForm(),
         IdService, svc1.ExternalForm(),
         IdOperation, badBuf,
@@ -679,12 +710,14 @@ func initServiceRequestTests() {
     addReqVcErr(
         MustSymbolMap( IdNamespace, "ns1::ns2" ),
         objpath.RootedAt( IdNamespace ),
-        "STUB",
+        "[<input>, line 1, col 5]: Illegal start of identifier part: \":\" " +
+        "(U+003A)",
     )
     addReqVcErr(
         MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, "2bad" ),
         objpath.RootedAt( IdService ),
-        "STUB",
+        "[<input>, line 1, col 1]: Illegal start of identifier part: \"2\" " +
+        "(U+0032)",
     )
     addReqVcErr(
         MustSymbolMap(
@@ -693,11 +726,12 @@ func initServiceRequestTests() {
             IdOperation, "2bad",
         ),
         objpath.RootedAt( IdOperation ),
-        "STUB",
+        "[<input>, line 1, col 1]: Illegal start of identifier part: \"2\" " +
+        "(U+0032)",
     )
     t1Bad := qname( "foo@v1/Request" )
     AddStdReactorTests(
-        &ServiceRequestTest{
+        &ServiceRequestReactorTest{
             Source: MustStruct( t1Bad ),
             Error: NewTypeCastError(
                 TypeServiceRequest, t1Bad.AsAtomicType(), nil ),
@@ -709,18 +743,17 @@ func initServiceRequestTests() {
     // reactor is in fact being set up correctly and that we have set up the
     // right required fields.
     AddStdReactorTests(
-        &ServiceRequestTest{
+        &ServiceRequestReactorTest{
             Source: MustSymbolMap( 
                 IdNamespace, ns1.ExternalForm(),
                 IdOperation, op1.ExternalForm(),
             ),
-            Error: NewMissingFieldsError(
-                crtPathDefault, []*Identifier{ IdOperation } ),
+            Error: NewMissingFieldsError( nil, []*Identifier{ IdService } ),
         },
     )
 }
 
-type ServiceResponseTest struct {
+type ServiceResponseReactorTest struct {
     In Value
     ResVal Value
     ErrVal Value
@@ -730,7 +763,7 @@ type ServiceResponseTest struct {
 func initServiceResponseTests() {
     addSucc := func( in, res, err Value ) {
         AddStdReactorTests(
-            &ServiceResponseTest{ In: in, ResVal: res, ErrVal: err } )
+            &ServiceResponseReactorTest{ In: in, ResVal: res, ErrVal: err } )
     }
     i32Val1 := Int32( 1 )
     err1 := MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
@@ -741,7 +774,7 @@ func initServiceResponseTests() {
     addSucc( MustSymbolMap( IdError, NullVal ), nil, NullVal )
     addSucc( MustSymbolMap( IdError, err1 ), nil, err1 )
     addFail := func( in Value, err error ) {
-        AddStdReactorTests( &ServiceResponseTest{ In: in, Error: err } )
+        AddStdReactorTests( &ServiceResponseReactorTest{ In: in, Error: err } )
     }
     errPath := objpath.RootedAt( IdError )
     addFail( 
@@ -764,7 +797,7 @@ func initServiceResponseTests() {
 
 func initServiceTests() {
     initServiceRequestTests()
-    initServiceResponseTests()
+//    initServiceResponseTests()
 }
 
 type CastReactorTest struct {

@@ -772,3 +772,10 @@ func TestMissingFieldsErrorFormatting( t *testing.T ) {
     chk( "missing field(s): f1", id( "f1" ) )
     chk( "missing field(s): f1, f2", id( "f2" ), id( "f1" ) ) // check sorted
 }
+
+func TestUnrecognizedFieldErrorFormatting( t *testing.T ) {
+    assert.Equal(
+        "unrecognized field: f1",
+        NewUnrecognizedFieldError( nil, id( "f1" ) ).Error(),
+    )
+}
