@@ -71,6 +71,16 @@ type reactorTestCall struct {
     rt ReactorTest
 }
 
+func ( c *reactorTestCall ) checkNoError( err error ) {
+    if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
+}
+
+func ( c *reactorTestCall ) equalErrors( expct, act error ) {
+    if expct == nil { c.Fatal( act ) }
+    c.Equalf( expct, act, "expected %q (%T) but got %q (%T)",
+        expct, expct, act, act )
+}
+
 func ( c *reactorTestCall ) feedStructureEvents( 
     evs []ReactorEvent, tt ReactorTopType ) ( *StructuralReactor, error ) {
     rct := NewStructuralReactor( tt )
@@ -366,11 +376,11 @@ func ( c *reactorTestCall ) createCastReactor(
 func ( c *reactorTestCall ) callCast( ct *CastReactorTest ) {
     rct := NewValueBuilder()
     pip := InitReactorPipeline( 
-//        NewDebugReactor( c ),
+        NewDebugReactor( c ),
         c.createCastReactor( ct ), 
         rct,
     )
-//    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
+    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
     if err := VisitValue( ct.In, pip ); err == nil { 
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
@@ -427,21 +437,23 @@ func ( chk *requestCheck ) GetParametersProcessor() ReactorEventProcessor {
     return chk.params
 }
 
-func ( chk *requestCheck ) checkValue(
-    desc string, expct Value, vb *ValueBuilder ) {
-    a := chk.Descend( desc )
+func checkBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
     if expct == nil {
         if vb != nil {
             a.Fatalf( "unexpected value: %s", QuoteValue( vb.GetValue() ) )
         }
-    } else { EqualValues( expct, vb.GetValue(), a ) }
+    } else { 
+        a.Falsef( vb == nil, 
+            "expecting value %s but value builder is nil", QuoteValue( expct ) )
+        EqualValues( expct, vb.GetValue(), a ) 
+    }
 }
 
 func ( chk *requestCheck ) checkRequest() {
-    if chk.st == nil {
-        chk.checkValue( "authentication", chk.st.Authentication, chk.auth )
-        chk.checkValue( "parameters", chk.st.Parameters, chk.params )
-    }
+    checkBuiltValue( 
+        chk.st.Authentication, chk.auth, chk.Descend( "authentication" ) )
+    checkBuiltValue( 
+        chk.st.Parameters, chk.params, chk.Descend( "parameters" ) )
 }
 
 func ( c *reactorTestCall ) feedServiceRequest(
@@ -459,17 +471,47 @@ func ( c *reactorTestCall ) feedServiceRequest(
 
 func ( c *reactorTestCall ) callServiceRequest(
     st *ServiceRequestReactorTest ) {
+    c.Logf( "Source: %v", st.Source )
     reqChk := &requestCheck{ PathAsserter: c.PathAsserter, st: st }
-    rct := InitReactorPipeline( 
-        NewDebugReactor( c ), NewServiceRequestReactor( reqChk ) )
+//    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
+    rct := InitReactorPipeline( NewDebugReactor( c ), NewServiceRequestReactor( reqChk ) )
     if err := c.feedServiceRequest( st.Source, rct ); err == nil {
-        if e2 := st.Error; e2 != nil { c.Fatalf( "Expected %T: %s", e2, e2 ) }
+        c.checkNoError( st.Error )
         reqChk.checkRequest()
-    } else { 
-        if st.Error == nil { c.Fatal( err ) }
-        c.Equalf( st.Error, err, "expected %q (%T) but got %q (%T)",
-            st.Error, st.Error, err, err )
-    }
+    } else { c.equalErrors( st.Error, err ) }
+}
+
+type responseCheck struct {
+    *assert.PathAsserter
+    st *ServiceResponseReactorTest
+    err *ValueBuilder
+    res *ValueBuilder
+}
+
+func ( rc *responseCheck ) GetResultProcessor() ReactorEventProcessor {
+    rc.res = NewValueBuilder()
+    return rc.res
+}
+
+func ( rc *responseCheck ) GetErrorProcessor() ReactorEventProcessor {
+    rc.err = NewValueBuilder()
+    return rc.err
+}
+
+func ( rc *responseCheck ) check() {
+    checkBuiltValue( rc.st.ResVal, rc.res, rc.Descend( "Result" ) )
+    checkBuiltValue( rc.st.ErrVal, rc.err, rc.Descend( "Error" ) )
+}
+
+func ( c *reactorTestCall ) callServiceResponse( 
+    st *ServiceResponseReactorTest ) {
+    chk := &responseCheck{ PathAsserter: c.PathAsserter, st: st }
+    rct := InitReactorPipeline( 
+        NewDebugReactor( c ), NewServiceResponseReactor( chk ) )
+    if err := VisitValue( st.In, rct ); err == nil {
+        c.checkNoError( st.Error )
+        chk.check()
+    } else { c.equalErrors( st.Error, err ) }
 }
 
 func ( c *reactorTestCall ) call() {
@@ -483,6 +525,7 @@ func ( c *reactorTestCall ) call() {
     case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
     case *CastReactorTest: c.callCast( s )
     case *ServiceRequestReactorTest: c.callServiceRequest( s )
+    case *ServiceResponseReactorTest: c.callServiceResponse( s )
     default: panic( libErrorf( "Unhandled test source: %T", c.rt ) )
     }
 }

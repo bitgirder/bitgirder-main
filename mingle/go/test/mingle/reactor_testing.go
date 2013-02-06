@@ -553,6 +553,23 @@ func initServiceRequestTests() {
         evFldSvc, evSvc1,
         EvEnd,
     )
+    AddStdReactorTests(
+        &ServiceRequestReactorTest{
+            Source: flattenEvs( evReqTyp,
+                evFldNs, evNs1,
+                evFldSvc, evSvc1,
+                evFldOp, evOp1,
+                evFldAuth, i32Val1,
+                evFldParams, evParams1,
+                EvEnd,
+            ),
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Authentication: Int32( 1 ),
+            Parameters: params1,
+        },
+    )
     mkReq1 := func( params, auth Value ) *Struct {
         pairs := []interface{}{ 
             IdNamespace, ns1.ExternalForm(),
@@ -585,6 +602,7 @@ func initServiceRequestTests() {
             evFldSvc, evSvc1, 
             evFldOp, evOp1, 
             evFldNs, evNs1,
+            EvEnd,
         ),
         nil,
     )
@@ -594,6 +612,7 @@ func initServiceRequestTests() {
             evFldAuth, evAuth1,
             evFldOp, evOp1,
             evFldNs, evNs1,
+            EvEnd,
         ),
         auth1,
     )
@@ -776,28 +795,28 @@ func initServiceResponseTests() {
     addFail := func( in Value, err error ) {
         AddStdReactorTests( &ServiceResponseReactorTest{ In: in, Error: err } )
     }
-    errPath := objpath.RootedAt( IdError )
-    addFail( 
-        MustSymbolMap( IdError, i32Val1 ), 
-        NewValueCastError( errPath, "STUB" ),
-    )
     addFail(
         err1.Fields,
-        NewValueCastError( errPath, "STUB" ),
+        NewUnrecognizedFieldError( nil, id( "f1" ) ),
     )
     addFail(
         MustStruct( "ns1@v1/ServiceResponse" ),
-        NewValueCastError( nil, "STUB" ),
+        NewTypeCastError( 
+            TypeServiceResponse, 
+            MustTypeReference( "ns1@v1/ServiceResponse" ),
+            nil, 
+        ),
     )
     addFail(
         MustSymbolMap( IdResult, i32Val1, IdError, err1 ),
-        NewValueCastError( nil, "STUB" ),
+        NewValueCastError( 
+            nil, "response has both a result and an error value" ),
     )
 }
 
 func initServiceTests() {
     initServiceRequestTests()
-//    initServiceResponseTests()
+    initServiceResponseTests()
 }
 
 type CastReactorTest struct {

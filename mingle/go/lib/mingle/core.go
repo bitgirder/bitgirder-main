@@ -1037,6 +1037,8 @@ var (
     TypeServiceRequest *AtomicTypeReference
     QnameServiceResponse *QualifiedTypeName
     TypeServiceResponse *AtomicTypeReference
+    TypeOpaqueList *ListTypeReference
+    TypeNullableValue *NullableTypeReference
     IdNamespace *Identifier
     IdService *Identifier
     IdOperation *Identifier
@@ -1109,6 +1111,8 @@ func init() {
         TypeBuffer,
         TypeSymbolMap,
     }
+    TypeOpaqueList = &ListTypeReference{ TypeValue, true }
+    TypeNullableValue = &NullableTypeReference{ TypeValue }
     NumericTypes = []*AtomicTypeReference{
         TypeInt32,
         TypeInt64,
@@ -1153,9 +1157,6 @@ func IsIntegerType( typ TypeReference ) bool {
            typ.Equals( TypeUint32 ) ||
            typ.Equals( TypeUint64 )
 }
-
-var TypeOpaqueList *ListTypeReference
-func init() { TypeOpaqueList = &ListTypeReference{ TypeValue, true } }
 
 func TypeOf( mgVal Value ) TypeReference {
     switch v := mgVal.( type ) {
