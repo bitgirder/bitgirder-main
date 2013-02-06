@@ -485,6 +485,19 @@ func initFieldOrderPathTests() {
             },
         )
     }
+    // Regression for bug fixed in previous commit (f7fa84122047)
+    AddStdReactorTests(
+        &FieldOrderPathTest{
+            Source: []ReactorEvent{ ss( 1 ), fld( 1 ), val1, EvEnd },
+            Expect: []EventExpectation{
+                { ss( 1 ), nil },
+                { fld( 1 ), p( 1 ) },
+                { val1, p( 1 ) },
+                { EvEnd, nil },
+            },
+            Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ) },
+        },
+    )
 }
 
 func initFieldOrderReactorTests() {
