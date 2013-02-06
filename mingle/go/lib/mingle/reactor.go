@@ -5,7 +5,7 @@ import (
     "fmt"
     "bitgirder/objpath"
     "bytes"
-    "log"
+//    "log"
 )
 
 type ReactorError struct { msg string }
@@ -238,14 +238,12 @@ func newEventStack() *eventStack {
 }
 
 func ( s *eventStack ) buildPath( e *list.Element, p idPath ) idPath {
-//    log.Printf( "building path, e: %v, p: %v", e, p )
     if e == nil { return p }
     switch v := e.Value.( type ) {
     case *Identifier: p = objpath.Descend( p, v )
     case listIndex: 
         if v >= 0 { p = objpath.StartList( p ).SetIndex( int( v ) ) }
     }
-//    log.Printf( "After check, p: %v", p )
     return s.buildPath( e.Prev(), p )
 }
 
@@ -268,8 +266,8 @@ func ( s *eventStack ) pop() interface{} { return s.Remove( s.Front() ) }
 
 func ( s *eventStack ) pushMap( val interface{} ) { s.PushFront( val ) }
 
-func ( s *eventStack ) pushField( fld *Identifier, val interface{} ) { 
-    s.PushFront( val ) 
+func ( s *eventStack ) pushField( fld *Identifier ) { 
+    s.PushFront( fld ) 
 }
 
 func ( s *eventStack ) pushList( val interface{} ) { s.PushFront( val ) }
@@ -310,7 +308,7 @@ func ( epr *EventPathReactor ) preProcessValue() {
 
 func ( epr *EventPathReactor ) preProcess( ev ReactorEvent ) {
     switch v := ev.( type ) {
-    case FieldStartEvent: epr.stack.pushField( v.Field, v.Field )
+    case FieldStartEvent: epr.stack.pushField( v.Field )
     case MapStartEvent, StructStartEvent: 
         epr.preProcessValue()
         epr.stack.pushMap( "map" )
@@ -474,7 +472,7 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
             return rctErrorf( tmpl, fld )
         case *structuralMap: 
             if err := sr.startMapField( fld, v ); err != nil { return err }
-            sr.stack.pushField( fld, fld )
+            sr.stack.pushField( fld )
             return nil
         case *Identifier:
             tmpl := "Saw start of field '%s' while expecting a value for '%s'"
@@ -918,8 +916,6 @@ func ( cr *CastReactor ) completeStartMap(
 
 func ( cr *CastReactor ) startMap( 
     sm MapStartEvent, rep ReactorEventProcessor ) error {
-    log.Printf( "Starting map, peek.elt (%T): %v", 
-        cr.peek().elt, cr.peek().elt )
     switch elt := cr.peek().elt.( type ) {
     case *AtomicTypeReference, *NullableTypeReference: 
         return cr.completeStartMap( elt.( TypeReference ), sm, rep )
@@ -1145,10 +1141,13 @@ func ( foc *fieldOrderCtx ) completeEvent(
 // fields of a map/struct
 func ( foc *fieldOrderCtx ) appendFeedPath( 
     p objpath.PathNode ) objpath.PathNode {
-    if _, ok := p.( *objpath.DictNode ); ! ok {
-        panic( libErrorf( "Not a dict node: %s", FormatIdPath( p ) ) )
+    switch p.( type ) {
+    case nil: {}
+    case *objpath.DictNode: 
+        p = p.Parent() // It's a field, but we're feeding a sibling field
+    default:
+        panic( libErrorf( "Not a dict node (%T): %s", p, FormatIdPath( p ) ) )
     }
-    p = p.Parent() // It's a field, but we're feeding a sibling field
     return foc.epRct.stack.AppendPath( p )
 }
 
@@ -1287,7 +1286,7 @@ func ( fo *FieldOrderReactor ) ProcessEvent(
     if fo.stack.Len() == 0 { return rep.ProcessEvent( ev ) }
     foc := fo.peek()
     if ee, ok := ev.( EndEvent ); ok && foc.valDepth == 0 {
-        fo.pop()
+        defer fo.pop()
         if err := foc.endStruct( ee, rep ); err != nil { return err }
         if foc.parent == nil { return nil }
         return foc.parent.completeEvent( ev, rep )
@@ -1309,8 +1308,8 @@ type ServiceRequestReactorInterface interface {
     Namespace( ns *Namespace, pg PathGetter ) error
     Service( svc *Identifier, pg PathGetter ) error
     Operation( op *Identifier, pg PathGetter ) error
-    GetAuthenticationProcessor() ReactorEventProcessor
-    GetParametersProcessor() ReactorEventProcessor
+    GetAuthenticationProcessor( pg PathGetter ) ReactorEventProcessor
+    GetParametersProcessor( pg PathGetter ) ReactorEventProcessor
 }
 
 type requestFieldType int
@@ -1348,9 +1347,9 @@ func NewServiceRequestReactor(
     return &ServiceRequestReactor{ iface: iface }
 }
 
-func ( sr *ServiceRequestReactor ) getPath() objpath.PathNode {
+func ( sr *ServiceRequestReactor ) GetPath() objpath.PathNode {
     res := sr.pg.GetPath()
-    if sr.paramsSynth { res = res.Descend( IdParameters ) }
+    if sr.paramsSynth { res = objpath.Descend( res, IdParameters ) }
     return res
 }
 
@@ -1406,7 +1405,7 @@ func ( sr *ServiceRequestReactor ) Init( rpi *ReactorPipelineInit ) {
 }
 
 func ( sr *ServiceRequestReactor ) invalidValueErr( desc string ) error {
-    return NewValueCastErrorf( sr.getPath(), "invalid value: %s", desc )
+    return NewValueCastErrorf( sr.GetPath(), "invalid value: %s", desc )
 }
 
 func ( sr *ServiceRequestReactor ) startStruct( ev StructStartEvent ) error {
@@ -1428,13 +1427,15 @@ func ( sr *ServiceRequestReactor ) startField( fs FieldStartEvent ) error {
     case fld.Equals( IdService ): sr.fld = reqFieldSvc
     case fld.Equals( IdOperation ): sr.fld = reqFieldOp
     case fld.Equals( IdAuthentication ): 
-        sr.fld, sr.evProc = reqFieldAuth, sr.iface.GetAuthenticationProcessor()
+        sr.fld = reqFieldAuth
+        sr.evProc = sr.iface.GetAuthenticationProcessor( sr )
     case fld.Equals( IdParameters ): 
-        sr.fld, sr.evProc = reqFieldParams, sr.iface.GetParametersProcessor()
+        sr.fld = reqFieldParams
+        sr.evProc = sr.iface.GetParametersProcessor( sr )
         sr.hadParams = true
     }
     if sr.fld == reqFieldNone {
-        return NewUnrecognizedFieldError( sr.getPath(), fs.Field )
+        return NewUnrecognizedFieldError( sr.GetPath(), fs.Field )
     }
     return nil
 }
@@ -1447,7 +1448,7 @@ func ( sr *ServiceRequestReactor ) getFieldValueForString(
     default:
         panic( libErrorf( "Unhandled req fld type for string: %d", reqFld ) )
     }
-    if err != nil { err = NewValueCastError( sr.getPath(), err.Error() ) }
+    if err != nil { err = NewValueCastError( sr.GetPath(), err.Error() ) }
     return
 }
 
@@ -1460,7 +1461,7 @@ func ( sr *ServiceRequestReactor ) getFieldValueForBuffer(
     default:
         panic( libErrorf( "Unhandled req fld type for buffer: %d", reqFld ) )
     }
-    if err != nil { err = NewValueCastError( sr.getPath(), err.Error() ) }
+    if err != nil { err = NewValueCastError( sr.GetPath(), err.Error() ) }
     return
 }
 
@@ -1475,7 +1476,7 @@ func ( sr *ServiceRequestReactor ) getFieldValue(
 
 func ( sr *ServiceRequestReactor ) namespace( val Value ) error {
     ns, err := sr.getFieldValue( val, reqFieldNs )
-    if err == nil { return sr.iface.Namespace( ns.( *Namespace ), sr.pg ) }
+    if err == nil { return sr.iface.Namespace( ns.( *Namespace ), sr ) }
     return err
 }
 
@@ -1485,8 +1486,8 @@ func ( sr *ServiceRequestReactor ) readIdent(
     if err == nil {
         id := v2.( *Identifier )
         switch reqFld {
-        case reqFieldSvc: return sr.iface.Service( id, sr.pg )
-        case reqFieldOp: return sr.iface.Operation( id, sr.pg )
+        case reqFieldSvc: return sr.iface.Service( id, sr )
+        case reqFieldOp: return sr.iface.Operation( id, sr )
         default: panic( libErrorf( "Unhandled req fld type: %d", reqFld ) )
         }
     }
@@ -1506,7 +1507,7 @@ func ( sr *ServiceRequestReactor ) end() error {
     if ! sr.hadParams {
         defer func() { sr.paramsSynth = false }()
         sr.paramsSynth = true
-        ep := sr.iface.GetParametersProcessor();
+        ep := sr.iface.GetParametersProcessor( sr );
         if err := ep.ProcessEvent( EvMapStart ); err != nil { return err }
         if err := ep.ProcessEvent( EvEnd ); err != nil { return err }
     }
@@ -1531,8 +1532,8 @@ func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
 }
 
 type ServiceResponseReactorInterface interface {
-    GetResultProcessor() ReactorEventProcessor
-    GetErrorProcessor() ReactorEventProcessor
+    GetResultProcessor( pg PathGetter ) ReactorEventProcessor
+    GetErrorProcessor( pg PathGetter ) ReactorEventProcessor
 }
 
 type ServiceResponseReactor struct {
@@ -1578,6 +1579,10 @@ func ( sr *ServiceResponseReactor ) Init( rpi *ReactorPipelineInit ) {
     sr.pg = LastPathGetter( rpi )
 }
 
+func ( sr *ServiceResponseReactor ) GetPath() objpath.PathNode {
+    return sr.pg.GetPath()
+}
+
 func ( sr *ServiceResponseReactor ) updateEvProc( ev ReactorEvent ) {
     if _, ok := ev.( FieldStartEvent ); ok { return }
     switch ev.( type ) {
@@ -1613,8 +1618,8 @@ func ( sr *ServiceResponseReactor ) startStruct( t *QualifiedTypeName ) error {
 
 func ( sr *ServiceResponseReactor ) startField( fld *Identifier ) error {
     switch {
-    case fld.Equals( IdResult ): sr.evProc = sr.iface.GetResultProcessor()
-    case fld.Equals( IdError ): sr.evProc = sr.iface.GetErrorProcessor()
+    case fld.Equals( IdResult ): sr.evProc = sr.iface.GetResultProcessor( sr )
+    case fld.Equals( IdError ): sr.evProc = sr.iface.GetErrorProcessor( sr )
     default: return NewUnrecognizedFieldError( sr.getPath().Parent(), fld )
     }
     return nil
@@ -1631,7 +1636,15 @@ func ( sr *ServiceResponseReactor ) ProcessEvent( ev ReactorEvent ) error {
     panic( libErrorf( "Saw event %v (%T) while evProc == nil", ev, ev ) )
 }
 
-type DebugLogger interface { Logf( tmpl string, args ...interface{} ) }
+type DebugLogger interface {
+    Logf( tmpl string, args ...interface{} )
+}
+
+type DebugLoggerFunc func( string, ...interface{} )
+
+func ( f DebugLoggerFunc ) Logf( tmpl string, args ...interface{} ) {
+    f( tmpl, args... )
+}
 
 type debugReactor struct { 
     l DebugLogger 

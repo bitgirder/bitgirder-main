@@ -499,7 +499,9 @@ type ServiceRequestReactorTest struct {
     Service *Identifier
     Operation *Identifier
     Parameters *SymbolMap
+    ParameterEvents []EventExpectation
     Authentication Value
+    AuthenticationEvents []EventExpectation
     Error error
 }
 
@@ -615,6 +617,59 @@ func initServiceRequestTests() {
             EvEnd,
         ),
         auth1,
+    )
+    addPathSucc := func( 
+        paramsIn, paramsExpct *SymbolMap, paramEvs []EventExpectation,
+        auth Value, authEvs []EventExpectation ) {
+        t := &ServiceRequestReactorTest{
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Parameters: paramsExpct,
+            ParameterEvents: paramEvs,
+            Authentication: auth,
+            AuthenticationEvents: authEvs,
+        }
+        pairs := []interface{}{
+            IdNamespace, ns1.ExternalForm(),
+            IdService, svc1.ExternalForm(),
+            IdOperation, op1.ExternalForm(),
+        }
+        if paramsIn != nil { pairs = append( pairs, IdParameters, paramsIn ) }
+        if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }
+        t.Source = MustStruct( QnameServiceRequest, pairs... )
+        AddStdReactorTests( t )
+    }
+    pathParams := objpath.RootedAt( IdParameters )
+    evsEmptyParams := 
+        []EventExpectation{ { EvMapStart, pathParams }, { EvEnd, pathParams } }
+    pathAuth := objpath.RootedAt( IdAuthentication )
+    addPathSucc( nil, MustSymbolMap(), evsEmptyParams, nil, nil )
+    addPathSucc( MustSymbolMap(), MustSymbolMap(), evsEmptyParams, nil, nil )
+    idF1 := id( "f1" )
+    addPathSucc(
+        MustSymbolMap( idF1, Int32( 1 ) ),
+        MustSymbolMap( idF1, Int32( 1 ) ),
+        []EventExpectation{
+            { EvMapStart, pathParams },
+            { evFldF1, pathParams.Descend( idF1 ) },
+            { i32Val1, pathParams.Descend( idF1 ) },
+            { EvEnd, pathParams },
+        },
+        nil, nil,
+    )
+    addPathSucc( 
+        nil, MustSymbolMap(), evsEmptyParams,
+        Int32( 1 ), []EventExpectation{ { i32Val1, pathAuth } },
+    )
+    addPathSucc(
+        nil, MustSymbolMap(), evsEmptyParams,
+        auth1, []EventExpectation{
+            { StructStartEvent{ authQn }, pathAuth },
+            { evFldF1, pathAuth.Descend( idF1 ) },
+            { i32Val1, pathAuth.Descend( idF1 ) },
+            { EvEnd, pathAuth },
+        },
     )
     writeMgIo := func( f func( w *BinWriter ) ) Buffer {
         bb := &bytes.Buffer{}
@@ -775,7 +830,9 @@ func initServiceRequestTests() {
 type ServiceResponseReactorTest struct {
     In Value
     ResVal Value
+    ResEvents []EventExpectation
     ErrVal Value
+    ErrEvents []EventExpectation
     Error error
 }
 
@@ -792,6 +849,43 @@ func initServiceResponseTests() {
     addSucc( MustSymbolMap( IdResult, i32Val1 ), i32Val1, nil )
     addSucc( MustSymbolMap( IdError, NullVal ), nil, NullVal )
     addSucc( MustSymbolMap( IdError, err1 ), nil, err1 )
+    addSucc( MustSymbolMap( IdError, int32( 1 ) ), nil, i32Val1 )
+    pathRes := objpath.RootedAt( IdResult )
+    pathResF1 := pathRes.Descend( id( "f1" ) )
+    pathErr := objpath.RootedAt( IdError )
+    pathErrF1 := pathErr.Descend( id( "f1" ) )
+    AddStdReactorTests(
+        &ServiceResponseReactorTest{
+            In: MustStruct( QnameServiceResponse, "result", int32( 1 ) ),
+            ResVal: i32Val1,
+            ResEvents: []EventExpectation{ { ValueEvent{ i32Val1 }, pathRes } },
+        },
+        &ServiceResponseReactorTest{
+            In: MustSymbolMap( "result", MustSymbolMap( "f1", int32( 1 ) ) ),
+            ResVal: MustSymbolMap( "f1", int32( 1 ) ),
+            ResEvents: []EventExpectation{
+                { EvMapStart, pathRes },
+                { FieldStartEvent{ id( "f1" ) }, pathResF1 },
+                { ValueEvent{ i32Val1 }, pathResF1 },
+                { EvEnd, pathRes },
+            },
+        },
+        &ServiceResponseReactorTest{
+            In: MustSymbolMap( "error", int32( 1 ) ),
+            ErrVal: i32Val1,
+            ErrEvents: []EventExpectation{ { ValueEvent{ i32Val1 }, pathErr } },
+        },
+        &ServiceResponseReactorTest{
+            In: MustSymbolMap( "error", err1 ),
+            ErrVal: err1,
+            ErrEvents: []EventExpectation{
+                { StructStartEvent{ err1.Type }, pathErr },
+                { FieldStartEvent{ id( "f1" ) }, pathErrF1 },
+                { ValueEvent{ i32Val1 }, pathErrF1 },
+                { EvEnd, pathErr },
+            },
+        },
+    )
     addFail := func( in Value, err error ) {
         AddStdReactorTests( &ServiceResponseReactorTest{ In: in, Error: err } )
     }

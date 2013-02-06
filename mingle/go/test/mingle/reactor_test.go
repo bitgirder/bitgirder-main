@@ -376,11 +376,11 @@ func ( c *reactorTestCall ) createCastReactor(
 func ( c *reactorTestCall ) callCast( ct *CastReactorTest ) {
     rct := NewValueBuilder()
     pip := InitReactorPipeline( 
-        NewDebugReactor( c ),
+//        NewDebugReactor( c ),
         c.createCastReactor( ct ), 
         rct,
     )
-    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
+//    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
     if err := VisitValue( ct.In, pip ); err == nil { 
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
@@ -422,19 +422,67 @@ func ( chk *requestCheck ) Operation( op *Identifier, pg PathGetter ) error {
         chk.st.Operation, op, reqFieldSvc, reqFieldOp, "operation" )
 }
 
-func ( chk *requestCheck ) GetAuthenticationProcessor() ReactorEventProcessor {
+type eventCheckReactor struct {
+    *assert.PathAsserter
+    ep ReactorEventProcessor
+    evs []EventExpectation
+    idx int
+    pg PathGetter
+}
+
+func ( r *eventCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
+    defer func() {
+        r.idx++
+        r.PathAsserter = r.Next()
+    }()
+    if l := len( r.evs ); r.idx >= l { 
+        r.Fatalf( "Expected only %d events", l ) 
+    }
+    ee := r.evs[ r.idx ]
+    r.Descend( "event" ).Equal( ee.Event, ev )
+    EqualPaths( ee.Path, r.pg.GetPath(), r.Descend( "path" ) )
+    return r.ep.ProcessEvent( ev )
+}
+
+func optAsEventChecker( 
+    ep ReactorEventProcessor, 
+    pg PathGetter,
+    evs []EventExpectation, 
+    a *assert.PathAsserter ) ReactorEventProcessor {
+    if evs == nil { return ep }
+    return &eventCheckReactor{ 
+        ep: ep, 
+        evs: evs, 
+        pg: pg,
+        PathAsserter: a.StartList(),
+    }
+}
+
+func ( chk *requestCheck ) GetAuthenticationProcessor(
+    pg PathGetter ) ReactorEventProcessor {
     chk.Descend( "reqFld" ).Equal( reqFieldOp, chk.reqFld )
     chk.reqFld = reqFieldAuth
     chk.auth = NewValueBuilder()
-    return chk.auth
+    return optAsEventChecker(
+        chk.auth,
+        pg,
+        chk.st.AuthenticationEvents,
+        chk.Descend( "authenticationEvents" ),
+    )
 }
 
-func ( chk *requestCheck ) GetParametersProcessor() ReactorEventProcessor {
+func ( chk *requestCheck ) GetParametersProcessor(
+    pg PathGetter ) ReactorEventProcessor {
     chk.Descend( "reqFld" ).True( 
         chk.reqFld == reqFieldOp || chk.reqFld == reqFieldAuth )
     chk.reqFld = reqFieldParams
     chk.params = NewValueBuilder()
-    return chk.params
+    return optAsEventChecker( 
+        chk.params, 
+        pg, 
+        chk.st.ParameterEvents, 
+        chk.Descend( "parameterEvents" ),
+    )
 }
 
 func checkBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
@@ -471,10 +519,8 @@ func ( c *reactorTestCall ) feedServiceRequest(
 
 func ( c *reactorTestCall ) callServiceRequest(
     st *ServiceRequestReactorTest ) {
-    c.Logf( "Source: %v", st.Source )
     reqChk := &requestCheck{ PathAsserter: c.PathAsserter, st: st }
-//    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
-    rct := InitReactorPipeline( NewDebugReactor( c ), NewServiceRequestReactor( reqChk ) )
+    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
     if err := c.feedServiceRequest( st.Source, rct ); err == nil {
         c.checkNoError( st.Error )
         reqChk.checkRequest()
@@ -488,14 +534,18 @@ type responseCheck struct {
     res *ValueBuilder
 }
 
-func ( rc *responseCheck ) GetResultProcessor() ReactorEventProcessor {
+func ( rc *responseCheck ) GetResultProcessor( 
+    pg PathGetter ) ReactorEventProcessor {
     rc.res = NewValueBuilder()
-    return rc.res
+    return optAsEventChecker(
+        rc.res, pg, rc.st.ResEvents, rc.Descend( "result" ) )
 }
 
-func ( rc *responseCheck ) GetErrorProcessor() ReactorEventProcessor {
+func ( rc *responseCheck ) GetErrorProcessor(
+    pg PathGetter ) ReactorEventProcessor {
     rc.err = NewValueBuilder()
-    return rc.err
+    return optAsEventChecker(
+        rc.err, pg, rc.st.ErrEvents, rc.Descend( "error" ) )
 }
 
 func ( rc *responseCheck ) check() {
@@ -506,8 +556,7 @@ func ( rc *responseCheck ) check() {
 func ( c *reactorTestCall ) callServiceResponse( 
     st *ServiceResponseReactorTest ) {
     chk := &responseCheck{ PathAsserter: c.PathAsserter, st: st }
-    rct := InitReactorPipeline( 
-        NewDebugReactor( c ), NewServiceResponseReactor( chk ) )
+    rct := InitReactorPipeline( NewServiceResponseReactor( chk ) )
     if err := VisitValue( st.In, rct ); err == nil {
         c.checkNoError( st.Error )
         chk.check()
@@ -515,7 +564,7 @@ func ( c *reactorTestCall ) callServiceResponse(
 }
 
 func ( c *reactorTestCall ) call() {
-    c.Logf( "Calling reactor test of type %T", c.rt )
+//    c.Logf( "Calling reactor test of type %T", c.rt )
     switch s := c.rt.( type ) {
     case *StructuralReactorErrorTest: c.callStructuralError( s )
     case *EventPathTest: c.callEventPath( s )
