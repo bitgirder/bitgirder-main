@@ -12,6 +12,8 @@ Mingle:
     - check that mingle.BinReader.ReadIdentifier() fails if an id part has
       length 0
 
+    - consider dropping TypeCastError in favor of just ValueCastError
+
 Go:
     - check bad codec reactor sequences against json, bincodec
 
