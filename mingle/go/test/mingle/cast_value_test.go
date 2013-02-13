@@ -23,7 +23,7 @@ func TestCastValueCalls( t *testing.T ) {
     if _, err := CastValue( Int32( 1 ), TypeBuffer, p ); err == nil {
         t.Fatalf( "No err" )
     } else {
-        if tc, ok := err.( *TypeCastError ); ok {
+        if tc, ok := err.( *ValueCastError ); ok {
             assert.Equal( FormatIdPath( p ), FormatIdPath( tc.Location() ) )
             assert.Equal( 
                 "Expected value of type mingle:core@v1/Buffer but found " +

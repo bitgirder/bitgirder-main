@@ -8,35 +8,6 @@ import (
     "bitgirder/objpath"
 )
 
-type TypeCastError struct {
-    ve ValueErrorImpl
-    Expected TypeReference
-    Actual TypeReference
-}
-
-func ( e *TypeCastError ) Message() string {
-    tmpl := "Expected value of type %s but found %s"
-    return fmt.Sprintf( tmpl, e.Expected, e.Actual )
-}
-
-func ( e *TypeCastError ) Error() string {
-    return e.ve.MakeError( e.Message() )
-}
-
-func ( e *TypeCastError ) Location() objpath.PathNode { return e.ve.Location() }
-
-func NewTypeCastError( 
-    expct, act TypeReference, path objpath.PathNode ) *TypeCastError {
-    res := &TypeCastError{ Expected: expct, Actual: act, ve: ValueErrorImpl{} }
-    res.ve.Path = path
-    return res
-}
-
-func NewTypeCastErrorValue( 
-    t TypeReference, val Value, path objpath.PathNode ) *TypeCastError {
-    return NewTypeCastError( t, TypeOf( val ), path )
-}
-
 type ValueCastError struct {
     ve ValueErrorImpl
     msg string
@@ -61,6 +32,20 @@ func NewValueCastError( path idPath, msg string ) *ValueCastError {
 func NewValueCastErrorf(
     path idPath, tmpl string, args ...interface{} ) *ValueCastError {
     return NewValueCastError( path, fmt.Sprintf( tmpl, args... ) )
+}
+
+func NewTypeCastError( 
+    expct, act TypeReference, path objpath.PathNode ) *ValueCastError {
+    return NewValueCastErrorf( 
+        path,
+        "Expected value of type %s but found %s",
+        expct.ExternalForm(), act.ExternalForm(),
+    )
+}
+
+func NewTypeCastErrorValue( 
+    t TypeReference, val Value, path objpath.PathNode ) *ValueCastError {
+    return NewTypeCastError( t, TypeOf( val ), path )
 }
 
 func strToBool( 

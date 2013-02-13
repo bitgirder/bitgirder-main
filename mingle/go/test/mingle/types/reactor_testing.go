@@ -16,7 +16,7 @@ func asType( val interface{} ) mg.TypeReference {
     panic( libErrorf( "Unhandled type reference: %T", val ) )
 }
 
-func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.TypeCastError {
+func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
     return mg.NewTypeCastError( asType( expct ), asType( act ), p )
 }
 
@@ -72,7 +72,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     s1F1Fail := func( in interface{}, typ string, err error ) {
         s1F1Add( in, nil, typ, err )
     }
-    tcErr1 := func( expct, act interface{} ) *mg.TypeCastError {
+    tcErr1 := func( expct, act interface{} ) *mg.ValueCastError {
         return newTcErr( expct, act, p( "f1" ) )
     }
     s1F1Succ( int32( 1 ), int32( 1 ), "Int32" )

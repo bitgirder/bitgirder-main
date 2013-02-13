@@ -803,11 +803,11 @@ func ( cr *CastReactor ) expectedType() TypeReference {
 }
 
 func ( cr *CastReactor ) newTypeCastErrorPath( 
-    act TypeReference, p idPath ) *TypeCastError {
+    act TypeReference, p idPath ) *ValueCastError {
     return NewTypeCastError( cr.expectedType(), act, p )
 }
 
-func ( cr *CastReactor ) newTypeCastError( act TypeReference ) *TypeCastError {
+func ( cr *CastReactor ) newTypeCastError( act TypeReference ) *ValueCastError {
     return cr.newTypeCastErrorPath( act, cr.GetPath() )
 }
 

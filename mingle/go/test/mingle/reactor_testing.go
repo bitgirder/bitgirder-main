@@ -1486,15 +1486,6 @@ func ( cea CastErrorAssert ) assertValueError(
     return a
 }
 
-func ( cea CastErrorAssert ) assertTcError() {
-    if act, ok := cea.ErrAct.( *TypeCastError ); ok {
-        expct := cea.ErrExpect.( *TypeCastError )
-        a := cea.assertValueError( expct, act )
-        a.Descend( "expcted" ).Equal( expct.Expected, act.Expected )
-        a.Descend( "actual" ).Equal( expct.Actual, act.Actual )
-    } else { cea.FailActErrType() }
-}
-
 func ( cea CastErrorAssert ) assertVcError() {
     if act, ok := cea.ErrAct.( *ValueCastError ); ok {
         cea.assertValueError( cea.ErrExpect.( *ValueCastError ), act )
@@ -1504,7 +1495,6 @@ func ( cea CastErrorAssert ) assertVcError() {
 func ( cea CastErrorAssert ) Call() {
     switch cea.ErrExpect.( type ) {
     case nil: cea.Fatal( cea.ErrAct )
-    case *TypeCastError: cea.assertTcError()
     case *ValueCastError: cea.assertVcError()
     default: cea.Fatalf( "Unhandled Err type: %T", cea.ErrExpect )
     }
