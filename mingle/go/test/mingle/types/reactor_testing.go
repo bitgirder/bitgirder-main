@@ -757,7 +757,6 @@ func ( rti *rtInit ) addServiceResponseTests() {
     for _, errTyp := range []string{
         "mingle:core@v1/MissingFieldsError",
         "mingle:core@v1/UnrecognizedFieldError",
-        "mingle:core@v1/TypeCastError",
         "mingle:core@v1/ValueCastError",
         "mingle:core@v1/UnrecognizedEndpointError",
     } {
