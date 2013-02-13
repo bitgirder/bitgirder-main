@@ -155,12 +155,12 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     )
     addFail(
         mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 2 ) ),
-        newUnrecognizedFieldError( mg.MustIdentifier( "f2" ), nil ),
+        mg.NewUnrecognizedFieldError( nil, mg.MustIdentifier( "f2" ) ),
     )
     for _, i := range []string{ "1", "2" } {
         addFail(
             mg.MustStruct( "ns1@v1/S" + i, "f3", int32( 3 ) ),
-            newUnrecognizedFieldError( mg.MustIdentifier( "f3" ), nil ),
+            mg.NewUnrecognizedFieldError( nil, mg.MustIdentifier( "f3" ) ),
         )
     }
 }
@@ -683,7 +683,7 @@ func ( rti *rtInit ) addServiceRequestTests() {
             mg.MustSymbolMap( "not-a-field", false ),
             int32( 1 ),
         ),
-        newUnrecognizedFieldError( id( "not-a-field" ), pathParams ),
+        mg.NewUnrecognizedFieldError( pathParams, id( "not-a-field" ) ),
     ) 
     addErr(
         mkReq( "ns1@v1", "svc1", "op4", nil, nil ),
@@ -759,7 +759,7 @@ func ( rti *rtInit ) addServiceResponseTests() {
         "mingle:core@v1/UnrecognizedFieldError",
         "mingle:core@v1/TypeCastError",
         "mingle:core@v1/ValueCastError",
-        "mingle:service@v1/UnrecognizedEndpointError",
+        "mingle:core@v1/UnrecognizedEndpointError",
     } {
         err := mg.MustStruct( errTyp )
         addErrSucc( err, err )
@@ -780,29 +780,29 @@ func ( rti *rtInit ) addServiceResponseTests() {
         addFail( errResp( in ), mg.TypeNullableValue, err )
     }
     addResFail( 
-        mg.TypeInt32, 
         []byte{},
+        mg.TypeInt32, 
         newTcErr( mg.TypeInt32, mg.TypeBuffer, pathRes ),
     )
     addResFail(
-        mg.TypeNull,
         int32( 1 ),
+        mg.TypeNull,
         newTcErr( mg.TypeNull, mg.TypeInt32, pathRes ),
     )
     addResFail( 
-        "ns1@v1/S1", 
         mg.MustStruct( "ns1@v1/S2" ),
+        "ns1@v1/S1", 
         newTcErr( "ns1@v1/S1", "ns1@v1/S2", pathRes ),
     )
     addResFail(
-        "ns1@v1/E1",
         mg.MustEnum( "ns1@v1/E1", "bad" ),
+        "ns1@v1/E1",
         newVcErr( pathRes, "STUB" ),
     )
     addErrFail( mg.MustStruct( "ns1@v1/BadErr" ), newVcErr( pathErr, "STUB" ) )
     addErrFail(
         mg.MustStruct( "ns1@v1/Err1", "not-a-field", int32( 1 ) ),
-        newUnrecognizedFieldError( id( "not-a-field" ), pathErr ),
+        mg.NewUnrecognizedFieldError( pathErr, id( "not-a-field" ) ),
     )
     addErrFail(
         mg.MustStruct( "ns1@v1/UndeclaredErr" ),
@@ -819,8 +819,8 @@ func ( rti *rtInit ) init() {
     rti.addDeepCatchallTests()
     rti.addDefaultCastTests()
     rti.addDefaultPathTests()
-    rti.addServiceRequestTests()
-    rti.addServiceResponseTests()
+//    rti.addServiceRequestTests()
+//    rti.addServiceResponseTests()
 }
 
 // The tests returned might normally be created during an init() block, but

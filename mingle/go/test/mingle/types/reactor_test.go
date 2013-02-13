@@ -15,8 +15,8 @@ func ( tc testCall ) assertCastError( ct *CastReactorTest, err error ) {
     cae := mg.CastErrorAssert{ 
         ErrExpect: ct.Err, ErrAct: err, PathAsserter: tc.PathAsserter }
     switch ct.Err.( type ) {
-    case *UnrecognizedFieldError:
-        if ufe, ok := err.( *UnrecognizedFieldError ); ok {
+    case *mg.UnrecognizedFieldError:
+        if ufe, ok := err.( *mg.UnrecognizedFieldError ); ok {
             tc.Equal( ct.Err, ufe )
         } else { cae.FailActErrType() }
     case *mg.MissingFieldsError:

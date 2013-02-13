@@ -3,7 +3,6 @@ package types
 import (
     mg "mingle"
     "bitgirder/objpath"
-    "fmt"
     "container/list"
 //    "log"
 )
@@ -18,31 +17,6 @@ func ( ci castIface ) InferStructFor( qn *mg.QualifiedTypeName ) bool {
         return res
     }
     return false
-}
-
-type UnrecognizedFieldError struct { 
-    ve mg.ValueErrorImpl
-    fld *mg.Identifier
-}
-
-func newUnrecognizedFieldError( 
-    fld *mg.Identifier, path objpath.PathNode ) *UnrecognizedFieldError {
-    return &UnrecognizedFieldError{
-        ve: mg.ValueErrorImpl{ Path: path },
-        fld: fld,
-    }
-}
-
-func ( e *UnrecognizedFieldError ) Message() string {
-    return fmt.Sprintf( "Unrecognized field: %s", e.fld )
-}
-
-func ( e *UnrecognizedFieldError ) Error() string {
-    return e.ve.MakeError( e.Message() )
-}
-
-func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {
-    return e.ve.Location()
 }
 
 func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
@@ -116,7 +90,7 @@ func ( ft fieldTyper ) FieldTypeOf(
     }
     // use parent path since we're positioned on the failed field itself
     par := objpath.ParentOf( pg.GetPath() )
-    return nil, newUnrecognizedFieldError( fld, par )
+    return nil, mg.NewUnrecognizedFieldError( par, fld )
 }
 
 func ( ci castIface ) FieldTyperFor(
