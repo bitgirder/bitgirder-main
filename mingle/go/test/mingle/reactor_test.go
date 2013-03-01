@@ -66,22 +66,7 @@ func TestReactorPipelineImpl( t *testing.T ) {
     a.Equal( p2, p5.elt )
 }
 
-type reactorTestCall struct {
-    *assert.PathAsserter
-    rt ReactorTest
-}
-
-func ( c *reactorTestCall ) checkNoError( err error ) {
-    if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
-}
-
-func ( c *reactorTestCall ) equalErrors( expct, act error ) {
-    if expct == nil { c.Fatal( act ) }
-    c.Equalf( expct, act, "expected %q (%T) but got %q (%T)",
-        expct, expct, act, act )
-}
-
-func ( c *reactorTestCall ) feedStructureEvents( 
+func ( c *ReactorTestCall ) feedStructureEvents( 
     evs []ReactorEvent, tt ReactorTopType ) ( *StructuralReactor, error ) {
     rct := NewStructuralReactor( tt )
 //    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
@@ -92,14 +77,14 @@ func ( c *reactorTestCall ) feedStructureEvents(
     return rct, nil
 }
 
-func ( c *reactorTestCall ) callStructuralError(
+func ( c *ReactorTestCall ) callStructuralError(
     ss *StructuralReactorErrorTest ) {
     if _, err := c.feedStructureEvents( ss.Events, ss.TopType ); err == nil {
         c.Fatalf( "Expected error (%T): %s", ss.Error, ss.Error ) 
     } else { c.Equal( ss.Error, err ) }
 }
 
-func ( c *reactorTestCall ) assertEventExpectations( 
+func ( c *ReactorTestCall ) assertEventExpectations( 
     src reactorEventSource, 
     expct []EventExpectation,
     rcts []interface{} ) *ReactorPipeline {
@@ -139,7 +124,7 @@ func assertEventPathReactorOn(
     }
 }
 
-func ( c *reactorTestCall ) callEventPath(
+func ( c *ReactorTestCall ) callEventPath(
     pt *EventPathTest ) {
     src := eventExpectSource( pt.Events )
     assertEventPathReactorOn( src, pt.Events, c.Descend( "epRctChk" ) )
@@ -154,7 +139,7 @@ func ( c *reactorTestCall ) callEventPath(
     c.Equal( pt.FinalPath, act )
 }
 
-func ( c *reactorTestCall ) callValueBuild( vb ValueBuildTest ) {
+func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
     rct := NewValueBuilder()
     pip := InitReactorPipeline( rct )
     if err := VisitValue( vb.Val, pip ); err == nil {
@@ -239,7 +224,7 @@ func ( ocr *orderCheckReactor ) ProcessEvent(
     return rep.ProcessEvent( ev )
 }
 
-func ( c *reactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
+func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
     vb := NewValueBuilder()
     chk := &orderCheckReactor{ 
         PathAsserter: c.PathAsserter,
@@ -257,7 +242,7 @@ func ( c *reactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
     assert.Equal( fo.Expect, vb.GetValue() )
 }
 
-func ( c *reactorTestCall ) callFieldOrderPath( fo *FieldOrderPathTest ) {
+func ( c *ReactorTestCall ) callFieldOrderPath( fo *FieldOrderPathTest ) {
     c.assertEventExpectations(
         eventSliceSource( fo.Source ),
         fo.Expect,
@@ -272,7 +257,7 @@ func ( s staticFieldOrderGetter ) FieldOrderFor(
     return FieldOrder( s )
 }
 
-func ( c *reactorTestCall ) assertMissingFieldsError(
+func ( c *ReactorTestCall ) assertMissingFieldsError(
     mfe *MissingFieldsError, err error ) {
     if mfe == nil { c.Fatal( err ) }
     if act, ok := err.( *MissingFieldsError ); ok {
@@ -281,7 +266,7 @@ func ( c *reactorTestCall ) assertMissingFieldsError(
     } else { c.Fatal( err ) }
 }
 
-func ( c *reactorTestCall ) callFieldOrderMissingFields(
+func ( c *ReactorTestCall ) callFieldOrderMissingFields(
     mf *FieldOrderMissingFieldsTest ) {
     vb := NewValueBuilder()
     ord := NewFieldOrderReactor( staticFieldOrderGetter( mf.Order ) )
@@ -301,7 +286,7 @@ func ( c *reactorTestCall ) callFieldOrderMissingFields(
 
 type castInterfaceImpl struct { 
     typers *QnameMap
-    c *reactorTestCall
+    c *ReactorTestCall
 }
 
 type castInterfaceTyper struct { *IdentifierMap }
@@ -313,7 +298,7 @@ func ( t castInterfaceTyper ) FieldTypeOf(
     return nil, NewValueCastErrorf( errPath, "unrecognized field: %s", fld )
 }
 
-func newCastInterfaceImpl( c *reactorTestCall ) *castInterfaceImpl {
+func newCastInterfaceImpl( c *ReactorTestCall ) *castInterfaceImpl {
     res := &castInterfaceImpl{ typers: NewQnameMap(), c: c }
     m1 := castInterfaceTyper{ NewIdentifierMap() }
     m1.Put( MustIdentifier( "f1" ), TypeInt32 )
@@ -363,17 +348,18 @@ func ( ci *castInterfaceImpl ) CastAtomic(
     return nil, NewTypeCastErrorValue( at, v, pg.GetPath() ), true
 }
 
-func ( c *reactorTestCall ) createCastReactor( 
+func ( c *ReactorTestCall ) createCastReactor( 
     ct *CastReactorTest ) *CastReactor {
+    pg := ImmediatePathGetter{ ct.Path }
     switch ct.Profile {
-    case "": return NewDefaultCastReactor( ct.Type, ct.Path )
+    case "": return NewDefaultCastReactor( ct.Type, pg )
     case "interface-impl": 
-        return NewCastReactor( ct.Type, newCastInterfaceImpl( c ), ct.Path )
+        return NewCastReactor( ct.Type, newCastInterfaceImpl( c ), pg )
     }
     panic( libErrorf( "Unhandled profile: %s", ct.Profile ) )
 }
 
-func ( c *reactorTestCall ) callCast( ct *CastReactorTest ) {
+func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     rct := NewValueBuilder()
     pip := InitReactorPipeline( 
 //        NewDebugReactor( c ),
@@ -459,52 +445,42 @@ func optAsEventChecker(
 }
 
 func ( chk *requestCheck ) GetAuthenticationProcessor(
-    pg PathGetter ) ReactorEventProcessor {
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
     chk.Descend( "reqFld" ).Equal( reqFieldOp, chk.reqFld )
     chk.reqFld = reqFieldAuth
     chk.auth = NewValueBuilder()
-    return optAsEventChecker(
+    res := optAsEventChecker(
         chk.auth,
         pg,
         chk.st.AuthenticationEvents,
         chk.Descend( "authenticationEvents" ),
     )
+    return res, nil
 }
 
 func ( chk *requestCheck ) GetParametersProcessor(
-    pg PathGetter ) ReactorEventProcessor {
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
     chk.Descend( "reqFld" ).True( 
         chk.reqFld == reqFieldOp || chk.reqFld == reqFieldAuth )
     chk.reqFld = reqFieldParams
     chk.params = NewValueBuilder()
-    return optAsEventChecker( 
+    res := optAsEventChecker( 
         chk.params, 
         pg, 
         chk.st.ParameterEvents, 
         chk.Descend( "parameterEvents" ),
     )
-}
-
-func checkBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
-    if expct == nil {
-        if vb != nil {
-            a.Fatalf( "unexpected value: %s", QuoteValue( vb.GetValue() ) )
-        }
-    } else { 
-        a.Falsef( vb == nil, 
-            "expecting value %s but value builder is nil", QuoteValue( expct ) )
-        EqualValues( expct, vb.GetValue(), a ) 
-    }
+    return res, nil
 }
 
 func ( chk *requestCheck ) checkRequest() {
-    checkBuiltValue( 
+    CheckBuiltValue( 
         chk.st.Authentication, chk.auth, chk.Descend( "authentication" ) )
-    checkBuiltValue( 
+    CheckBuiltValue( 
         chk.st.Parameters, chk.params, chk.Descend( "parameters" ) )
 }
 
-func ( c *reactorTestCall ) feedServiceRequest(
+func ( c *ReactorTestCall ) feedServiceRequest(
     src interface{}, ep ReactorEventProcessor ) error {
     switch v := src.( type ) {
     case []ReactorEvent:
@@ -517,14 +493,14 @@ func ( c *reactorTestCall ) feedServiceRequest(
     panic( libErrorf( "Uhandled source: %T", src ) )
 }
 
-func ( c *reactorTestCall ) callServiceRequest(
+func ( c *ReactorTestCall ) callServiceRequest(
     st *ServiceRequestReactorTest ) {
     reqChk := &requestCheck{ PathAsserter: c.PathAsserter, st: st }
     rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
     if err := c.feedServiceRequest( st.Source, rct ); err == nil {
-        c.checkNoError( st.Error )
+        c.CheckNoError( st.Error )
         reqChk.checkRequest()
-    } else { c.equalErrors( st.Error, err ) }
+    } else { c.EqualErrors( st.Error, err ) }
 }
 
 type responseCheck struct {
@@ -549,23 +525,23 @@ func ( rc *responseCheck ) GetErrorProcessor(
 }
 
 func ( rc *responseCheck ) check() {
-    checkBuiltValue( rc.st.ResVal, rc.res, rc.Descend( "Result" ) )
-    checkBuiltValue( rc.st.ErrVal, rc.err, rc.Descend( "Error" ) )
+    CheckBuiltValue( rc.st.ResVal, rc.res, rc.Descend( "Result" ) )
+    CheckBuiltValue( rc.st.ErrVal, rc.err, rc.Descend( "Error" ) )
 }
 
-func ( c *reactorTestCall ) callServiceResponse( 
+func ( c *ReactorTestCall ) callServiceResponse( 
     st *ServiceResponseReactorTest ) {
     chk := &responseCheck{ PathAsserter: c.PathAsserter, st: st }
     rct := InitReactorPipeline( NewServiceResponseReactor( chk ) )
     if err := VisitValue( st.In, rct ); err == nil {
-        c.checkNoError( st.Error )
+        c.CheckNoError( st.Error )
         chk.check()
-    } else { c.equalErrors( st.Error, err ) }
+    } else { c.EqualErrors( st.Error, err ) }
 }
 
-func ( c *reactorTestCall ) call() {
-//    c.Logf( "Calling reactor test of type %T", c.rt )
-    switch s := c.rt.( type ) {
+func ( c *ReactorTestCall ) call() {
+//    c.Logf( "Calling reactor test of type %T", c.Test )
+    switch s := c.Test.( type ) {
     case *StructuralReactorErrorTest: c.callStructuralError( s )
     case *EventPathTest: c.callEventPath( s )
     case ValueBuildTest: c.callValueBuild( s )
@@ -575,14 +551,14 @@ func ( c *reactorTestCall ) call() {
     case *CastReactorTest: c.callCast( s )
     case *ServiceRequestReactorTest: c.callServiceRequest( s )
     case *ServiceResponseReactorTest: c.callServiceResponse( s )
-    default: panic( libErrorf( "Unhandled test source: %T", c.rt ) )
+    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
     }
 }
 
 func TestReactors( t *testing.T ) {
     a := assert.NewListPathAsserter( t )
     for _, rt := range StdReactorTests {
-        ( &reactorTestCall{ PathAsserter: a, rt: rt } ).call()
+        ( &ReactorTestCall{ PathAsserter: a, Test: rt } ).call()
         a = a.Next()
     }
 }
@@ -608,4 +584,64 @@ func TestEventStackGetAndAppendPath( t *testing.T ) {
     s.pushList( listIndex( 1 ) )
     get( s, lp1.Next() )
     apnd( s, p1, p1.StartList().Next() )
+}
+
+type reactorImplTest struct {
+    *assert.PathAsserter
+    failOn *Identifier
+}
+
+func ( t reactorImplTest ) Error() string { return "reactorImplTest" }
+
+func ( t reactorImplTest ) Namespace( ns *Namespace, pg PathGetter ) error {
+    return nil
+}
+
+func ( t reactorImplTest ) Service( svc *Identifier, pg PathGetter ) error {
+    return nil
+}
+
+func ( t reactorImplTest ) Operation( op *Identifier, pg PathGetter ) error {
+    return nil
+}
+
+func ( t reactorImplTest ) makeErr( pg PathGetter ) error {
+    return NewValueCastError( pg.GetPath(), "test-error" )
+}
+
+func ( t reactorImplTest ) GetAuthenticationProcessor( 
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
+    if t.failOn.Equals( IdAuthentication ) { return nil, t.makeErr( pg ) }
+    return DiscardProcessor, nil
+}
+
+func ( t reactorImplTest ) GetParametersProcessor( 
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
+    if t.failOn.Equals( IdParameters ) { return nil, t.makeErr( pg ) }
+    return DiscardProcessor, nil
+}
+
+func ( t reactorImplTest ) call() {
+    in := MustStruct( QnameServiceRequest,
+        "namespace", "ns1@v1",
+        "service", "svc1",
+        "operation", "op1",
+        "parameters", MustSymbolMap( "p1", 1 ),
+        "authentication", 1,
+    )
+    pip := InitReactorPipeline( NewServiceRequestReactor( t ) )
+    err := VisitValue( in, pip )
+    t.EqualErrors( 
+        NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" ), err )
+}
+
+func TestRequestReactorImplErrors( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    for _, failOn := range []*Identifier{ IdAuthentication, IdParameters } {
+        t := reactorImplTest{ 
+            PathAsserter: a.Descend( failOn ), 
+            failOn: failOn,
+        }
+        t.call()
+    }
 }

@@ -9,11 +9,9 @@ import (
 //    "log"
 )
 
-type ReactorTest interface {}
+var StdReactorTests []interface{}
 
-var StdReactorTests []ReactorTest
-
-func AddStdReactorTests( t ...ReactorTest ) {
+func AddStdReactorTests( t ...interface{} ) {
     StdReactorTests = append( StdReactorTests, t... )
 }
 
@@ -39,7 +37,7 @@ func initValueBuildReactorTests() {
         "map1", MustSymbolMap(),
         "struct1", MustStruct( "ns1@v1/S2" ),
     )
-    mk := func( v Value ) ReactorTest { return ValueBuildTest{ v } }
+    mk := func( v Value ) interface{} { return ValueBuildTest{ v } }
     StdReactorTests = append( StdReactorTests,
         mk( String( "hello" ) ),
         mk( MustList() ),
@@ -1457,7 +1455,7 @@ func ( t *crtInit ) call() {
 func initCastReactorTests() { ( &crtInit{} ).call() }
 
 func init() {
-    StdReactorTests = []ReactorTest{}
+    StdReactorTests = []interface{}{}
     initValueBuildReactorTests()
     initStructuralReactorTests()
     initFieldOrderReactorTests()
@@ -1587,4 +1585,31 @@ func AssertEventPaths(
         rcts, 
         pa,
     )
+}
+
+type ReactorTestCall struct {
+    *assert.PathAsserter
+    Test interface{}
+}
+
+func ( c *ReactorTestCall ) CheckNoError( err error ) {
+    if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
+}
+
+func ( c *ReactorTestCall ) EqualErrors( expct, act error ) {
+    if expct == nil { c.Fatal( act ) }
+    c.Equalf( expct, act, "expected %q (%T) but got %q (%T)",
+        expct, expct, act, act )
+}
+
+func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
+    if expct == nil {
+        if vb != nil {
+            a.Fatalf( "unexpected value: %s", QuoteValue( vb.GetValue() ) )
+        }
+    } else { 
+        a.Falsef( vb == nil, 
+            "expecting value %s but value builder is nil", QuoteValue( expct ) )
+        EqualValues( expct, vb.GetValue(), a ) 
+    }
 }

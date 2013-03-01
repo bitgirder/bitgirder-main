@@ -779,3 +779,21 @@ func TestUnrecognizedFieldErrorFormatting( t *testing.T ) {
         NewUnrecognizedFieldError( nil, id( "f1" ) ).Error(),
     )
 }
+
+//func TestServiceIdMap( t *testing.T ) {
+//    m := NewServiceIdMap()
+//    ns1 := MustNamespace( "ns1@v1" )
+//    ns2 := MustNamespace( "ns1@v2" )
+//    svc1 := id( "svc1" )
+//    svc2 := id( "svc2" )
+//    m.Put( ns1, svc1, 1 )
+//    chkGetOk := func( 
+//        expctVal interface{}, expctOk bool, ns *Namespace, svc *Identifier ) {
+//        actVal, actOk := m.GetOk( ns, svc )
+//        assert.Equal( expctOk, actOk )
+//        if actOk { assert.Equal( expctVal, actVal ) }
+//    }
+//    chkGetOk( 1, true, ns1, svc1 )
+//    chkGetOk( nil, false, ns1, svc2 )
+//    chkGetOk( nil, false, ns2, svc2 )
+//}

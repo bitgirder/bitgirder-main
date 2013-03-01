@@ -49,6 +49,9 @@ type s1 struct { I1, i2 int }
 type stringType struct { s string }
 func ( st *stringType ) String() string { return st.s }
 
+type testErr string
+func ( e testErr ) Error() string { return string( e ) }
+
 func TestBasicAsserts( t *testing.T ) {
     a, f := testAsserter( t )
     f.ok( func() { a.True( true ) } )
@@ -78,6 +81,18 @@ func TestBasicAsserts( t *testing.T ) {
         `actual( *assert.stringType: abc )` )
     a.NotEqual( 1, 1 )
     f.failed( "'comp' and 'actual' are both 1" )
+    err1, err2 := testErr( "err1" ), testErr( "err2" )
+    f.ok( func() { a.EqualErrors( err1, err1 ) } )
+    f.ok( func() { a.EqualErrors( nil, nil ) } )
+    a.EqualErrors( nil, err1 )
+    f.failed( "Expected no error but got assert.testErr: err1" )
+    a.EqualErrors( err1, nil )
+    f.failed( `Got no error but expected assert.testErr: err1` )
+    a.EqualErrors( err1, err2 )
+    f.failed( 
+        `Expected assert.testErr with message "err1" but got ` +
+        `assert.testErr with message "err2"`,
+    )
     // loop through all variants of assert methods that take a format
     // string/args and ensure that those args are passed through correctly to
     // the fail method

@@ -251,6 +251,61 @@ func ( sd *ServiceDefinition ) GetSuperType() *mg.QualifiedTypeName {
     return sd.SuperType
 }
 
+func ( sd *ServiceDefinition ) findOpDef( 
+    op *mg.Identifier ) *OperationDefinition {
+    for _, od := range sd.Operations { if od.Name.Equals( op ) { return od } }
+    return nil
+}
+
+type ServiceDefinitionMap struct {
+    defs *DefinitionMap
+    nsMap *mg.NamespaceMap
+}
+
+func NewServiceDefinitionMap( defs *DefinitionMap ) *ServiceDefinitionMap {
+    return &ServiceDefinitionMap{ defs: defs, nsMap: mg.NewNamespaceMap() }
+}
+
+func ( m *ServiceDefinitionMap ) GetDefinitionMap() *DefinitionMap {
+    return m.defs
+}
+
+func ( m *ServiceDefinitionMap ) Put( 
+    ns *mg.Namespace, svc *mg.Identifier, qn *mg.QualifiedTypeName ) error {
+    if def, ok := m.defs.GetOk( qn ); ok {
+        if sd, ok := def.( *ServiceDefinition ); ok {
+            svcMap, ok := m.nsMap.GetOk( ns )
+            if ! ok {
+                svcMap = mg.NewIdentifierMap()
+                m.nsMap.Put( ns, svcMap )
+            }
+            svcMap.( *mg.IdentifierMap ).Put( svc, sd )
+            return nil
+        }
+        return libErrorf( "(%T).Put(): %s is not a service", m, qn )
+    }
+    return libErrorf( "(%T).Put(): no definition for name %s", qn )
+}
+
+func ( m *ServiceDefinitionMap ) MustPut(
+    ns *mg.Namespace, svc *mg.Identifier, qn *mg.QualifiedTypeName ) {
+    if err := m.Put( ns, svc, qn ); err != nil { panic( err ) }
+}
+
+func ( m *ServiceDefinitionMap ) HasNamespace( ns *mg.Namespace ) bool {
+    return m.nsMap.HasKey( ns )
+}
+
+func ( m *ServiceDefinitionMap ) GetOk( 
+    ns *mg.Namespace, svc *mg.Identifier ) ( *ServiceDefinition, bool ) {
+    if svcMap, ok := m.nsMap.GetOk( ns ); ok {
+        if sd, ok := svcMap.( *mg.IdentifierMap ).GetOk( svc ); ok {
+            return sd.( *ServiceDefinition ), true
+        }
+    }
+    return nil, false
+}
+
 var coreTypesV1 *DefinitionMap
 
 func CoreTypesV1() *DefinitionMap {

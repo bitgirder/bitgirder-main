@@ -163,8 +163,6 @@ func convertPtVal( val interface{} ) interface{} {
     panic( fmt.Errorf( "Unhandled pt val type (%T)", val ) )
 }
 
-type extFormer interface { ExternalForm() string }
-
 func assertExternalForm( ext string, val interface{}, a *assert.PathAsserter ) {
     if v, ok := val.( extFormer ); ok {
         a.Equal( ext, v.ExternalForm() )

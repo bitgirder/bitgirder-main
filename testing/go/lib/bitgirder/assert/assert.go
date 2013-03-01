@@ -66,6 +66,22 @@ func ( a *Asserter ) NotEqual( comp, actual interface{} ) {
         comp, actual, "'comp' and 'actual' are both %s", fmtVal{ comp } )
 }
 
+func ( a *Asserter ) EqualErrors( expct, act error ) {
+    if expct == nil {
+        if act != nil { 
+            a.Fatalf( "Expected no error but got %T: %s", act, act.Error() )
+        }
+    } else {
+        if act == nil {
+            a.Fatalf( "Got no error but expected %T: %s", expct, expct.Error() )
+        } else {
+            a.Equalf( expct, act, 
+                "Expected %T with message %q but got %T with message %q",
+                expct, expct.Error(), act, act.Error() )
+        }
+    }
+}
+
 func ( a *Asserter ) AssertError(
     call func() ( interface{}, error ), errChk func( err error ) ) {
     if val, err := call(); err == nil {

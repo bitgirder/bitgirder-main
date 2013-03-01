@@ -77,10 +77,13 @@ func MakeCallSig(
     return res
 }
 
+func MakeOpDef( nm string, sig *CallSignature ) *OperationDefinition {
+    return &OperationDefinition{ Name: mkId( nm ), Signature: sig }
+}
+
 func MakeServiceDef(
-    qn, sprTyp string,
-    opDefs []*OperationDefinition,
-    secQn string ) *ServiceDefinition {
+    qn, sprTyp, secQn string,
+    opDefs ...*OperationDefinition ) *ServiceDefinition {
     res := NewServiceDefinition()
     res.Name = mg.MustQualifiedTypeName( qn )
     if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }

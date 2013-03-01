@@ -47,30 +47,23 @@ func TestTypesIo( t *gotest.T ) {
             Name: mkQn( "ns1@v1/En1" ),
             Values: []*mg.Identifier{ mkId( "e1" ), mkId( "e2" ) },
         },
-        MakeServiceDef( "ns1@v1/Svc1", "", []*OperationDefinition{}, "" ),
+        MakeServiceDef( "ns1@v1/Svc1", "", "" ),
         MakeServiceDef(
             "ns1@v1/Svc2",
             "ns1@v1/Svc1",
-            []*OperationDefinition{
-                {   Name: mkId( "op1" ),
-                    Signature: MakeCallSig(
-                        []*FieldDefinition{
-                            MakeFieldDef( "f1", "ns1@v1/T", nil ),
-                            MakeFieldDef( "f2", "ns1@v1/T", int32( 1 ) ),
-                        },
-                        "ns1@v1/T",
-                        []string{ "ns1@v1/Ex1", "ns1@v1/Ex2" },
-                    ),
-                },
-                {   Name: mkId( "op2" ),
-                    Signature: MakeCallSig(
-                        []*FieldDefinition{},
-                        "ns1@v1/T",
-                        []string{},
-                    ),
-                },
-            },
             "ns1@v1/Security1",
+            MakeOpDef( "op1",
+                MakeCallSig(
+                    []*FieldDefinition{
+                        MakeFieldDef( "f1", "ns1@v1/T", nil ),
+                        MakeFieldDef( "f2", "ns1@v1/T", int32( 1 ) ),
+                    },
+                    "ns1@v1/T",
+                    []string{ "ns1@v1/Ex1", "ns1@v1/Ex2" },
+                ),
+            ),
+            MakeOpDef( "op2",
+                MakeCallSig( []*FieldDefinition{}, "ns1@v1/T", []string{} ) ),
         ),
     } {
         m1.MustAdd( def )

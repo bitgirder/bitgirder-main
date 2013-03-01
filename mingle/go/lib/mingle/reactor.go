@@ -46,6 +46,14 @@ const EvEnd = EndEvent( 0 )
 
 type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
 
+type discardEventProcessor int
+
+func ( d discardEventProcessor ) ProcessEvent( ev ReactorEvent ) error {
+    return nil
+}
+
+var DiscardProcessor = discardEventProcessor( 1 )
+
 type ReactorKey string
 
 type PipelineInitializer interface { Init( rpi *ReactorPipelineInit ) }
@@ -751,24 +759,21 @@ func ( i castInterfaceDefault ) CastAtomic(
 }
 
 type CastReactor struct {
-    path idPath
+    pg PathGetter
     iface CastInterface
     stack *list.List // stack of castContext
     sr *StructuralReactor
 }
 
 func NewCastReactor( 
-    expct TypeReference,
-    iface CastInterface, 
-    path objpath.PathNode ) *CastReactor {
-    res := &CastReactor{ path: path, stack: &list.List{}, iface: iface }
+    expct TypeReference, iface CastInterface, pg PathGetter ) *CastReactor {
+    res := &CastReactor{ pg: pg, stack: &list.List{}, iface: iface }
     res.stack.PushFront( castContext{ elt: expct, expct: expct } )
     return res
 }
 
-func NewDefaultCastReactor( 
-    expct TypeReference, path objpath.PathNode ) *CastReactor {
-    return NewCastReactor( expct, castInterfaceDefault{}, path )
+func NewDefaultCastReactor( expct TypeReference, pg PathGetter ) *CastReactor {
+    return NewCastReactor( expct, castInterfaceDefault{}, pg )
 }
 
 func ( cr *CastReactor ) Init( rpi *ReactorPipelineInit ) {
@@ -793,7 +798,9 @@ func ( cr *CastReactor ) pop() castContext {
 func ( cr *CastReactor ) push( cc castContext ) { cr.stack.PushFront( cc ) }
 
 func ( cr *CastReactor ) GetPath() objpath.PathNode { 
-    return cr.sr.AppendPath( cr.path ) 
+    var p idPath
+    if cr.pg != nil { p = cr.pg.GetPath() }
+    return cr.sr.AppendPath( p )
 }
 
 func ( cr *CastReactor ) expectedType() TypeReference {
@@ -1002,7 +1009,8 @@ func ( cr *CastReactor ) ProcessEvent(
 func CastValue( 
     mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
     vb := NewValueBuilder()
-    pip := InitReactorPipeline( NewDefaultCastReactor( typ, path ), vb )
+    pg := ImmediatePathGetter{ path }
+    pip := InitReactorPipeline( NewDefaultCastReactor( typ, pg ), vb )
     if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
     return vb.GetValue(), nil
 }
@@ -1308,8 +1316,8 @@ type ServiceRequestReactorInterface interface {
     Namespace( ns *Namespace, pg PathGetter ) error
     Service( svc *Identifier, pg PathGetter ) error
     Operation( op *Identifier, pg PathGetter ) error
-    GetAuthenticationProcessor( pg PathGetter ) ReactorEventProcessor
-    GetParametersProcessor( pg PathGetter ) ReactorEventProcessor
+    GetAuthenticationProcessor( pg PathGetter ) ( ReactorEventProcessor, error )
+    GetParametersProcessor( pg PathGetter ) ( ReactorEventProcessor, error )
 }
 
 type requestFieldType int
@@ -1417,7 +1425,8 @@ func ( sr *ServiceRequestReactor ) startStruct( ev StructStartEvent ) error {
     return sr.invalidValueErr( ev.Type.ExternalForm() )
 }
 
-func ( sr *ServiceRequestReactor ) startField( fs FieldStartEvent ) error {
+func ( sr *ServiceRequestReactor ) startField( 
+    fs FieldStartEvent ) ( err error ) {
     if sr.fld != reqFieldNone {
         panic( libErrorf( 
             "Saw field start '%s' while sr.fld is %d", fs.Field, sr.fld ) )
@@ -1428,10 +1437,12 @@ func ( sr *ServiceRequestReactor ) startField( fs FieldStartEvent ) error {
     case fld.Equals( IdOperation ): sr.fld = reqFieldOp
     case fld.Equals( IdAuthentication ): 
         sr.fld = reqFieldAuth
-        sr.evProc = sr.iface.GetAuthenticationProcessor( sr )
+        sr.evProc, err = sr.iface.GetAuthenticationProcessor( sr )
+        if err != nil { return }
     case fld.Equals( IdParameters ): 
         sr.fld = reqFieldParams
-        sr.evProc = sr.iface.GetParametersProcessor( sr )
+        sr.evProc, err = sr.iface.GetParametersProcessor( sr )
+        if err != nil { return }
         sr.hadParams = true
     }
     if sr.fld == reqFieldNone {
@@ -1507,7 +1518,8 @@ func ( sr *ServiceRequestReactor ) end() error {
     if ! sr.hadParams {
         defer func() { sr.paramsSynth = false }()
         sr.paramsSynth = true
-        ep := sr.iface.GetParametersProcessor( sr );
+        ep, err := sr.iface.GetParametersProcessor( sr );
+        if err != nil { return err }
         if err := ep.ProcessEvent( EvMapStart ); err != nil { return err }
         if err := ep.ProcessEvent( EvEnd ); err != nil { return err }
     }

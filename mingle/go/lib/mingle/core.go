@@ -988,6 +988,9 @@ func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
 type PathGetter interface { GetPath() objpath.PathNode }
 type PathAppender interface { AppendPath( objpath.PathNode ) objpath.PathNode }
 
+type ImmediatePathGetter struct { Path objpath.PathNode }
+func ( i ImmediatePathGetter ) GetPath() objpath.PathNode { return i.Path }
+
 type idPath objpath.PathNode // elts are *Identifier
 
 var idPathRootVal idPath
@@ -1241,6 +1244,42 @@ func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {
     return e.impl.Location()
 }
 
+type extFormer interface { ExternalForm() string }
+
+type EndpointError struct {
+    impl ValueErrorImpl
+    desc string
+    ef extFormer
+}
+
+func ( ee *EndpointError ) Error() string {
+    msg := fmt.Sprintf( "no such %s: %s", ee.desc, ee.ef.ExternalForm() )
+    return ee.impl.MakeError( msg )
+}
+
+func ( ee *EndpointError ) Location() objpath.PathNode {
+    return ee.impl.Location()
+}
+
+func newEndpointError( desc string, ef extFormer, p idPath ) *EndpointError {
+    return &EndpointError{ desc: desc, ef: ef, impl: ValueErrorImpl{ p } }
+}
+
+func NewEndpointErrorNamespace( 
+    ns *Namespace, p objpath.PathNode ) *EndpointError {
+    return newEndpointError( "namespace", ns, p )
+}
+
+func NewEndpointErrorService(
+    svc *Identifier, p objpath.PathNode ) *EndpointError {
+    return newEndpointError( "service", svc, p )
+}
+
+func NewEndpointErrorOperation(
+    op *Identifier, p objpath.PathNode ) *EndpointError {
+    return newEndpointError( "operation", op, p )
+}
+
 type mapImplKey interface { ExternalForm() string }
 
 type mapImplEntry struct { 
@@ -1407,3 +1446,28 @@ func ( m *NamespaceMap ) PutSafe( ns *Namespace, val interface{} ) error {
 }
 
 func ( m *NamespaceMap ) Delete( ns *Namespace ) { m.implDelete( ns ) }
+
+//type svcIdMapKey struct {
+//    ns *Namespace
+//    svc *Identifier
+//}
+//
+//func ( k svcIdMapKey ) ExternalForm() string {
+//    return k.ns.ExternalForm() + "/" + k.svc.ExternalForm()
+//}
+//
+//type ServiceIdMap struct {
+//    *mapImpl
+//}
+//
+//func NewServiceIdMap() *ServiceIdMap { return &ServiceIdMap{ newMapImpl() } }
+//
+//func ( m *ServiceIdMap ) Put( 
+//    ns *Namespace, svc *Identifier, val interface{} ) {
+//    m.implPut( svcIdMapKey{ ns, svc }, val )
+//}
+//
+//func ( m *ServiceIdMap ) GetOk( 
+//    ns *Namespace, svc *Identifier ) ( interface{}, bool ) {
+//    return m.implGetOk( svcIdMapKey{ ns, svc } )
+//}

@@ -389,11 +389,10 @@ service Service1 {
 }
 `,
     }
-    mkId := mg.MustIdentifier
     mkQn := mg.MustQualifiedTypeName
     mkTyp := mg.MustTypeReference
     p1Defs = []*types.DefinitionMap{
-        makeDefMap(
+        types.MakeDefMap(
             &types.AliasedTypeDefinition{
                 Name: mkQn( "ns1@v1/Alias1" ),
                 AliasedType: mkTyp( "mingle:core@v1/String?" ),
@@ -414,78 +413,89 @@ service Service1 {
                 Name: mkQn( "ns1@v1/Alias5" ),
                 AliasedType: mkTyp( `mingle:core@v1/Int64~[0,)` ),
             },
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Struct1",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "string1", "mingle:core@v1/String", nil ),
-                    makeFieldDef( "string2", "mingle:core@v1/String?", nil ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
+                        "string1", "mingle:core@v1/String", nil ),
+                    types.MakeFieldDef( 
+                        "string2", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( 
                         "string3", "mingle:core@v1/String", "hello there" ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "string4", `mingle:core@v1/String~"a*"`, "aaaaa" ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "string5", `mingle:core@v1/String~"^.*(a|b)$"?`, nil ),
-                    makeFieldDef( "bool1", "mingle:core@v1/Boolean?", nil ),
-                    makeFieldDef( "bool2", "mingle:core@v1/Boolean", true ),
-                    makeFieldDef( "buf1", "mingle:core@v1/Buffer?", nil ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
+                        "bool1", "mingle:core@v1/Boolean?", nil ),
+                    types.MakeFieldDef( 
+                        "bool2", "mingle:core@v1/Boolean", true ),
+                    types.MakeFieldDef( "buf1", "mingle:core@v1/Buffer?", nil ),
+                    types.MakeFieldDef( 
                         "timestamp1", "mingle:core@v1/Timestamp?", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "timestamp2", 
                         "mingle:core@v1/Timestamp",
                         mg.MustTimestamp( 
                             "2007-08-24T14:15:43.123450000-07:00" ),
                     ),
-                    makeFieldDef( "int1", "mingle:core@v1/Int64", nil ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( "int1", "mingle:core@v1/Int64", nil ),
+                    types.MakeFieldDef( 
                         "int2", "mingle:core@v1/Int64", int64( 1234 ) ),
-                    makeFieldDef( "int3", "mingle:core@v1/Int64?", nil ),
-                    makeFieldDef( "int4", "mingle:core@v1/Int32", int32( 12 ) ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( "int3", "mingle:core@v1/Int64?", nil ),
+                    types.MakeFieldDef( 
+                        "int4", "mingle:core@v1/Int32", int32( 12 ) ),
+                    types.MakeFieldDef( 
                         "int5", "mingle:core@v1/Int32~[0,)", int32( 1111 ) ),
-                    makeFieldDef( "int6", "mingle:core@v1/Int64~(,)", nil ),
-                    makeFieldDef( "int7", "mingle:core@v1/Uint32", nil ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
+                        "int6", "mingle:core@v1/Int64~(,)", nil ),
+                    types.MakeFieldDef( "int7", "mingle:core@v1/Uint32", nil ),
+                    types.MakeFieldDef( 
                         "int8", "mingle:core@v1/Uint64~[0,100)", nil ),
-                    makeFieldDef( "ints1", "mingle:core@v1/Int64*", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef( "ints1", "mingle:core@v1/Int64*", nil ),
+                    types.MakeFieldDef(
                         "ints2",
                         "mingle:core@v1/Int32+",
                         []interface{}{ 
                             int32( 1 ), int32( -2 ), int32( 3 ), int32( -4 ) },
                     ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "float1", "mingle:core@v1/Float64", float64( 3.1 ) ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "float2", "mingle:core@v1/Float64~(-1e-10,3]?", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "float3", "mingle:core@v1/Float32", float32( 3.2 ) ),
-                    makeFieldDef( "floats1", "mingle:core@v1/Float32*", nil ),
-                    makeFieldDef( "val1", "mingle:core@v1/Value", nil ),
-                    makeFieldDef( "val2", "mingle:core@v1/Value", int64( 12 ) ),
-                    makeFieldDef( "list1", "mingle:core@v1/String*", nil ),
-                    makeFieldDef( "list2", "mingle:core@v1/String**", nil ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
+                        "floats1", "mingle:core@v1/Float32*", nil ),
+                    types.MakeFieldDef( "val1", "mingle:core@v1/Value", nil ),
+                    types.MakeFieldDef( 
+                        "val2", "mingle:core@v1/Value", int64( 12 ) ),
+                    types.MakeFieldDef( 
+                        "list1", "mingle:core@v1/String*", nil ),
+                    types.MakeFieldDef( 
+                        "list2", "mingle:core@v1/String**", nil ),
+                    types.MakeFieldDef( 
                         "list3", `mingle:core@v1/String~"abc$"*`, nil ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Struct2",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
-                    makeFieldDef( "inst2", "ns1@v1/Struct1*", nil ),
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct1*", nil ),
                 },
             ),
-            makeStructDef2(
+            types.MakeStructDef2(
                 "ns1@v1/Struct3",
                 "ns1@v1/Struct1",
                 []*types.FieldDefinition{
-                    makeFieldDef( "string6", "mingle:core@v1/String?", nil ),
-                    makeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
-                    makeFieldDef( "enum1", "ns1@v1/Enum1?", nil ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
+                        "string6", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
+                    types.MakeFieldDef( "enum1", "ns1@v1/Enum1?", nil ),
+                    types.MakeFieldDef( 
                         "enum2",
                         "ns1@v1/Enum1",
                         mg.MustEnum( "ns1@v1/Enum1", "green" ),
@@ -497,63 +507,65 @@ service Service1 {
                     { mg.MustTypeReference( `mingle:core@v1/String~"^a+$"` ) },
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Struct5",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f1", "mingle:core@v1/String?", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f2", "mingle:core@v1/String??", "hello" ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f3", "mingle:core@v1/String?*", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f4", 
                         "mingle:core@v1/String?+", 
                         []interface{}{ "a", "b" },
                     ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f5", "mingle:core@v1/String??*+", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f6", "ns1@v1/Struct1", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f7", "ns1@v1/Struct1*", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f8", 
                         "mingle:core@v1/String?*", 
                         []interface{}{ "hello" },
                     ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f9", "mingle:core@v1/String?*+", nil ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f10", `mingle:core@v1/String~"^a+$"`, "aaa" ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f11", "mingle:core@v1/Int64~[0,)", int64( 12 ) ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Exception1",
                 "mingle:core@v1/StandardException",
                 []*types.FieldDefinition{},
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Exception2",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "failTime", "mingle:core@v1/Int64", nil ),
+                    types.MakeFieldDef( 
+                        "failTime", "mingle:core@v1/Int64", nil ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Exception3",
                 "ns1@v1/Exception1",
                 []*types.FieldDefinition{
-                    makeFieldDef( "string2", "mingle:core@v1/String*", nil ),
+                    types.MakeFieldDef( 
+                        "string2", "mingle:core@v1/String*", nil ),
                 },
             ),
-            makeEnumDef( "ns1@v1/Enum1", "red", "green", "lightGrey" ),
+            types.MakeEnumDef( "ns1@v1/Enum1", "red", "green", "lightGrey" ),
             &types.PrototypeDefinition{
                 Name: mkQn( "ns1@v1/Proto1" ),
-                Signature: makeCallSig(
+                Signature: types.MakeCallSig(
                     []*types.FieldDefinition{},
                     "mingle:core@v1/String",
                     []string{},
@@ -561,7 +573,7 @@ service Service1 {
             },
             &types.PrototypeDefinition{
                 Name: mkQn( "ns1@v1/Proto2" ),
-                Signature: makeCallSig(
+                Signature: types.MakeCallSig(
                     []*types.FieldDefinition{},
                     "mingle:core@v1/String",
                     []string{ "ns1@v1/Exception1" },
@@ -569,10 +581,11 @@ service Service1 {
             },
             &types.PrototypeDefinition{
                 Name: mkQn( "ns1@v1/Proto3" ),
-                Signature: makeCallSig(
+                Signature: types.MakeCallSig(
                     []*types.FieldDefinition{
-                        makeFieldDef( "f1", "ns1@v1/Struct1", nil ),
-                        makeFieldDef( "f2", "mingle:core@v1/String", "hi" ),
+                        types.MakeFieldDef( "f1", "ns1@v1/Struct1", nil ),
+                        types.MakeFieldDef( 
+                            "f2", "mingle:core@v1/String", "hi" ),
                     },
                     "ns1@v1/Struct1?",
                     []string{},
@@ -580,9 +593,10 @@ service Service1 {
             },
             &types.PrototypeDefinition{
                 Name: mkQn( "ns1@v1/Sec1" ),
-                Signature: makeCallSig(
+                Signature: types.MakeCallSig(
                     []*types.FieldDefinition{
-                        makeFieldDef( "authentication", "ns1@v1/Struct1", nil ),
+                        types.MakeFieldDef( 
+                            "authentication", "ns1@v1/Struct1", nil ),
                     },
                     "mingle:core@v1/Null",
                     []string{},
@@ -590,127 +604,121 @@ service Service1 {
             },
             &types.PrototypeDefinition{
                 Name: mkQn( "ns1@v1/Sec2" ),
-                Signature: makeCallSig(
+                Signature: types.MakeCallSig(
                     []*types.FieldDefinition{
-                        makeFieldDef( "authentication", "ns1@v1/Struct1", nil ),
+                        types.MakeFieldDef( 
+                            "authentication", "ns1@v1/Struct1", nil ),
                     },
                     "mingle:core@v1/Int64~[9,10]",
                     []string{ "ns1@v1/Exception1", "ns1@v1/Exception2" },
                 ),
             },
-            makeServiceDef(
+            types.MakeServiceDef(
                 "ns1@v1/Service1",
                 "",
-                []*types.OperationDefinition{
-                    {   Name: mkId( "op1" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{},
-                            "mingle:core@v1/String*",
-                            []string{},
-                        ),
-                    },
-                    {   Name: mkId( "op2" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{
-                                makeFieldDef( 
-                                    "param1", "mingle:core@v1/String", nil ),
-                                makeFieldDef(
-                                    "param2", "ns1@v1/Struct1?", nil ),
-                                makeFieldDef(
-                                    "param3",
-                                    "mingle:core@v1/Int64", 
-                                    int64( 12 ),
-                                ),
-                                makeFieldDef(
-                                    "param4", "mingle:core@v1/String?*", nil ),
-                                makeFieldDef( "param5", "ns1@v1/Struct1", nil ),
-                            },
-                            "ns1@v1/Struct2",
-                            []string{ 
-                                "ns1@v1/Exception1", "ns1@v1/Exception3" },
-                        ),
-                    },
-                    {   Name: mkId( "op3" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{},
-                            "mingle:core@v1/Int64?",
-                            []string{ "ns1@v1/Exception2" },
-                        ),
-                    },
-                    {   Name: mkId( "op4" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{},
-                            "mingle:core@v1/Null",
-                            []string{},
-                        ),
-                    },
-                },
                 "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/String*",
+                        []string{},
+                    ),
+                ),
+                types.MakeOpDef( "op2",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( 
+                                "param1", "mingle:core@v1/String", nil ),
+                            types.MakeFieldDef(
+                                "param2", "ns1@v1/Struct1?", nil ),
+                            types.MakeFieldDef(
+                                "param3", "mingle:core@v1/Int64", int64( 12 ) ),
+                            types.MakeFieldDef(
+                                "param4", "mingle:core@v1/String?*", nil ),
+                            types.MakeFieldDef( 
+                                "param5", "ns1@v1/Struct1", nil ),
+                        },
+                        "ns1@v1/Struct2",
+                        []string{ "ns1@v1/Exception1", "ns1@v1/Exception3" },
+                    ),
+                ),
+                types.MakeOpDef( "op3",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Int64?",
+                        []string{ "ns1@v1/Exception2" },
+                    ),
+                ),
+                types.MakeOpDef( "op4",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Null",
+                        []string{},
+                    ),
+                ),
             ),
-            makeServiceDef(
+            types.MakeServiceDef(
                 "ns1@v1/Service2",
                 "",
-                []*types.OperationDefinition{
-                    {   Name: mkId( "op1" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{},
-                            "mingle:core@v1/Int64",
-                            []string{},
-                        ),
-                    },
-                    {   Name: mkId( "op2" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{},
-                            "mingle:core@v1/Boolean",
-                            []string{},
-                        ),
-                    },
-                },
                 "ns1@v1/Sec1",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Int64",
+                        []string{},
+                    ),
+                ),
+                types.MakeOpDef( "op2",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Boolean",
+                        []string{},
+                    ),
+                ),
             ),
-            makeServiceDef(
-                "ns1@v1/Service3",
-                "",
-                []*types.OperationDefinition{},
-                "ns1@v1/Sec2",
-            ),
-            makeStructDef(
+            types.MakeServiceDef( "ns1@v1/Service3", "", "ns1@v1/Sec2" ),
+            types.MakeStructDef(
                 "ns1@v1/FieldConstantTester",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "f1", "mingle:core@v1/Boolean", true ),
-                    makeFieldDef( "f2", "mingle:core@v1/Boolean", false ),
-                    makeFieldDef( "f3", "mingle:core@v1/Int32", int32( 1 ) ),
-                    makeFieldDef( "f4", "mingle:core@v1/Int32", int32( -1 ) ),
-                    makeFieldDef( "f5", "mingle:core@v1/Int64", int64( 1 ) ),
-                    makeFieldDef( "f6", "mingle:core@v1/Int64", int64( -1 ) ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( "f1", "mingle:core@v1/Boolean", true ),
+                    types.MakeFieldDef( "f2", "mingle:core@v1/Boolean", false ),
+                    types.MakeFieldDef( 
+                        "f3", "mingle:core@v1/Int32", int32( 1 ) ),
+                    types.MakeFieldDef( 
+                        "f4", "mingle:core@v1/Int32", int32( -1 ) ),
+                    types.MakeFieldDef( 
+                        "f5", "mingle:core@v1/Int64", int64( 1 ) ),
+                    types.MakeFieldDef( 
+                        "f6", "mingle:core@v1/Int64", int64( -1 ) ),
+                    types.MakeFieldDef( 
                         "f7", "mingle:core@v1/Float32", float32( 1.0 ) ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f8", "mingle:core@v1/Float32", float32( -1.0 ) ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f9", "mingle:core@v1/Float64", float64( 1.0 ) ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f10", "mingle:core@v1/Float64", float64( -1.0 ) ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f11", "mingle:core@v1/Int32~[0,10)", int32( 8 ) ),
-                    makeFieldDef( "f12", "mingle:core@v1/String", "a" ),
-                    makeFieldDef( "f13", `mingle:core@v1/String~"a"`, "a" ),
-                    makeFieldDef( "f14", "ns1@v1/Enum1",
+                    types.MakeFieldDef( "f12", "mingle:core@v1/String", "a" ),
+                    types.MakeFieldDef( 
+                        "f13", `mingle:core@v1/String~"a"`, "a" ),
+                    types.MakeFieldDef( "f14", "ns1@v1/Enum1",
                         mg.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
-                    makeFieldDef( "f15", "mingle:core@v1/Timestamp",
+                    types.MakeFieldDef( "f15", "mingle:core@v1/Timestamp",
                         mg.MustTimestamp( 
                             "2007-08-24T14:15:43.123450000-07:00" ) ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
                         "f16", "mingle:core@v1/String+",
                         []interface{}{ "a", "b", "c" } ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f17", "mingle:core@v1/Int32*",
                         []interface{}{ int32( 1 ), int32( 2 ), int32( 3 ) } ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f18", "mingle:core@v1/Float64*", []interface{}{} ),
-                    makeFieldDef(
+                    types.MakeFieldDef(
                         "f19", "mingle:core@v1/String*+",
                         []interface{}{
                             []interface{}{},
@@ -718,11 +726,13 @@ service Service1 {
                             []interface{}{ "c", "d", "e" },
                         },
                     ),
-                    makeFieldDef( "f20", "mingle:core@v1/Uint32", uint32( 1 ) ),
-                    makeFieldDef( 
+                    types.MakeFieldDef( 
+                        "f20", "mingle:core@v1/Uint32", uint32( 1 ) ),
+                    types.MakeFieldDef( 
                         "f21", "mingle:core@v1/Uint32", uint32( 4294967295 ) ),
-                    makeFieldDef( "f22", "mingle:core@v1/Uint64", uint64( 0 ) ),
-                    makeFieldDef(
+                    types.MakeFieldDef( 
+                        "f22", "mingle:core@v1/Uint64", uint64( 0 ) ),
+                    types.MakeFieldDef(
                         "f23", 
                         "mingle:core@v1/Uint64", 
                         uint64( 18446744073709551615 ),
@@ -730,26 +740,28 @@ service Service1 {
                 },
             ),
         ),
-        makeDefMap(
-            makeStructDef(
+        types.MakeDefMap(
+            types.MakeStructDef(
                 "ns1@v1/Struct4",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
-                    makeFieldDef( "inst2", "ns1@v1/Struct2", nil ),
-                    makeFieldDef( "str1", "mingle:core@v1/String?", nil ),
-                    makeFieldDef( "str2", "mingle:core@v1/String?*", nil ),
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct2", nil ),
+                    types.MakeFieldDef( "str1", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( 
+                        "str2", "mingle:core@v1/String?*", nil ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v1/Exception4",
                 "ns1@v1/Exception3",
                 []*types.FieldDefinition{
-                    makeFieldDef( "int1", "mingle:core@v1/Int64", int64( 33 ) ),
+                    types.MakeFieldDef( 
+                        "int1", "mingle:core@v1/Int64", int64( 33 ) ),
                 },
             ),
         ),
-        makeDefMap(
+        types.MakeDefMap(
             &types.AliasedTypeDefinition{
                 Name: mkQn( "ns2@v1/Alias1" ),
                 AliasedType: mkTyp( "ns1@v1/Struct3" ),
@@ -758,159 +770,153 @@ service Service1 {
                 Name: mkQn( "ns2@v1/Alias2" ),
                 AliasedType: mkTyp( "mingle:core@v1/String?*" ),
             },
-            makeStructDef(
+            types.MakeStructDef(
                 "ns2@v1/Struct1",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "inst1", "ns1@v1/Struct1?", nil ),
-                    makeFieldDef( "inst2", "ns2@v1/Struct2", nil ),
-                    makeFieldDef( "inst3", "ns1@v1/Struct4", nil ),
-                    makeFieldDef( "inst4", "ns1@v1/Struct3", nil ),
-                    makeFieldDef( "inst5", "ns1@v1/Struct1", nil ),
-                    makeFieldDef( "inst6", "mingle:core@v1/String?*", nil ),
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct1?", nil ),
+                    types.MakeFieldDef( "inst2", "ns2@v1/Struct2", nil ),
+                    types.MakeFieldDef( "inst3", "ns1@v1/Struct4", nil ),
+                    types.MakeFieldDef( "inst4", "ns1@v1/Struct3", nil ),
+                    types.MakeFieldDef( "inst5", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( 
+                        "inst6", "mingle:core@v1/String?*", nil ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns2@v1/Struct2",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "inst1", "ns2@v1/Struct1", nil ),
-                    makeFieldDef( "inst2", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst1", "ns2@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct1", nil ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns2@v1/Exception1",
                 "ns1@v1/Exception1",
                 []*types.FieldDefinition{},
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns2@v1/Exception2",
                 "ns1@v1/Exception3",
                 []*types.FieldDefinition{
-                    makeFieldDef( "str1", "mingle:core@v1/String*", nil ),
+                    types.MakeFieldDef( "str1", "mingle:core@v1/String*", nil ),
                 },
             ),
-            makeServiceDef(
+            types.MakeServiceDef(
                 "ns2@v1/Service1",
                 "",
-                []*types.OperationDefinition{
-                    {   Name: mkId( "op1" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{},
-                            "ns2@v1/Struct2",
-                            []string{ 
-                                "ns2@v1/Exception1", "ns1@v1/Exception4" },
-                        ),
-                    },
-                    {   Name: mkId( "op2" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{
-                                makeFieldDef( 
-                                    "param1", "mingle:core@v1/String*+", nil ),
-                                makeFieldDef(
-                                    "param2", "ns1@v1/Struct4*", nil ),
-                                makeFieldDef( "param3", "ns1@v1/Struct1", nil ),
-                                makeFieldDef( "param4", "ns2@v1/Struct2", nil ),
-                            },
-                            "mingle:core@v1/String",
-                            []string{},
-                        ),
-                    },
-                },
                 "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "ns2@v1/Struct2",
+                        []string{ "ns2@v1/Exception1", "ns1@v1/Exception4" },
+                    ),
+                ),
+                types.MakeOpDef( "op2",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( 
+                                "param1", "mingle:core@v1/String*+", nil ),
+                            types.MakeFieldDef(
+                                "param2", "ns1@v1/Struct4*", nil ),
+                            types.MakeFieldDef( 
+                                "param3", "ns1@v1/Struct1", nil ),
+                            types.MakeFieldDef( 
+                                "param4", "ns2@v1/Struct2", nil ),
+                        },
+                        "mingle:core@v1/String",
+                        []string{},
+                    ),
+                ),
             ),
         ),
-        makeDefMap(
-            makeStructDef(
+        types.MakeDefMap(
+            types.MakeStructDef(
                 "ns1:globTestNs@v1/Struct1",
                 "ns1@v1/Struct1",
                 []*types.FieldDefinition{
-                    makeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
-                    makeFieldDef( "inst2", "ns1@v1/Struct4", nil ),
-                    makeFieldDef( "inst3", "ns1:globTestNs@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct4", nil ),
+                    types.MakeFieldDef( 
+                        "inst3", "ns1:globTestNs@v1/Struct1", nil ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1:globTestNs@v1/Exception2",
                 "",
                 []*types.FieldDefinition{},
             ),
-            makeServiceDef(
+            types.MakeServiceDef(
                 "ns1:globTestNs@v1/Service1",
                 "",
-                []*types.OperationDefinition{
-                    {   Name: mkId( "op1" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{
-                                makeFieldDef( 
-                                    "param1", 
-                                    "ns1:globTestNs@v1/Struct1*", 
-                                    nil,
-                                ),
-                                makeFieldDef( "param2", "ns1@v1/Struct1", nil ),
-                                makeFieldDef( "param3", "ns1@v1/Struct3", nil ),
-                            },
-                            "mingle:core@v1/String",
-                            []string{
-                                "ns2@v1/Exception1",
-                                "ns1:globTestNs@v1/Exception2",
-                                "ns1@v1/Exception3",
-                            },
-                        ),
-                    },
-                },
                 "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( 
+                                "param1", "ns1:globTestNs@v1/Struct1*", nil ),
+                            types.MakeFieldDef( 
+                                "param2", "ns1@v1/Struct1", nil ),
+                            types.MakeFieldDef( 
+                                "param3", "ns1@v1/Struct3", nil ),
+                        },
+                        "mingle:core@v1/String",
+                        []string{
+                            "ns2@v1/Exception1",
+                            "ns1:globTestNs@v1/Exception2",
+                            "ns1@v1/Exception3",
+                        },
+                    ),
+                ),
             ),
         ),
-        makeDefMap(
-            makeStructDef(
+        types.MakeDefMap(
+            types.MakeStructDef(
                 "ns1@v2/Struct1",
                 "",
                 []*types.FieldDefinition{
-                    makeFieldDef( "f1", "mingle:core@v1/String", "hello" ),
+                    types.MakeFieldDef( 
+                        "f1", "mingle:core@v1/String", "hello" ),
                 },
             ),
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v2/Struct2",
                 "ns1@v1/Struct1",
                 []*types.FieldDefinition{
-                    makeFieldDef( "f1", "ns1@v2/Struct1?", nil ),
+                    types.MakeFieldDef( "f1", "ns1@v2/Struct1?", nil ),
                 },
             ),
             &types.AliasedTypeDefinition{
                 Name: mkQn( "ns1@v2/Struct1V1" ),
                 AliasedType: mkTyp( "ns1@v1/Struct1" ),
             },
-            makeStructDef(
+            types.MakeStructDef(
                 "ns1@v2/Struct3",
                 "ns1@v2/Struct1",
                 []*types.FieldDefinition{
-                    makeFieldDef( "f2", "ns1@v2/Struct2", nil ),
-                    makeFieldDef( "f3", "mingle:core@v1/String?", nil ),
-                    makeFieldDef( "f4", "ns1@v1/Struct1*", nil ),
+                    types.MakeFieldDef( "f2", "ns1@v2/Struct2", nil ),
+                    types.MakeFieldDef( "f3", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( "f4", "ns1@v1/Struct1*", nil ),
                 },
             ),
-            makeServiceDef(
+            types.MakeServiceDef(
                 "ns1@v2/Service1",
                 "",
-                []*types.OperationDefinition{
-                    {   Name: mkId( "op1" ),
-                        Signature: makeCallSig(
-                            []*types.FieldDefinition{
-                                makeFieldDef( "f1", "ns1@v2/Struct1", nil ),
-                                makeFieldDef(
-                                    "f2",
-                                    "mingle:core@v1/Int64~[0,12)",
-                                    nil,
-                                ),
-                                makeFieldDef( "f3", "ns1@v1/Struct1*+", nil ),
-                            },
-                            "mingle:core@v1/Null",
-                            []string{},
-                        ),
-                    },
-                },
                 "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( "f1", "ns1@v2/Struct1", nil ),
+                            types.MakeFieldDef(
+                                "f2", "mingle:core@v1/Int64~[0,12)", nil ),
+                            types.MakeFieldDef( "f3", "ns1@v1/Struct1*+", nil ),
+                        },
+                        "mingle:core@v1/Null",
+                        []string{},
+                    ),
+                ),
             ),
         ),
     }
