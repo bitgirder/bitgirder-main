@@ -151,6 +151,15 @@ class TestClass5 < BitGirderClass
     end
 end
 
+class TestClass6 < BitGirderClass
+    
+    bg_attr :attr1,
+            :is_list => true,
+            :required => true,
+            :default => lambda { [] },
+            :processor => lambda { |elt| elt.to_s }
+end
+
 class TestError1 < BitGirderError
     bg_attr :attr1
 end
@@ -439,6 +448,12 @@ class CoreTests < TestClassBase
                 assert_equal( test[ 2 ], bg_attr.processor.call( val ) )
             end
         end
+    end
+
+    def test_list_proc_applied_to_default_val
+        
+        assert_equal( [], TestClass6.new.attr1 )
+        assert_equal( [ "1", "2" ], TestClass6.new( :attr1 => [ 1, 2 ] ).attr1 )
     end
 
     def test_error_basic

@@ -542,6 +542,17 @@ class BitGirderAttribute
     def get_instance_value( inst )
         inst.instance_variable_get( @id_sym )
     end
+
+    public
+    def get_default_value
+        
+        case d = @default
+            when Proc then d.call
+            when Class then d.new
+            when Array, Hash then d.clone
+            else d == nil && @is_list ? [] : d
+        end
+    end
 end
 
 class BitGirderClassDefinition
@@ -600,17 +611,6 @@ class BitGirderClassDefinition
     end
 
     private
-    def get_default_val( attr )
-        
-        case d = attr.default
-            when Proc then d.call
-            when Class then d.new
-            when Array, Hash then d.clone
-            else d == nil && attr.is_list ? [] : d
-        end
-    end
-
-    private
     def apply_processor( attr, val )
 
         if p = attr.processor
@@ -635,7 +635,7 @@ class BitGirderClassDefinition
         val = hash.key?( ident ) ? hash[ ident ] : hash[ ident.to_s ]
 
         if val == nil 
-            val = get_default_val( attr ) # could still end up being nil
+            val = attr.get_default_value # could still end up being nil
         else 
             val = apply_processor( attr, val )
         end
@@ -990,9 +990,9 @@ class BitGirderCliApplication < BitGirderClass
 
         if desc = attr.description
 
-            # attr.default could be the boolean false, which we still want to
+            # attr default could be the boolean false, which we still want to
             # display
-            unless ( defl = attr.default ) == nil
+            unless ( defl = attr.get_default_value ) == nil
                 defl = defl.call if defl.is_a?( Proc )
                 desc += " (Default: #{default_to_s( defl )})"
             end
@@ -1008,8 +1008,9 @@ class BitGirderCliApplication < BitGirderClass
  
         attr = argh[ :attr ]
         ident = attr.identifier
-        
-        prev = argh[ :argh ][ ident ] || attr.default # could be nil either way
+
+        # could be nil either way
+        prev = argh[ :argh ][ ident ] || attr.get_default_value
         
         val = argh[ :arg ]
 #        val = attr.processor.call( val ) if attr.processor
