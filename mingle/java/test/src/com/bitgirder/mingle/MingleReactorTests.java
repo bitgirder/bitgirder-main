@@ -43,12 +43,25 @@ class MingleReactorTests
             this.topType = topType;
         }
 
+        private
+        void
+        callReactor( ValueReactor r,
+                     String call )
+            throws Exception
+        {
+            state.fail( "Unhandled call:", call );
+        }
+
         public
         void
         call()
             throws Exception
         {
-            throw new UnsupportedOperationException( "Unimplemented" );
+            PipelineReactor r = 
+                PipelineReactor.create( new StructureCheckReactor() );
+
+            for ( String call : calls ) callReactor( r, call );
+            state.fail( "Unimplemented" );
         }
     }
 
@@ -98,7 +111,7 @@ class MingleReactorTests
         }
     }
 
-//    @InvocationFactory
+    @InvocationFactory
     private
     List< ReactorSeqErrorTest >
     testReactorSeqError()
