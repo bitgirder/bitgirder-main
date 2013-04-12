@@ -37,12 +37,13 @@ function hasKeyOrProperty( obj, key, objNm, errTmpl ) {
 }
 
 $mod.Inputs.hasKey = function( obj, key, objNm ) {
-    hasKeyOrProperty( obj, key, objNm, 
+    return hasKeyOrProperty( obj, key, objNm, 
         "parameter '%s' has no value for key '%s'" );
 }
 
 $mod.Inputs.hasProperty = function( obj, key, objNm ) {
-    hasKeyOrProperty( obj, key, objNm, "%s has no value for property '%s'" );
+    return hasKeyOrProperty( obj, key, objNm, 
+        "%s has no value for property '%s'" );
 };
 
 });
