@@ -928,7 +928,7 @@ class UnixProcessBuilder < BitGirderClass
         dbg = { :cmd => @cmd, :argv => @argv, :opts => @opts }
         dbg[ :env ] = @env if @show_env_in_debug
 
-        code( "Doing #{opts[ :call_type ]} with #{dbg.inspect}" )
+        code( "Doing #{opts[ :call_type ]} in #{Dir.pwd} with #{dbg.inspect}" )
     end
 
     private
