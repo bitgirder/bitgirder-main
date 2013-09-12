@@ -1322,20 +1322,35 @@ class WaitCondition < BitGirderClass
     
     private_class_method :new
 
-    def initialize( f, waiter, max_tries )
+    def initialize( f, waiter, opts )
 
         @f, @waiter = f, waiter
-        @max_tries = positive( max_tries, :max_tries )
+        
+        raise "One of :max_tries or :max_wait must be given" unless 
+            opts.key?( :max_tries ) || opts.key?( :max_wait )
+
+        @max_tries = opts.key?( :max_tries ) ?
+            positive( opts[ :max_tries ] ) : 1 << 63
+        
+        @max_wait = opts.key?( :max_wait ) ? 
+            positive( opts[ :max_wait ] ) : Float::INFINITY
     end
 
     public
     def execute
 
         res = nil
+        
+        start = Time.now
 
         @max_tries.times do |i|
+
             break if res = @f.call
-            @waiter.call if i < @max_tries - 1
+
+            remain = @max_wait - ( Time.now - start )
+            break if remain <= 0
+
+            @waiter.call( remain ) if i < @max_tries - 1
         end
 
         res
@@ -1344,15 +1359,14 @@ class WaitCondition < BitGirderClass
     def self.create_and_exec( waiter, opts, blk )
         
         raise "No block given" unless blk
-        max_tries = has_key( opts, :max_tries )
 
-        self.send( :new, blk, waiter, max_tries ).execute
+        self.send( :new, blk, waiter, opts ).execute
     end
 
     def self.wait_poll( opts, &blk )
         
         poll = positive( has_key( opts, :poll ), :poll )
-        waiter = lambda { sleep( poll ) }
+        waiter = lambda { |rem| sleep( [ poll, rem ].min ) }
 
         self.create_and_exec( waiter, opts, blk )
     end
@@ -1360,7 +1374,7 @@ class WaitCondition < BitGirderClass
     def self.wait_backoff( opts, &blk )
         
         seed = positive( has_key( opts, :seed ), :seed )
-        waiter = lambda { sleep( seed ); seed *= 2 }
+        waiter = lambda { |rem| sleep( [ seed, rem ].min ); seed *= 2 }
 
         self.create_and_exec( waiter, opts, blk )
     end
