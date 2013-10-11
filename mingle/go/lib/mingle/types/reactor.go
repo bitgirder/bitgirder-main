@@ -395,7 +395,7 @@ func ( om *opMatcher ) Service( svc *mg.Identifier, pg mg.PathGetter ) error {
 }
 
 func ( om *opMatcher ) Operation( op *mg.Identifier, pg mg.PathGetter ) error {
-    if om.opDef = om.sd.findOpDef( op ); om.opDef == nil {
+    if om.opDef = om.sd.findOperation( op ); om.opDef == nil {
         return mg.NewEndpointErrorOperation( op, pg.GetPath() )
     }
     return nil
@@ -529,4 +529,31 @@ func NewRequestReactor(
             iface: iface,
         },
     )
+}
+
+type ResponseReactorInterface interface {
+    GetResultProcessor( pg mg.PathGetter ) mg.ReactorEventProcessor
+    GetErrorProcessor( pg mg.PathGetter ) mg.ReactorEventProcessor
+}
+
+type mgRespImpl struct {
+    iface ResponseReactorInterface
+}
+
+func ( impl *mgRespImpl ) GetResultProcessor( 
+    pg mg.PathGetter ) mg.ReactorEventProcessor {
+    return impl.iface.GetResultProcessor( pg )
+}
+
+func ( impl *mgRespImpl ) GetErrorProcessor( 
+    pg mg.PathGetter ) mg.ReactorEventProcessor {
+    return impl.iface.GetErrorProcessor( pg )
+}
+
+func NewResponseReactor(
+    defs *DefinitionMap,
+    opDef *OperationDefinition,
+    iface ResponseReactorInterface ) *mg.ServiceResponseReactor {
+    mgIface := &mgRespImpl{ iface: iface }
+    return mg.NewServiceResponseReactor( mgIface )
 }

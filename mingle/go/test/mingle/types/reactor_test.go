@@ -92,12 +92,47 @@ func ( tc *ReactorTestCall ) callServiceRequest( st *ServiceRequestTest ) {
     tc.visitAndCheck( st.In, pip, chk, st.Error )
 }
 
+type responseCheck struct {
+    st *ServiceResponseTest
+    *assert.PathAsserter
+    resultProc, errorProc *mg.ValueBuilder
+}
+
+func ( chk *responseCheck ) GetResultProcessor( 
+    pg mg.PathGetter ) mg.ReactorEventProcessor {
+    chk.resultProc = mg.NewValueBuilder()
+    return chk.resultProc
+}
+
+func ( chk *responseCheck ) GetErrorProcessor( 
+    pg mg.PathGetter ) mg.ReactorEventProcessor {
+    chk.errorProc = mg.NewValueBuilder()
+    return chk.errorProc
+}
+
+func ( chk *responseCheck ) check() {
+    mg.CheckBuiltValue( 
+        chk.st.ResultValue, chk.resultProc, chk.Descend( "result" ) )
+    mg.CheckBuiltValue( 
+        chk.st.ErrorValue, chk.errorProc, chk.Descend( "error" ) )
+}
+
+func ( tc *ReactorTestCall ) callServiceResponse( st *ServiceResponseTest ) {
+    chk := &responseCheck{ st: st, PathAsserter: tc.PathAsserter }
+    svcDef := st.Definitions.MustGet( st.ServiceType ).( *ServiceDefinition )
+    opDef := svcDef.mustFindOperation( st.Operation )
+    rct := NewResponseReactor( st.Definitions, opDef, chk )
+    pip := mg.InitReactorPipeline( rct )
+    tc.visitAndCheck( st.In, pip, chk, st.Error )
+}
+
 func ( tc *ReactorTestCall ) call() {
 //    tc.Logf( "Calling test of type %T", tc.Test )
     switch v := tc.Test.( type ) {
     case *CastReactorTest: tc.callCast( v )
     case *EventPathTest: tc.callEventPath( v )
     case *ServiceRequestTest: tc.callServiceRequest( v )
+    case *ServiceResponseTest: tc.callServiceResponse( v )
     default: panic( libErrorf( "Unhandled test type: %T", tc.Test ) )
     }
 }

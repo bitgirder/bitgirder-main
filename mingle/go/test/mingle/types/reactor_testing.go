@@ -819,41 +819,60 @@ func ( rti *rtInit ) addServiceRequestTests() {
 }
 
 type ServiceResponseTest struct {
+    Definitions *DefinitionMap
+    ServiceType *mg.QualifiedTypeName
+    Operation *mg.Identifier
     In mg.Value
-    Expect mg.Value
-    ResultType mg.TypeReference
+    ResultValue mg.Value
+    ErrorValue mg.Value
     Error error
 }
 
 func ( rti *rtInit ) addServiceResponseTests() {
-    okResp := func( in interface{} ) mg.Value {
-        return mg.MustSymbolMap( "result", in )
+    opIdStr := "op1"
+    svcType := mg.MustQualifiedTypeName( "ns1@v1/Service1" )
+    newRespTest := func( od *OperationDefinition ) *ServiceResponseTest {
+        dm := MakeV1DefMap(
+            MakeServiceDef( svcType.ExternalForm(), "", "", od ),
+        )
+        return &ServiceResponseTest{ 
+            Definitions: dm,
+            ServiceType: svcType,
+            Operation: mg.MustIdentifier( opIdStr ),
+        }
     }
-    errResp := func( in interface{} ) mg.Value {
-        return mg.MustSymbolMap( "error", in )
+    opDef := func( resTyp string, throws []string ) *OperationDefinition {
+        callSig := MakeCallSig( []*FieldDefinition{}, resTyp, throws )
+        return MakeOpDef( opIdStr, callSig )
     }
+    inVal := func( in interface{}, key string ) mg.Value {
+        return mg.MustSymbolMap( key, in )
+    }
+    okResp := func( in interface{} ) mg.Value { return inVal( in, "result" ) }
+    errResp := func( in interface{} ) mg.Value { return inVal( in, "error" ) }
     id := mg.MustIdentifier
     pathRes := objpath.RootedAt( mg.IdResult )
     pathErr := objpath.RootedAt( mg.IdError )
-    addSucc := func( in, expct mg.Value, resTyp interface{} ) {
-        rti.addTests(
-            &ServiceResponseTest{
-                In: in,
-                Expect: expct,
-                ResultType: asType( resTyp ),
-            },
-        )
+    addSucc := func( 
+        in, expctRes, expctErr interface{}, resTyp string, throws []string ) {
+        st := newRespTest( opDef( resTyp, throws ) )
+        st.In = mg.MustValue( in )
+        if ( expctRes != nil ) { st.ResultValue = mg.MustValue( expctRes ) }
+        if ( expctErr != nil ) { st.ErrorValue = mg.MustValue( expctErr ) }
+//                Operation: opDef( resTyp ),
+//                ResultType: asType( resTyp ),
+        rti.addTests( st )
     }
-    addResSucc := func( in, expct interface{}, resTyp interface{} ) {
-        addSucc( okResp( in ), okResp( expct ), resTyp )
+    addResSucc := func( in, val interface{}, resTyp string ) {
+        addSucc( okResp( in ), val, nil, resTyp, []string{} )
     }
-    addErrSucc := func( in, expct interface{} ) {
-        addSucc( errResp( in ), errResp( expct ), mg.TypeNullableValue )
+    addErrSucc := func( in, err interface{}, throws ...string ) {
+        addSucc( errResp( in ), nil, err, "Null", throws )
     }
-    addResSucc( mg.NullVal, mg.NullVal, mg.TypeNull )
-    addResSucc( nil, nil, mg.TypeNull )
-    addResSucc( int32( 1 ), int32( 1 ), mg.TypeInt32 )
-    addResSucc( "1", int32( 1 ), mg.TypeInt32 )
+    addResSucc( mg.NullVal, mg.NullVal, "Null" )
+    addResSucc( nil, nil, "Null" )
+    addResSucc( int32( 1 ), int32( 1 ), "Int32" )
+    addResSucc( "1", int32( 1 ), "Int32" )
     addResSucc( mg.NullVal, nil, "Int32?" )
     addResSucc( nil, nil, "Int32?" )
     en1 := mg.MustEnum( "ns1@v1/E1", "e1" )
@@ -861,10 +880,9 @@ func ( rti *rtInit ) addServiceResponseTests() {
     addResSucc( "e1", en1, "ns1@v1/E1" )
     s1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     addResSucc( s1, s1, "ns1@v1/S1" )
-    addResSucc( mg.MustStruct( "ns1@v1/S1" ), s1, "ns1@v1/S1" )
     err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
-    addErrSucc( err1, err1 )
-    addErrSucc( mg.MustStruct( "ns1@v1/Err1" ), err1 )
+    addErrSucc( err1, err1, "ns1@v1/Err1" )
+    addErrSucc( err1, err1, "ns1@v1/Err1", "ns1@v1/Err2" )
     // We're not really checking here that the error values are correct as
     // mingle struct values (most should have at least a 'message' field), only
     // that the types are allowed by the response cast even when not explicitly
@@ -878,29 +896,27 @@ func ( rti *rtInit ) addServiceResponseTests() {
         err := mg.MustStruct( errTyp )
         addErrSucc( err, err )
     }
-    addFail := func( in interface{}, resTyp interface{}, err error ) {
-        rti.addTests(
-            &ServiceResponseTest{
-                In: mg.MustValue( in ),
-                ResultType: asType( resTyp ),
-                Error: err,
-            },
-        )
+    addFail := 
+        func( in interface{}, resTyp string, throws []string, err error ) {
+        st := newRespTest( opDef( resTyp, throws ) )
+        st.In = mg.MustValue( in )
+        st.Error = err
+        rti.addTests( st )
     }
-    addResFail := func( in interface{}, resTyp interface{}, err error ) {
-        addFail( okResp( in ), resTyp, err )
+    addResFail := func( in interface{}, resTyp string, err error ) {
+        addFail( okResp( in ), resTyp, []string{}, err )
     }
-    addErrFail := func( in interface{}, err error ) {
-        addFail( errResp( in ), mg.TypeNullableValue, err )
+    addErrFail := func( in interface{}, throws []string, err error ) {
+        addFail( errResp( in ), "Null", throws, err )
     }
     addResFail( 
         []byte{},
-        mg.TypeInt32, 
+        "Int32",
         newTcErr( mg.TypeInt32, mg.TypeBuffer, pathRes ),
     )
     addResFail(
         int32( 1 ),
-        mg.TypeNull,
+        "Null",
         newTcErr( mg.TypeNull, mg.TypeInt32, pathRes ),
     )
     addResFail( 
@@ -913,13 +929,19 @@ func ( rti *rtInit ) addServiceResponseTests() {
         "ns1@v1/E1",
         newVcErr( pathRes, "STUB" ),
     )
-    addErrFail( mg.MustStruct( "ns1@v1/BadErr" ), newVcErr( pathErr, "STUB" ) )
     addErrFail(
         mg.MustStruct( "ns1@v1/Err1", "not-a-field", int32( 1 ) ),
+        []string{ "ns1@v1/Err1" },
         mg.NewUnrecognizedFieldError( pathErr, id( "not-a-field" ) ),
     )
     addErrFail(
         mg.MustStruct( "ns1@v1/UndeclaredErr" ),
+        []string{},
+        newVcErr( pathErr, "STUB" ),
+    )
+    addErrFail(
+        mg.MustStruct( "ns1@v1/UndeclaredErr" ),
+        []string{ "ns1@v1/Err1" },
         newVcErr( pathErr, "STUB" ),
     )
 }
@@ -934,7 +956,7 @@ func ( rti *rtInit ) init() {
     rti.addDefaultCastTests()
     rti.addDefaultPathTests()
     rti.addServiceRequestTests()
-//    rti.addServiceResponseTests()
+    rti.addServiceResponseTests()
 }
 
 // The tests returned might normally be created during an init() block, but

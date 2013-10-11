@@ -35,6 +35,11 @@ func ( m *DefinitionMap ) Get( qn *mg.QualifiedTypeName ) Definition {
     return nil
 }
 
+func ( m *DefinitionMap ) MustGet( qn *mg.QualifiedTypeName ) Definition {
+    if res := m.Get( qn ); res != nil { return res }
+    panic( libErrorf( "no definition for type: %s", qn ) )
+}
+
 func ( m *DefinitionMap ) HasKey( qn *mg.QualifiedTypeName ) bool {
     return m.m.HasKey( qn )
 }
@@ -251,10 +256,17 @@ func ( sd *ServiceDefinition ) GetSuperType() *mg.QualifiedTypeName {
     return sd.SuperType
 }
 
-func ( sd *ServiceDefinition ) findOpDef( 
+func ( sd *ServiceDefinition ) findOperation( 
     op *mg.Identifier ) *OperationDefinition {
     for _, od := range sd.Operations { if od.Name.Equals( op ) { return od } }
     return nil
+}
+
+func ( sd *ServiceDefinition ) mustFindOperation(
+    op *mg.Identifier ) *OperationDefinition {
+    res := sd.findOperation( op )
+    if ( res != nil ) { return res }
+    panic( libErrorf( "service %s has no operation %s", sd.Name, op ) )
 }
 
 type ServiceDefinitionMap struct {
@@ -304,6 +316,13 @@ func ( m *ServiceDefinitionMap ) GetOk(
         }
     }
     return nil, false
+}
+
+func ( m *ServiceDefinitionMap ) MustGet(
+    ns *mg.Namespace, svc *mg.Identifier ) *ServiceDefinition {
+    if res, ok := m.GetOk( ns, svc ); ok { return res }
+    panic( 
+        libErrorf( "no service matches namespace '%s' and id '%s'", ns, svc ) )
 }
 
 var coreTypesV1 *DefinitionMap
