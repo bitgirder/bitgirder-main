@@ -99,15 +99,15 @@ type responseCheck struct {
 }
 
 func ( chk *responseCheck ) GetResultProcessor( 
-    pg mg.PathGetter ) mg.ReactorEventProcessor {
+    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
     chk.resultProc = mg.NewValueBuilder()
-    return chk.resultProc
+    return chk.resultProc, nil
 }
 
 func ( chk *responseCheck ) GetErrorProcessor( 
-    pg mg.PathGetter ) mg.ReactorEventProcessor {
+    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
     chk.errorProc = mg.NewValueBuilder()
-    return chk.errorProc
+    return chk.errorProc, nil
 }
 
 func ( chk *responseCheck ) check() {

@@ -1544,8 +1544,8 @@ func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
 }
 
 type ServiceResponseReactorInterface interface {
-    GetResultProcessor( pg PathGetter ) ReactorEventProcessor
-    GetErrorProcessor( pg PathGetter ) ReactorEventProcessor
+    GetResultProcessor( pg PathGetter ) ( ReactorEventProcessor, error )
+    GetErrorProcessor( pg PathGetter ) ( ReactorEventProcessor, error )
 }
 
 type ServiceResponseReactor struct {
@@ -1629,12 +1629,15 @@ func ( sr *ServiceResponseReactor ) startStruct( t *QualifiedTypeName ) error {
 }
 
 func ( sr *ServiceResponseReactor ) startField( fld *Identifier ) error {
+    var err error
     switch {
-    case fld.Equals( IdResult ): sr.evProc = sr.iface.GetResultProcessor( sr )
-    case fld.Equals( IdError ): sr.evProc = sr.iface.GetErrorProcessor( sr )
+    case fld.Equals( IdResult ): 
+        sr.evProc, err = sr.iface.GetResultProcessor( sr )
+    case fld.Equals( IdError ): 
+        sr.evProc, err = sr.iface.GetErrorProcessor( sr )
     default: return NewUnrecognizedFieldError( sr.getPath().Parent(), fld )
     }
-    return nil
+    return err
 }
 
 func ( sr *ServiceResponseReactor ) ProcessEvent( ev ReactorEvent ) error {

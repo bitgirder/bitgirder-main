@@ -511,17 +511,19 @@ type responseCheck struct {
 }
 
 func ( rc *responseCheck ) GetResultProcessor( 
-    pg PathGetter ) ReactorEventProcessor {
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
     rc.res = NewValueBuilder()
-    return optAsEventChecker(
+    res := optAsEventChecker(
         rc.res, pg, rc.st.ResEvents, rc.Descend( "result" ) )
+    return res, nil
 }
 
 func ( rc *responseCheck ) GetErrorProcessor(
-    pg PathGetter ) ReactorEventProcessor {
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
     rc.err = NewValueBuilder()
-    return optAsEventChecker(
+    res := optAsEventChecker(
         rc.err, pg, rc.st.ErrEvents, rc.Descend( "error" ) )
+    return res, nil
 }
 
 func ( rc *responseCheck ) check() {
@@ -589,6 +591,7 @@ func TestEventStackGetAndAppendPath( t *testing.T ) {
 type reactorImplTest struct {
     *assert.PathAsserter
     failOn *Identifier
+    in Value
 }
 
 func ( t reactorImplTest ) Error() string { return "reactorImplTest" }
@@ -609,19 +612,42 @@ func ( t reactorImplTest ) makeErr( pg PathGetter ) error {
     return NewValueCastError( pg.GetPath(), "test-error" )
 }
 
+func ( t reactorImplTest ) getProcessor(
+    pg PathGetter,
+    id *Identifier ) ( ReactorEventProcessor, error ) {
+    if t.failOn.Equals( id ) { return nil, t.makeErr( pg ) }
+    return DiscardProcessor, nil
+}
+
 func ( t reactorImplTest ) GetAuthenticationProcessor( 
     pg PathGetter ) ( ReactorEventProcessor, error ) {
-    if t.failOn.Equals( IdAuthentication ) { return nil, t.makeErr( pg ) }
-    return DiscardProcessor, nil
+    return t.getProcessor( pg, IdAuthentication )
 }
 
 func ( t reactorImplTest ) GetParametersProcessor( 
     pg PathGetter ) ( ReactorEventProcessor, error ) {
-    if t.failOn.Equals( IdParameters ) { return nil, t.makeErr( pg ) }
-    return DiscardProcessor, nil
+    return t.getProcessor( pg, IdParameters )
 }
 
-func ( t reactorImplTest ) call() {
+func ( t reactorImplTest ) GetErrorProcessor(
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
+    return t.getProcessor( pg, IdError )
+}
+
+func ( t reactorImplTest ) GetResultProcessor(
+    pg PathGetter ) ( ReactorEventProcessor, error ) {
+    return t.getProcessor( pg, IdResult )
+}
+
+func ( t reactorImplTest ) callWith( rct ReactorEventProcessor ) {
+    pip := InitReactorPipeline( rct )
+    err := VisitValue( t.in, pip )
+    errExpct := NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" )
+    t.EqualErrors( errExpct, err )
+}
+
+func TestRequestReactorImplErrors( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
     in := MustStruct( QnameServiceRequest,
         "namespace", "ns1@v1",
         "service", "svc1",
@@ -629,19 +655,25 @@ func ( t reactorImplTest ) call() {
         "parameters", MustSymbolMap( "p1", 1 ),
         "authentication", 1,
     )
-    pip := InitReactorPipeline( NewServiceRequestReactor( t ) )
-    err := VisitValue( in, pip )
-    t.EqualErrors( 
-        NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" ), err )
-}
-
-func TestRequestReactorImplErrors( t *testing.T ) {
-    a := assert.NewPathAsserter( t )
     for _, failOn := range []*Identifier{ IdAuthentication, IdParameters } {
         t := reactorImplTest{ 
             PathAsserter: a.Descend( failOn ), 
             failOn: failOn,
+            in: in,
         }
-        t.call()
+        t.callWith( NewServiceRequestReactor( t ) )
     }
+}
+
+func TestResponseReactorImplErrors( t *testing.T ) {
+    chk := func( failOn *Identifier, in Value ) {
+        test := reactorImplTest{
+            PathAsserter: assert.NewPathAsserter( t ).Descend( failOn ),
+            failOn: failOn,
+            in: in,
+        }
+        test.callWith( NewServiceResponseReactor( test ) )
+    }
+    chk( IdResult, MustSymbolMap( "result", 1 ) )
+    chk( IdError, MustSymbolMap( "error", 1 ) )
 }

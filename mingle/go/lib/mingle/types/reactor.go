@@ -359,10 +359,17 @@ func newCastReactor(
     }
 }
 
+func newCastReactor1(
+    typ mg.TypeReference,
+    dm *DefinitionMap,
+    pg mg.PathGetter ) mg.PipelineProcessor {
+    fsg := defMapFieldSetGetter{ dm }
+    return newCastReactor( typ, castIface{ dm }, dm, fsg, pg )
+}
+
 func NewCastReactor( 
     typ mg.TypeReference, dm *DefinitionMap ) mg.PipelineProcessor {
-    fsg := defMapFieldSetGetter{ dm }
-    return newCastReactor( typ, castIface{ dm }, dm, fsg, nil )
+    return newCastReactor1( typ, dm, nil )
 }
 
 type opMatcher struct {
@@ -531,29 +538,108 @@ func NewRequestReactor(
     )
 }
 
+type errorProcReactor struct {
+    defs *DefinitionMap
+    throws []mg.TypeReference
+    proc mg.ReactorEventProcessor
+    pg mg.PathGetter
+}
+
+func errorForUnexpectedErrorType( 
+    path objpath.PathNode, typ mg.TypeReference ) error {
+    return mg.NewValueCastErrorf( path,
+        "Error type is not a declared thrown type: %s", typ )
+}
+
+func ( epr *errorProcReactor ) errorForUnexpectedErrorType( 
+    typ mg.TypeReference ) error {
+    return errorForUnexpectedErrorType( epr.pg.GetPath(), typ )
+}
+
+func ( epr *errorProcReactor ) errorForUnexpectedErrorQname(
+    qn *mg.QualifiedTypeName ) error {
+    typ := &mg.AtomicTypeReference{ Name: qn }
+    return epr.errorForUnexpectedErrorType( typ )
+}
+
+func ( epr *errorProcReactor ) errorForUnexpectedErrorValue( 
+    ev mg.ReactorEvent ) error {
+    var typ mg.TypeReference
+    switch v := ev.( type ) {
+    case mg.ValueEvent: typ = mg.TypeOf( v.Val )
+    case mg.ListStartEvent: typ = mg.TypeOpaqueList
+    case mg.MapStartEvent: typ = mg.TypeSymbolMap
+    }
+    if ( typ == nil ) { panic( libErrorf( "unhandled event type: %T", ev ) ) }
+    return epr.errorForUnexpectedErrorType( typ )
+}
+
+func ( epr *errorProcReactor ) errorTypeForStruct( 
+    qn *mg.QualifiedTypeName ) ( mg.TypeReference, bool ) {
+    if epr.defs.HasBuiltInDefinition( qn ) {
+        return &mg.AtomicTypeReference{ Name: qn }, true
+    }
+    for _, typ := range epr.throws {
+        if mg.TypeNameIn( typ ).Equals( qn ) { return typ, true }
+    }
+    return nil, false
+}
+
+func ( epr *errorProcReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
+    if ( epr.proc == nil ) { 
+        if ss, ok := ev.( mg.StructStartEvent ); ok {
+            if typ, ok := epr.errorTypeForStruct( ss.Type ); ok {
+                cr := newCastReactor1( typ, epr.defs, epr.pg )
+                epr.proc = mg.InitReactorPipeline( cr )
+            } else { return epr.errorForUnexpectedErrorQname( ss.Type ) }
+        } else { return epr.errorForUnexpectedErrorValue( ev ) }
+    }
+    return epr.proc.ProcessEvent( ev )
+}
+
 type ResponseReactorInterface interface {
-    GetResultProcessor( pg mg.PathGetter ) mg.ReactorEventProcessor
-    GetErrorProcessor( pg mg.PathGetter ) mg.ReactorEventProcessor
+    GetResultProcessor( pg mg.PathGetter ) ( mg.ReactorEventProcessor, error )
+    GetErrorProcessor( pg mg.PathGetter ) ( mg.ReactorEventProcessor, error )
 }
 
 type mgRespImpl struct {
+    defs *DefinitionMap
+    opDef *OperationDefinition
     iface ResponseReactorInterface
 }
 
 func ( impl *mgRespImpl ) GetResultProcessor( 
-    pg mg.PathGetter ) mg.ReactorEventProcessor {
-    return impl.iface.GetResultProcessor( pg )
+    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
+    resTyp := impl.opDef.Signature.Return
+    ipg := mg.ImmediatePathGetter{ pg.GetPath() }
+    cr := newCastReactor1( resTyp, impl.defs, ipg )
+    rct, err := impl.iface.GetResultProcessor( pg )
+    if err != nil { return nil, err }
+    return mg.InitReactorPipeline( cr, rct ), nil
 }
 
 func ( impl *mgRespImpl ) GetErrorProcessor( 
-    pg mg.PathGetter ) mg.ReactorEventProcessor {
-    return impl.iface.GetErrorProcessor( pg )
+    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
+    rct, err := impl.iface.GetErrorProcessor( pg )
+    if err != nil { return nil, err }
+    epr := &errorProcReactor{ 
+        defs: impl.defs, 
+        throws: impl.opDef.Signature.Throws,
+        pg: mg.ImmediatePathGetter{ pg.GetPath() },
+    }
+    return mg.InitReactorPipeline( epr, rct ), nil
 }
 
 func NewResponseReactor(
     defs *DefinitionMap,
     opDef *OperationDefinition,
     iface ResponseReactorInterface ) *mg.ServiceResponseReactor {
-    mgIface := &mgRespImpl{ iface: iface }
+    resTyp := opDef.Signature.Return
+    qn := mg.TypeNameIn( resTyp ).( *mg.QualifiedTypeName )
+    if ! defs.HasKey( qn ) {
+        tmpl := "operation '%s' declares unrecognized return type: %s"
+        panic( libErrorf( tmpl, opDef.Name, resTyp ) )
+    }
+    mgIface := &mgRespImpl{ iface: iface, defs: defs, opDef: opDef }
     return mg.NewServiceResponseReactor( mgIface )
 }

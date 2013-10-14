@@ -8,16 +8,24 @@ import (
 
 type DefinitionMap struct {
     m *mg.QnameMap
+    builtIn *mg.QnameMap
 }
 
 func NewDefinitionMap() *DefinitionMap {
-    return &DefinitionMap{ mg.NewQnameMap() }
+    return &DefinitionMap{ m: mg.NewQnameMap(), builtIn: mg.NewQnameMap() }
+}
+
+func ( dm *DefinitionMap ) setBuiltIn( qn *mg.QualifiedTypeName ) {
+    dm.builtIn.Put( qn, true )
 }
 
 // package note: not safe to call before completion of package init
 func NewV1DefinitionMap() *DefinitionMap {
     res := NewDefinitionMap()
-    res.MustAddFrom( CoreTypesV1() )
+    res.MustAddFrom( coreTypesV1 )
+    coreTypesV1.EachDefinition( func( def Definition ) {
+        res.setBuiltIn( def.GetName() )
+    })
     return res
 }
 
@@ -42,6 +50,11 @@ func ( m *DefinitionMap ) MustGet( qn *mg.QualifiedTypeName ) Definition {
 
 func ( m *DefinitionMap ) HasKey( qn *mg.QualifiedTypeName ) bool {
     return m.m.HasKey( qn )
+}
+
+func ( m *DefinitionMap ) HasBuiltInDefinition( 
+    qn *mg.QualifiedTypeName ) bool {
+    return m.builtIn.HasKey( qn )
 }
 
 func ( m *DefinitionMap ) Add( d Definition ) error {
@@ -345,11 +358,52 @@ func initCoreV1Prims() {
     }
 }
 
-func initCoreV1Exceptions() {
-    var ed *StructDefinition
-    ed = NewStructDefinition()
-    ed.Name = asCoreV1Qn( "StandardException" )
+func initCoreV1StandardError() *StructDefinition {
+    ed := NewStructDefinition()
+    ed.Name = asCoreV1Qn( "StandardError" )
     coreTypesV1.MustAdd( ed )
+    return ed
+}
+
+func newV1StandardError( 
+    nm string, ns *mg.Namespace, stdErr *StructDefinition ) *StructDefinition {
+    res := NewStructDefinition()
+    res.Name = mg.MustDeclaredTypeName( nm ).ResolveIn( ns )
+    res.SuperType = stdErr.Name
+    return res
+}
+
+func newCoreV1StandardError( 
+    nm string, stdErr *StructDefinition ) *StructDefinition {
+    return newV1StandardError( nm, mg.CoreNsV1, stdErr )
+}
+
+func initCoreV1MissingFieldsError( stdErr *StructDefinition ) {
+    ed := newCoreV1StandardError( "MissingFieldsError", stdErr )
+    coreTypesV1.MustAdd( ed )
+}
+
+func initCoreV1UnrecognizedFieldError( stdErr *StructDefinition ) {
+    ed := newCoreV1StandardError( "UnrecognizedFieldError", stdErr )
+    coreTypesV1.MustAdd( ed )
+}
+
+func initCoreV1ValueCastError( stdErr *StructDefinition ) {
+    ed := newCoreV1StandardError( "ValueCastError", stdErr )
+    coreTypesV1.MustAdd( ed )
+}
+
+func initServiceV1EndpointError( stdErr *StructDefinition ) {
+    ed := newCoreV1StandardError( "EndpointError", stdErr )
+    coreTypesV1.MustAdd( ed )
+}
+
+func initCoreV1Exceptions() {
+    stdErr := initCoreV1StandardError()
+    initCoreV1MissingFieldsError( stdErr )
+    initCoreV1UnrecognizedFieldError( stdErr )
+    initCoreV1ValueCastError( stdErr )
+    initServiceV1EndpointError( stdErr )
 }
 
 func init() {

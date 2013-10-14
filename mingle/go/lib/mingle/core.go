@@ -1057,7 +1057,6 @@ var PrimitiveTypes []*AtomicTypeReference
 var NumericTypes []*AtomicTypeReference
 
 var CoreNsV1 *Namespace
-var ServiceNsV1 *Namespace
 
 func init() {
     id := func( strs []string ) *Identifier {
@@ -1072,10 +1071,6 @@ func init() {
     }
     CoreNsV1 = ns( 
         [][]string{ []string{ "mingle" }, []string{ "core" } },
-        []string{ "v1" },
-    )
-    ServiceNsV1 = ns(
-        [][]string{ []string{ "mingle" }, []string{ "service" } },
         []string{ "v1" },
     )
     coreQnameResolver = make( map[ string ]*QualifiedTypeName )
@@ -1124,8 +1119,8 @@ func init() {
         TypeFloat32,
         TypeFloat64,
     }
-    QnameServiceRequest, TypeServiceRequest = f1( "Request", ServiceNsV1 )
-    QnameServiceResponse, TypeServiceResponse = f1( "Response", ServiceNsV1 )
+    QnameServiceRequest, TypeServiceRequest = f1( "Request", CoreNsV1 )
+    QnameServiceResponse, TypeServiceResponse = f1( "Response", CoreNsV1 )
     IdNamespace = id( []string{ "namespace" } )
     IdService = id( []string{ "service" } )
     IdOperation = id( []string{ "operation" } )

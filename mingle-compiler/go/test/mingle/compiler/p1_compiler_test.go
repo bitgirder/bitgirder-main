@@ -196,7 +196,7 @@ struct Struct3 < Struct1 {
     @constructor( String~"^a+$" )
 }
 
-struct Exception1 < StandardException {}
+struct Exception1 < StandardError {}
 
 struct Exception2 { failTime Int64 }
 
@@ -543,7 +543,7 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v1/Exception1",
-                "mingle:core@v1/StandardException",
+                "mingle:core@v1/StandardError",
                 []*types.FieldDefinition{},
             ),
             types.MakeStructDef(
