@@ -21,7 +21,14 @@ class App < BitGirderClass
     end
 
     REQUIRES_PROJ = 
-        %w{ clean build build_bin, test run dist_test errorf_gen }.map do |s| 
+        %w{ clean 
+            build 
+            build_bin, 
+            test 
+            run 
+            dist_test 
+            errorf_gen 
+        }.map do |s| 
             s.to_sym 
         end
 
@@ -33,6 +40,7 @@ class App < BitGirderClass
             processor: lambda { |s| s.gsub( /-/, "_" ).to_sym }
     
     bg_attr :project,
+            required: false,
             processor: lambda { |s| s.sub( %r{/*$}, "" ).to_sym }
     
     bg_attr :filter_pattern, required: false

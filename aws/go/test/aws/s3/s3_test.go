@@ -6,6 +6,9 @@ import (
     "bitgirder/iotests"
     "bitgirder/hashes"
     "bitgirder/assert"
+    mg "mingle"
+    "mingle/codec/json"
+    "mingle/codec"
     "path/filepath"
     "testing"
     "errors"
@@ -23,9 +26,7 @@ import (
 )
 
 const envTestRuntime = "BITGIRDER_TEST_RUNTIME"
-const credsFileName = "resource/aws-testing.properties"
-const propAccKeyId = "accessKeyId"
-const propSecretKey = "secretKey"
+const credsFileName = "aws-creds.json"
 const objPathPrefix = "test-object"
 
 var testCreds *Credentials
@@ -43,45 +44,33 @@ const cFirstFileInBucket = "$first-file-in-bucket.txt"
 var markerErr error
 func init() { markerErr = errors.New( "marker-error" ) }
 
-func readPropertiesData( f *os.File ) map[ string ]string {
-    res := make( map[ string ]string )
+func readCredentials( f *os.File, creds *Credentials ) {
     r := bufio.NewReader( f )
-    for s, err := r.ReadString( '\n' ); err != io.EOF; 
-        s, err = r.ReadString( '\n' ) {
-        if err != nil { panic( err ) }
-        if pair := strings.SplitN( s, "=", 2 ); len( pair ) == 2 {
-            res[ strings.TrimSpace( pair[ 0 ] ) ] = 
-                strings.TrimSpace( pair[ 1 ] )
-        } else { panic( fmt.Errorf( "Invalid line: %#v", s ) ) }
-    }
-    return res
+    cdc := json.NewJsonCodec()
+    if ms, err := codec.Decode( cdc, r ); err == nil {
+        acc := mg.NewSymbolMapAccessor( ms.Fields, nil )
+        creds.AccessKey = AccessKey( acc.MustGoStringByString( "access-key" ) )
+        creds.SecretKey = SecretKey( acc.MustGoStringByString( "secret-key" ) )
+    } else { panic( err ) }
 }
 
-func readAwsTestProps() ( map[ string ]string, string ) {
+func readAwsTestProps( creds *Credentials ) {
     if rtEnv := os.Getenv( envTestRuntime ); rtEnv != "" {
         propsFile := rtEnv + "/" + credsFileName
         if f, err := os.Open( propsFile ); err == nil {
             defer f.Close()
-            return readPropertiesData( f ), propsFile
-        } else {
-            panic( err )
-        }
+            readCredentials( f, creds )
+            return
+        } else { panic( err ) }
     }
     msgFmt := "No runtime env is set in env var %s"
     panic( fmt.Sprintf( msgFmt, envTestRuntime ) )
 }
 
-func expectProp( props map[ string ]string, fName, key string ) string {
-    if val, ok := props[ key ]; ok { return val }
-    panic( fmt.Errorf( "No value for key '%s' in %s", key, fName ) )
-}
-
 func init() {
     testBucket = Bucket( "s3test.bitgirder.com" )
-    props, f := readAwsTestProps()
     testCreds = new( Credentials )
-    testCreds.AccessKeyId = AccessKeyId( expectProp( props, f, propAccKeyId ) )
-    testCreds.SecretKey = SecretKey( expectProp( props, f, propSecretKey ) )
+    readAwsTestProps( testCreds )
 }
 
 func nextPathString() string {
@@ -287,13 +276,13 @@ func TestRemoteS3ErrorHandled( t *testing.T ) {
 // the xml literal below is structurally taken from an actual message, although
 // the content of elements has been shortened and simplified for testing
 func TestRemoteExceptionSetFieldsFromXml( t *testing.T ) {
-    xml := `<?xml version="1.0" encoding="UTF-8"?> <Error><Code>TEST_CODE</Code><Message>TEST_MESSAGE</Message><RequestId>TEST_REQ_ID</RequestId><HostId>TEST_HOST_ID</HostId><AWSAccessKeyId>TEST_ACC_ID</AWSAccessKeyId></Error>`
+    xml := `<?xml version="1.0" encoding="UTF-8"?> <Error><Code>TEST_CODE</Code><Message>TEST_MESSAGE</Message><RequestId>TEST_REQ_ID</RequestId><HostId>TEST_HOST_ID</HostId><AWSAccessKey>TEST_ACC_ID</AWSAccessKey></Error>`
     err := &S3RemoteError{ HttpStatusCode: 403 }
     err.setFieldsFromXml( bytes.NewBuffer( []byte( xml ) ) )
     assert.Equal( "TEST_CODE", err.Code )
     assert.Equal( "TEST_MESSAGE", err.Message )
     assert.Equal( "TEST_HOST_ID", err.HostId )
-    assert.Equal( "TEST_ACC_ID", err.AWSAccessKeyId )
+    assert.Equal( "TEST_ACC_ID", err.AWSAccessKey )
     assert.Equal( "(HTTP 403) TEST_CODE: TEST_MESSAGE", err.Error() )
 }
 

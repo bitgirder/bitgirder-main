@@ -128,7 +128,8 @@ class Install < Command
             if @wipe_install 
                 fu().rm_rf( @install_to )
             else
-                raise "Install dir #@install_to exists (--wipe-install?)"
+                Dir.glob( "#@install_to/*" ).empty? or 
+                    raise "Install dir #@install_to exists (--wipe-install?)"
             end
         end
 
@@ -437,7 +438,7 @@ class Daemon < RuntimeCommand
         code( "Awaiting connection on ports: #{ports}" )
 
         ports.each do |p|
-            WaitCondition.wait_backoff( seed: 1, max_tries: 4 ) do
+            WaitCondition.wait_backoff( seed: 1, max_tries: 6 ) do
                 res = can_connect?( p )
                 code( "Got conn on :#{p}: #{res}" )
                 res
@@ -506,7 +507,12 @@ class Daemon < RuntimeCommand
         
         unless await_proc_exit( pid = get_current_pid )
             code( "Server appears to still be running; sending KILL to #{pid}" )
-            Process.kill( "KILL", pid )
+
+            # Quietly squash ESRCH since it may be that tomcat exits
+            # concurrently with our kill
+            begin
+                Process.kill( "KILL", pid )
+            rescue Errno::ESRCH; end
         end
 
         fu().rm( pid_file )

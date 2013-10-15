@@ -151,6 +151,15 @@ class TestClass5 < BitGirderClass
     end
 end
 
+class TestClass6 < BitGirderClass
+    
+    bg_attr :attr1,
+            :is_list => true,
+            :required => true,
+            :default => lambda { [] },
+            :processor => lambda { |elt| elt.to_s }
+end
+
 class TestError1 < BitGirderError
     bg_attr :attr1
 end
@@ -441,6 +450,12 @@ class CoreTests < TestClassBase
         end
     end
 
+    def test_list_proc_applied_to_default_val
+        
+        assert_equal( [], TestClass6.new.attr1 )
+        assert_equal( [ "1", "2" ], TestClass6.new( :attr1 => [ 1, 2 ] ).attr1 )
+    end
+
     def test_error_basic
 
         e = TestError1.new( :attr1 => 1 )
@@ -591,18 +606,42 @@ class WaitConditionTests < TestClassBase
         end
     end
 
-    def assert_wait( v, opts )
+    def assert_wait_runtime( v, opts )
+
+        start = Time.now
+        res, err = nil, nil
+
+        begin
+            res = yield
+        rescue StandardError => err; end
+        
+        if err == nil || err.is_a?( MarkerError )
+
+            elaps = Time.now - start
+            assert_equal( has_key( opts, :calls ), v.calls )
+            
+            if min = opts[ :min_wait ] then assert( elaps >= min ) end
+            if max = opts[ :max_wait ] then assert( elaps <= max ) end
+        end
+
+        raise err if err
+        res
+    end
+
+    def assert_wait( v, opts, &blk )
         
         raise "Need an expect val (even if nil)" unless opts.key?( :expect )
         expct = opts[ :expect ]
 
-        start = Time.now
-        res = yield
-        elaps = Time.now - start
-
+        res = assert_wait_runtime( v, opts, &blk )
         assert_equal( expct, res )
-        assert_equal( has_key( opts, :calls ), v.calls )
-        assert( elaps >= has_key( opts, :min_wait ) )
+    end
+
+    def assert_wait_raise( v, opts, &blk )
+        
+        assert_raised( v.value.to_s, MarkerError ) do
+            assert_wait_runtime( v, opts, &blk )
+        end
     end
 
     def test_wait_nontrivial_poll
@@ -636,14 +675,9 @@ class WaitConditionTests < TestClassBase
         
         v = WaitValue.new( :complete_at => 3, :do_fail => true )
 
-        start = Time.now
-        assert_raised( v.value.to_s, MarkerError ) do
+        assert_wait_raise( v, :min_wait => 1.5, :calls => 4 ) do
             WaitCondition.wait_poll( :poll => 0.5, :max_tries => 4 ) { v.get }
         end
-        elaps = Time.now - start
-
-        assert( elaps >= 1.5 )
-        assert_equal( 4, v.calls )
     end
 
     def test_wait_backoff
@@ -653,6 +687,37 @@ class WaitConditionTests < TestClassBase
         assert_wait( v, :calls => 5, :expect => v.value, :min_wait => 1.5 ) do
             WaitCondition.
                 wait_backoff( :seed => 0.1, :max_tries => 5 ) { v.get }
+        end
+    end
+
+    def test_wait_max_wait_backoff_expired
+ 
+        v = WaitValue.new( :complete_at => 5 )
+
+        # :max_wait leaves time for the ruby runtime in general, but will still
+        # catch a wait that runs too long, since in theory that would be 16
+        # seconds
+        assert_opts = { 
+            :expect => nil, :min_wait => 3.0, :max_wait => 4.0, :calls => 3 }
+
+        assert_wait( v, assert_opts ) do
+
+            opts = { :seed => 1.0, :max_wait => 3.0 }
+            WaitCondition.wait_backoff( opts ) { v.get }
+        end
+    end
+
+    def test_wait_max_wait_poll_expired
+        
+        v = WaitValue.new( :complete_at => 5 )
+
+        assert_opts = {
+            :expect => nil, :min_wait => 3.0, :max_wait => 4.0, :calls => 3 }
+
+        assert_wait( v, assert_opts ) do
+            
+            opts = { :poll => 2.0, :max_wait => 3.0 }
+            WaitCondition.wait_poll( opts ) { v.get }
         end
     end
 end

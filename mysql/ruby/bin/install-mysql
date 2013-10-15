@@ -27,6 +27,12 @@ class App < BitGirderClass
     bg_attr :skip_install, processor: :boolean, default: false
     bg_attr :skip_init_db, processor: :boolean, default: false
 
+    bg_attr :max_start_wait, 
+            processor: :integer, 
+            validation: :positive,
+            required: false,
+            default: 30
+
     bg_attr :port, processor: :integer, validation: :positive
 
     bg_attr :root_pass
@@ -100,7 +106,8 @@ class App < BitGirderClass
             if @wipe_install_dir 
                 do_wipe_install
             else
-                raise "#@install_to already exists"
+                Dir.glob( "#@install_to/*" ).empty? or
+                    raise "#@install_to already exists"
             end
         end
     end
@@ -153,25 +160,14 @@ class App < BitGirderClass
     end
 
     private
-    def await_sock( tries_remain = 3, stall = 2 )
+    def await_start
         
-        code( "Attempting connect to #@port" )
-
-        begin
-            TCPSocket.new( LOCALHOST, @port ).close
-            code( "Connected" )
-
-        rescue Errno::ECONNREFUSED => e
-
-            if tries_remain > 0 
-
-                code( "No connection, will retry in #{stall}s" )
-                sleep( stall )
-                await_sock( tries_remain - 1, stall * 2 )
-            else
-                raise "Could not connect to #@port"
-            end
-        end
+        opts = { max_wait: @max_start_wait, seed: 1 }
+        
+        WaitCondition.wait_backoff( opts ) do
+            code( "Attempting connect to #@port" )
+            can_connect?( @port )
+        end or raise "Could not connect to mysqld at :#@port"
     end
 
     private
@@ -253,7 +249,7 @@ class App < BitGirderClass
         code( "Started mysqld as #{pid}" )
 
         begin
-            await_sock
+            await_start
             run_db_init
             init_done = true
         ensure
