@@ -72,7 +72,7 @@ func ( w *BinWriter ) WriteIdentifier( id *Identifier ) ( err error ) {
     return
 }
 
-func ( w *BinWriter ) writeIds( ids []*Identifier ) ( err error ) {
+func ( w *BinWriter ) WriteIdentifiers( ids []*Identifier ) ( err error ) {
     if err = w.WriteUint8( uint8( len( ids ) ) ); err != nil { return }
     for _, id := range ids {
         if err = w.WriteIdentifier( id ); err != nil { return }
@@ -102,7 +102,7 @@ func ( w *BinWriter ) WriteIdPath( p objpath.PathNode ) ( err error ) {
 
 func ( w *BinWriter ) WriteNamespace( ns *Namespace ) ( err error ) {
     if err = w.WriteTypeCode( tcNs ); err != nil { return }
-    if err = w.writeIds( ns.Parts ); err != nil { return }
+    if err = w.WriteIdentifiers( ns.Parts ); err != nil { return }
     return w.WriteIdentifier( ns.Version )
 }
 
@@ -370,7 +370,7 @@ func ( r *BinReader ) ReadIdentifier() ( id *Identifier, err error ) {
     return    
 }
 
-func ( r *BinReader ) readIds() ( ids []*Identifier, err error ) {
+func ( r *BinReader ) ReadIdentifiers() ( ids []*Identifier, err error ) {
     var sz uint8
     if sz, err = r.ReadUint8(); err != nil { return }
     ids = make( []*Identifier, sz )
@@ -416,7 +416,7 @@ func ( r *BinReader ) ReadIdPath() ( p objpath.PathNode, err error ) {
 func ( r *BinReader ) ReadNamespace() ( ns *Namespace, err error ) {
     if _, err = r.ExpectTypeCode( tcNs ); err != nil { return }
     ns = &Namespace{}
-    if ns.Parts, err = r.readIds(); err != nil { return }
+    if ns.Parts, err = r.ReadIdentifiers(); err != nil { return }
     if ns.Version, err = r.ReadIdentifier(); err != nil { return }
     return
 }
