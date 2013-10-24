@@ -5,6 +5,7 @@ import (
     "bitgirder/objpath"
     "strings"
     "fmt"
+    "math"
 //    "log"
 )
 
@@ -42,12 +43,32 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "bool-false", Boolean( false ) )
     b.setVal( "buffer-empty", Buffer( []byte{} ) )
     b.setVal( "buffer-nonempty", Buffer( []byte( "hello" ) ) )
-    b.setVal( "int32-val1", Int32( int32( 1 ) ) )
-    b.setVal( "int64-val1", Int64( int64( 1 ) ) )
-    b.setVal( "uint32-val1", Uint32( uint32( 1 ) ) )
-    b.setVal( "uint64-val1", Uint64( uint64( 1 ) ) )
+    b.setVal( "int32-min", Int32( math.MaxInt32 ) )
+    b.setVal( "int32-max", Int32( math.MinInt32 ) )
+    b.setVal( "int32-pos1", Int32( int32( 1 ) ) )
+    b.setVal( "int32-zero", Int32( int32( 0 ) ) )
+    b.setVal( "int32-neg1", Int32( int32( -1 ) ) )
+    b.setVal( "int64-min", Int64( math.MaxInt64 ) )
+    b.setVal( "int64-max", Int64( math.MinInt64 ) )
+    b.setVal( "int64-pos1", Int64( int64( 1 ) ) )
+    b.setVal( "int64-zero", Int64( int64( 0 ) ) )
+    b.setVal( "int64-neg1", Int64( int64( -1 ) ) )
+    b.setVal( "uint32-min", Uint32( math.MaxUint32 ) )
+    b.setVal( "uint32-max", Uint32( uint32( 0 ) ) )
+    b.setVal( "uint32-pos1", Uint32( uint32( 1 ) ) )
+    b.setVal( "uint32-zero", Uint32( uint32( 0 ) ) )
+    b.setVal( "uint64-min", Uint64( math.MaxUint64 ) )
+    b.setVal( "uint64-max", Uint64( uint64( 0 ) ) )
+    b.setVal( "uint64-pos1", Uint64( uint64( 1 ) ) )
+    b.setVal( "uint64-zero", Uint64( uint64( 0 ) ) )
     b.setVal( "float32-val1", Float32( float32( 1 ) ) )
+    b.setVal( "float32-max", Float32( math.MaxFloat32 ) )
+    b.setVal( "float32-smallest-nonzero",
+        Float32( math.SmallestNonzeroFloat32 ) )
     b.setVal( "float64-val1", Float64( float64( 1 ) ) )
+    b.setVal( "float64-max", Float64( math.MaxFloat64 ) )
+    b.setVal( "float64-smallest-nonzero",
+        Float64( math.SmallestNonzeroFloat64 ) )
     b.setVal( "time-val1", MustTimestamp( "2013-10-19T02:47:00-08:00" ) )
     b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
     b.setVal( "symmap-empty", MustSymbolMap() )
