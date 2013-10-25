@@ -6,31 +6,32 @@
         "mingle/parser/lexer", 
         "mingle/parser/loc",
         "mingle/parser/syntax",
-        "mingle/parser/testing",
-        "mingle/types",
-        "mingle/types/testing",
+        "mingle/types"
+    ],
+    "test-packages": [
         "mingle/testing",
-        "mingle/testing/testval"
+        "mingle/testing/testval",
+        "mingle/parser/testing"
     ],
     "test-commands": {
+        "write-core-io-tests": {},
         "write-parser-tests": {},
-        "write-cast-value-tests": {},
-        "write-reactor-seq-error-tests": {}
+        "write-reactor-tests": {}
     },
     "test-data-generators": {
+        "core-io-tests": {
+            "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
+            "command": "write-core-io-tests",
+            "argv": [ "--out-file", "${data_gen_dir}/core-io-tests.bin" ]
+        },
         "core-parser-tests": {
             "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
             "command": "write-parser-tests",
             "argv": [ "--out-file", "${data_gen_dir}/parser-tests.bin" ]
         },
-        "cast-value-tests": {
-            "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
-            "command": "write-cast-value-tests",
-            "argv": [ "--out-file", "${data_gen_dir}/cast-value-tests.bin" ]
-        },
         "reactor-seq-error-tests": {
             "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
-            "command": "write-reactor-seq-error-tests",
+            "command": "write-reactor-tests",
             "argv": [ 
                 "--out-file", "${data_gen_dir}/reactor-seq-error-tests.bin"
             ]

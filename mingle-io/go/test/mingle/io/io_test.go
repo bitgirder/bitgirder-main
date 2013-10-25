@@ -14,7 +14,7 @@ func TestMustHeadersPairsFail( t *testing.T ) {
         func( err interface{} ) {
             msg := `f1: Expected value of type mingle:core@v1/String but ` + 
                 `found mingle:core@v1/Value*`
-            assert.Equal( msg, err.( *mg.TypeCastError ).Error() )
+            assert.Equal( msg, err.( *mg.ValueCastError ).Error() )
         },
     )
 }

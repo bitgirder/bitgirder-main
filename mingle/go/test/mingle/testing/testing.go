@@ -85,7 +85,7 @@ func ( a *asserter ) equalSymbolMaps( m1 *mg.SymbolMap, act mg.Value ) {
 
 func ( a *asserter ) equalStructs( s1 *mg.Struct, act mg.Value ) {
     if s2, ok := act.( *mg.Struct ); ok {
-        a.equalTypes( s1.Type, s2.Type )
+        a.Equal( s1.Type, s2.Type )
         a.equalSymbolMaps( s1.Fields, s2.Fields )
     } else { a.failBadType( "struct", act ) }
 }
@@ -93,7 +93,7 @@ func ( a *asserter ) equalStructs( s1 *mg.Struct, act mg.Value ) {
 func ( a *asserter ) equalEnums( e1 *mg.Enum, act mg.Value ) {
     switch v := act.( type ) {
     case *mg.Enum:
-        a.equalTypes( e1.Type, v.Type )
+        a.Equal( e1.Type, v.Type )
         a.Equal( e1.Value, v.Value )
     case mg.String: a.Equal( e1.Value, mg.MustIdentifier( string( v ) ) )
     default: a.failBadType( "enum", act )

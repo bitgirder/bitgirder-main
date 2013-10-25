@@ -3,16 +3,13 @@ package mingle
 import (
     "bitgirder/objpath"
     "fmt"
-    "errors"
-    "strings"
     "regexp"
 //    "log"
     "time"
     "sort"
     "bytes"
-    "strconv"
     "unicode"
-    "encoding/base64"
+    "strings"
 )
 
 type IdentifierFormat uint
@@ -65,7 +62,6 @@ func asIdentifier( id IdentifierInitializer ) ( *Identifier, error ) {
 
 type idPart []byte
 
-//func ( part idPart ) compare( part2 idPart ) int {
 func compareIdParts( part1, part2 idPart ) int {
     return bytes.Compare( []byte( part1 ), []byte( part2 ) )
 }
@@ -138,6 +134,16 @@ func ( id *Identifier ) Equals( id2 *Identifier ) bool {
     return id2 != nil && id.Compare( id2 ) == 0
 }
 
+type idSort []*Identifier
+func ( s idSort ) Len() int { return len( s ) }
+func ( s idSort ) Less( i, j int ) bool { return s[ i ].Compare( s[ j ] ) < 0 }
+func ( s idSort ) Swap( i, j int ) { s[ j ], s[ i ] = s[ i ], s[ j ] }
+
+func SortIds( ids []*Identifier ) []*Identifier { 
+    sort.Sort( idSort( ids ) ) 
+    return ids
+}
+
 type Namespace struct {
     Parts []*Identifier
     Version *Identifier
@@ -177,6 +183,7 @@ func ( ns *Namespace ) Equals( ns2 *Namespace ) bool {
 type TypeName interface{
     ExternalForm() string
     Equals( n TypeName ) bool
+    typeNameImpl()
 }
 
 type DeclaredTypeName struct {
@@ -186,6 +193,8 @@ type DeclaredTypeName struct {
 func NewDeclaredTypeNameUnsafe( nm []byte ) *DeclaredTypeName {
     return &DeclaredTypeName{ nm }
 }
+
+func ( n *DeclaredTypeName ) typeNameImpl() {}
 
 func ( n *DeclaredTypeName ) String() string { return string( n.nm ) }
 
@@ -216,6 +225,8 @@ type QualifiedTypeName struct {
     Name *DeclaredTypeName
 }
 
+func ( qn *QualifiedTypeName ) typeNameImpl() {}
+
 func ( qn *QualifiedTypeName ) ExternalForm() string {
     res := make( []byte, 0, 32 )
     res = append( res, []byte( qn.Namespace.ExternalForm() )... )
@@ -235,11 +246,16 @@ func ( qn *QualifiedTypeName ) Equals( n2 TypeName ) bool {
     return false
 }
 
+func ( qn *QualifiedTypeName ) AsAtomicType() *AtomicTypeReference {
+    return &AtomicTypeReference{ Name: qn }
+}
+
 // (atomic|list|nullable)
 type TypeReference interface {
     ExternalForm() string
     Equals( t TypeReference ) bool
     String() string
+    typeRefImpl()
 }
 
 type ValueRestriction interface {
@@ -351,6 +367,8 @@ type AtomicTypeReference struct {
     Restriction ValueRestriction
 }
 
+func ( t *AtomicTypeReference ) typeRefImpl() {}
+
 func ( t *AtomicTypeReference ) ExternalForm() string {
     nm := t.Name.ExternalForm()
     if t.Restriction == nil { return nm }
@@ -376,6 +394,8 @@ type ListTypeReference struct {
     AllowsEmpty bool
 }
 
+func ( t *ListTypeReference ) typeRefImpl() {}
+
 func ( t *ListTypeReference ) ExternalForm() string {
     var quant string
     if t.AllowsEmpty { quant = "*" } else { quant = "+" }
@@ -396,6 +416,8 @@ func ( t *ListTypeReference ) Equals( ref TypeReference ) bool {
 type NullableTypeReference struct {
     Type TypeReference
 }
+
+func ( t *NullableTypeReference ) typeRefImpl() {}
 
 func ( t *NullableTypeReference ) ExternalForm() string {
     return t.Type.ExternalForm() + "?"
@@ -427,8 +449,10 @@ func asTypeReference( typ TypeReferenceInitializer ) TypeReference {
     switch v := typ.( type ) {
     case string: return MustTypeReference( v )
     case TypeReference: return v
+    case *QualifiedTypeName, *DeclaredTypeName:
+        return &AtomicTypeReference{ Name: v.( TypeName ) }
     }
-    panic( fmt.Sprintf( "Unhandled type ref initializer: %v", typ ) )
+    panic( libErrorf( "Unhandled type ref initializer: %T", typ ) )
 }
 
 func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
@@ -440,7 +464,7 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     panic( fmt.Errorf( "No atomic type in %s (%T)", ref, ref ) )
 }
 
-type Value interface{}
+type Value interface{ valImpl() }
 
 func appendQuotedList( buf *bytes.Buffer, l *List ) {
     buf.WriteRune( '[' )
@@ -470,7 +494,7 @@ func appendQuotedStruct( buf *bytes.Buffer, ms *Struct ) {
 func appendQuotedValue( buf *bytes.Buffer, val Value ) {
     switch v := val.( type ) {
     case String: fmt.Fprintf( buf, "%q", string( v ) )
-    case Buffer: fmt.Fprintf( buf, "%x", []byte( v ) )
+    case Buffer: fmt.Fprintf( buf, "buf[%x]", []byte( v ) )
     case Timestamp: fmt.Fprintf( buf, "%s", v.Rfc3339Nano() )
     case *Null: buf.WriteString( "null" )
     case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:
@@ -502,6 +526,7 @@ type ValueTypeError struct {
 }
 
 var goValPathFormatter objpath.Formatter
+
 func init() {
     goValPathFormatter = 
         objpath.DotFormatter(
@@ -525,6 +550,7 @@ type Comparer interface {
 }
 
 type String string
+func ( s String ) valImpl() {}
 func ( s String ) String() string { return string( s ) }
 
 func ( s String ) Compare( val interface{} ) int {
@@ -536,9 +562,11 @@ func ( s String ) Compare( val interface{} ) int {
 }
 
 type Boolean bool
+func ( b Boolean ) valImpl() {}
 func ( b Boolean ) String() string { return fmt.Sprint( bool( b ) ) }
 
 type Int64 int64
+func ( i Int64 ) valImpl() {}
 func ( i Int64 ) String() string { return fmt.Sprint( int64( i ) ) }
 
 func ( i Int64 ) Compare( val interface{} ) int {
@@ -550,6 +578,7 @@ func ( i Int64 ) Compare( val interface{} ) int {
 }
 
 type Int32 int32
+func ( i Int32 ) valImpl() {}
 func ( i Int32 ) String() string { return fmt.Sprint( int32( i ) ) }
 
 func ( i Int32 ) Compare( val interface{} ) int {
@@ -557,6 +586,7 @@ func ( i Int32 ) Compare( val interface{} ) int {
 }
 
 type Uint64 uint64
+func ( i Uint64 ) valImpl() {}
 func ( i Uint64 ) String() string { return fmt.Sprint( uint64( i ) ) }
 
 func ( i Uint64 ) Compare( val interface{} ) int {
@@ -568,6 +598,7 @@ func ( i Uint64 ) Compare( val interface{} ) int {
 }
 
 type Uint32 uint32
+func ( i Uint32 ) valImpl() {}
 func ( i Uint32 ) String() string { return fmt.Sprint( uint32( i ) ) }
 
 func ( i Uint32 ) Compare( val interface{} ) int {
@@ -575,6 +606,7 @@ func ( i Uint32 ) Compare( val interface{} ) int {
 }
 
 type Float64 float64
+func ( d Float64 ) valImpl() {}
 func ( d Float64 ) String() string { return fmt.Sprint( float64( d ) ) }
 
 func ( d Float64 ) Compare ( val interface{} ) int {
@@ -586,6 +618,7 @@ func ( d Float64 ) Compare ( val interface{} ) int {
 }
 
 type Float32 float32
+func ( f Float32 ) valImpl() {}
 func ( f Float32 ) String() string { return fmt.Sprint( float32( f ) ) }
 
 func ( f Float32 ) Compare( val interface{} ) int {
@@ -593,8 +626,10 @@ func ( f Float32 ) Compare( val interface{} ) int {
 }
 
 type Buffer []byte
+func ( b Buffer ) valImpl() {}
 
 type Null struct {}
+func ( n Null ) valImpl() {}
 var NullVal *Null
 func init() { NullVal = &Null{} }
 
@@ -604,6 +639,8 @@ func IsNull( val Value ) bool {
 }
 
 type Timestamp time.Time
+
+func ( t Timestamp ) valImpl() {}
 
 func Now() Timestamp { return Timestamp( time.Now() ) }
 
@@ -695,6 +732,11 @@ type List struct {
     vals []Value
 }
 
+var constEmptyList = &List{ []Value{} }
+func EmptyList() *List { return constEmptyList }
+
+func ( l *List ) valImpl() {}
+
 func ( l *List ) Values() []Value { return l.vals }
 
 func ( l *List ) Len() int { return len( l.vals ) }
@@ -725,6 +767,10 @@ type fieldEntry struct {
 type SymbolMap struct {
     fields []fieldEntry
 }
+
+func EmptySymbolMap() *SymbolMap { return MustSymbolMap() }
+
+func ( m SymbolMap ) valImpl() {}
 
 func ( m *SymbolMap ) Len() int { return len( m.fields ) }
 
@@ -847,7 +893,7 @@ func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
 func ( acc *SymbolMapAccessor ) GetValueById( id *Identifier ) ( Value, error ) {
     val, err := acc.m.GetById( id ), error( nil )
     if val == nil { 
-        err = newValueCastError( acc.descend( id ), "value is null" )
+        err = NewValueCastError( acc.descend( id ), "value is null" )
     }
     return val, err
 }
@@ -867,23 +913,34 @@ func ( acc *SymbolMapAccessor ) MustValueByString( id string ) Value {
 }
 
 type Enum struct {
-    Type TypeReference
+    Type *QualifiedTypeName
     Value *Identifier
 }
 
+func ( e *Enum ) valImpl() {}
+
 func MustEnum( typ, val string ) *Enum {
-    return &Enum{ MustTypeReference( typ ), MustIdentifier( val ) }
+    return &Enum{ MustQualifiedTypeName( typ ), MustIdentifier( val ) }
 }
 
 type Struct struct {
-    Type TypeReference
+    Type *QualifiedTypeName
     Fields *SymbolMap
 }
 
+func ( s *Struct ) valImpl() {}
+
 func CreateStruct(
-    typ TypeReferenceInitializer, pairs ...interface{} ) ( *Struct, error ) {
+    typ interface{}, pairs ...interface{} ) ( *Struct, error ) {
     res := new( Struct )
-    res.Type = asTypeReference( typ )
+    switch v := typ.( type ) {
+    case *QualifiedTypeName: res.Type = v
+    case string: 
+        if qn, err := ParseQualifiedTypeName( v ); err == nil {
+            res.Type = qn
+        } else { return nil, err }
+    default: return nil, libErrorf( "Not a qname: %s", typ )
+    }
     if flds, err := CreateSymbolMap( pairs... ); err == nil {
         res.Fields = flds
     } else { return nil, err }
@@ -924,6 +981,15 @@ func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
     }
     return false
 }
+
+// Useful in place of passing actual path objects in instances when the path may
+// be expensive to generate and is only useful in certain situations (as when
+// generating error messages or conditional debugging)
+type PathGetter interface { GetPath() objpath.PathNode }
+type PathAppender interface { AppendPath( objpath.PathNode ) objpath.PathNode }
+
+type ImmediatePathGetter struct { Path objpath.PathNode }
+func ( i ImmediatePathGetter ) GetPath() objpath.PathNode { return i.Path }
 
 type idPath objpath.PathNode // elts are *Identifier
 
@@ -970,35 +1036,64 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
+    QnameServiceRequest *QualifiedTypeName
+    TypeServiceRequest *AtomicTypeReference
+    QnameServiceResponse *QualifiedTypeName
+    TypeServiceResponse *AtomicTypeReference
+    TypeOpaqueList *ListTypeReference
+    TypeNullableValue *NullableTypeReference
+    IdNamespace *Identifier
+    IdService *Identifier
+    IdOperation *Identifier
+    IdParameters *Identifier
+    IdAuthentication *Identifier
+    svcReqFieldOrder FieldOrder // initialized in same scope as Ids above
+    IdResult *Identifier
+    IdError *Identifier
 )
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
 var PrimitiveTypes []*AtomicTypeReference
 var NumericTypes []*AtomicTypeReference
 
-var CoreNsV1 = MustNamespace( "mingle:core@v1" )
+var CoreNsV1 *Namespace
 
 func init() {
+    id := func( strs []string ) *Identifier {
+        parts := make( []idPart, len( strs ) )
+        for i, str := range strs { parts[ i ] = idPart( []byte( str ) ) }
+        return &Identifier{ parts }
+    }
+    ns := func( parts [][]string, ver []string ) *Namespace {
+        ids := make( []*Identifier, len( parts ) )
+        for i, part := range parts { ids[ i ] = id( part ) }
+        return &Namespace{ Parts: ids, Version: id( ver ) }
+    }
+    CoreNsV1 = ns( 
+        [][]string{ []string{ "mingle" }, []string{ "core" } },
+        []string{ "v1" },
+    )
     coreQnameResolver = make( map[ string ]*QualifiedTypeName )
-    f := func( s string ) ( *QualifiedTypeName, *AtomicTypeReference ) {
-        qn := ( &DeclaredTypeName{ []byte( s ) } ).ResolveIn( CoreNsV1 )
+    f1 := func( 
+        s string, ns *Namespace ) ( *QualifiedTypeName, *AtomicTypeReference ) {
+        qn := ( &DeclaredTypeName{ []byte( s ) } ).ResolveIn( ns )
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
         at := &AtomicTypeReference{ Name: qn }
         return qn, at
     }
-    QnameValue, TypeValue = f( "Value" )
-    QnameBoolean, TypeBoolean = f( "Boolean" )
-    QnameBuffer, TypeBuffer = f( "Buffer" )
-    QnameString, TypeString = f( "String" )
-    QnameInt32, TypeInt32 = f( "Int32" )
-    QnameInt64, TypeInt64 = f( "Int64" )
-    QnameUint32, TypeUint32 = f( "Uint32" )
-    QnameUint64, TypeUint64 = f( "Uint64" )
-    QnameFloat32, TypeFloat32 = f( "Float32" )
-    QnameFloat64, TypeFloat64 = f( "Float64" )
-    QnameTimestamp, TypeTimestamp = f( "Timestamp" )
-    QnameSymbolMap, TypeSymbolMap = f( "SymbolMap" )
-    QnameNull, TypeNull = f( "Null" )
+    QnameValue, TypeValue = f1( "Value", CoreNsV1 )
+    QnameBoolean, TypeBoolean = f1( "Boolean", CoreNsV1 )
+    QnameBuffer, TypeBuffer = f1( "Buffer", CoreNsV1 )
+    QnameString, TypeString = f1( "String", CoreNsV1 )
+    QnameInt32, TypeInt32 = f1( "Int32", CoreNsV1 )
+    QnameInt64, TypeInt64 = f1( "Int64", CoreNsV1 )
+    QnameUint32, TypeUint32 = f1( "Uint32", CoreNsV1 )
+    QnameUint64, TypeUint64 = f1( "Uint64", CoreNsV1 )
+    QnameFloat32, TypeFloat32 = f1( "Float32", CoreNsV1 )
+    QnameFloat64, TypeFloat64 = f1( "Float64", CoreNsV1 )
+    QnameTimestamp, TypeTimestamp = f1( "Timestamp", CoreNsV1 )
+    QnameSymbolMap, TypeSymbolMap = f1( "SymbolMap", CoreNsV1 )
+    QnameNull, TypeNull = f1( "Null", CoreNsV1 )
     PrimitiveTypes = []*AtomicTypeReference{
         TypeValue,
         TypeNull,
@@ -1012,7 +1107,10 @@ func init() {
         TypeBoolean,
         TypeTimestamp,
         TypeBuffer,
+        TypeSymbolMap,
     }
+    TypeOpaqueList = &ListTypeReference{ TypeValue, true }
+    TypeNullableValue = &NullableTypeReference{ TypeValue }
     NumericTypes = []*AtomicTypeReference{
         TypeInt32,
         TypeInt64,
@@ -1021,6 +1119,24 @@ func init() {
         TypeFloat32,
         TypeFloat64,
     }
+    QnameServiceRequest, TypeServiceRequest = f1( "Request", CoreNsV1 )
+    QnameServiceResponse, TypeServiceResponse = f1( "Response", CoreNsV1 )
+    IdNamespace = id( []string{ "namespace" } )
+    IdService = id( []string{ "service" } )
+    IdOperation = id( []string{ "operation" } )
+    IdParameters = id( []string{ "parameters" } )
+    IdAuthentication = id( []string{ "authentication" } )
+    svcReqFieldOrder = FieldOrder(
+        []FieldOrderSpecification{
+            { IdNamespace, true },
+            { IdService, true },
+            { IdOperation, true },
+            { IdAuthentication, false },
+            { IdParameters, false },
+        },
+    )
+    IdResult = id( []string{ "result" } )
+    IdError =id( []string{ "error" } )
 }
 
 func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {
@@ -1040,9 +1156,6 @@ func IsIntegerType( typ TypeReference ) bool {
            typ.Equals( TypeUint64 )
 }
 
-var typeOpaqueList *ListTypeReference
-func init() { typeOpaqueList = &ListTypeReference{ TypeValue, true } }
-
 func TypeOf( mgVal Value ) TypeReference {
     switch v := mgVal.( type ) {
     case Boolean: return TypeBoolean
@@ -1055,10 +1168,10 @@ func TypeOf( mgVal Value ) TypeReference {
     case Float32: return TypeFloat32
     case Float64: return TypeFloat64
     case Timestamp: return TypeTimestamp
-    case *Enum: return v.Type
+    case *Enum: return v.Type.AsAtomicType()
     case *SymbolMap: return TypeSymbolMap
-    case *Struct: return v.Type
-    case *List: return typeOpaqueList
+    case *Struct: return v.Type.AsAtomicType()
+    case *List: return TypeOpaqueList
     case *Null: return TypeNull
     }
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
@@ -1070,411 +1183,96 @@ type ValueError interface {
     error
 }
 
-type valueErrorImpl struct {
-    path idPath
+type ValueErrorImpl struct {
+    Path idPath
 }
 
-func ( e valueErrorImpl ) Location() objpath.PathNode { 
-    return e.path.( objpath.PathNode )
+func ( e ValueErrorImpl ) Location() objpath.PathNode { 
+    if e.Path == nil { return nil }
+    return e.Path.( objpath.PathNode )
 }
 
-func ( e valueErrorImpl ) makeError( msg string ) string {
-    if e.path == nil { return msg }
-    return fmt.Sprintf( "%s: %s", FormatIdPath( e.path ), msg )
+func ( e ValueErrorImpl ) MakeError( msg string ) string {
+    if e.Path == nil { return msg }
+    return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
 }
 
-type TypeCastError struct {
-    valueErrorImpl
-    Expected TypeReference
-    Actual TypeReference
+type MissingFieldsError struct {
+    impl ValueErrorImpl
+    flds []*Identifier // stored sorted
 }
 
-func ( e *TypeCastError ) Message() string {
-    tmpl := "Expected value of type %s but found %s"
-    return fmt.Sprintf( tmpl, e.Expected, e.Actual )
+func NewMissingFieldsError( 
+    path objpath.PathNode, flds []*Identifier ) *MissingFieldsError {
+    flds2 := make( []*Identifier, len( flds ) )
+    for i, e := 0, len( flds ); i < e; i++ { flds2[ i ] = flds[ i ] }
+    SortIds( flds2 )
+    return &MissingFieldsError{ impl: ValueErrorImpl{ path }, flds: flds2 }
 }
 
-func ( e *TypeCastError ) Error() string {
-    return e.makeError( e.Message() )
+func ( e *MissingFieldsError ) Error() string {
+    strs := make( []string, len( e.flds ) )
+    for i, fld := range e.flds { strs[ i ] = fld.ExternalForm() }
+    fldsStr := strings.Join( strs, ", " )
+    return e.impl.MakeError( fmt.Sprintf( "missing field(s): %s", fldsStr ) )
 }
 
-func newTypeCastError( expct, act TypeReference, path idPath ) *TypeCastError {
-    res := &TypeCastError{ Expected: expct, Actual: act }
-    res.path = path
-    return res
+func ( e *MissingFieldsError ) Location() objpath.PathNode { 
+    return e.impl.Location() 
 }
 
-func asTypeCastError( t TypeReference, val Value, path idPath ) *TypeCastError {
-    return newTypeCastError( t, TypeOf( val ), path )
+type UnrecognizedFieldError struct {
+    impl ValueErrorImpl
+    fld *Identifier
 }
 
-type ValueCastError struct {
-    valueErrorImpl
-    msg string
+func NewUnrecognizedFieldError( 
+    p objpath.PathNode, fld *Identifier ) *UnrecognizedFieldError {
+    return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, fld: fld }
 }
 
-func ( e *ValueCastError ) Message() string { return e.msg }
-func ( e *ValueCastError ) Error() string { return e.makeError( e.msg ) }
-
-func newValueCastError( path idPath, msg string ) *ValueCastError {
-    res := &ValueCastError{ msg: msg }
-    res.path = path
-    return res
+func ( e *UnrecognizedFieldError ) Error() string {
+    return e.impl.MakeError( fmt.Sprintf( "unrecognized field: %s", e.fld ) )
 }
 
-func newValueCastErrorf(
-    path idPath, tmpl string, args ...interface{} ) *ValueCastError {
-    return newValueCastError( path, fmt.Sprintf( tmpl, args... ) )
+func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {
+    return e.impl.Location()
 }
 
-func strToBool( 
-    s String, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch lc := strings.ToLower( string( s ) ); lc { 
-    case "true": return Boolean( true ), nil
-    case "false": return Boolean( false ), nil
-    }
-    errTmpl :="Invalid boolean value: %s"
-    errStr := QuoteValue( s )
-    return nil, newValueCastErrorf( path, errTmpl, errStr )
+type extFormer interface { ExternalForm() string }
+
+type EndpointError struct {
+    impl ValueErrorImpl
+    desc string
+    ef extFormer
 }
 
-func castBoolean( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Boolean: return v, nil
-    case String: return strToBool( v, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
+func ( ee *EndpointError ) Error() string {
+    msg := fmt.Sprintf( "no such %s: %s", ee.desc, ee.ef.ExternalForm() )
+    return ee.impl.MakeError( msg )
 }
 
-func castBuffer( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Buffer: return v, nil
-    case String: 
-        buf, err := base64.StdEncoding.DecodeString( string( v ) )
-        if err == nil { return Buffer( buf ), nil }
-        msg := "Invalid base64 string: %s"
-        return nil, newValueCastErrorf( path, msg, err.Error() )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
+func ( ee *EndpointError ) Location() objpath.PathNode {
+    return ee.impl.Location()
 }
 
-func castString( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case String: return mgVal, nil
-    case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:
-        return String( v.( fmt.Stringer ).String() ), nil
-    case Timestamp: return String( v.Rfc3339Nano() ), nil
-    case Buffer:
-        return String( base64.StdEncoding.EncodeToString( []byte( v ) ) ), nil
-    case *Enum: return String( v.Value.ExternalForm() ), nil
-    }
-    return nil, asTypeCastError( at, mgVal, path )
+func newEndpointError( desc string, ef extFormer, p idPath ) *EndpointError {
+    return &EndpointError{ desc: desc, ef: ef, impl: ValueErrorImpl{ p } }
 }
 
-func valueCastErrorForNumError(
-    path idPath, at *AtomicTypeReference, err *strconv.NumError ) error {
-    return newValueCastErrorf( path, "%s: %s", err.Err.Error(), err.Num )
+func NewEndpointErrorNamespace( 
+    ns *Namespace, p objpath.PathNode ) *EndpointError {
+    return newEndpointError( "namespace", ns, p )
 }
 
-func parseIntInitial(
-    s String,
-    bitSize int,
-    numType TypeReference ) ( sInt int64, uInt uint64, err error ) {
-    if indx := strings.IndexAny( string( s ), "eE." ); indx >= 0 {
-        var f float64
-        f, err = strconv.ParseFloat( string( s ), 64 )
-        if err == nil { sInt, uInt  = int64( f ), uint64( f ) }
-    } else { 
-        if numType == TypeUint32 || numType == TypeUint64 {
-            uInt, err = strconv.ParseUint( string( s ), 10, bitSize )
-            sInt = int64( uInt ) // do this even if err != nil
-        } else {
-            sInt, err = strconv.ParseInt( string( s ), 10, bitSize )
-            uInt = uint64( sInt )
-        }
-    }
-    return
+func NewEndpointErrorService(
+    svc *Identifier, p objpath.PathNode ) *EndpointError {
+    return newEndpointError( "service", svc, p )
 }
 
-func parseInt( 
-    s String, 
-    bitSize int, 
-    numTyp TypeReference, 
-    at *AtomicTypeReference, 
-    path idPath ) ( Value, error ) {
-    sInt, uInt, err := parseIntInitial( s, bitSize, numTyp )
-    if err == nil {
-        switch numTyp {
-        case TypeInt32: return Int32( sInt ), nil
-        case TypeInt64: return Int64( sInt ), nil
-        case TypeUint32: return Uint32( uInt ), nil
-        case TypeUint64: return Uint64( uInt ), nil
-        default:
-            msg := "Unhandled number type: %s"
-            panic( newValueCastErrorf( path, msg, numTyp ) )
-        }
-    } 
-    if ne, ok := err.( *strconv.NumError ); ok {
-        return nil, valueCastErrorForNumError( path, at, ne )
-    }
-    return nil, newValueCastErrorf( path, err.Error() )
-}
-
-func castInt32( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Int32: return v, nil
-    case Int64: return Int32( v ), nil
-    case Uint32: return Int32( int32( v ) ), nil
-    case Uint64: return Int32( int32( v ) ), nil
-    case Float32: return Int32( int32( v ) ), nil
-    case Float64: return Int32( int32( v ) ), nil
-    case String: return parseInt( v, 32, TypeInt32, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castInt64( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Int32: return Int64( v ), nil
-    case Int64: return v, nil
-    case Uint32: return Int64( int64( v ) ), nil
-    case Uint64: return Int64( int64( v ) ), nil
-    case Float32: return Int64( int64( v ) ), nil
-    case Float64: return Int64( int64( v ) ), nil
-    case String: return parseInt( v, 64, TypeInt64, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castUint32(
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Int32: return Uint32( uint32( v ) ), nil
-    case Uint32: return v, nil
-    case Int64: return Uint32( uint32( v ) ), nil
-    case Uint64: return Uint32( uint32( v ) ), nil
-    case Float32: return Uint32( uint32( v ) ), nil
-    case Float64: return Uint32( uint32( v ) ), nil
-    case String: return parseInt( v, 32, TypeUint32, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castUint64(
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Int32: return Uint64( uint64( v ) ), nil
-    case Uint32: return Uint64( uint64( v ) ), nil
-    case Int64: return Uint64( uint64( v ) ), nil
-    case Uint64: return v, nil
-    case Float32: return Uint64( uint64( v ) ), nil
-    case Float64: return Uint64( uint64( v ) ), nil
-    case String: return parseInt( v, 64, TypeUint64, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func parseFloat32(
-    s string,
-    bitSize int,
-    numTyp TypeReference,
-    at *AtomicTypeReference,
-    path idPath ) ( Value, error ) {
-    f, err := strconv.ParseFloat( string( s ), bitSize )
-    if err != nil { 
-        ne := err.( *strconv.NumError )
-        return nil, valueCastErrorForNumError( path, at, ne )
-    }
-    switch numTyp {
-    case TypeFloat32: return Float32( f ), nil
-    case TypeFloat64: return Float64( f ), nil
-    }
-    panic( newValueCastErrorf( path, "Unhandled num type: %s", numTyp ) )
-}
-
-func castFloat32( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Int32: return Float32( float32( v ) ), nil
-    case Int64: return Float32( float32( v ) ), nil
-    case Uint32: return Float32( float32( v ) ), nil
-    case Uint64: return Float32( float32( v ) ), nil
-    case Float32: return v, nil
-    case Float64: return Float32( float32( v ) ), nil
-    case String: return parseFloat32( string( v ), 32, TypeFloat32, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castFloat64( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Int32: return Float64( float64( v ) ), nil
-    case Int64: return Float64( float64( v ) ), nil
-    case Uint32: return Float64( float64( v ) ), nil
-    case Uint64: return Float64( float64( v ) ), nil
-    case Float32: return Float64( float64( v ) ), nil
-    case Float64: return v, nil
-    case String: return parseFloat32( string( v ), 64, TypeFloat64, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castTimestamp( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case Timestamp: return v, nil
-    case String:
-        tm, err := ParseTimestamp( string( v ) )
-        if err == nil { return tm, nil }
-        msg := "Invalid timestamp: %s"
-        return nil, newValueCastErrorf( path, msg, err.Error() )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castEnum( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case *Enum: if v.Type.Equals( at ) { return v, nil }
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castSymbolMap( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case *SymbolMap: return v, nil
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castStruct( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    switch v := mgVal.( type ) {
-    case *Struct: if v.Type.Equals( at ) { return v, nil }
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castNull( 
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    if _, ok := mgVal.( *Null ); ok { return mgVal, nil }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func castAtomicUnrestricted(
-    mgVal Value, at *AtomicTypeReference, path idPath ) ( Value, error ) {
-    if _, ok := mgVal.( *Null ); ok {
-        if at.Equals( TypeNull ) { return mgVal, nil }
-        return nil, newValueCastErrorf( path, "Value is null" )
-    }
-    switch nm := at.Name; {
-    case nm.Equals( QnameBoolean ): return castBoolean( mgVal, at, path )
-    case nm.Equals( QnameBuffer ): return castBuffer( mgVal, at, path )
-    case nm.Equals( QnameString ): return castString( mgVal, at, path )
-    case nm.Equals( QnameInt32 ): return castInt32( mgVal, at, path )
-    case nm.Equals( QnameInt64 ): return castInt64( mgVal, at, path )
-    case nm.Equals( QnameUint32 ): return castUint32( mgVal, at, path )
-    case nm.Equals( QnameUint64 ): return castUint64( mgVal, at, path )
-    case nm.Equals( QnameFloat32 ): return castFloat32( mgVal, at, path )
-    case nm.Equals( QnameFloat64 ): return castFloat64( mgVal, at, path )
-    case nm.Equals( QnameTimestamp ): return castTimestamp( mgVal, at, path )
-    case nm.Equals( QnameSymbolMap ): return castSymbolMap( mgVal, at, path )
-    case nm.Equals( QnameNull ): return castNull( mgVal, at, path )
-    case nm.Equals( QnameValue ): return mgVal, nil
-    }
-    switch mgVal.( type ) {
-    case *Enum: return castEnum( mgVal, at, path )
-    case *Struct: return castStruct( mgVal, at, path )
-    }
-    return nil, asTypeCastError( at, mgVal, path )
-}
-
-func checkRestriction( val Value, at *AtomicTypeReference, path idPath ) error {
-    if at.Restriction.AcceptsValue( val ) { return nil }
-    return newValueCastErrorf( 
-        path, "Value %s does not satisfy restriction %s",
-        QuoteValue( val ), at.Restriction.ExternalForm() )
-}
-
-// switch compares based on qname not at itself since we may be dealing with
-// restriction types, meaning that if at is mingle:core@v1/String~"a", it is a
-// string (has qname mingle:core@v1/String) but will not equal TypeString itself
-func castAtomic(
-    mgVal Value, 
-    at *AtomicTypeReference,
-    path idPath ) ( val Value, err error ) {
-    if val, err = castAtomicUnrestricted( mgVal, at, path ); err == nil {
-        if at.Restriction != nil { err = checkRestriction( val, at, path ) }
-    }
-    return
-}
-
-// Currently the list returned is a new *List representing a shallow copy of
-// mgVal (assuming it is a *List) with each original element in the original
-// list represented in the output by the result of casting it to the list
-// element type.
-//
-// In cases when no actual casts need to take place (which may prove the common
-// case), a space optimization will be to only lazily initiate a copy, returning
-// the original list untouched if possible. That's tabled for now though.
-func castList(
-    mgVal Value, 
-    lt *ListTypeReference, 
-    path idPath ) ( Value, error ) {
-    if ml, ok := mgVal.( *List ); ok {
-        eltTyp := lt.ElementType
-        vals := make( []Value, len( ml.vals ) )
-        lp := path.StartList()
-        for i, inVal := range ml.vals {
-            if val, err := castValue( inVal, eltTyp, lp ); err == nil {
-                vals[ i ] = val
-            } else { return nil, err }
-            lp = lp.Next()
-        }
-        if len( vals ) == 0 && ( ! lt.AllowsEmpty ) {
-            return nil, newValueCastErrorf( path, "List is empty" )
-        }
-        return &List{ vals }, nil
-    }
-    return nil, asTypeCastError( lt, mgVal, path )
-}
-
-func castNullable(
-    mgVal Value, 
-    nt *NullableTypeReference, 
-    path idPath ) ( Value, error ) {
-    if nv, ok := mgVal.( *Null ); ok { return nv, nil }
-    val, err := castValue( mgVal, nt.Type, path )
-    // Reset error type to be the enclosing nullable type
-    if tcErr, ok := err.( *TypeCastError ); ok { tcErr.Expected = nt }
-    return val, err
-}
-
-func castValue(
-    mgVal Value, 
-    typ TypeReference,
-    path idPath ) ( val Value, err error ) {
-    switch v := typ.( type ) {
-    case *AtomicTypeReference: val, err = castAtomic( mgVal, v, path )
-    case *ListTypeReference: val, err = castList( mgVal, v, path )
-    case *NullableTypeReference: val, err = castNullable( mgVal, v, path )
-    default: panic( libErrorf( "Unhandled target type (%T): %s", typ, typ ) )
-    }
-    return val, err
-}
-
-func CastValue( 
-    mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
-    if path == nil { return nil, errors.New( "path arg is nil" ) }
-    if mgVal == nil { return nil, errors.New( "mgVal is nil" ) }
-    return castValue( mgVal, typ, path )
+func NewEndpointErrorOperation(
+    op *Identifier, p objpath.PathNode ) *EndpointError {
+    return newEndpointError( "operation", op, p )
 }
 
 type mapImplKey interface { ExternalForm() string }
@@ -1494,8 +1292,14 @@ func newMapImpl() *mapImpl {
 
 func ( m *mapImpl ) Len() int { return len( m.m ) }
 
+func ( m *mapImpl ) implGetOk( k mapImplKey ) ( interface{}, bool ) {
+    res, ok := m.m[ k.ExternalForm() ]
+    if ok { return res.val, ok }
+    return nil, false
+}
+
 func ( m *mapImpl ) implGet( k mapImplKey ) interface{} {
-    if e, ok := m.m[ k.ExternalForm() ]; ok { return e.val }
+    if val, ok := m.implGetOk( k ); ok { return val }
     return nil
 }
 
@@ -1540,6 +1344,10 @@ type IdentifierMap struct { *mapImpl }
 
 func NewIdentifierMap() *IdentifierMap { return &IdentifierMap{ newMapImpl() } }
 
+func ( m *IdentifierMap ) GetOk( id *Identifier ) ( interface{}, bool ) {
+    return m.implGetOk( id )
+}
+
 func ( m *IdentifierMap ) Get( id *Identifier ) interface{} {
     return m.implGet( id )
 }
@@ -1577,6 +1385,10 @@ type QnameMap struct { *mapImpl }
 
 func NewQnameMap() *QnameMap { return &QnameMap{ newMapImpl() } }
 
+func ( m *QnameMap ) GetOk( qn *QualifiedTypeName ) ( interface{}, bool ) {
+    return m.implGetOk( qn )
+}
+
 func ( m *QnameMap ) Get( qn *QualifiedTypeName ) interface{} {
     return m.implGet( qn )
 }
@@ -1608,6 +1420,10 @@ type NamespaceMap struct { *mapImpl }
 
 func NewNamespaceMap() *NamespaceMap { return &NamespaceMap{ newMapImpl() } }
 
+func ( m *NamespaceMap ) GetOk( ns *Namespace ) ( interface{}, bool ) {
+    return m.implGetOk( ns )
+}
+
 func ( m *NamespaceMap ) Get( ns *Namespace ) interface{} {
     return m.implGet( ns )
 }
@@ -1625,3 +1441,28 @@ func ( m *NamespaceMap ) PutSafe( ns *Namespace, val interface{} ) error {
 }
 
 func ( m *NamespaceMap ) Delete( ns *Namespace ) { m.implDelete( ns ) }
+
+//type svcIdMapKey struct {
+//    ns *Namespace
+//    svc *Identifier
+//}
+//
+//func ( k svcIdMapKey ) ExternalForm() string {
+//    return k.ns.ExternalForm() + "/" + k.svc.ExternalForm()
+//}
+//
+//type ServiceIdMap struct {
+//    *mapImpl
+//}
+//
+//func NewServiceIdMap() *ServiceIdMap { return &ServiceIdMap{ newMapImpl() } }
+//
+//func ( m *ServiceIdMap ) Put( 
+//    ns *Namespace, svc *Identifier, val interface{} ) {
+//    m.implPut( svcIdMapKey{ ns, svc }, val )
+//}
+//
+//func ( m *ServiceIdMap ) GetOk( 
+//    ns *Namespace, svc *Identifier ) ( interface{}, bool ) {
+//    return m.implGetOk( svcIdMapKey{ ns, svc } )
+//}

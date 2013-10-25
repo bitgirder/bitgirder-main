@@ -109,7 +109,6 @@ type encoder struct {
     c *JsonCodec
     w io.Writer
     stack *list.List
-    impl *mg.ReactorImpl
 }
 
 // Both value() and end() operate on and return go json vals (not mg.Value)
@@ -155,54 +154,52 @@ func ( e *encoder ) pop() accumulator {
     return res
 }
 
-func ( e *encoder ) StartStruct( typ mg.TypeReference ) error {
-    if err := e.impl.StartStruct(); err != nil { return err }
+func ( e *encoder ) startStruct( typ *mg.QualifiedTypeName ) {
     acc := e.newMapAcc()
     if ! e.c.opts.OmitTypeFields { acc.m[ jsonKeyType ] = typ.ExternalForm() }
     e.push( acc )
-    return nil
 }
 
-func ( e *encoder ) StartList() error {
-    if err := e.impl.StartList(); err != nil { return err }
-    e.push( newListAcc() )
-    return nil
-}
+func ( e *encoder ) startList() { e.push( newListAcc() ) }
 
-func ( e *encoder ) StartMap() error {
-    if err := e.impl.StartMap(); err != nil { return err }
-    e.push( e.newMapAcc() )
-    return nil
-}
+func ( e *encoder ) startMap() { e.push( e.newMapAcc() ) }
 
-func ( e *encoder ) StartField( fld *mg.Identifier ) error {
-    if err := e.impl.StartField( fld ); err != nil { return err }
+func ( e *encoder ) startField( fld *mg.Identifier ) {
     e.peek().( *mapAcc ).fld = fld
-    return nil
 }
 
-func ( e *encoder ) Value( val mg.Value ) error {
-    if err := e.impl.Value(); err != nil { return err }
+func ( e *encoder ) value( val mg.Value ) {
     e.peek().value( e.c.asJsonValue( val ) )
-    return nil
 }
 
-func ( e *encoder ) End() error {
-    if err := e.impl.End(); err != nil { return err }
+func ( e *encoder ) end() error {
     val := e.pop().end()
     if e.stack.Len() == 0 {
         enc := gojson.NewEncoder( e.w )
         return enc.Encode( val )
-    } else { e.peek().value( val ) }
+    }
+    e.peek().value( val )
     return nil
 }
 
-func ( c *JsonCodec ) EncoderTo( w io.Writer ) mg.Reactor {
+func ( e *encoder ) ProcessEvent( ev mg.ReactorEvent ) error {
+    switch v := ev.( type ) {
+    case mg.ValueEvent: e.value( v.Val )
+    case mg.ListStartEvent: e.startList()
+    case mg.StructStartEvent: e.startStruct( v.Type )
+    case mg.MapStartEvent: e.startMap()
+    case mg.FieldStartEvent: e.startField( v.Field )
+    case mg.EndEvent: return e.end()
+    default: panic( libErrorf( "Unhandled event: %T", ev ) )
+    }
+    return nil
+}
+
+func ( c *JsonCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
     return &encoder{ 
         w: w, 
         c: c, 
         stack: &list.List{},
-        impl: mg.NewReactorImpl(),
     }
 }
 
@@ -232,42 +229,46 @@ func visitErrorf(
 func ( c *JsonCodec ) visitNumber(
     n gojson.Number,
     path objpath.PathNode,
-    rct mg.Reactor ) error {
+    rep mg.ReactorEventProcessor ) error {
     mgNum, err := asMingleNumber( n )
     if err != nil { return err }
-    return rct.Value( mgNum )
+    return rep.ProcessEvent( mg.ValueEvent{ mgNum } )
 }
 
 func ( c *JsonCodec ) visitValue(
-    goVal interface{}, path objpath.PathNode, rct mg.Reactor ) error {
+    goVal interface{}, 
+    path objpath.PathNode, 
+    rep mg.ReactorEventProcessor ) error {
     switch v := goVal.( type ) {
-    case nil: return rct.Value( mg.NullVal )
-    case gojson.Number: return c.visitNumber( v, path, rct )
-    case string: return rct.Value( mg.String( v ) )
-    case bool: return rct.Value( mg.Boolean( v ) )
-    case map[ string ]interface{}: return c.visitMap( v, path, rct )
-    case []interface{}: return c.visitList( v, path, rct )
+    case nil: return rep.ProcessEvent( mg.ValueEvent{ mg.NullVal } )
+    case gojson.Number: return c.visitNumber( v, path, rep )
+    case string: return rep.ProcessEvent( mg.ValueEvent{ mg.String( v ) } )
+    case bool: return rep.ProcessEvent( mg.ValueEvent{ mg.Boolean( v ) } )
+    case map[ string ]interface{}: return c.visitMap( v, path, rep )
+    case []interface{}: return c.visitList( v, path, rep )
     }
     panic( libErrorf( "Unhandled json go value: %T", goVal ) )
 }
 
 func ( c *JsonCodec ) visitList(
-    l []interface{}, path objpath.PathNode, rct mg.Reactor ) error {
+    l []interface{}, 
+    path objpath.PathNode, 
+    rep mg.ReactorEventProcessor ) error {
     lp := startList( path )
-    if err := rct.StartList(); err != nil { return err }
+    if err := rep.ProcessEvent( mg.EvListStart ); err != nil { return err }
     for _, val := range l {
-        if err := c.visitValue( val, lp, rct ); err != nil { return err }
+        if err := c.visitValue( val, lp, rep ); err != nil { return err }
         lp = lp.Next()
     }
-    return rct.End()
+    return rep.ProcessEvent( mg.EvEnd )
 }
 
 // m[ $constant ] known to be present, though not necessarily valid
 func ( c *JsonCodec ) visitEnum(
-    typ mg.TypeReference,
+    typ *mg.QualifiedTypeName,
     m map[ string ]interface{},
     path objpath.PathNode,
-    rct mg.Reactor ) error {
+    rep mg.ReactorEventProcessor ) error {
     if len( m ) > 2 {
         return visitError( path, "Enum has one or more unrecognized keys" )
     }
@@ -281,13 +282,13 @@ func ( c *JsonCodec ) visitEnum(
         errLoc := descendInbound( path, jsonKeyConstant )
         return visitError( errLoc, "Invalid constant value" )
     }
-    return rct.Value( &mg.Enum{ typ, val } )
+    return rep.ProcessEvent( mg.ValueEvent{ &mg.Enum{ typ, val } } )
 }
 
 func ( c *JsonCodec ) visitFields(
     m map[ string ]interface{},
     path objpath.PathNode,
-    rct mg.Reactor ) error {
+    rep mg.ReactorEventProcessor ) error {
     for fld, val := range m {
         if fld != jsonKeyType {
             if len( fld ) > 0 && fld[ 0 ] == byte( '$' ) {
@@ -297,49 +298,59 @@ func ( c *JsonCodec ) visitFields(
             id, err := expectIdentifier( fld, tmplInvalidFieldId, fldPath )
             if err != nil { return err }
             if val != nil {
-                if err = rct.StartField( id ); err != nil { return err }
+                ev := mg.FieldStartEvent{ id }
+                if err = rep.ProcessEvent( ev ); err != nil { return err }
                 valPath := descendInbound( path, fld )
-                if err = c.visitValue( val, valPath, rct ); err != nil { 
+                if err = c.visitValue( val, valPath, rep ); err != nil { 
                     return err
                 }
             }
         }
     }
-    return rct.End()
+    return rep.ProcessEvent( mg.EvEnd )
+}
+
+func parseQname( 
+    qnStr string, 
+    path objpath.PathNode, 
+    key string ) ( *mg.QualifiedTypeName, error ) {
+    qn, err := mg.ParseQualifiedTypeName( qnStr )
+    if err == nil { return qn, nil }
+    errStr := parseErrorMessageOf( err )
+    return nil, visitError( descendInbound( path, key ), errStr )
 }
 
 func ( c *JsonCodec ) visitMap( 
     m map[ string ]interface{}, 
     path objpath.PathNode, 
-    rct mg.Reactor ) error {
+    rep mg.ReactorEventProcessor ) error {
     if typVal, ok := m[ jsonKeyType ]; ok {
         if typStr, ok2 := typVal.( string ); ok2 {
-            if typ, err := mg.ParseTypeReference( typStr ); err == nil {
-                if _, ok3 := m[ jsonKeyConstant ]; ok3 {
-                    return c.visitEnum( typ, m, path, rct )
-                }
-                if err = rct.StartStruct( typ ); err != nil { return err }
-            } else {
-                errStr := parseErrorMessageOf( err )
-                return visitError( descendInbound( path, jsonKeyType ), errStr )
+            qn, err := parseQname( typStr, path, jsonKeyType )
+            if err != nil { return err }
+            if _, ok4 := m[ jsonKeyConstant ]; ok4 {
+                return c.visitEnum( qn, m, path, rep )
             }
+            ev := mg.StructStartEvent{ qn }
+            if err = rep.ProcessEvent( ev ); err != nil { return err }
         }
     } else {
         if path == nil {
             return visitErrorf( path, "Missing type key (%q)", jsonKeyType )
         }
-        if err := rct.StartMap(); err != nil { return err }
+        if err := rep.ProcessEvent( mg.EvMapStart ); err != nil { return err }
     }
-    return c.visitFields( m, path, rct )
+    return c.visitFields( m, path, rep )
 }
 
-func ( c *JsonCodec ) DecodeFrom( r io.Reader, rct mg.Reactor ) error {
+func ( c *JsonCodec ) DecodeFrom( 
+    r io.Reader, rep mg.ReactorEventProcessor ) error {
     dec := gojson.NewDecoder( r )
     dec.UseNumber()
     var dest interface{}
     if err := dec.Decode( &dest ); err != nil { return err }
     if m, ok := dest.( map[ string ]interface{} ); ok {
-        return c.visitMap( m, nil, rct )
+        return c.visitMap( m, nil, rep )
     }
     return codec.Errorf( "Unexpected top level JSON value" )
 }

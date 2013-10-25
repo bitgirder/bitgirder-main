@@ -374,7 +374,7 @@ var testSources = map[ string ]string{
 @version v1
 
 import ns1/Struct1 
-import ns1@v2/Exception3
+import ns1@v2/Error3
 import ns1@v2/* # Stuff in a comment
 # left blank to preserve line nums below (previous test text removed)
 
@@ -421,10 +421,10 @@ struct Struct3 < Struct1 {
 
 struct Struct4 < Struct1 {}
 
-struct Exception1 < StandardException {}
-struct Exception2 { failTime Int64 }
+struct Error1 < StandardError {}
+struct Error2 { failTime Int64 }
 
-struct Exception3 < Exception1 { 
+struct Error3 < Error1 { 
     @constructor( F1 )
     string2 String*
 }
@@ -434,7 +434,7 @@ enum Enum1 { red, green, lightGrey }
 alias Alias1 String?
 
 prototype Proto1(): String~"abc"
-prototype Proto2( f1 String ): String throws Exception1
+prototype Proto2( f1 String ): String throws Error1
 prototype Proto3( f1 Struct1, f2 ns1@v1/String default "hi" ): Struct1?
 
 service Service1 {
@@ -446,9 +446,9 @@ service Service1 {
             param3 ns1:ns2/Int64 default 12,
             param4 Alias1*,
             param5 Alias2 ): ns1/Struct2,
-                throws Exception1, Exception3
+                throws Error1, Error3
     
-    op op3(): Int64? throws Exception2
+    op op3(): Int64? throws Error2
 
     @security Sec1
 }
@@ -499,7 +499,7 @@ func initResultTestSource1() {
                 NamespaceLoc: lc1( 9, 8 ),
                 IsGlob: false,
                 Includes: []*TypeListEntry{
-                    { Name: mgDeclNm( "Exception3" ), Loc: lc1( 9, 15 ) },
+                    { Name: mgDeclNm( "Error3" ), Loc: lc1( 9, 15 ) },
                 },
             },
             {
@@ -740,10 +740,10 @@ func initResultTestSource1() {
             &StructDecl{
                 Start: lc1( 56, 1 ),
                 Info: &TypeDeclInfo{
-                    Name: mgDeclNm( "Exception1" ),
+                    Name: mgDeclNm( "Error1" ),
                     NameLoc: lc1( 56, 8 ),
-                    SuperType: sxTyp( "StandardException" ),
-                    SuperTypeLoc: lc1( 56, 21 ),
+                    SuperType: sxTyp( "StandardError" ),
+                    SuperTypeLoc: lc1( 56, 17 ),
                 },
                 Fields: []*FieldDecl{},
                 KeyedElements: keyedElts(),
@@ -751,24 +751,24 @@ func initResultTestSource1() {
             &StructDecl{
                 Start: lc1( 57, 1 ),
                 Info: &TypeDeclInfo{ 
-                    Name: mgDeclNm( "Exception2" ),
+                    Name: mgDeclNm( "Error2" ),
                     NameLoc: lc1( 57, 8 ),
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "failTime" ), 
-                      NameLoc: lc1( 57, 21 ),
+                      NameLoc: lc1( 57, 17 ),
                       Type: sxTyp( "Int64" ),
-                      TypeLoc: lc1( 57, 30 ) },
+                      TypeLoc: lc1( 57, 26 ) },
                 },
                 KeyedElements: keyedElts(),
             },
             &StructDecl{
                 Start: lc1( 59, 1 ),
                 Info: &TypeDeclInfo{
-                    Name: mgDeclNm( "Exception3" ),
+                    Name: mgDeclNm( "Error3" ),
                     NameLoc: lc1( 59, 8 ),
-                    SuperType: sxTyp( "Exception1" ),
-                    SuperTypeLoc: lc1( 59, 21 ),
+                    SuperType: sxTyp( "Error1" ),
+                    SuperTypeLoc: lc1( 59, 17 ),
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "string2" ), 
@@ -828,7 +828,7 @@ func initResultTestSource1() {
                     Return: sxTyp( "String" ),
                     ReturnLoc: lc1( 69, 32 ),
                     Throws: []*ThrownType{
-                        { Type: sxTyp( "Exception1" ), TypeLoc: lc1( 69, 46 ) },
+                        { Type: sxTyp( "Error1" ), TypeLoc: lc1( 69, 46 ) },
                     },
                 },
             },
@@ -906,10 +906,10 @@ func initResultTestSource1() {
                         Return: sxTyp( "ns1@v1/Struct2" ),
                         ReturnLoc: lc1( 80, 30 ),
                         Throws: []*ThrownType{
-                            { Type: sxTyp( "Exception1" ),
+                            { Type: sxTyp( "Error1" ),
                               TypeLoc: lc1( 81, 24 ) },
-                            { Type: sxTyp( "Exception3" ),
-                              TypeLoc: lc1( 81, 36 ) },
+                            { Type: sxTyp( "Error3" ),
+                              TypeLoc: lc1( 81, 32 ) },
                         },
                       },
                     },
@@ -921,7 +921,7 @@ func initResultTestSource1() {
                         Return: sxTyp( "Int64?" ),
                         ReturnLoc: lc1( 83, 15 ),
                         Throws: []*ThrownType{
-                            { Type: sxTyp( "Exception2" ),
+                            { Type: sxTyp( "Error2" ),
                               TypeLoc: lc1( 83, 29 ) },
                         },
                       },

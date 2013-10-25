@@ -65,6 +65,7 @@ const (
     TestTypeNamespace = CoreParseTestType( "namespace" )
     TestTypeDeclaredTypeName = CoreParseTestType( "declared-type-name" )
     TestTypeQualifiedTypeName = CoreParseTestType( "qualified-type-name" )
+    TestTypeTypeName = CoreParseTestType( "type-name" )
     TestTypeIdentifiedName = CoreParseTestType( "identified-name" )
     TestTypeTypeReference = CoreParseTestType( "type-reference" )
 )
@@ -340,6 +341,25 @@ func init() {
         qnFail( "ns1@v1//T1", 8, "Illegal type name start: \"/\" (U+002F)" ),
         qnFail( "ns1@v1/T1#T2", 10, "Illegal type name rune: \"#\" (U+0023)" ),
     )
+//    tnSucc := func( in, extForm string, expct interface{} ) *CoreParseTest {
+//        return &CoreParseTest{
+//            In: in,
+//            ExternalForm: extForm,
+//            Expect: expct,
+//            TestType: TestTypeTypeName,
+//        }
+//    }
+//    tnFail := peFailBinder( TestTypeTypeName )
+//    CoreParseTests = append( CoreParseTests,
+//        tnSucc( 
+//            "ns1@v1/T1",
+//            "ns1@v1/T1", 
+//            qn( ns( idV1, id( "ns1" ) ), declNm( "T1" ) ),
+//        ),
+//        tnSucc( "T", "T", declNm( "T" ) ),
+//        tnFail( "2Bad", 1, "Illegal type name start: \"2\" (U+0032)" ),
+//        tnFail( "ns1@v1", 7, "Expected type path but found: END" ),
+//    )
     idNmSucc := func( 
         in, extForm string, ns *Namespace, ids ...Identifier ) *CoreParseTest {
         return &CoreParseTest{

@@ -13,14 +13,16 @@ func init() {
     eng.PutCodecFactory( CodecId, func( hdrs *mgio.Headers ) codec.Codec {
         return New()
     })
-    for _, fi := range mg.BinWriterFailureInputs {
+    for _, test := range mg.CreateCoreIoTests() {
+        idt, ok := test.( *mg.BinIoInvalidDataTest )
+        if ! ok { continue }
         eng.MustPutSpecs(
             &testing.TestSpec{
                 CodecId: CodecId,
-                Id: fi.Id,
+                Id: mg.MustIdentifier( idt.Name ),
                 Action: &testing.FailDecode{
-                    ErrorMessage: fi.ErrMsg,
-                    Input: fi.Input,
+                    ErrorMessage: idt.ErrMsg,
+                    Input: idt.Input,
                 },
             },
         )

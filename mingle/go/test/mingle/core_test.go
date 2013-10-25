@@ -10,9 +10,6 @@ import (
 //    "log"
 )
 
-func typeRef( s string ) TypeReference { return MustTypeReference( s ) }
-func id( s string ) *Identifier { return MustIdentifier( s ) }
-
 type notAMingleValue struct {}
 
 func assertAsIntValues( t *testing.T ) {
@@ -50,7 +47,7 @@ func assertAsBufferValues( t *testing.T ) {
 func assertCompositeTypesAsValue( t *testing.T ) {
     m := MustSymbolMap( "key1", "val1" )
     assert.Equal( m, MustValue( m ) )
-    typ := MustTypeReference( "ns1@v1/T1" )
+    typ := qname( "ns1@v1/T1" )
     s := &Struct{ Type: typ, Fields: m }
     assert.Equal( s, MustValue( s ) )
     l := MustList( 1, 2 )
@@ -149,7 +146,9 @@ func assertMapLiteralError(
     assert.AssertError(
         f,
         func( err error ) {
-            assert.Equal( expctStr, err.( *MapLiteralError ).Error() )
+            if mle, ok := err.( *MapLiteralError ); ok {
+                assert.Equal( expctStr, mle.Error() )
+            } else { assert.Fatal( err ) }
         },
     )
 }
@@ -216,8 +215,8 @@ func TestAsTypeReference( t *testing.T ) {
     assert.AssertPanic( 
         func() { f( asTypeReference( 12 ) ) }, 
         func( err interface{} ) { 
-            msg := "Unhandled type ref initializer: 12"
-            assert.Equal( msg, err.( string ) )
+            msg := "mingle: Unhandled type ref initializer: int"
+            assert.Equal( msg, err.( error ).Error() )
         },
     )
 }
@@ -325,14 +324,14 @@ func TestCreateStructError( t *testing.T ) {
         t,
         "Invalid pairs len: 1",
         func() ( interface{}, error ) {
-            return CreateStruct( "T1", "missingVal" )
+            return CreateStruct( "ns1@v1/T1", "missingVal" )
         },
     )
 }
 
 func TestExpectStructError( t *testing.T ) {
     assert.AssertPanic(
-        func() { MustStruct( "T1", "missingVal" ) },
+        func() { MustStruct( "ns1@v1/T1", "missingVal" ) },
         func( err interface{} ) {
             assert.Equal(
                 "Invalid pairs len: 1", 
@@ -366,9 +365,9 @@ func TestTypeCastFormatting( t *testing.T ) {
     t1 := typeRef( "ns1@v1/T1" )
     t2 := typeRef( "ns1@v1/T2" )
     suff := "Expected value of type ns1@v1/T1 but found ns1@v1/T2"
-    err := newTypeCastError( t1, t2, nil )
+    err := NewTypeCastError( t1, t2, nil )
     assert.Equal( suff, err.Error() )
-    err = newTypeCastError( t1, t2, path )
+    err = NewTypeCastError( t1, t2, path )
     assert.Equal( FormatIdPath( path ) + ": " + suff, err.Error() )
 }
 
@@ -385,9 +384,10 @@ func TestTypeOf( t *testing.T ) {
     assert.Equal( TypeTimestamp, TypeOf( Now() ) )
     assert.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
     assert.Equal( typeRef( "mingle:core@v1/Value*" ), TypeOf( MustList() ) )
-    typ := typeRef( "ns1@v1/T1" )
-    assert.Equal( typ, TypeOf( &Enum{ Type: typ } ) )
-    assert.Equal( typ, TypeOf( &Struct{ Type: typ } ) )
+    qn := qname( "ns1@v1/T1" )
+    typ := &AtomicTypeReference{ Name: qn }
+    assert.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
+    assert.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
@@ -478,7 +478,7 @@ func TestQuoteValue( t *testing.T ) {
     }
     f( Boolean( true ), "true" )
     f( Boolean( false ), "false" )
-    f( Buffer( []byte{ 0, 1, 2 } ), "000102" )
+    f( Buffer( []byte{ 0, 1, 2 } ), "buf[000102]" )
     f( String( "s" ), `"s"` )
     f( Int32( 1 ), "1" )
     f( Int64( 1 ), "1" )
@@ -498,7 +498,7 @@ func TestQuoteValue( t *testing.T ) {
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
     map1 := MustSymbolMap( "k", 1 )
     expct := `ns1@v1/T1{k:1}`
-    f( &Struct{ Type: typeRef( "ns1@v1/T1" ), Fields: map1 }, expct )
+    f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
 }
 
 func TestIsNull( t *testing.T ) {
@@ -523,7 +523,7 @@ func TestIdentifierCompare( t *testing.T ) {
 
 func TestMustEnum( t *testing.T ) {
     assert.Equal(
-        &Enum{ typeRef( "ns1@v1/E1" ), MustIdentifier( "val1" ) },
+        &Enum{ qname( "ns1@v1/E1" ), MustIdentifier( "val1" ) },
         MustEnum( "ns1@v1/E1", "val1" ),
     )
 }
@@ -680,25 +680,29 @@ func TestMapImpl( t *testing.T ) {
     val1 := 1
     val2 := 2
     m := NewIdentifierMap()
-    chk := func( id *Identifier, okExpct bool, expct interface{} ) {
-        assert.Equal( expct, m.Get( id ) )
-    }
     assert.Equal( 0, m.Len() )
-    chk( id1, false, nil )
+    assert.False( m.HasKey( id1 ) )
+    chkGet := func( id *Identifier, okExpct bool, expct interface{} ) {
+        assert.Equal( expct, m.Get( id ) )
+        act, ok := m.GetOk( id )
+        assert.Equal( okExpct, ok )
+        assert.Equal( act, expct )
+    }
+    chkGet( id1, false, nil )
     m.Put( id1, val1 )
-    chk( id1, true, val1 )
+    chkGet( id1, true, val1 )
     if err := m.PutSafe( id1, val2 ); err == nil {
         t.Fatalf( "Was able to put val2 at id1" )
     } else {
         assert.Equal( 
             "mingle: map already contains an entry for key: id1", err.Error() )
-        chk( id1, true, val1 )
+        chkGet( id1, true, val1 )
     }
-    chk( id2, false, nil )
+    chkGet( id2, false, nil )
     m.Put( id1, val2 )
-    chk( id1, true, val2 )
+    chkGet( id1, true, val2 )
     m.Delete( id1 )
-    chk( id1, false, nil )
+    chkGet( id1, false, nil )
     assert.Equal( 0, m.Len() )
 }
 
@@ -745,3 +749,51 @@ func TestTypeNameIn( t *testing.T ) {
     }
 }
 
+func TestSortIds( t *testing.T ) {
+    chk := func( in, expct []*Identifier ) {
+        assert.Equal( expct, SortIds( in ) )
+    }
+    chk( []*Identifier{}, []*Identifier{} )
+    ids := []*Identifier{ id( "i1" ), id( "i2" ), id( "i3" ) }
+    for _, in := range [][]*Identifier{
+        []*Identifier{ ids[ 0 ], ids[ 1 ], ids[ 2 ] },
+        []*Identifier{ ids[ 2 ], ids[ 1 ], ids[ 0 ] },
+        []*Identifier{ ids[ 2 ], ids[ 0 ], ids[ 1 ] },
+    } {
+        chk( in, ids )
+    }
+}
+
+func TestMissingFieldsErrorFormatting( t *testing.T ) {
+    chk := func( msg string, flds ...*Identifier ) {
+        err := NewMissingFieldsError( nil, flds )
+        assert.Equal( msg, err.Error() )
+    }
+    chk( "missing field(s): f1", id( "f1" ) )
+    chk( "missing field(s): f1, f2", id( "f2" ), id( "f1" ) ) // check sorted
+}
+
+func TestUnrecognizedFieldErrorFormatting( t *testing.T ) {
+    assert.Equal(
+        "unrecognized field: f1",
+        NewUnrecognizedFieldError( nil, id( "f1" ) ).Error(),
+    )
+}
+
+//func TestServiceIdMap( t *testing.T ) {
+//    m := NewServiceIdMap()
+//    ns1 := MustNamespace( "ns1@v1" )
+//    ns2 := MustNamespace( "ns1@v2" )
+//    svc1 := id( "svc1" )
+//    svc2 := id( "svc2" )
+//    m.Put( ns1, svc1, 1 )
+//    chkGetOk := func( 
+//        expctVal interface{}, expctOk bool, ns *Namespace, svc *Identifier ) {
+//        actVal, actOk := m.GetOk( ns, svc )
+//        assert.Equal( expctOk, actOk )
+//        if actOk { assert.Equal( expctVal, actVal ) }
+//    }
+//    chkGetOk( 1, true, ns1, svc1 )
+//    chkGetOk( nil, false, ns1, svc2 )
+//    chkGetOk( nil, false, ns2, svc2 )
+//}

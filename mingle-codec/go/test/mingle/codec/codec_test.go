@@ -13,11 +13,12 @@ var noOpCodecErr = errors.New( "no-op codec; nothing to see here" )
 
 type NoOpCodec struct {}
 
-func ( c *NoOpCodec ) EncoderTo( w io.Writer ) mg.Reactor {
+func ( c *NoOpCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
     panic( noOpCodecErr )
 }
 
-func ( c *NoOpCodec ) DecodeFrom( rd io.Reader, r mg.Reactor ) error {
+func ( c *NoOpCodec ) DecodeFrom( 
+    rd io.Reader, rep mg.ReactorEventProcessor ) error {
     return noOpCodecErr
 }
 
@@ -55,7 +56,7 @@ type fixedValueWriteReactor struct {
     didWrite bool
 }
 
-func ( f *fixedValueWriteReactor ) StartStruct( typ mg.TypeReference ) error {
+func ( f *fixedValueWriteReactor ) ProcessEvent( _ mg.ReactorEvent ) error {
     if ! f.didWrite { 
         if _, err := f.w.Write( fixedCodecBuf ); err != nil { return err }
         f.didWrite = true
@@ -63,17 +64,7 @@ func ( f *fixedValueWriteReactor ) StartStruct( typ mg.TypeReference ) error {
     return nil
 }
 
-func ( f *fixedValueWriteReactor ) StartList() error { return nil }
-func ( f *fixedValueWriteReactor ) StartMap() error { return nil }
-
-func ( f *fixedValueWriteReactor ) StartField( fld *mg.Identifier ) error {
-    return nil
-}
-
-func ( f *fixedValueWriteReactor ) Value( v mg.Value ) error { return nil }
-func ( f *fixedValueWriteReactor ) End() error { return nil }
-
-func ( f *fixedValueCodec ) EncoderTo( w io.Writer ) mg.Reactor {
+func ( f *fixedValueCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
     return &fixedValueWriteReactor{ w: w }
 }
 
@@ -83,9 +74,10 @@ func ( w discardWriter ) Write( p []byte ) ( int, error ) {
     return len( p ), nil
 }
 
-func ( f *fixedValueCodec ) DecodeFrom( rd io.Reader, rct mg.Reactor ) error {
+func ( f *fixedValueCodec ) DecodeFrom( 
+    rd io.Reader, rep mg.ReactorEventProcessor ) error {
     if _, err := io.Copy( discardWriter( 0 ), rd ); err != nil { return err }
-    return mg.VisitValue( fixedCodecStruct, rct )
+    return mg.VisitValue( fixedCodecStruct, rep )
 }
 
 func TestCodecBufferUtilMethods( t *testing.T ) {
