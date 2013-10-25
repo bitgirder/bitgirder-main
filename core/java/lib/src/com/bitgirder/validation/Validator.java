@@ -85,9 +85,20 @@ class Validator
         return sb;
     }
  
+    // Does not actually return a value, but is typed to so that callers can use
+    // this method either as a standalone call:
+    //
+    //      v.fail( "..." );
+    //
+    // as well as as part of a 'throw' statement, which is particularly useful
+    // when needing to convince the compiler that a method will not return a
+    // value:
+    //
+    //      throw v.fail( "..." );
+    //
     public
     final
-    void 
+    RuntimeException
     fail( Object... message )
     { 
         throw createException( null, makeMessage( message ) );
@@ -95,16 +106,16 @@ class Validator
 
     public
     final
-    void
+    RuntimeException
     failf( String fmt,
            Object... args )
     {
-        fail( String.format( fmt, args ) );
+        return fail( String.format( fmt, args ) );
     }
 
     public
     final
-    void
+    RuntimeException
     failInput( String input,
                Object... message )
     {

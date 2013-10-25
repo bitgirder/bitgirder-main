@@ -64,6 +64,25 @@ class CodeLoggers
     public
     static
     void
+    codef( String tmpl,
+           Object... args )
+    {
+        code( String.format( tmpl, (Object[]) args ) );
+    }
+
+    public
+    static
+    void
+    codef( Throwable th,
+           String tmpl,
+           Object... msg )
+    {
+        code( th, String.format( tmpl, msg ) );
+    }
+
+    public
+    static
+    void
     code( Throwable th,
           Object... msg )
     {
@@ -79,5 +98,24 @@ class CodeLoggers
           Object... msg )
     {
         defl.warn( th, msg );
+    }
+
+    public
+    static
+    void
+    warnf( String tmpl,
+           Object... args )
+    {
+        warn( String.format( tmpl, (Object[]) args ) );
+    }
+
+    public
+    static
+    void
+    warnf( Throwable th,
+           String tmpl,
+           Object... msg )
+    {
+        warn( th, String.format( tmpl, msg ) );
     }
 }
