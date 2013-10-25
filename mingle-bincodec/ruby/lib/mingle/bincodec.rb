@@ -271,13 +271,29 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     end
 
     private
+    def bin_reader_result( scanner )
+        
+        off = cur_pos( scanner )
+
+        begin
+            yield( BinReader.as_bin_reader( scanner ) )
+        rescue => err
+            decode_raise( off, err )
+        end
+    end
+
+    private
     def read_type_reference( scanner )
-        return BinReader.as_bin_reader( scanner ).read_type_reference
+
+        bin_reader_result( scanner ) do |br| 
+            qn = br.read_qualified_type_name 
+            AtomicTypeReference.create( name: qn )
+        end 
     end
 
     private
     def read_identifier( scanner )
-        return BinReader.as_bin_reader( scanner ).read_identifier
+        bin_reader_result( scanner ) { |br| br.read_identifier }
     end
 
     private
@@ -324,7 +340,9 @@ class MingleBinCodec < BitGirder::Core::BitGirderClass
     private
     def read_mg_struct( scanner )
  
+        code( "reading struct, cur pos: #{cur_pos( scanner )}" )
         sz = scanner.read_int32
+        code( "sz is #{sz}, cur_pos: #{cur_pos( scanner )}" )
         typ = read_type_reference( scanner )
         flds = read_fields( scanner )
 

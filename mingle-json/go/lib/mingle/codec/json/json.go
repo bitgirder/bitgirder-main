@@ -310,14 +310,28 @@ func ( c *JsonCodec ) visitFields(
     return rep.ProcessEvent( mg.EvEnd )
 }
 
-func parseQname( 
-    qnStr string, 
+func expectQname( 
+    typStr string, 
     path objpath.PathNode, 
-    key string ) ( *mg.QualifiedTypeName, error ) {
-    qn, err := mg.ParseQualifiedTypeName( qnStr )
-    if err == nil { return qn, nil }
-    errStr := parseErrorMessageOf( err )
-    return nil, visitError( descendInbound( path, key ), errStr )
+    key string,
+) ( *mg.QualifiedTypeName, error ) {
+    typ, err := mg.ParseTypeReference( typStr )
+    mkErr := func( msg string ) error {
+        return visitError( descendInbound( path, key ), msg )
+    }
+    mkTypStrErr := func( tmpl string ) error {
+        return mkErr( fmt.Sprintf( tmpl, typStr ) )
+    }
+    if err == nil { 
+        if at, isAtomic := typ.( *mg.AtomicTypeReference ); isAtomic {
+            if qn, isQn := at.Name.( *mg.QualifiedTypeName ); isQn {
+                return qn, nil
+            }
+            return nil, mkTypStrErr( "Not a qualified type name: %s" )
+        }
+        return nil, mkTypStrErr( "Not an atomic type reference: %s" )
+    }
+    return nil, mkErr( parseErrorMessageOf( err ) )
 }
 
 func ( c *JsonCodec ) visitMap( 
@@ -326,9 +340,9 @@ func ( c *JsonCodec ) visitMap(
     rep mg.ReactorEventProcessor ) error {
     if typVal, ok := m[ jsonKeyType ]; ok {
         if typStr, ok2 := typVal.( string ); ok2 {
-            qn, err := parseQname( typStr, path, jsonKeyType )
+            qn, err := expectQname( typStr, path, jsonKeyType )
             if err != nil { return err }
-            if _, ok4 := m[ jsonKeyConstant ]; ok4 {
+            if _, hasConstant := m[ jsonKeyConstant ]; hasConstant {
                 return c.visitEnum( qn, m, path, rep )
             }
             ev := mg.StructStartEvent{ qn }

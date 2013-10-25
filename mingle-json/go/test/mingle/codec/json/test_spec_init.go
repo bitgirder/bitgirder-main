@@ -218,7 +218,12 @@ func init() {
         initFailDecode(
             "invalid-type",
             `{ "$type": "ns1@v1/S1?" }`,
-            `$type: Unexpected token: ?`,
+            `$type: Not an atomic type reference: ns1@v1/S1?`,
+        ),
+        initFailDecode(
+            "invalid-type-name",
+            `{ "$type": "T" }`,
+            "$type: Not a qualified type name: T",
         ),
         initFailDecode( "empty-document", "{}", `Missing type key ("$type")` ),
         initFailDecode( 

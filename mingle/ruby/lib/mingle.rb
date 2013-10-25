@@ -1960,6 +1960,10 @@ class AtomicTypeReference < MingleTypeReference
  
     bg_attr :restriction, :required => false
 
+    def self.create( *argv )
+        self.send( :new, *argv )
+    end
+
     public
     def hash
         [ @name, @restriction ].hash
@@ -2671,7 +2675,7 @@ class BinReader < BinIoBase
         Array.new( @rd.read_uint8 ) { read_identifier }
     end
 
-    private
+    public
     def read_namespace
         
         expect_type_code( TYPE_CODE_NS )
@@ -2690,7 +2694,7 @@ class BinReader < BinIoBase
         DeclaredTypeName.send( :new, :name => buf32_as_utf8 )
     end
 
-    private
+    public
     def read_qualified_type_name
         
         expect_type_code( TYPE_CODE_QN )
@@ -2701,7 +2705,7 @@ class BinReader < BinIoBase
         )
     end
 
-    private
+    public
     def read_type_name
 
         case tc = peek_type_code
