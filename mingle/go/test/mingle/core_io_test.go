@@ -28,17 +28,7 @@ func assertBinIoRoundtripWrite(
     obj interface{}, 
     a *assert.PathAsserter,
 ) {
-    var err error
-    switch v := obj.( type ) {
-    case Value: err = wr.WriteValue( v )
-    case *Identifier: err = wr.WriteIdentifier( v )
-    case objpath.PathNode: err = wr.WriteIdPath( v )
-    case *Namespace: err = wr.WriteNamespace( v )
-    case TypeName: err = wr.WriteTypeName( v )
-    case TypeReference: err = wr.WriteTypeReference( v )
-    default: a.Fatalf( "Unhandled expct obj: %T", obj )
-    }
-    if err != nil { a.Fatal( err ) }
+    if err := WriteBinIoTestValue( obj, wr ); err != nil { a.Fatal( err ) }
 }
 
 func assertBinIoRoundtripReadValue(

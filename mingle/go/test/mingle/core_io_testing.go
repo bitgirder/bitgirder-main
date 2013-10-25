@@ -233,3 +233,15 @@ func CreateCoreIoTests() []interface{} {
     res = addBinIoInvalidDataTests( res )
     return res
 }
+
+func WriteBinIoTestValue( obj interface{}, w *BinWriter ) error {
+    switch v := obj.( type ) {
+    case Value: return w.WriteValue( v )
+    case *Identifier: return w.WriteIdentifier( v )
+    case objpath.PathNode: return w.WriteIdPath( v )
+    case *Namespace: return w.WriteNamespace( v )
+    case TypeName: return w.WriteTypeName( v )
+    case TypeReference: return w.WriteTypeReference( v )
+    }
+    panic( libErrorf( "Unhandled expct obj: %T", obj ) )
+}

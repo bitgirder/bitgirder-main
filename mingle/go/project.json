@@ -14,10 +14,16 @@
         "mingle/parser/testing"
     ],
     "test-commands": {
+        "write-core-io-tests": {},
         "write-parser-tests": {},
         "write-reactor-tests": {}
     },
     "test-data-generators": {
+        "core-io-tests": {
+            "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
+            "command": "write-core-io-tests",
+            "argv": [ "--out-file", "${data_gen_dir}/core-io-tests.bin" ]
+        },
         "core-parser-tests": {
             "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
             "command": "write-parser-tests",
