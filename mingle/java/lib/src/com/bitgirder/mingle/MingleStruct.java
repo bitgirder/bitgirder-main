@@ -6,17 +6,18 @@ import com.bitgirder.validation.State;
 public
 final
 class MingleStruct
-extends TypedMingleValue
+implements MingleValue
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
+    private final QualifiedTypeName type;
     private final MingleSymbolMap flds;
 
-    MingleStruct( AtomicTypeReference type,
+    MingleStruct( QualifiedTypeName type,
                   MingleSymbolMap flds )
     {
-        super( type );
+        this.type = type;
         this.flds = flds;
     }
 
@@ -26,12 +27,26 @@ extends TypedMingleValue
         this( inputs.notNull( b.type, "type" ), b.buildMap() );
     }
 
+    public QualifiedTypeName getType() { return type; }
     public MingleSymbolMap getFields() { return flds; }
+
+    public int hashCode() { return type.hashCode() | flds.hashCode(); }
+
+    public
+    boolean
+    equals( Object o )
+    {
+        if ( o == this ) return true;
+        if ( ! ( o instanceof MingleStruct ) ) return false;
+
+        MingleStruct ms = (MingleStruct) o;
+        return type.equals( ms.type ) && flds.equals( ms.flds );
+    }
 
     public
     static
     MingleStruct
-    create( AtomicTypeReference type,
+    create( QualifiedTypeName type,
             MingleSymbolMap flds )
     {
         return new MingleStruct(
@@ -46,11 +61,11 @@ extends TypedMingleValue
     class Builder
     extends MingleSymbolMap.BuilderImpl< Builder >
     {
-        private AtomicTypeReference type;
+        private QualifiedTypeName type;
 
         public
         Builder
-        setType( AtomicTypeReference type )
+        setType( QualifiedTypeName type )
         {
             this.type = inputs.notNull( type, "type" );
             return this;
@@ -61,13 +76,7 @@ extends TypedMingleValue
         setType( CharSequence type )
         {
             inputs.notNull( type, "type" );
-
-            MingleTypeReference t = MingleTypeReference.create( type );
-
-            inputs.isTrue( t instanceof AtomicTypeReference,
-                "Not an atomic type reference:", type );
-
-            return setType( (AtomicTypeReference) t );
+            return setType( QualifiedTypeName.create( type ) );
         }
 
         public MingleStruct build() { return new MingleStruct( this ); }

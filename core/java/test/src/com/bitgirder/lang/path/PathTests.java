@@ -3,6 +3,7 @@ package com.bitgirder.lang.path;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.TypedString;
 
 import com.bitgirder.test.Test;
@@ -161,5 +162,51 @@ class PathTests
         
         assertFormat( "/a/b[ 5 ]", p );
         assertFormat( "/a/b[ 6 ]", p.next() );
+    }
+
+    private
+    < V >
+    void
+    assertPathsEq( ObjectPath< V > p1,
+                   ObjectPath< V > p2 )
+    {
+        ObjectPaths.areEqual( p1, p2 );
+        ObjectPaths.areEqual( p2, p1 );
+
+        ObjectPaths.areEqual( p1, p1 ); 
+        ObjectPaths.areEqual( p2, p2 ); 
+    }
+
+    private
+    < V >
+    void
+    assertPathsNeq( ObjectPath< V > p1,
+                    ObjectPath< V > p2 )
+    {
+        boolean res = ObjectPaths.areEqual( p1, p2 );
+        state.isFalse( ObjectPaths.areEqual( p1, p2 ) );
+        state.isFalse( ObjectPaths.areEqual( p2, p1 ) );
+    }
+
+    @Test
+    private
+    void
+    testPathEquals()
+    {
+        ObjectPath< String > p1 = ObjectPath.getRoot();
+        ObjectPath< String > p2 = ObjectPath.getRoot();
+        assertPathsEq( p1, p2 );
+        p2 = p2.descend( "n1" );
+        assertPathsNeq( p1, p2 );
+        p1 = p1.descend( "n1" );
+        assertPathsEq( p1, p2 );
+        p1 = p1.descend( "n2" ).startImmutableList().next().next();
+        assertPathsNeq( p1, p2 );
+        state.isFalse( p2.equals( p1 ) );
+        p2 = p2.descend( "n2" ).startImmutableList().next();
+        assertPathsNeq( p1, p2 );
+        ImmutableListPath< String > p2Cast = Lang.castUnchecked( p2 );
+        p2 = p2Cast.next();
+        assertPathsEq( p1, p2 );
     }
 }

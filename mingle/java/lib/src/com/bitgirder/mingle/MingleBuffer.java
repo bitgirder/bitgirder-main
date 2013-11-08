@@ -22,11 +22,16 @@ implements MingleValue
     private final ByteBuffer bb;
 
     // live reference is kept, not copied, not made readOnly()
-    MingleBuffer( ByteBuffer bb ) { this.bb = state.notNull( bb, "bb" ); }
+    public 
+    MingleBuffer( ByteBuffer bb ) 
+    { 
+        this.bb = inputs.notNull( bb, "bb" ); 
+    }
 
+    public
     MingleBuffer( byte[] arr ) 
     { 
-        this( ByteBuffer.wrap( state.notNull( arr, "arr" ) ) );
+        this( ByteBuffer.wrap( inputs.notNull( arr, "arr" ) ) );
     }
 
     public int hashCode() { return bb.hashCode(); }

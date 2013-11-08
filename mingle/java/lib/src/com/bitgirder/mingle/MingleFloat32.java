@@ -15,7 +15,7 @@ implements MingleValue,
 
     private final float num;
 
-    MingleFloat32( float num ) { this.num = num; }
+    public MingleFloat32( float num ) { this.num = num; }
 
     public
     int

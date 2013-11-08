@@ -347,7 +347,7 @@ class MingleBinReader
     processEnum()
         throws IOException
     {
-        return new MingleEnum( readAtomicTypeReference(), readIdentifier() );
+        return new MingleEnum( readQualifiedTypeName(), readIdentifier() );
     }
 
     private
@@ -374,11 +374,7 @@ class MingleBinReader
         throws IOException
     {
         readSize();
-
-        return new MingleStruct( 
-            readAtomicTypeReference(), 
-            processSymbolMap()
-        );
+        return new MingleStruct( readQualifiedTypeName(), processSymbolMap() );
     }
 
     private
@@ -463,6 +459,14 @@ class MingleBinReader
         throws IOException
     {
         return readValue( "mingle value" );
+    }
+
+    public
+    QualifiedTypeName
+    readQualifiedTypeName()
+        throws IOException
+    {
+        return (QualifiedTypeName) readNext( "qname", TC_QN );
     }
 
     public

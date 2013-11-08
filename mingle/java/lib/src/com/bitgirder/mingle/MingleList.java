@@ -26,6 +26,18 @@ implements Iterable< MingleValue >,
 
     public Iterator< MingleValue > iterator() { return vals.iterator(); }
 
+    public int hashCode() { return vals.hashCode(); }
+
+    public
+    boolean
+    equals( Object o )
+    {
+        if ( o == this ) return true;
+        if ( ! ( o instanceof MingleList ) ) return false;
+
+        return vals.equals( ( (MingleList) o ).vals );
+    }
+
     static
     MingleList
     createLive( Iterable< MingleValue > vals )

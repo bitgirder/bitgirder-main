@@ -106,4 +106,43 @@ class ObjectPaths
             sb.append( pathSep ); 
         }
     }
+
+    private
+    static
+    boolean
+    areEqualNodes( ObjectPath< ? > p1,
+                   ObjectPath< ? > p2 )
+    {
+        if ( p1 instanceof DictionaryPath )
+        {
+            DictionaryPath< ? > dp1 = (DictionaryPath< ? >) p1;
+
+            if ( ! ( p2 instanceof DictionaryPath ) ) return false;
+            return dp1.getKey().equals( ( (DictionaryPath< ? >) p2 ).getKey() );
+        }
+
+        if ( p1 instanceof ListPath )
+        {
+            ListPath< ? > lp1 = (ListPath< ? >) p1;
+            if ( ! ( p2 instanceof ListPath ) ) return false;
+            return lp1.getIndex() == ( (ListPath< ? >) p2 ).getIndex();
+        }
+
+        state.isTrue( p1.getParent() == null ); // p1 must be a root
+        return p2.getParent() == null;
+    }
+
+    public
+    static
+    < V >
+    boolean
+    areEqual( ObjectPath< V > p1,
+              ObjectPath< V > p2 )
+    {
+        if ( p1 == null ) return p2 == null;
+        if ( p2 == null ) return false;
+
+        if ( ! areEqualNodes( p1, p2 ) ) return false;
+        return areEqual( p1.getParent(), p2.getParent() );
+    }
 }

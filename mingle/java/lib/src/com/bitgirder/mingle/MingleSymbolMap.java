@@ -35,6 +35,18 @@ implements MingleValue
     public Set< MingleIdentifier > getKeySet() { return fields.keySet(); }
     public Iterable< MingleIdentifier > getFields() { return getKeySet(); }
 
+    public int hashCode() { return fields.hashCode(); }
+
+    public
+    boolean
+    equals( Object other )
+    {
+        if ( this == other ) return true;
+        if ( ! ( other instanceof MingleSymbolMap ) ) return false;
+
+        return fields.equals( ( (MingleSymbolMap) other ).fields );
+    }
+
     public 
     Set< Map.Entry< MingleIdentifier, MingleValue > >
     entrySet()

@@ -1,6 +1,7 @@
 package com.bitgirder.mingle;
 
 import static com.bitgirder.mingle.Mingle.*;
+import static com.bitgirder.mingle.MingleTestMethods.*;
 
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
@@ -36,23 +37,6 @@ class MingleTests
 
 //    private final static String TS2_STRING =
 //        "2007-08-24T13:15:43.000000000-08:00";
-
-    private
-    static
-    MingleIdentifier
-    id( CharSequence s )
-    {
-        return MingleIdentifier.create( s );
-    }
-
-    private
-    static
-    AtomicTypeReference
-    at( CharSequence s )
-    {
-        MingleTypeReference t = MingleTypeReference.create( s );
-        return state.cast( AtomicTypeReference.class, t );
-    }
 
     private
     void
@@ -154,7 +138,7 @@ class MingleTests
         );
 
         assertInspection(
-            new MingleEnum( at( "ns1@v1/E1" ), id( "val1" ) ),
+            new MingleEnum( qname( "ns1@v1/E1" ), id( "val1" ) ),
             "ns1@v1/E1.val1"
         );
 

@@ -387,11 +387,6 @@ class Mingle
         if ( mv instanceof MingleList ) return TYPE_VALUE_LIST;
         if ( mv instanceof MingleNull ) return TYPE_NULL;
 
-        if ( mv instanceof TypedMingleValue )
-        {
-            return ( (TypedMingleValue) mv ).getType();
-        }
-
         throw state.createFail( "Unhandled value:", mv.getClass() );
     }
 
@@ -597,18 +592,6 @@ class Mingle
 
     private
     static
-    MingleValue
-    castTypedValue( TypedMingleValue mv,
-                    AtomicTypeReference at,
-                    MingleTypeReference tcErrTyp,
-                    ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv.getType().equals( at ) ) return mv;
-        throw new MingleTypeCastException( tcErrTyp, mv.getType(), loc );
-    }
-
-    private
-    static
     MingleBuffer
     castAsBuffer( MingleValue mv,
                   MingleTypeReference tcErrTyp,
@@ -712,10 +695,6 @@ class Mingle
         else if ( nm.equals( QNAME_NULL ) )
         {
             return castAsNull( mv, tcErrTyp, loc );
-        }
-        else if ( mv instanceof TypedMingleValue )
-        {
-            return castTypedValue( (TypedMingleValue) mv, at, tcErrTyp, loc );
         }
         else throw failCastType( tcErrTyp, mv, loc );
     }

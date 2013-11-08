@@ -1,11 +1,16 @@
 package com.bitgirder.mingle;
 
+import static com.bitgirder.mingle.MingleTestMethods.*;
+
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
+
+import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ObjectPaths;
 
 import com.bitgirder.test.Test;
 import com.bitgirder.test.InvocationFactory;
@@ -76,7 +81,19 @@ class CoreIoTests
             throws Exception
         {
             if ( rep instanceof MingleValue ) return rd.readValue();
+            if ( rep instanceof ObjectPath ) return rd.readIdPath();
             throw state.failf( "unhandled read type: %s", rep.getClass() );
+        }
+
+        private
+        void
+        assertIdPaths( Object expct,
+                       Object act )
+        {
+            ObjectPath< MingleIdentifier > p1 = Lang.castUnchecked( expct );
+            ObjectPath< MingleIdentifier > p2 = Lang.castUnchecked( act );
+
+            state.isTrue( ObjectPaths.areEqual( p1, p2 ) );
         }
 
         final
@@ -87,6 +104,12 @@ class CoreIoTests
         {
             Object act = readValue( rd, expct );
             state.equal( expct.getClass(), act.getClass() );
+
+            if ( expct instanceof ObjectPath ) {
+                assertIdPaths( expct, act );
+                return;
+            }
+
             state.equal( expct, act );
         }
 
@@ -228,67 +251,107 @@ class CoreIoTests
 
     private
     static
+    void
+    putPathRoundtrips( Map< String, Object > m )
+    {
+        ObjectPath< MingleIdentifier > p1 = 
+            Lang.putUnique( m, "p1", idPathRoot( "id1" ) );
+        
+        ObjectPath< MingleIdentifier > p2 = 
+            Lang.putUnique( m, "p2", p1.descend( id( "id2" ) ) );
+
+        ObjectPath< MingleIdentifier > p3 =
+            Lang.putUnique( m, "p3", p2.startImmutableList().next().next() );
+        
+        ObjectPath< MingleIdentifier > p4 =
+            Lang.putUnique( m, "p4", p3.descend( id( "id3" ) ) );
+
+        Lang.putUnique( m, "p5", 
+            ObjectPath.getRoot().startImmutableList().descend( id( "id1" ) ) );
+    }
+
+    private
+    static
     Map< String, Object >
     createRoundtripVals()
     {
         Map< String, Object > res = Lang.newMap( String.class, Object.class,
-//    b.setVal( "null-val", NullVal )
-//    b.setVal( "string-empty", String( "" ) )
-//    b.setVal( "string-val1", String( "hello" ) )
-//    b.setVal( "bool-true", Boolean( true ) )
-//    b.setVal( "bool-false", Boolean( false ) )
-//    b.setVal( "buffer-empty", Buffer( []byte{} ) )
-//    b.setVal( "buffer-nonempty", Buffer( []byte( "hello" ) ) )
-//    b.setVal( "int32-min", Int32( math.MaxInt32 ) )
-//    b.setVal( "int32-max", Int32( math.MinInt32 ) )
-//    b.setVal( "int32-pos1", Int32( int32( 1 ) ) )
-//    b.setVal( "int32-zero", Int32( int32( 0 ) ) )
-//    b.setVal( "int32-neg1", Int32( int32( -1 ) ) )
-//    b.setVal( "int64-min", Int64( math.MaxInt64 ) )
-//    b.setVal( "int64-max", Int64( math.MinInt64 ) )
-//    b.setVal( "int64-pos1", Int64( int64( 1 ) ) )
-//    b.setVal( "int64-zero", Int64( int64( 0 ) ) )
-//    b.setVal( "int64-neg1", Int64( int64( -1 ) ) )
-//    b.setVal( "uint32-min", Uint32( math.MaxUint32 ) )
-//    b.setVal( "uint32-max", Uint32( uint32( 0 ) ) )
-//    b.setVal( "uint32-pos1", Uint32( uint32( 1 ) ) )
-//    b.setVal( "uint32-zero", Uint32( uint32( 0 ) ) )
+            "null-val", MingleNull.getInstance(),
+            "string-empty", new MingleString( "" ),
+            "string-val1", new MingleString( "hello" ),
+            "bool-true", MingleBoolean.TRUE,
+            "bool-false", MingleBoolean.FALSE,
+            "buffer-empty", new MingleBuffer( new byte[] {} ),
+            "buffer-nonempty", new MingleBuffer( new byte[] { 0x00, 0x01 } ),
+            "int32-min", new MingleInt32( Integer.MIN_VALUE ),
+            "int32-max", new MingleInt32( Integer.MAX_VALUE ),
+            "int32-pos1", new MingleInt32( 1 ),
+            "int32-zero", new MingleInt32( 0 ),
+            "int32-neg1", new MingleInt32( -1 ),
+            "int64-min", new MingleInt64( Long.MIN_VALUE ),
+            "int64-max", new MingleInt64( Long.MAX_VALUE ),
+            "int64-zero", new MingleInt64( 0L ),
+            "int64-pos1", new MingleInt64( 1L ),
+            "int64-neg1", new MingleInt64( -1L ),
+            "uint32-min", new MingleUint32( 0 ),
+            "uint32-max", new MingleUint32( 0xFFFFFFFF ),
+            "uint32-pos1", new MingleUint32( 1 ),
             "uint64-min", new MingleUint64( 0L ),
             "uint64-max", new MingleUint64( 0xFFFFFFFFFFFFFFFFL ),
-            "uint64-pos1", new MingleUint64( 1L )
-//    b.setVal( "uint64-min", Uint64( math.MaxUint64 ) )
-//    b.setVal( "uint64-max", Uint64( uint64( 0 ) ) )
-//    b.setVal( "uint64-pos1", Uint64( uint64( 1 ) ) )
-//    b.setVal( "uint64-zero", Uint64( uint64( 0 ) ) )
-//    b.setVal( "float32-val1", Float32( float32( 1 ) ) )
-//    b.setVal( "float32-max", Float32( math.MaxFloat32 ) )
-//    b.setVal( "float32-smallest-nonzero",
-//        Float32( math.SmallestNonzeroFloat32 ) )
-//    b.setVal( "float64-val1", Float64( float64( 1 ) ) )
-//    b.setVal( "float64-max", Float64( math.MaxFloat64 ) )
-//    b.setVal( "float64-smallest-nonzero",
-//        Float64( math.SmallestNonzeroFloat64 ) )
-//    b.setVal( "time-val1", MustTimestamp( "2013-10-19T02:47:00-08:00" ) )
-//    b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
-//    b.setVal( "symmap-empty", MustSymbolMap() )
-//
-//    b.setVal( "symmap-flat", 
-//        MustSymbolMap( "k1", int32( 1 ), "k2", int32( 2 ) ) )
-//
-//    b.setVal( "symmap-nested",
-//        MustSymbolMap( "k1", MustSymbolMap( "kk1", int32( 1 ) ) ) )
-//
-//    b.setVal( "struct-empty", MustStruct( "ns1@v1/T1" ) )
-//    b.setVal( "struct-flat", MustStruct( "ns1@v1/T1", "k1", int32( 1 ) ) )
-//    b.setVal( "list-empty", MustList() )
-//    b.setVal( "list-scalars", MustList( int32( 1 ), "hello" ) )
-//
-//    b.setVal( "list-nested",
-//        MustList( int32( 1 ), MustList(), MustList( "hello" ), NullVal ) )
-//
-//    b.setVal( "id1", id( "id1" ) )
-//    b.setVal( "id1-id2", id( "id1-id2" ) )
+            "uint64-pos1", new MingleUint64( 1L ),
+            "float32-val1", new MingleFloat32( 1.0f ),
+            "float32-max", new MingleFloat32( Float.MAX_VALUE ),
+            "float32-smallest-nonzero", new MingleFloat32( Float.MIN_VALUE ),
+            "float64-val1", new MingleFloat64( 1.0d ),
+            "float64-max", new MingleFloat64( Double.MAX_VALUE ),
+            "float64-smallest-nonzero", new MingleFloat64( Double.MIN_VALUE ),
+            "time-val1", MingleTimestamp.create( "2013-10-19T02:47:00-08:00" ),
+
+            "enum-val1", 
+                MingleEnum.create( qname( "ns1@v1/E1" ), id( "val1" ) ),
+
+            "symmap-empty", MingleSymbolMap.empty(),
+
+            "symmap-flat",
+                new MingleSymbolMap.Builder().
+                    setInt32( "k1", 1 ).
+                    setInt32( "k2", 2 ).
+                    build(),
+            
+            "symmap-nested",
+                new MingleSymbolMap.Builder().
+                    set( "k1",
+                        new MingleSymbolMap.Builder().
+                            setInt32( "kk1", 1 ).
+                            build()
+                    ).
+                    build(),
+
+            "struct-empty",
+                new MingleStruct.Builder().setType( "ns1@v1/T1" ).build(),
+                
+            "struct-flat",
+                new MingleStruct.Builder().
+                    setType( "ns1@v1/T1" ).
+                    setInt32( "k1", 1 ).
+                    build(),
+
+            "list-empty", MingleList.empty(),
+
+            "list-scalars", 
+                MingleList.asList(
+                    new MingleInt32( 1 ), new MingleString( "hello" ) ),
+
+            "list-nested",
+                MingleList.asList(
+                    new MingleInt32( 1 ),
+                    MingleList.empty(),
+                    MingleList.asList( new MingleString( "hello" ) ),
+                    MingleNull.getInstance()
+                )
         );
+
+        putPathRoundtrips( res );
 
         return res;
     }

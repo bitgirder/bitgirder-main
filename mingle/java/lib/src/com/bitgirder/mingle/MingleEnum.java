@@ -6,28 +6,25 @@ import com.bitgirder.validation.State;
 public
 final
 class MingleEnum
-extends TypedMingleValue
+implements MingleValue
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
+    private final QualifiedTypeName type;
     private final MingleIdentifier value;
 
-    MingleEnum( AtomicTypeReference typ,
+    MingleEnum( QualifiedTypeName type,
                 MingleIdentifier value )
     {
-        super( typ ); 
+        this.type = type;
         this.value = value;
     }
 
+    public QualifiedTypeName getType() { return type; }
     public MingleIdentifier getValue() { return value; }
 
-    public
-    int
-    hashCode()
-    {
-        return getType().hashCode() | value.hashCode();
-    }
+    public int hashCode() { return type.hashCode() | value.hashCode(); }
 
     public
     boolean
@@ -39,7 +36,7 @@ extends TypedMingleValue
         {
             MingleEnum e = (MingleEnum) o;
 
-            return getType().equals( e.getType() ) && value.equals( e.value );
+            return type.equals( e.type ) && value.equals( e.value );
         }
 
         return false;
@@ -48,12 +45,12 @@ extends TypedMingleValue
     public
     static
     MingleEnum
-    create( AtomicTypeReference typ,
+    create( QualifiedTypeName name,
             MingleIdentifier value )
     {
-        inputs.notNull( typ, "typ" );
+        inputs.notNull( name, "name" );
         inputs.notNull( value, "value" );
 
-        return new MingleEnum( typ, value );
+        return new MingleEnum( name, value );
     }
 }

@@ -885,11 +885,11 @@ class Lang
     // m allows it
     public
     static
-    < K, V >
-    void
+    < K, V, O extends V >
+    O
     putUnique( Map< K, V > m,
                K key,
-               V val )
+               O val )
     {
         inputs.notNull( m, "m" );
         inputs.notNull( key, "key" );
@@ -901,6 +901,8 @@ class Lang
                 "(Attempt to set value", val + ")" );
         }
         else m.put( key, val );
+
+        return val;
     }
 
     public

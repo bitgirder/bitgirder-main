@@ -16,7 +16,7 @@ implements MingleValue,
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    MingleString( CharSequence cs ) { super( cs, "cs" ); }
+    public MingleString( CharSequence cs ) { super( cs, "cs" ); }
 
     public
     CharSequence
