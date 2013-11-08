@@ -21,7 +21,7 @@ extends ObjectPath< E >
         this.key = inputs.notNull( key, "key" );
     }
 
-    E getKey() { return key; }
+    public E getKey() { return key; }
 
     public
     static

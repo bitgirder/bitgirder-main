@@ -954,4 +954,16 @@ class Mingle
             sb.append( "[ " ).append( indx ).append( " ]" );
         }
     }
+
+    // returns null if p == null; throws ClassCastException if p is not an
+    // ObjectPath, otherwise does an unchecked cast on the type parameter to get
+    // p as ObjectPath< MingleIdentifier >
+    static
+    ObjectPath< MingleIdentifier >
+    castIdPath( Object p )
+    {
+        if ( p == null ) return null;
+
+        return Lang.castUnchecked( (ObjectPath< ? >) p );
+    }
 }

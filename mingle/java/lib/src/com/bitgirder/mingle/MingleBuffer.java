@@ -7,6 +7,8 @@ import com.bitgirder.io.Base64Encoder;
 import com.bitgirder.io.Base64Exception;
 import com.bitgirder.io.IoUtils;
 
+import java.util.Arrays;
+
 import java.nio.ByteBuffer;
 
 public
@@ -19,22 +21,18 @@ implements MingleValue
 
     private final static Base64Encoder enc = new Base64Encoder();
 
-    private final ByteBuffer bb;
+    private final byte[] arr;
 
-    // live reference is kept, not copied, not made readOnly()
     public 
-    MingleBuffer( ByteBuffer bb ) 
+    MingleBuffer( byte[] arr )
     { 
-        this.bb = inputs.notNull( bb, "bb" ); 
+        this.arr = inputs.notNull( arr, "arr" );
     }
 
-    public
-    MingleBuffer( byte[] arr ) 
-    { 
-        this( ByteBuffer.wrap( inputs.notNull( arr, "arr" ) ) );
-    }
+    // returns live array
+    public byte[] array() { return arr; }
 
-    public int hashCode() { return bb.hashCode(); }
+    public int hashCode() { return Arrays.hashCode( arr ); }
 
     public
     boolean
@@ -43,13 +41,25 @@ implements MingleValue
         if ( o == this ) return true;
         if ( ! ( o instanceof MingleBuffer ) ) return false;
 
-        return bb.equals( ( (MingleBuffer) o ).bb );
+        return Arrays.equals( arr, ( (MingleBuffer) o ).arr );
     }
 
-    public ByteBuffer getByteBuffer() { return bb.slice(); }
+    // returns live buffer
+    public 
+    ByteBuffer 
+    asByteBuffer() 
+    { 
+        return ByteBuffer.wrap( arr );
+    }
 
-    public CharSequence asBase64String() { return enc.encode( bb ); }
-    public CharSequence asHexString() { return IoUtils.asHexString( bb ); }
+    public 
+    CharSequence 
+    asBase64String() 
+    { 
+        return enc.encode( asByteBuffer() ); 
+    }
+
+    public CharSequence asHexString() { return IoUtils.asHexString( arr ); }
 
     public
     static
@@ -59,7 +69,7 @@ implements MingleValue
     {
         inputs.notNull( str, "str" );
 
-        return new MingleBuffer( enc.asByteBuffer( str ) );
+        return new MingleBuffer( enc.decode( str ) );
     }
 
     @Override
@@ -67,6 +77,6 @@ implements MingleValue
     String
     toString()
     {
-        return "[mingle buffer, length: " + bb.remaining() + "]";
+        return "[mingle buffer, length: " + arr.length + "]";
     }
 }

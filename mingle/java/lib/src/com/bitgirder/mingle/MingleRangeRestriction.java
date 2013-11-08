@@ -21,10 +21,10 @@ extends MingleValueRestriction
 
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
-    private final boolean minClosed;
-    private final V min;
-    private final V max;
-    private final boolean maxClosed;
+    final boolean minClosed;
+    final V min;
+    final V max;
+    final boolean maxClosed;
     private final Class< V > typeTok;
 
     private final int hc;

@@ -34,13 +34,13 @@ class MingleBinReader
     private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
 
     private final static byte[] RESTRICTION_TYPE_CODES = new byte[] {
-        TC_NIL,
+        TC_NULL,
         TC_RANGE_RESTRICT,
         TC_REGEX_RESTRICT
     };
 
     private final static byte[] VAL_TYPE_CODES = new byte[] {
-        TC_NIL,
+        TC_NULL,
         TC_BOOL,
         TC_INT32,
         TC_INT64,
@@ -239,7 +239,7 @@ class MingleBinReader
         MingleValueRestriction vr = null;
         byte tc = nextTc( "restriction", RESTRICTION_TYPE_CODES );
 
-        if ( tc != TC_NIL ) 
+        if ( tc != TC_NULL ) 
         {
             Object obj = processNext( tc );
             if ( tc == TC_REGEX_RESTRICT ) vr = (MingleRegexRestriction) obj;
@@ -359,7 +359,7 @@ class MingleBinReader
 
         while ( true )
         {
-            byte tc = nextTc( "symbol map", TC_END, TC_MAP_PAIR );
+            byte tc = nextTc( "symbol map", TC_END, TC_FIELD );
             if ( tc == TC_END ) return new MingleSymbolMap( m );
             m.put( readIdentifier(), readValue() );
         }
@@ -417,7 +417,7 @@ class MingleBinReader
             case TC_LIST_TYP: return processListType();
             case TC_NULLABLE_TYP: return processNullableType();
             case TC_ID_PATH: return processIdPath();
-            case TC_NIL: return MingleNull.getInstance();
+            case TC_NULL: return MingleNull.getInstance();
             case TC_BOOL: return MingleBoolean.valueOf( rd.readBoolean() ); 
             case TC_INT32: return new MingleInt32( rd.readInt() );
             case TC_UINT32: return new MingleUint32( rd.readInt() );

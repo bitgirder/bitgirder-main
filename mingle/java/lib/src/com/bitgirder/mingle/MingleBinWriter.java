@@ -6,10 +6,16 @@ import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.ObjectReceiver;
+
+import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ListPath;
+import com.bitgirder.lang.path.DictionaryPath;
 
 import com.bitgirder.io.BinWriter;
 
 import java.util.List;
+import java.util.Map;
 
 import java.io.OutputStream;
 import java.io.IOException;
@@ -65,6 +71,58 @@ class MingleBinWriter
         for ( MingleIdentifier id : ids ) writeIdentifier( id );
     }
 
+    private
+    void
+    writePathNode( ObjectPath< MingleIdentifier > n )
+        throws Exception
+    {
+        if ( n instanceof DictionaryPath )
+        {
+            writeTypeCode( TC_ID );
+
+            writeIdentifier( 
+                (MingleIdentifier) ( (DictionaryPath< ? >) n ).getKey() );
+        }
+        else
+        {
+            writeTypeCode( TC_ID_PATH_LIST_NODE );
+            w.writeInt( ( (ListPath< ? >) n ).getIndex() );
+        }
+    }
+
+    private
+    void
+    writePathNodes( ObjectPath< MingleIdentifier > p )
+        throws Exception
+    {
+        p.visitDescent( new ObjectReceiver< ObjectPath< MingleIdentifier > >() {
+            public void receive( ObjectPath< MingleIdentifier > node )
+                throws Exception
+            {
+                writePathNode( node );
+            }
+        });
+    }
+
+    public
+    void
+    writeIdentifierPath( ObjectPath< MingleIdentifier > p )
+        throws IOException
+    {
+        inputs.notNull( p, "p" );
+
+        writeTypeCode( TC_ID_PATH );
+
+        try { writePathNodes( p ); }
+        catch ( IOException ioe ) { throw ioe; }
+        catch ( RuntimeException re ) { throw re; }
+        catch ( Exception ex ) {
+            throw new RuntimeException( "unhandled write error", ex );
+        }
+
+        writeTypeCode( TC_END );
+    }
+
     public
     void
     writeDeclaredTypeName( DeclaredTypeName nm )
@@ -74,6 +132,20 @@ class MingleBinWriter
 
         writeTypeCode( TC_DECL_NM );
         w.writeUtf8( nm.getExternalForm() );
+    }
+
+    private
+    void
+    writeTypeName( TypeName nm )
+        throws IOException
+    {
+        if ( nm instanceof QualifiedTypeName ) {
+            writeQualifiedTypeName( (QualifiedTypeName) nm );
+        } else if ( nm instanceof DeclaredTypeName ) {
+            writeDeclaredTypeName( (DeclaredTypeName) nm );
+        } else {
+            state.failf( "unhandled type name: %s", nm.getClass() );
+        }
     }
 
     public
@@ -97,6 +169,202 @@ class MingleBinWriter
         writeTypeCode( TC_QN );
         writeNamespace( qn.getNamespace() );
         writeDeclaredTypeName( qn.getName() );
+    }
+
+    private void writeEnd() throws IOException { writeTypeCode( TC_END ); }
+
+    private
+    void
+    writeList( MingleList ml )
+        throws IOException
+    {
+        writeTypeCode( TC_LIST );
+        w.writeInt( -1 );
+
+        for ( MingleValue mv : ml ) implWriteValue( mv );
+
+        writeEnd();
+    }
+
+    private
+    void
+    endMapWrite( MingleSymbolMap ms )
+        throws IOException
+    {
+        for ( Map.Entry< MingleIdentifier, MingleValue > e : ms.entrySet() )
+        {
+            writeTypeCode( TC_FIELD );
+            writeIdentifier( e.getKey() );
+            implWriteValue( e.getValue() );
+        }
+
+        writeEnd();
+    }
+
+    private
+    void
+    writeSymbolMap( MingleSymbolMap ms )
+        throws IOException
+    {
+        writeTypeCode( TC_SYM_MAP );
+        endMapWrite( ms );
+    }
+
+    private
+    void
+    writeStruct( MingleStruct ms )
+        throws IOException
+    {
+        writeTypeCode( TC_STRUCT );
+        w.writeInt( -1 );
+        writeQualifiedTypeName( ms.getType() );
+        endMapWrite( ms.getFields() );
+    }
+
+    private
+    void
+    implWriteValue( MingleValue mv )
+        throws IOException
+    {
+        if ( mv instanceof MingleNull ) writeTypeCode( TC_NULL );
+        else if ( mv instanceof MingleBoolean ) {
+            writeTypeCode( TC_BOOL );
+            w.writeBoolean( ( (MingleBoolean) mv ).booleanValue() );
+        } else if ( mv instanceof MingleString ) {
+            writeTypeCode( TC_STRING );
+            w.writeUtf8( ( (MingleString) mv ).toString() );
+        } else if ( mv instanceof MingleBuffer ) {
+            writeTypeCode( TC_BUFFER );
+            w.writeByteArray( ( (MingleBuffer) mv ).array() );
+        } else if ( mv instanceof MingleInt32 ) {
+            writeTypeCode( TC_INT32 );
+            w.writeInt( ( (MingleInt32) mv ).intValue() );
+        } else if ( mv instanceof MingleUint32 ) {
+            writeTypeCode( TC_UINT32 );
+            w.writeInt( ( (MingleUint32) mv ).intValue() );
+        } else if ( mv instanceof MingleInt64 ) {
+            writeTypeCode( TC_INT64 );
+            w.writeLong( ( (MingleInt64) mv ).longValue() );
+        } else if ( mv instanceof MingleUint64 ) {
+            writeTypeCode( TC_UINT64 );
+            w.writeLong( ( (MingleUint64) mv ).longValue() );
+        } else if ( mv instanceof MingleFloat32 ) {
+            writeTypeCode( TC_FLOAT32 );
+            w.writeFloat( ( (MingleFloat32) mv ).floatValue() );
+        } else if ( mv instanceof MingleFloat64 ) {
+            writeTypeCode( TC_FLOAT64 );
+            w.writeDouble( ( (MingleFloat64) mv ).doubleValue() );
+        } else if ( mv instanceof MingleTimestamp ) {
+            writeTypeCode( TC_TIMESTAMP );
+            MingleTimestamp ts = (MingleTimestamp) mv;
+            w.writeLong( ts.seconds() );
+            w.writeInt( ts.nanos() );
+        } else if ( mv instanceof MingleEnum ) {
+            writeTypeCode( TC_ENUM );
+            MingleEnum me = (MingleEnum) mv;
+            writeQualifiedTypeName( me.getType() );
+            writeIdentifier( me.getValue() );
+        } else if ( mv instanceof MingleList ) { 
+            writeList( (MingleList) mv );
+        } else if ( mv instanceof MingleSymbolMap ) {
+            writeSymbolMap( (MingleSymbolMap) mv );
+        } else if ( mv instanceof MingleStruct ) {
+            writeStruct( (MingleStruct) mv );
+        } else {
+            state.failf( "unhandled write value: %s", mv.getClass() );
+        }
+    }
+
+    public
+    void
+    writeValue( MingleValue mv )
+        throws IOException
+    {
+        implWriteValue( inputs.notNull( mv, "mv" ) );
+    }
+
+    private
+    void
+    writeRangeValue( MingleValue mv )
+        throws IOException
+    {
+        implWriteValue( mv == null ? MingleNull.getInstance() : mv );
+    }
+
+    private
+    void
+    writeRestriction( MingleRangeRestriction r )
+        throws IOException
+    {
+        writeTypeCode( TC_RANGE_RESTRICT );
+        w.writeBoolean( r.minClosed );
+        writeRangeValue( r.min );
+        writeRangeValue( r.max );
+        w.writeBoolean( r.maxClosed );
+    }
+
+    private
+    void
+    writeRestriction( MingleRegexRestriction r )
+        throws IOException
+    {
+        writeTypeCode( TC_REGEX_RESTRICT );
+        w.writeUtf8( r.pattern().pattern() );
+    }
+
+    private
+    void
+    writeAtomicTypeReference( AtomicTypeReference typ )
+        throws IOException
+    {
+        writeTypeCode( TC_ATOM_TYP );
+        writeTypeName( typ.getName() );
+
+        MingleValueRestriction r = typ.getRestriction();
+
+        if ( r == null ) writeTypeCode( TC_NULL ); 
+        else if ( r instanceof MingleRangeRestriction ) {
+            writeRestriction( (MingleRangeRestriction) r );
+        } else if ( r instanceof MingleRegexRestriction ) {
+            writeRestriction( (MingleRegexRestriction) r );
+        } else state.failf( "unhandled restriction: %s", r.getClass() );
+    }
+
+    private
+    void
+    writeListTypeReference( ListTypeReference typ )
+        throws IOException
+    {
+        writeTypeCode( TC_LIST_TYP );
+        writeTypeReference( typ.getElementTypeReference() );
+        w.writeBoolean( typ.allowsEmpty() );
+    }
+
+    private
+    void
+    writeNullableTypeReference( NullableTypeReference typ )
+        throws IOException
+    {
+        writeTypeCode( TC_NULLABLE_TYP );
+        writeTypeReference( typ.getTypeReference() );
+    }
+
+    public
+    void
+    writeTypeReference( MingleTypeReference typ )
+        throws IOException
+    {
+        inputs.notNull( typ, "typ" );
+        
+        if ( typ instanceof AtomicTypeReference ) {
+            writeAtomicTypeReference( (AtomicTypeReference) typ );
+        } else if ( typ instanceof ListTypeReference ) {
+            writeListTypeReference( (ListTypeReference) typ );
+        } else if ( typ instanceof NullableTypeReference ) {
+            writeNullableTypeReference( (NullableTypeReference) typ );
+        } else {
+            state.failf( "unhandled type reference: %s", typ.getClass() );
+        }
     }
 
     public

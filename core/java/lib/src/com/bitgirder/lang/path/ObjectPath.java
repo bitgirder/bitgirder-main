@@ -4,6 +4,7 @@ import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.ObjectReceiver;
 
 import java.util.Deque;
 import java.util.Iterator;
@@ -48,6 +49,18 @@ class ObjectPath< E >
         }
 
         return d.iterator();
+    }
+
+    public
+    void
+    visitDescent( ObjectReceiver< ObjectPath< E > > vis )
+        throws Exception
+    {
+        inputs.notNull( vis, "vis" );
+
+        for ( Iterator< ObjectPath< E > > it = getDescent(); it.hasNext(); ) {
+            vis.receive( it.next() );
+        }
     }
 
     private
@@ -139,7 +152,7 @@ class ObjectPath< E >
             this.index = index;
         }
 
-        int getIndex() { return index; }
+        public int getIndex() { return index; }
     }
 
     public

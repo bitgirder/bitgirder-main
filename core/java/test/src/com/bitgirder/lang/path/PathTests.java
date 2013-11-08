@@ -5,8 +5,11 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.TypedString;
+import com.bitgirder.lang.ObjectReceiver;
 
 import com.bitgirder.test.Test;
+
+import java.util.List;
 
 @Test
 final
@@ -208,5 +211,51 @@ class PathTests
         ImmutableListPath< String > p2Cast = Lang.castUnchecked( p2 );
         p2 = p2Cast.next();
         assertPathsEq( p1, p2 );
+    }
+
+    private
+    < V >
+    void
+    assertVisit( ObjectPath< V > p,
+                 List< ObjectPath< V > > expct )
+        throws Exception
+    {
+        final List< ObjectPath< V > > act = Lang.newList();
+
+        p.visitDescent( new ObjectReceiver< ObjectPath< V > >() {
+            public void receive( ObjectPath< V > v ) { act.add( v ); }
+        });
+
+        state.equal( expct, act );
+    }
+
+    @Test
+    public
+    void
+    testVisitDescentEmpty()
+        throws Exception
+    {
+        assertVisit( 
+            ObjectPath.< String >getRoot(), 
+            Lang.< ObjectPath< String > >newList() 
+        );
+    }
+
+    @Test
+    public
+    void
+    testVisitDescentNonTrivial()
+        throws Exception
+    {
+        ObjectPath< String > p = ObjectPath.getRoot( "p1" );
+
+        List< ObjectPath< String > > expct = Lang.newList();
+        expct.add( p );
+        expct.add( p = p.descend( "p2" ) );
+        expct.add( p = p.startImmutableList() );
+        expct.add( p = p.descend( "p3" ) );
+        expct.add( p = p.getListIndex( 9 ) );
+
+        assertVisit( p, expct );
     }
 }

@@ -8,8 +8,6 @@ import com.bitgirder.lang.Lang;
 import java.util.Map;
 import java.util.Set;
 
-import java.nio.ByteBuffer;
-
 public
 final
 class MingleSymbolMap
@@ -219,25 +217,6 @@ implements MingleValue
                     float num )
         {
             return setFloat32( makeIdent( fld, "fld" ), num );
-        }
-    
-        public
-        final
-        B
-        setBuffer( MingleIdentifier fld,
-                   ByteBuffer data )
-        {
-            MingleBuffer mb = new MingleBuffer( data );
-            return set( fld, mb );
-        }
-    
-        public
-        final
-        B
-        setBuffer( CharSequence fld,
-                   ByteBuffer data )
-        {
-            return setBuffer( makeIdent( fld, "fld" ), data );
         }
     
         public

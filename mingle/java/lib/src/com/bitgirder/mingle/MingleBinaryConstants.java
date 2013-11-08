@@ -9,7 +9,7 @@ class MingleBinaryConstants
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
     
-    final static byte TC_NIL = (byte) 0x00;
+    final static byte TC_NULL = (byte) 0x00;
     final static byte TC_ID = (byte) 0x01;
     final static byte TC_NS = (byte) 0x02;
     final static byte TC_DECL_NM = (byte) 0x03;
@@ -31,7 +31,7 @@ class MingleBinaryConstants
     final static byte TC_BUFFER = (byte) 0x13;
     final static byte TC_ENUM = (byte) 0x14;
     final static byte TC_SYM_MAP = (byte) 0x15;
-    final static byte TC_MAP_PAIR = (byte) 0x16;
+    final static byte TC_FIELD = (byte) 0x16;
     final static byte TC_STRUCT = (byte) 0x17;
     final static byte TC_LIST = (byte) 0x19;
     final static byte TC_END = (byte) 0x1a;

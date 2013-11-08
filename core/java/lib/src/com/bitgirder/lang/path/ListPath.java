@@ -11,5 +11,5 @@ extends ObjectPath< E >
         super( parent, paramName );
     }
 
-    abstract int getIndex();
+    public abstract int getIndex();
 }

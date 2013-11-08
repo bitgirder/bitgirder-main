@@ -23,6 +23,8 @@ extends MingleValueRestriction
 
     private MingleRegexRestriction( Pattern pat ) { this.pat = pat; }
 
+    Pattern pattern() { return pat; }
+
     private
     boolean
     checkPat( CharSequence str )
