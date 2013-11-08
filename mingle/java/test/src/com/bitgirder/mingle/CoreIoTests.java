@@ -13,15 +13,21 @@ import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
 
 import com.bitgirder.test.Test;
+import com.bitgirder.test.Before;
+import com.bitgirder.test.After;
 import com.bitgirder.test.InvocationFactory;
 import com.bitgirder.test.LabeledTestCall;
+
+import com.bitgirder.testing.TestData;
 
 import com.bitgirder.io.IoTestFactory;
 import com.bitgirder.io.IoUtils;
 import com.bitgirder.io.IoTests;
+import com.bitgirder.io.PipedProcess;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 
 import java.util.List;
 import java.util.Map;
@@ -41,6 +47,21 @@ class CoreIoTests
     private final static byte TC_SEQUENCE_ROUNDTRIP_TEST = 3;
 
     private final static Map< String, Object > ROUNDTRIP_VALS;
+
+    private PipedProcess checker;
+
+    @Before
+    private
+    void
+    startChecker()
+        throws Exception
+    {
+        File cmd = TestData.expectFile( "check-core-io" );
+        ProcessBuilder pb = new ProcessBuilder( cmd.getAbsolutePath() );
+        checker = PipedProcess.start( pb );
+    }
+
+    @After private void stopChecker() throws Exception { checker.kill(); }
 
     private 
     static 

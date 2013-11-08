@@ -16,7 +16,8 @@
     "test-commands": {
         "write-core-io-tests": {},
         "write-parser-tests": {},
-        "write-reactor-tests": {}
+        "write-reactor-tests": {},
+        "check-core-io": {}
     },
     "test-data-generators": {
         "core-io-tests": {
