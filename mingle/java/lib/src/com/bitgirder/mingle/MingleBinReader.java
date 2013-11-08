@@ -16,6 +16,7 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.io.BinReader;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 import java.util.Map;
 import java.util.List;
@@ -498,9 +499,9 @@ class MingleBinReader
     public
     static
     MingleBinReader
-    create( BinReader rd )
+    create( InputStream is )
     {
-        inputs.notNull( rd, "rd" );
-        return new MingleBinReader( rd );
+        inputs.notNull( is, "is" );
+        return new MingleBinReader( BinReader.asReaderLe( is ) );
     }
 }

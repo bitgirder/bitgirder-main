@@ -74,10 +74,29 @@ class TestData
 
         private InputStream is;
 
+        private boolean endCalled;
+
         protected
         TestReader( String fileNm )
         {
             this.fileNm = inputs.notNull( fileNm, "fileNm" );
+        }
+
+        // returns null so impls can chain end() with a null return val from
+        // readNext():
+        //
+        //  protected T readNext() {
+        //      if ( someEndCondition ) return end();
+        //      return someOtherValue();
+        //  }
+        //
+        protected 
+        final 
+        T
+        end() 
+        { 
+            this.endCalled = true; 
+            return null;
         }
 
         protected final InputStream io() { return is; }
@@ -116,8 +135,10 @@ class TestData
             { 
                 readHeader();
 
-                T t = null;
-                while ( ( t = readNext() ) != null ) res.add( t );
+                while ( ! endCalled ) {
+                    T t = readNext();
+                    if ( t != null ) res.add( t );
+                }
 
                 return res;
             } 

@@ -225,9 +225,9 @@ func writeTest( w *mg.BinWriter, t interface{} ) error {
 func main() {
     testgen.WriteOutFile( func( w *mg.BinWriter ) error {
         if err := w.WriteInt32( fileVersion ); err != nil { return err }
-        for _, t := range mg.StdReactorTests {
-            if err := writeTest( w, t ); err != nil { return err }
-        }
+//        for _, t := range mg.StdReactorTests {
+//            if err := writeTest( w, t ); err != nil { return err }
+//        }
         return writeTestType( w, ttEnd )
     })
 }

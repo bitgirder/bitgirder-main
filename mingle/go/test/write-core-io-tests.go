@@ -15,6 +15,8 @@ const (
     tcSequenceRoundtripTest
 )
 
+const valFileHeader = int32( 1 )
+
 func writeTypeCode( tc typeCode, w *mg.BinWriter ) error {
     return w.WriteInt8( int8( tc ) )
 }
@@ -67,6 +69,7 @@ func writeTest( test interface{}, w *mg.BinWriter ) error {
 }
 
 func writeTests( w *mg.BinWriter ) error {
+    if err := w.WriteInt32( valFileHeader ); err != nil { return err }
     for _, test := range mg.CreateCoreIoTests() {
         if err := writeTest( test, w ); err != nil { return err }
     }

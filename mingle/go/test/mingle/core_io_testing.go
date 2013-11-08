@@ -53,14 +53,12 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "int64-pos1", Int64( int64( 1 ) ) )
     b.setVal( "int64-zero", Int64( int64( 0 ) ) )
     b.setVal( "int64-neg1", Int64( int64( -1 ) ) )
-    b.setVal( "uint32-min", Uint32( math.MaxUint32 ) )
-    b.setVal( "uint32-max", Uint32( uint32( 0 ) ) )
+    b.setVal( "uint32-max", Uint32( math.MaxUint32 ) )
+    b.setVal( "uint32-min", Uint32( uint32( 0 ) ) )
     b.setVal( "uint32-pos1", Uint32( uint32( 1 ) ) )
-    b.setVal( "uint32-zero", Uint32( uint32( 0 ) ) )
-    b.setVal( "uint64-min", Uint64( math.MaxUint64 ) )
-    b.setVal( "uint64-max", Uint64( uint64( 0 ) ) )
+    b.setVal( "uint64-max", Uint64( math.MaxUint64 ) )
+    b.setVal( "uint64-min", Uint64( uint64( 0 ) ) )
     b.setVal( "uint64-pos1", Uint64( uint64( 1 ) ) )
-    b.setVal( "uint64-zero", Uint64( uint64( 0 ) ) )
     b.setVal( "float32-val1", Float32( float32( 1 ) ) )
     b.setVal( "float32-max", Float32( math.MaxFloat32 ) )
     b.setVal( "float32-smallest-nonzero",
@@ -86,9 +84,6 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
 
     b.setVal( "list-nested",
         MustList( int32( 1 ), MustList(), MustList( "hello" ), NullVal ) )
-
-    b.setVal( "id1", id( "id1" ) )
-    b.setVal( "id1-id2", id( "id1-id2" ) )
 }
 
 func ( b *binIoRoundtripTestBuilder ) addPathTests() {
@@ -109,6 +104,8 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
         simplNm := fqNm[ lastDot + 1 : ]
         b.setVal( fmt.Sprintf( "%s (%s)", ef, simplNm ), ef )
     }
+    set( id( "id1" ) )
+    set( id( "id1-id2" ) )
     set( MustNamespace( "ns1@v1" ) )
     set( MustNamespace( "ns1:ns2@v1" ) )
     set( MustDeclaredTypeName( "T1" ) )

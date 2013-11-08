@@ -21,7 +21,7 @@ implements MingleValue,
 
     private final long num;
 
-    MingleUint64( long num ) { this.num = num; }
+    public MingleUint64( long num ) { this.num = num; }
 
     public
     int
