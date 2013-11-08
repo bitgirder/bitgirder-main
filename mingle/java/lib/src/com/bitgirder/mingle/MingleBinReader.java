@@ -134,7 +134,7 @@ class MingleBinReader
         return new MingleIdentifier( parts );
     }
 
-    private
+    public
     MingleIdentifier
     readIdentifier()
         throws IOException
@@ -163,7 +163,7 @@ class MingleBinReader
         return new MingleNamespace( readIdentifiers(), readIdentifier() );
     }
 
-    private
+    public
     MingleNamespace
     readNamespace()
         throws IOException
@@ -171,7 +171,7 @@ class MingleBinReader
         return (MingleNamespace) readNext( "namespace", TC_NS );
     }
 
-    private
+    public
     DeclaredTypeName
     readDeclaredTypeName()
         throws IOException

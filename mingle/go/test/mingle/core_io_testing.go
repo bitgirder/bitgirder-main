@@ -102,7 +102,7 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
         fqNm := fmt.Sprintf( "%T", ef )
         lastDot := strings.LastIndex( fqNm, "." )
         simplNm := fqNm[ lastDot + 1 : ]
-        b.setVal( fmt.Sprintf( "%s (%s)", ef, simplNm ), ef )
+        b.setVal( fmt.Sprintf( "%s/%s", simplNm, ef ), ef )
     }
     set( id( "id1" ) )
     set( id( "id1-id2" ) )

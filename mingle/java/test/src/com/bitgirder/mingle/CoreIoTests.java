@@ -18,8 +18,10 @@ import com.bitgirder.test.LabeledTestCall;
 
 import com.bitgirder.io.IoTestFactory;
 import com.bitgirder.io.IoUtils;
+import com.bitgirder.io.IoTests;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 
 import java.util.List;
 import java.util.Map;
@@ -58,6 +60,10 @@ class CoreIoTests
 
         byte[] buffer;
 
+        // lazily instantiated via getWriter()
+        private ByteArrayOutputStream bos;
+        private MingleBinWriter mgWr;
+
         private 
         CoreIoTest( CharSequence prefix,
                     CharSequence lbl ) 
@@ -82,6 +88,22 @@ class CoreIoTests
         {
             if ( rep instanceof MingleValue ) return rd.readValue();
             if ( rep instanceof ObjectPath ) return rd.readIdPath();
+
+            if ( rep instanceof QualifiedTypeName ) {
+                return rd.readQualifiedTypeName();
+            }
+
+            if ( rep instanceof MingleNamespace ) return rd.readNamespace();
+            if ( rep instanceof MingleIdentifier ) return rd.readIdentifier();
+
+            if ( rep instanceof DeclaredTypeName ) {
+                return rd.readDeclaredTypeName();
+            }
+
+            if ( rep instanceof MingleTypeReference ) {
+                return rd.readTypeReference();
+            }
+
             throw state.failf( "unhandled read type: %s", rep.getClass() );
         }
 
@@ -97,7 +119,7 @@ class CoreIoTests
         }
 
         final
-        void
+        Object
         expectValue( MingleBinReader rd,
                      Object expct )
             throws Exception
@@ -107,10 +129,52 @@ class CoreIoTests
 
             if ( expct instanceof ObjectPath ) {
                 assertIdPaths( expct, act );
-                return;
+            } else { 
+                state.equal( expct, act ); 
             }
 
-            state.equal( expct, act );
+            return act;
+        }
+
+        final
+        MingleBinWriter
+        getWriter()
+        {
+            if ( mgWr == null )
+            {
+                bos = new ByteArrayOutputStream();
+                mgWr = MingleBinWriter.create( bos );
+            }
+
+            return mgWr;
+        }
+
+        final
+        void
+        writeTestValue( Object val )
+            throws Exception
+        {
+            MingleBinWriter mgWr = getWriter();
+
+            if ( val instanceof MingleIdentifier ) {
+                mgWr.writeIdentifier( (MingleIdentifier) val );
+            } else if ( val instanceof MingleNamespace ) {
+                mgWr.writeNamespace( (MingleNamespace) val );
+            } else if ( val instanceof DeclaredTypeName ) {
+                mgWr.writeDeclaredTypeName( (DeclaredTypeName) val );
+            } else if ( val instanceof QualifiedTypeName ) {
+                mgWr.writeQualifiedTypeName( (QualifiedTypeName) val );
+            } else {
+                state.failf( "unhandled write val: %s", val.getClass() );
+            }
+        }
+
+        final
+        byte[]
+        writeBuffer()
+        {
+            state.notNull( mgWr, "no writer set" );
+            return bos.toByteArray();
         }
 
         public
@@ -134,14 +198,15 @@ class CoreIoTests
         call()
             throws Exception
         {
-            code( "buffer (%d): %s", this.buffer.length,
-                IoUtils.asHexString( this.buffer ) );
-
             Object expct =
                 state.get( ROUNDTRIP_VALS, this.key, "ROUNDTRIP_VALS" );
  
             MingleBinReader mgRd = createReader();
-            expectValue( mgRd, expct );
+            Object act = expectValue( mgRd, expct );
+
+            writeTestValue( act );
+
+            IoTests.assertEqual( buffer, writeBuffer() );
         }
     }
 
@@ -252,30 +317,9 @@ class CoreIoTests
     private
     static
     void
-    putPathRoundtrips( Map< String, Object > m )
+    putValueRoundtrips( Map< String, Object > m )
     {
-        ObjectPath< MingleIdentifier > p1 = 
-            Lang.putUnique( m, "p1", idPathRoot( "id1" ) );
-        
-        ObjectPath< MingleIdentifier > p2 = 
-            Lang.putUnique( m, "p2", p1.descend( id( "id2" ) ) );
-
-        ObjectPath< MingleIdentifier > p3 =
-            Lang.putUnique( m, "p3", p2.startImmutableList().next().next() );
-        
-        ObjectPath< MingleIdentifier > p4 =
-            Lang.putUnique( m, "p4", p3.descend( id( "id3" ) ) );
-
-        Lang.putUnique( m, "p5", 
-            ObjectPath.getRoot().startImmutableList().descend( id( "id1" ) ) );
-    }
-
-    private
-    static
-    Map< String, Object >
-    createRoundtripVals()
-    {
-        Map< String, Object > res = Lang.newMap( String.class, Object.class,
+        m.putAll( Lang.newMap( String.class, Object.class,
             "null-val", MingleNull.getInstance(),
             "string-empty", new MingleString( "" ),
             "string-val1", new MingleString( "hello" ),
@@ -349,8 +393,119 @@ class CoreIoTests
                     MingleList.asList( new MingleString( "hello" ) ),
                     MingleNull.getInstance()
                 )
+        ));
+    }
+
+    private
+    static
+    void
+    putPathRoundtrips( Map< String, Object > m )
+    {
+        ObjectPath< MingleIdentifier > p1 = 
+            Lang.putUnique( m, "p1", idPathRoot( "id1" ) );
+        
+        ObjectPath< MingleIdentifier > p2 = 
+            Lang.putUnique( m, "p2", p1.descend( id( "id2" ) ) );
+
+        ObjectPath< MingleIdentifier > p3 =
+            Lang.putUnique( m, "p3", p2.startImmutableList().next().next() );
+        
+        ObjectPath< MingleIdentifier > p4 =
+            Lang.putUnique( m, "p4", p3.descend( id( "id3" ) ) );
+
+        Lang.putUnique( m, "p5", 
+            ObjectPath.getRoot().startImmutableList().descend( id( "id1" ) ) );
+    }
+
+    private
+    static
+    String
+    keyForType( Object val )
+    {
+        String res = val.getClass().getSimpleName();
+
+        if ( res.startsWith( "Mingle" ) ) return res.substring( 6 );
+
+        return res;
+    }
+
+    private
+    static
+    void
+    putDefinitionRoundtripVals( Map< String, Object > m,
+                                Object... vals )
+    {
+        for ( Object val : vals )
+        {
+            String key = keyForType( val );
+            Lang.putUnique( m, key + "/" + val.toString(), val );
+        }
+    }
+
+    private
+    static
+    void
+    putDefinitionRoundtrips( Map< String, Object > m )
+    {
+        putDefinitionRoundtripVals( m,
+
+            MingleIdentifier.create( "id1" ),
+            MingleIdentifier.create( "id1-id2" ),
+
+            MingleNamespace.create( "ns1@v1" ),
+            MingleNamespace.create( "ns1:ns2@v1" ),
+
+            DeclaredTypeName.create( "T1" ),
+
+            QualifiedTypeName.create( "ns1:ns2@v1/T1" ),
+
+            MingleTypeReference.create( "T1" ),
+            MingleTypeReference.create( "String~\"a\"" ),
+            MingleTypeReference.create( "String~[\"a\",\"b\"]" ),
+            MingleTypeReference.create( "Int32~(0,10)" ),
+            MingleTypeReference.create( "Int64~[0,10]" ),
+            MingleTypeReference.create( "Uint32~(0,10)" ),
+            MingleTypeReference.create( "Uint64~[0,10]" ),
+            MingleTypeReference.create( "Float64~(,)" ),
+            MingleTypeReference.create( "T1*" ),
+            MingleTypeReference.create( "T1+" ),
+            MingleTypeReference.create( "T1*?" ),
+            MingleTypeReference.create( "ns1@v1/T1" ),
+            MingleTypeReference.create( "ns1@v1/T1*" ),
+            MingleTypeReference.create( "ns1@v1/T1?" )
         );
 
+        // due to differences in how we serialize some values ("0" vs "0.0"), we
+        // handcode the key for a few test values
+        
+        Lang.putUnique( m,
+            "AtomicTypeReference/mingle:core@v1/Timestamp~" +
+                "[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]",
+            MingleTypeReference.create(
+                "Timestamp~[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]"
+            )
+        );
+
+        Lang.putUnique( m,
+            "AtomicTypeReference/mingle:core@v1/Float64~[0,1)",
+            MingleTypeReference.create( "Float64~[0.0,1.0)" )
+        );
+
+        Lang.putUnique( m,
+            "AtomicTypeReference/mingle:core@v1/Float32~(0,1]",
+            MingleTypeReference.create( "Float32~(0.0,1.0]" )
+        );
+    }
+
+    private
+    static
+    Map< String, Object >
+    createRoundtripVals()
+    {
+        Map< String, Object > res = Lang.newMap();
+
+        putValueRoundtrips( res );
+        putDefinitionRoundtrips( res );
         putPathRoundtrips( res );
 
         return res;
