@@ -995,7 +995,7 @@ class ParseTests
     {
         List< CoreParseTest > res = Lang.newList();
 
-        InputStream is = TestData.openFile( FILE_NAME );
+        InputStream is = TestData.openDataFile( FILE_NAME );
         CoreParseTestReader rd = new CoreParseTestReader( is );
 
         CoreParseTest t = null;

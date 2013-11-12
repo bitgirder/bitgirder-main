@@ -21,48 +21,69 @@ class TestData
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static String PROP_TEST_DATA_PATH = "bitgirder.testData.path";
+    private final static String PROP_TEST_DATA_PATH = "bitgirder.testDataPath";
+    private final static String PROP_TEST_BIN_PATH = "bitgirder.testBinPath";
 
     private TestData() {}
 
-    public
+    private
     static
     String
-    getTestPath()
+    getTestPath( String pathProp )
     {
-        String res = System.getProperty( PROP_TEST_DATA_PATH );
+        String res = System.getProperty( pathProp );
         return res == null ? "" : res;
+    }
+
+    private
+    static
+    File
+    expectFile( String pathProp, 
+                String fileNm )
+        throws FileNotFoundException
+    {
+        inputs.notNull( fileNm, "fileNm" );
+
+        File res = new File( fileNm );
+        if ( res.exists() ) return res;
+
+        String[] dirs = getTestPath( pathProp ).split( File.pathSeparator );
+
+        for ( String dir : dirs )
+        {
+            res = new File( dir + File.separatorChar + fileNm );
+            if ( res.exists() ) return res;
+        }
+
+        throw new FileNotFoundException( 
+            "Cannot find test data file: " + fileNm );
     }
 
     public
     static
     File
-    expectFile( String nm )
+    expectDataFile( String fileNm )
         throws FileNotFoundException
     {
-        inputs.notNull( nm, "nm" );
+        return expectFile( PROP_TEST_DATA_PATH, fileNm );
+    }
 
-        File res = new File( nm );
-        if ( res.exists() ) return res;
-
-        String[] dirs = getTestPath().split( File.pathSeparator );
-
-        for ( String dir : dirs )
-        {
-            res = new File( dir + File.separatorChar + nm );
-            if ( res.exists() ) return res;
-        }
-
-        throw new FileNotFoundException( "Cannot find test data file: " + nm );
+    public
+    static
+    File
+    expectCommand( String fileNm )
+        throws FileNotFoundException
+    {
+        return expectFile( PROP_TEST_BIN_PATH, fileNm );
     }
 
     public
     static
     InputStream
-    openFile( String nm )
+    openDataFile( String nm )
         throws IOException
     {
-        return new FileInputStream( expectFile( nm ) );
+        return new FileInputStream( expectFile( PROP_TEST_DATA_PATH, nm ) );
     }
 
     public
@@ -130,7 +151,7 @@ class TestData
         {
             List< T > res = Lang.newList();
 
-            is = new BufferedInputStream( openFile( fileNm ) );
+            is = new BufferedInputStream( openDataFile( fileNm ) );
             try 
             { 
                 readHeader();

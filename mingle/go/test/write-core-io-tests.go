@@ -26,9 +26,13 @@ func writeValue( val interface{}, bb *bytes.Buffer ) error {
     return mg.WriteBinIoTestValue( val, w )
 }
 
+func writeTestName( test interface{}, w *mg.BinWriter ) error {
+    return w.WriteUtf8( mg.CoreIoTestNameFor( test ) )
+}
+
 func writeInvalidDataTest( t *mg.BinIoInvalidDataTest, w *mg.BinWriter ) error {
     if err := writeTypeCode( tcInvalidDataTest, w ); err != nil { return err }
-    if err := w.WriteUtf8( t.Name ); err != nil { return err }
+    if err := writeTestName( t, w ); err != nil { return err }
     if err := w.WriteUtf8( t.ErrMsg ); err != nil { return err }
     if err := w.WriteBuffer32( t.Input ); err != nil { return err }
     return nil
@@ -36,7 +40,7 @@ func writeInvalidDataTest( t *mg.BinIoInvalidDataTest, w *mg.BinWriter ) error {
 
 func writeRoundtripTest( t *mg.BinIoRoundtripTest, w *mg.BinWriter ) error {
     if err := writeTypeCode( tcRoundtripTest, w ); err != nil { return err }
-    if err := w.WriteUtf8( t.Name ); err != nil { return err }
+    if err := writeTestName( t, w ); err != nil { return err }
     bb := &bytes.Buffer{}
     if err := writeValue( t.Val, bb ); err != nil { return err }
     if err := w.WriteBuffer32( bb.Bytes() ); err != nil { return err }
@@ -50,7 +54,7 @@ func writeSequenceTest(
     if err := writeTypeCode( tcSequenceRoundtripTest, w ); err != nil { 
         return err 
     }
-    if err := w.WriteUtf8( t.Name ); err != nil { return err }
+    if err := writeTestName( t, w ); err != nil { return err }
     bb := &bytes.Buffer{}
     for _, val := range t.Seq {
         if err := writeValue( val, bb ); err != nil { return err }

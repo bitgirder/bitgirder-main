@@ -242,3 +242,15 @@ func WriteBinIoTestValue( obj interface{}, w *BinWriter ) error {
     }
     panic( libErrorf( "Unhandled expct obj: %T", obj ) )
 }
+
+func CoreIoTestNameFor( test interface{} ) string {
+    mk := func( pref, nm string ) string {
+        return fmt.Sprintf( "%s/%s", pref, nm )
+    }
+    switch v := test.( type ) {
+    case *BinIoRoundtripTest: return mk( "roundtrip", v.Name )
+    case *BinIoSequenceRoundtripTest: return mk( "sequence-roundtrip", v.Name )
+    case *BinIoInvalidDataTest: return mk( "invalid-data", v.Name )
+    }
+    panic( libErrorf( "unhandled test: %T", test ) )
+}

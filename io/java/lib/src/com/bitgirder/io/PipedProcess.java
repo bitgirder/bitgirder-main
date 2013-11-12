@@ -108,15 +108,18 @@ class PipedProcess
         finally { lock.unlock(); }
     }
 
-    // This method mutates pb regarding its streams, but does not change
-    // anything related to the command or environment
+    // For anything more complicated configuration-wise we should create a
+    // builder with config setters and a start() method
     public
     static
     PipedProcess
-    start( ProcessBuilder pb )
+    start( String... cmd )
         throws IOException
     {
-        inputs.notNull( pb, "pb" );
+        inputs.noneNull( cmd, "cmd" );
+        inputs.isFalse( cmd.length == 0, "need a command" );
+
+        ProcessBuilder pb = new ProcessBuilder( cmd );
 
         pb.redirectError( ProcessBuilder.Redirect.INHERIT );
 

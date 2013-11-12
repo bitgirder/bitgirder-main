@@ -46,7 +46,7 @@ class CoreIoTests
     private final static byte TC_ROUNDTRIP_TEST = 2;
     private final static byte TC_SEQUENCE_ROUNDTRIP_TEST = 3;
 
-    private final static Map< String, Object > ROUNDTRIP_VALS;
+    private final static Map< String, Object > TEST_VALS = Lang.newMap();
 
     private PipedProcess checker;
 
@@ -56,9 +56,10 @@ class CoreIoTests
     startChecker()
         throws Exception
     {
-        File cmd = TestData.expectFile( "check-core-io" );
-        ProcessBuilder pb = new ProcessBuilder( cmd.getAbsolutePath() );
-        checker = PipedProcess.start( pb );
+        String cmd = 
+            TestData.expectCommand( "check-core-io" ).getAbsolutePath();
+
+        checker = PipedProcess.start( cmd );
     }
 
     @After private void stopChecker() throws Exception { checker.kill(); }
@@ -91,6 +92,13 @@ class CoreIoTests
         { 
             super( prefix + "/" + lbl ); 
             this.key = lbl.toString();
+        }
+
+        final
+        Object
+        valueExpected()
+        {
+            return state.get( TEST_VALS, this.key, "TEST_VALS" );
         }
 
         final
@@ -204,6 +212,26 @@ class CoreIoTests
             return bos.toByteArray();
         }
 
+        final
+        synchronized
+        void
+        sendTestValue( byte[] act )
+            throws Exception
+        {
+            checker.usePipe(
+                new ObjectReceiver< InputStream >() {
+                    public void receive( InputStream is ) throws Exception {
+                        readCheckRes( BinReader.asReaderLe( is ) );
+                    }
+                },
+                new ObjectReceiver< OutputStream >() {
+                    public void receive( OutputStream os ) throws Exception {
+                        sendCheckValue( BinWriter.asWriterLe( os ) );
+                    }
+                }
+            );
+        }
+
         public
         void
         call()
@@ -225,8 +253,7 @@ class CoreIoTests
         call()
             throws Exception
         {
-            Object expct =
-                state.get( ROUNDTRIP_VALS, this.key, "ROUNDTRIP_VALS" );
+            Object expct = valueExpected();
  
             MingleBinReader mgRd = createReader();
             Object act = expectValue( mgRd, expct );
@@ -237,6 +264,7 @@ class CoreIoTests
                 IoUtils.asHexString( buffer ),
                 IoUtils.asHexString( writeBuffer() ) );
 
+            sendCheckValue( writeBuffer() );
 //            IoTests.assertEqual( buffer, writeBuffer() );
         }
     }
@@ -347,10 +375,42 @@ class CoreIoTests
 
     private
     static
-    void
-    putValueRoundtrips( Map< String, Object > m )
+    < V >
+    V
+    putTestValue( String key,
+                  V val )
     {
-        m.putAll( Lang.newMap( String.class, Object.class,
+        Lang.putUnique( TEST_VALS, key, val );
+        return val;
+    }
+
+    private
+    static
+    void
+    putTestValues( Map< String, Object > m )
+    {
+        for ( Map.Entry< String, Object > e : m.entrySet() )
+        {
+            putTestValue( e.getKey(), e.getValue() );
+        }
+    }
+
+    private
+    static
+    < V >
+    V
+    putRoundtripValue( String key,
+                       V val )
+    {
+        return putTestValue( "roundtrip/" + key, val );
+    }
+
+    private
+    static
+    void
+    putValueRoundtrips()
+    {
+        putTestValues( Lang.newMap( String.class, Object.class,
             "null-val", MingleNull.getInstance(),
             "string-empty", new MingleString( "" ),
             "string-val1", new MingleString( "hello" ),
@@ -430,21 +490,21 @@ class CoreIoTests
     private
     static
     void
-    putPathRoundtrips( Map< String, Object > m )
+    putPathRoundtrips()
     {
         ObjectPath< MingleIdentifier > p1 = 
-            Lang.putUnique( m, "p1", idPathRoot( "id1" ) );
+            putRoundtripValue( "p1", idPathRoot( "id1" ) );
         
         ObjectPath< MingleIdentifier > p2 = 
-            Lang.putUnique( m, "p2", p1.descend( id( "id2" ) ) );
+            putRoundtripValue( "p2", p1.descend( id( "id2" ) ) );
 
         ObjectPath< MingleIdentifier > p3 =
-            Lang.putUnique( m, "p3", p2.startImmutableList().next().next() );
+            putRoundtripValue( "p3", p2.startImmutableList().next().next() );
         
         ObjectPath< MingleIdentifier > p4 =
-            Lang.putUnique( m, "p4", p3.descend( id( "id3" ) ) );
+            putRoundtripValue( "p4", p3.descend( id( "id3" ) ) );
 
-        Lang.putUnique( m, "p5", 
+        putRoundtripValue( "p5", 
             ObjectPath.getRoot().startImmutableList().descend( id( "id1" ) ) );
     }
 
@@ -463,22 +523,21 @@ class CoreIoTests
     private
     static
     void
-    putDefinitionRoundtripVals( Map< String, Object > m,
-                                Object... vals )
+    putDefinitionRoundtripVals( Object... vals )
     {
         for ( Object val : vals )
         {
             String key = keyForType( val );
-            Lang.putUnique( m, key + "/" + val.toString(), val );
+            putRoundtripValue( key + "/" + val.toString(), val );
         }
     }
 
     private
     static
     void
-    putDefinitionRoundtrips( Map< String, Object > m )
+    putDefinitionRoundtrips()
     {
-        putDefinitionRoundtripVals( m,
+        putDefinitionRoundtripVals(
 
             MingleIdentifier.create( "id1" ),
             MingleIdentifier.create( "id1-id2" ),
@@ -509,7 +568,7 @@ class CoreIoTests
         // due to differences in how we serialize some values ("0" vs "0.0"), we
         // handcode the key for a few test values
         
-        Lang.putUnique( m,
+        putRoundtripValue( 
             "AtomicTypeReference/mingle:core@v1/Timestamp~" +
                 "[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]",
             MingleTypeReference.create(
@@ -517,12 +576,12 @@ class CoreIoTests
             )
         );
 
-        Lang.putUnique( m,
+        putRoundtripValue(
             "AtomicTypeReference/mingle:core@v1/Float64~[0,1)",
             MingleTypeReference.create( "Float64~[0.0,1.0)" )
         );
 
-        Lang.putUnique( m,
+        putRoundtripValue(
             "AtomicTypeReference/mingle:core@v1/Float32~(0,1]",
             MingleTypeReference.create( "Float32~(0.0,1.0]" )
         );
@@ -530,20 +589,16 @@ class CoreIoTests
 
     private
     static
-    Map< String, Object >
-    createRoundtripVals()
+    void
+    putRoundtripVals()
     {
-        Map< String, Object > res = Lang.newMap();
-
-        putValueRoundtrips( res );
-        putDefinitionRoundtrips( res );
-        putPathRoundtrips( res );
-
-        return res;
+        putValueRoundtrips();
+        putDefinitionRoundtrips();
+        putPathRoundtrips();
     }
 
     static
     {
-        ROUNDTRIP_VALS = createRoundtripVals();
+        putRoundtripVals();
     }
 }

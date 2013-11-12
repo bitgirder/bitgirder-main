@@ -733,6 +733,24 @@ module TestData
     end
 
     module_function :get_test_data_path
+
+    def get_bin_path_dirs( chain )
+        
+        not_nil( chain, :chain )
+
+        BuildChains.tasks( chain ).inject( [] ) do |arr, t|
+            arr += t.bin_path_dirs if t.respond_to?( :bin_path_dirs )
+            arr
+        end
+    end
+
+    module_function :get_bin_path_dirs
+
+    def get_bin_path( chain )
+        get_bin_path_dirs( chain ).join( ":" )
+    end
+
+    module_function :get_bin_path
 end
 
 class TaskRegistry < BitGirder::Core::BitGirderClass

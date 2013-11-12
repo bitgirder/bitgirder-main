@@ -381,6 +381,16 @@ class GoBinBuilder < StandardProjTask
         ws_ctx.mod_dir( mod: bin_mod )
     end
 
+    private
+    def bin_build_dir
+        ensure_dir( build_bin_dir( bin_mod ) )
+    end
+
+    public
+    def bin_path_dirs
+        [ bin_build_dir ]
+    end
+
     public
     def get_direct_dependencies
         [ TaskTarget.create( :go, :build, proj(), lib_mod() ) ]
@@ -431,7 +441,7 @@ class GoBinBuilder < StandardProjTask
 
         argv = %w{ build }
 
-        bin_dir = ensure_dir( build_bin_dir( bin_mod ) )
+        bin_dir = bin_build_dir
         argv << "-o" << "#{bin_dir}/#{name}"
 
         argv += src_files

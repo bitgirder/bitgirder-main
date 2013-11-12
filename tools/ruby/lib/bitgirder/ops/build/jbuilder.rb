@@ -1142,13 +1142,17 @@ module JavaTesting
 
     module_function :add_filter_args
 
-    def add_test_data_path( path, chain )
-        unless ( td_path = TestData.get_test_data_path( chain ) ).empty?
-            path << "-Dbitgirder.testData.path=#{td_path}"
-        end
+    def add_test_run_paths( path, chain )
+
+        opt_add = lambda { |nm, arr|
+            path << "-Dbitgirder.#{nm}=#{arr}" unless arr.empty?
+        }
+
+        opt_add.call( "testDataPath", TestData.get_test_data_path( chain ) )
+        opt_add.call( "testBinPath", TestData.get_bin_path( chain ) )
     end
 
-    module_function :add_test_data_path
+    module_function :add_test_run_paths
 end
 
 class JavaTestRunner < AbstractJavaModuleTask
@@ -1208,7 +1212,7 @@ class JavaTestRunner < AbstractJavaModuleTask
         argv = []
         argv << "-classpath" << get_test_classpath( chain ).join( ":" )
 
-        JavaTesting.add_test_data_path( argv, chain )
+        JavaTesting.add_test_run_paths( argv, chain )
 
         argv += get_test_runner_args( chain, get_test_class_names )
         JavaTesting.add_filter_args( argv, @run_opts )
@@ -1926,7 +1930,7 @@ class JavaDistTestRunner < AbstractJavaDistTask
 
         argv += JavaTesting.get_test_jvm_args( @run_ctx )
         argv << "-classpath" << get_test_classpath( chain ).join( ":" )
-        JavaTesting.add_test_data_path( argv, chain )
+        JavaTesting.add_test_run_paths( argv, chain )
 
         nms = get_test_class_names( chain )
         argv += JavaTesting.get_testing_test_runner_args( nms, @run_ctx )
