@@ -6,12 +6,65 @@ import (
     "strings"
     "fmt"
     "math"
+    "bitgirder/assert"
 //    "log"
 )
+
+func assertWriteValueValue(
+    rd *BinReader,
+    expct interface{},
+    a *assert.PathAsserter,
+) {
+    if val, err := rd.ReadValue(); err == nil {
+        if expct == nil { val = NullVal }
+        if tm, tmOk := expct.( Timestamp ); tmOk {
+            a.Truef( tm.Compare( val ) == 0, "input time was %s, got: %s",
+                tm, val )
+        } else { a.Equal( expct, val ) }
+    } else { a.Fatal( err ) }
+}
+
+func assertWriteValue(
+    rd *BinReader,
+    expct interface{},
+    a *assert.PathAsserter,
+) {
+    switch v := expct.( type ) {
+    case Value: assertWriteValueValue( rd, expct, a )
+    case *Identifier:
+        if id, err := rd.ReadIdentifier(); err == nil { 
+            a.True( v.Equals( id ) )
+        } else { a.Fatal( err ) }
+    case objpath.PathNode:
+        if n, err := rd.ReadIdPath(); err == nil {
+            a.Equal( v, n ) 
+        } else { a.Fatal( err ) }
+    case *Namespace:
+        if ns, err := rd.ReadNamespace(); err == nil {
+            a.True( v.Equals( ns ) )
+        } else { a.Fatal( err ) }
+    case TypeName:
+        if nm, err := rd.ReadTypeName(); err == nil {
+            a.True( v.Equals( nm ) )
+        } else { a.Fatal( err ) }
+    case TypeReference:
+        if typ, err := rd.ReadTypeReference(); err == nil {
+            a.Truef( v.Equals( typ ), "expct (%v) != act (%v)", v, typ )
+        } else { a.Fatal( err ) }
+    default: a.Fatalf( "Unhandled expct expct: %T", expct )
+    }
+}
 
 type BinIoRoundtripTest struct {
     Name string
     Val interface{}
+}
+
+func ( t *BinIoRoundtripTest ) AssertWriteValue( 
+    rd *BinReader, 
+    a *assert.PathAsserter,
+) {
+    assertWriteValue( rd, t.Val, a )
 }
 
 type binIoRoundtripTestBuilder struct {
@@ -148,6 +201,17 @@ type BinIoSequenceRoundtripTest struct {
     Seq []interface{}
 }
 
+func ( t *BinIoSequenceRoundtripTest ) AssertWriteValue(
+    rd *BinReader,
+    a *assert.PathAsserter,
+) {
+    la := a.StartList()
+    for _, val := range t.Seq {
+        assertWriteValue( rd, val, la )
+        la = la.Next()
+    }
+}
+
 func addBinIoSequenceRoundtripTests( tests []interface{} ) []interface{} {
     return append( tests,
         &BinIoSequenceRoundtripTest{
@@ -253,4 +317,11 @@ func CoreIoTestNameFor( test interface{} ) string {
     case *BinIoInvalidDataTest: return mk( "invalid-data", v.Name )
     }
     panic( libErrorf( "unhandled test: %T", test ) )
+}
+
+func CoreIoTestsByName() map[ string ]interface{} {
+    tests := CreateCoreIoTests()
+    res := make( map[ string ]interface{}, len( tests ) )
+    for _, t := range tests { res[ CoreIoTestNameFor( t ) ] = t }
+    return res
 }

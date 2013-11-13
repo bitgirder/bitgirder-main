@@ -9,6 +9,10 @@ import(
 )
 
 type Failer interface {
+
+    // Implementations must in some way ensure that they stop execution of the
+    // caller, as with panic() or testing.Fatal(), in addition to reporting or
+    // recording the error information encapsulated in args
     Fatal( args ...interface{} )
 }
 

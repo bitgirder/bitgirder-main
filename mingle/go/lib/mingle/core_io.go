@@ -60,7 +60,7 @@ func ( w *BinWriter ) WriteTypeCode( tc uint8 ) error {
 func ( w *BinWriter ) WriteNull() error { return w.WriteTypeCode( tcNull ) }
 
 func ( w *BinWriter ) writeBool( b bool ) ( err error ) {
-    return w.WriteValue( Boolean( b ) )
+    return w.WriteBool( b )
 }
 
 func ( w *BinWriter ) WriteIdentifier( id *Identifier ) ( err error ) {
@@ -354,10 +354,7 @@ func ( r *BinReader ) ExpectTypeCode( expct uint8 ) ( res uint8, err error ) {
     return
 }
 
-func ( r *BinReader ) readBool() ( bool, error ) {
-    if _, err := r.ExpectTypeCode( tcBool ); err != nil { return false, err }
-    return r.ReadBool()
-}
+func ( r *BinReader ) readBool() ( bool, error ) { return r.ReadBool() }
 
 func ( r *BinReader ) ReadIdentifier() ( id *Identifier, err error ) {
     if _, err = r.ExpectTypeCode( tcId ); err != nil { return }

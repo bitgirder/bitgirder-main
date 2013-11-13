@@ -2,7 +2,6 @@ package mingle
 
 import (
     "testing"
-    "bitgirder/objpath"
     "bitgirder/assert"
     "bytes"
     "fmt"
@@ -31,56 +30,11 @@ func assertBinIoRoundtripWrite(
     if err := WriteBinIoTestValue( obj, wr ); err != nil { a.Fatal( err ) }
 }
 
-func assertBinIoRoundtripReadValue(
-    rd *BinReader,
-    expct interface{},
-    a *assert.PathAsserter,
-) {
-    if val, err := rd.ReadValue(); err == nil {
-        if expct == nil { val = NullVal }
-        if tm, tmOk := expct.( Timestamp ); tmOk {
-            a.Truef( tm.Compare( val ) == 0, "input time was %s, got: %s",
-                tm, val )
-        } else { a.Equal( expct, val ) }
-    } else { a.Fatal( err ) }
-}
-
-func assertBinIoRoundtripRead(
-    rd *BinReader,
-    expct interface{},
-    a *assert.PathAsserter,
-) {
-    switch v := expct.( type ) {
-    case Value: assertBinIoRoundtripReadValue( rd, expct, a )
-    case *Identifier:
-        if id, err := rd.ReadIdentifier(); err == nil { 
-            a.True( v.Equals( id ) )
-        } else { a.Fatal( err ) }
-    case objpath.PathNode:
-        if n, err := rd.ReadIdPath(); err == nil {
-            a.Equal( v, n ) 
-        } else { a.Fatal( err ) }
-    case *Namespace:
-        if ns, err := rd.ReadNamespace(); err == nil {
-            a.True( v.Equals( ns ) )
-        } else { a.Fatal( err ) }
-    case TypeName:
-        if nm, err := rd.ReadTypeName(); err == nil {
-            a.True( v.Equals( nm ) )
-        } else { a.Fatal( err ) }
-    case TypeReference:
-        if typ, err := rd.ReadTypeReference(); err == nil {
-            a.Truef( v.Equals( typ ), "expct (%v) != act (%v)", v, typ )
-        } else { a.Fatal( err ) }
-    default: a.Fatalf( "Unhandled expct expct: %T", expct )
-    }
-}
-
 func assertBinIoRoundtrip( rt *BinIoRoundtripTest, a *assert.PathAsserter ) {
     a = a.Descend( rt.Name )
     bb := &bytes.Buffer{}
     assertBinIoRoundtripWrite( NewWriter( bb ), rt.Val, a )
-    assertBinIoRoundtripRead( NewReader( bb ), rt.Val, a )
+    rt.AssertWriteValue( NewReader( bb ), a )
 }
 
 func assertBinIoSequenceRoundtrip( 
@@ -95,12 +49,7 @@ func assertBinIoSequenceRoundtrip(
         assertBinIoRoundtripWrite( wr, val, la )
         la = la.Next()
     }
-    la = a.StartList()
-    rd := NewReader( bb )
-    for _, val := range rt.Seq {
-        assertBinIoRoundtripRead( rd, val, la )
-        la = la.Next()
-    }
+    rt.AssertWriteValue( NewReader( bb ), a )
 }
 
 func TestCoreIo( t *testing.T ) {

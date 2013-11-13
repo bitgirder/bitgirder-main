@@ -37,6 +37,7 @@ import java.io.FileFilter;
 import java.io.FilenameFilter;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.Serializable;
 
 import java.nio.ByteBuffer;
@@ -1072,6 +1073,36 @@ class IoTests
         ccr.peek();
         ccr.read();
         state.equal( 2L, ccr.position() );
+    }
+
+    @Test
+    private
+    void
+    testCountingInputStream()
+        throws Exception
+    {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        BinWriter wr = BinWriter.asWriterLe( bos );
+        wr.writeInt( 1 );
+        wr.writeBoolean( true );
+        wr.writeUtf8( "hello" );
+        wr.writeLong( 8 );
+
+        CountingInputStream cis = new CountingInputStream(
+            new ByteArrayInputStream( bos.toByteArray() ) );
+ 
+        BinReader br = BinReader.asReaderLe( cis );
+        state.equal( 0L, cis.position() );
+        state.equalInt( 1, br.readInt() );
+        state.equal( 4L, cis.position() );
+        state.isTrue( br.readBoolean() );
+        state.equal( 5L, cis.position() );
+        state.equal( "hello", br.readUtf8() );
+        state.equal( 14L, cis.position() );
+        state.equal( 8L, br.readLong() );
+        state.equal( 22L, cis.position() );
+        cis.close();
+        state.equal( -1L, cis.position() );
     }
 
     private

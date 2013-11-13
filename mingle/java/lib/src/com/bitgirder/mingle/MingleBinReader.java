@@ -14,6 +14,7 @@ import com.bitgirder.validation.State;
 import com.bitgirder.lang.Lang;
 
 import com.bitgirder.io.BinReader;
+import com.bitgirder.io.CountingInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,17 +60,27 @@ class MingleBinReader
 
     private final static byte[] TC_END_ARR = new byte[] { TC_END };
 
-    private BinReader rd;
+    private final CountingInputStream cis;
+    private final BinReader rd;
 
-    private MingleBinReader( BinReader rd ) { this.rd = rd; }
+    private 
+    MingleBinReader( CountingInputStream cis )
+    {
+        this.cis = cis;
+        this.rd = BinReader.asReaderLe( cis );
+    }
 
     private
     static
     MingleBinaryException
-    failf( String tmpl,
+    failf( long pos,
+           String tmpl,
            Object... args )
     {
-        return new MingleBinaryException( String.format( tmpl, args ) );
+        StringBuilder sb = new StringBuilder();
+        sb.append( "[offset " ).append( pos ).append( "]: " );
+        sb.append( String.format( tmpl, args ) );
+        return new MingleBinaryException( sb.toString() );
     }
 
     private
@@ -77,11 +88,12 @@ class MingleBinReader
     expectPosInt32( String errDesc )
         throws IOException
     {
+        long pos = cis.position();
         int i = rd.readInt();
 
         if ( i < 0 )
         {
-            throw failf( "Value for %s is not a positive signed int32: %s",
+            throw failf( pos, "Value for %s is not a positive signed int32: %s",
                 errDesc, Lang.toUint32String( i ) );
         }
 
@@ -90,6 +102,8 @@ class MingleBinReader
 
     private byte nextTc() throws IOException { return rd.readByte(); }
 
+    // assumes that tc was the most recently read byte, in terms of setting the
+    // error position
     private
     byte
     acceptTc( byte tc,
@@ -100,7 +114,9 @@ class MingleBinReader
         for ( byte a : accpt ) if ( a == tc ) { return tc; }
 
         if ( desc == null ) return (byte) -1;
-        throw failf( "Expected %s but saw type code 0x%02x", desc, tc );
+
+        long errPos = cis.position() - 1L;
+        throw failf( errPos, "Expected %s but saw type code 0x%02x", desc, tc );
     }
 
     private
@@ -110,15 +126,6 @@ class MingleBinReader
         throws IOException
     {
         return acceptTc( nextTc(), desc, accpt );
-    }
-
-    private
-    boolean
-    readJvBool( String desc )
-        throws IOException
-    {
-        byte tc = nextTc( desc, TC_BOOL );
-        return rd.readBoolean();
     }
 
     private
@@ -200,10 +207,14 @@ class MingleBinReader
     static
     class RangeVals
     {
+        private final long errPos;
+
         private boolean minClosed;
         private MingleValue min;
         private MingleValue max;
         private boolean maxClosed;
+
+        private RangeVals( long errPos ) { this.errPos = errPos; }
 
         private
         MingleValue
@@ -221,7 +232,7 @@ class MingleBinReader
 
             if ( typeTok == null ) 
             {
-                throw failf( "Unrecognized range target type: %s", tn );
+                throw failf( errPos, "Unrecognized range target type: %s", tn );
             }
 
             return MingleRangeRestriction.createChecked(
@@ -254,12 +265,12 @@ class MingleBinReader
     processRangeRestriction()
         throws IOException
     {
-        RangeVals res = new RangeVals();
+        RangeVals res = new RangeVals( cis.position() );
 
-        res.minClosed = readJvBool( "min range inclusivity" );
+        res.minClosed = rd.readBoolean();
         res.min = res.convertNull( readValue( "range min" ) );
         res.max = res.convertNull( readValue( "range max" ) );
-        res.maxClosed = readJvBool( "max range inclusivity" );
+        res.maxClosed = rd.readBoolean();
 
         return res;
     }
@@ -285,10 +296,7 @@ class MingleBinReader
     processListType()
         throws IOException
     {
-        return new ListTypeReference( 
-            readTypeReference(), 
-            readJvBool( "list type empty/non-empty flag" ) 
-        );
+        return new ListTypeReference( readTypeReference(), rd.readBoolean() );
     }
 
     private
@@ -400,6 +408,8 @@ class MingleBinReader
         }
     }
 
+    // see note at acceptTc() on assumption about tc being most recently read
+    // byte
     private
     Object
     processNext( byte tc )
@@ -432,7 +442,9 @@ class MingleBinReader
             case TC_SYM_MAP: return processSymbolMap();
             case TC_STRUCT: return processStruct();
             case TC_LIST: return processList();
-            default: throw failf( "Unrecognized type code: 0x%02x", tc );
+            default: 
+                long errPos = cis.position() - 1L;
+                throw failf( errPos, "Unrecognized type code: 0x%02x", tc );
         }
     }
 
@@ -506,6 +518,6 @@ class MingleBinReader
     create( InputStream is )
     {
         inputs.notNull( is, "is" );
-        return new MingleBinReader( BinReader.asReaderLe( is ) );
+        return new MingleBinReader( new CountingInputStream( is ) );
     }
 }

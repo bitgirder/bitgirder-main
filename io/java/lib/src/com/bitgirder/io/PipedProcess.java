@@ -103,6 +103,8 @@ class PipedProcess
             es.submit( u );
 
             procIn.receive( proc.getOutputStream() );
+            proc.getOutputStream().flush();
+
             u.join();
         }
         finally { lock.unlock(); }

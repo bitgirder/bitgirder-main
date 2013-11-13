@@ -3,12 +3,22 @@ package main
 import (
     "log"
     "os"
-//    "fmt"
+    "fmt"
+    "errors"
     bgio "bitgirder/io"
+    mg "mingle"
+    "bytes"
+    "bitgirder/assert"
 )
 
 var rd *bgio.BinReader
 var wr *bgio.BinWriter
+
+var tests map[ string ]interface{}
+
+type writeValueAsserter interface {
+    AssertWriteValue( rd *mg.BinReader, a *assert.PathAsserter )
+}
 
 type responseCode int8
 
@@ -17,13 +27,51 @@ const (
     rcFailed = responseCode( int8( 1 ) )
 )
 
-type testSpec struct {
+type checkInstance struct {
+
     name string
     buffer []byte
+
+    err error
 }
 
-func readNext() ( res *testSpec, err error ) {
-    res = &testSpec{}
+func ( ci *checkInstance ) Fatal( args ...interface{} ) {
+    ci.err = errors.New( fmt.Sprint( args... ) )
+    panic( ci.err )
+}
+
+func ( ci *checkInstance ) assertWriteValue( wva writeValueAsserter ) {
+    defer func() {
+        if err := recover(); err != nil && err != ci.err { panic( err ) }
+    }()
+    a := assert.NewPathAsserter( ci )
+    wva.AssertWriteValue( mg.NewReader( bytes.NewBuffer( ci.buffer ) ), a )
+}
+
+func ( ci *checkInstance ) getResponse() error {
+    if test, ok := tests[ ci.name ]; ok {
+        if wva, ok := test.( writeValueAsserter ); ok {
+            ci.assertWriteValue( wva )
+            return ci.err
+        }
+        return fmt.Errorf( 
+            "don't know how to check values for test: %s", ci.name )
+    }    
+    return fmt.Errorf( "unrecognized test: %s", ci.name )
+}
+
+func initIo() func() {
+    rd = bgio.NewLeReader( os.Stdin )
+    wr = bgio.NewLeWriter( os.Stdout )
+    return func() {
+        log.Printf( "closing streams" )
+        defer rd.Close()
+        defer wr.Close()
+    }
+}
+
+func readNext() ( res *checkInstance, err error ) {
+    res = &checkInstance{}
     if res.name, err = rd.ReadUtf8(); err != nil { return }
     if res.buffer, err = rd.ReadBuffer32(); err != nil { return }
     return
@@ -39,16 +87,19 @@ func checkNext() ( error, bool ) {
     test, err := readNext()
     if err != nil { return err, false }
     if test == nil { return nil, false }
-    return writeResponse( nil ), true
+    return writeResponse( test.getResponse() ), true
+}
+
+func runCheckLoop() {
+    ok := true
+    var err error
+    for err == nil && ok { err, ok = checkNext() }
+    if err != nil { log.Fatal( err ) }
 }
 
 func main() {
-    var err error
-    rd = bgio.NewLeReader( os.Stdin )
-    defer rd.Close()
-    wr = bgio.NewLeWriter( os.Stdout )
-    defer wr.Close()
-    ok := true
-    for err == nil && ok { err, ok = checkNext() }
-    if err != nil { log.Fatal( err ) }
+    defer ( initIo() )()
+    tests = mg.CoreIoTestsByName()
+    runCheckLoop()
+    log.Printf( "checker exiting" )
 }

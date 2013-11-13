@@ -8,6 +8,7 @@ import com.bitgirder.validation.State;
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.ObjectReceiver;
 
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
@@ -24,7 +25,11 @@ import com.bitgirder.io.IoTestFactory;
 import com.bitgirder.io.IoUtils;
 import com.bitgirder.io.IoTests;
 import com.bitgirder.io.PipedProcess;
+import com.bitgirder.io.BinReader;
+import com.bitgirder.io.BinWriter;
 
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -45,6 +50,9 @@ class CoreIoTests
     private final static byte TC_INVALID_DATA_TEST = 1; 
     private final static byte TC_ROUNDTRIP_TEST = 2;
     private final static byte TC_SEQUENCE_ROUNDTRIP_TEST = 3;
+
+    private final static byte RESP_CODE_PASSED = 0;
+    private final static byte RESP_CODE_FAILED = 1;
 
     private final static Map< String, Object > TEST_VALS = Lang.newMap();
 
@@ -78,27 +86,19 @@ class CoreIoTests
     class CoreIoTest
     extends LabeledTestCall
     {
-        final String key;
-
         byte[] buffer;
 
         // lazily instantiated via getWriter()
         private ByteArrayOutputStream bos;
         private MingleBinWriter mgWr;
 
-        private 
-        CoreIoTest( CharSequence prefix,
-                    CharSequence lbl ) 
-        { 
-            super( prefix + "/" + lbl ); 
-            this.key = lbl.toString();
-        }
+        private CoreIoTest( CharSequence lbl ) { super( lbl ); }
 
         final
         Object
         valueExpected()
         {
-            return state.get( TEST_VALS, this.key, "TEST_VALS" );
+            return state.get( TEST_VALS, getLabel().toString(), "TEST_VALS" );
         }
 
         final
@@ -212,41 +212,62 @@ class CoreIoTests
             return bos.toByteArray();
         }
 
-        final
-        synchronized
+        private
         void
-        sendTestValue( byte[] act )
+        readCheckRes( BinReader br )
             throws Exception
         {
-            checker.usePipe(
-                new ObjectReceiver< InputStream >() {
-                    public void receive( InputStream is ) throws Exception {
-                        readCheckRes( BinReader.asReaderLe( is ) );
-                    }
-                },
-                new ObjectReceiver< OutputStream >() {
-                    public void receive( OutputStream os ) throws Exception {
-                        sendCheckValue( BinWriter.asWriterLe( os ) );
-                    }
-                }
-            );
+            int rc = br.readByte();
+
+            switch ( rc ) {
+            case RESP_CODE_PASSED: break;
+            case RESP_CODE_FAILED:
+                state.failf( 
+                    "check failed with remote message: %s", br.readUtf8() );
+            default: state.failf( "unhandled response code: 0x%02x", rc );
+            }
         }
 
-        public
+        private
         void
-        call()
+        sendCheckValue( BinWriter bw )
             throws Exception
         {
-            state.fail( "unimplemented" );
+            bw.writeUtf8( getLabel() );
+            bw.writeByteArray( writeBuffer() );
+        }
+
+        final
+        void
+        checkWriteValue()
+            throws Exception
+        {
+            synchronized ( checker )
+            {
+                checker.usePipe(
+                    new ObjectReceiver< InputStream >() {
+                        public void receive( InputStream is ) throws Exception {
+                            readCheckRes( BinReader.asReaderLe( is ) );
+                        }
+                    },
+                    new ObjectReceiver< OutputStream >() {
+                        public void receive( OutputStream os ) 
+                            throws Exception 
+                        {
+                            sendCheckValue( BinWriter.asWriterLe( os ) );
+                        }
+                    }
+                );
+            }
         }
     }
-
+    
     private
     final
     class RoundtripTest
     extends CoreIoTest
     {
-        private RoundtripTest( CharSequence lbl ) { super( "roundtrip", lbl ); }
+        private RoundtripTest( CharSequence lbl ) { super( lbl ); }
 
         public
         void
@@ -259,13 +280,7 @@ class CoreIoTests
             Object act = expectValue( mgRd, expct );
 
             writeTestValue( act );
-
-            codef( "buffer: %s, wrote: %s",
-                IoUtils.asHexString( buffer ),
-                IoUtils.asHexString( writeBuffer() ) );
-
-            sendCheckValue( writeBuffer() );
-//            IoTests.assertEqual( buffer, writeBuffer() );
+            checkWriteValue();
         }
     }
 
@@ -274,10 +289,23 @@ class CoreIoTests
     class SequenceRoundtripTest
     extends CoreIoTest
     {
-        private 
-        SequenceRoundtripTest( CharSequence lbl ) 
-        { 
-            super( "sequence-roundtrip", lbl ); 
+        private SequenceRoundtripTest( CharSequence lbl ) { super( lbl ); }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            MingleList seq = (MingleList) valueExpected();
+
+            MingleBinReader rd = createReader();
+
+            for ( MingleValue expct : seq ) {
+                MingleValue act = (MingleValue) expectValue( rd, expct );
+                writeTestValue( act );
+            }
+
+            checkWriteValue();
         }
     }
 
@@ -288,10 +316,31 @@ class CoreIoTests
     {
         private CharSequence message;
 
+        private InvalidDataTest( CharSequence lbl ) { super( lbl ); }
+
         private
-        InvalidDataTest( CharSequence lbl )
+        void
+        assertBinaryException( MingleBinaryException mbe )
         {
-            super( "invalid-data", lbl );
+            CharSequence expct = (String) TEST_VALS.get( getLabel() );
+            if ( expct == null ) expct = message;
+
+            state.equalString( expct, mbe.getMessage() );
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            MingleBinReader rd = createReader();
+
+            try {
+                MingleValue val = rd.readValue();
+                state.failf( "was able to read value: %s", val );
+            } catch ( MingleBinaryException mbe ) { 
+                assertBinaryException( mbe ); 
+            }
         }
     }
 
@@ -367,7 +416,7 @@ class CoreIoTests
     @InvocationFactory
     private
     List< ? >
-    getTests()
+    testCoreIo()
         throws Exception
     {
         return new TestReader().call();
@@ -387,11 +436,12 @@ class CoreIoTests
     private
     static
     void
-    putTestValues( Map< String, Object > m )
+    putTestValues( String prefix,
+                   Map< String, Object > vals )
     {
-        for ( Map.Entry< String, Object > e : m.entrySet() )
+        for ( Map.Entry< String, Object > e : vals.entrySet() )
         {
-            putTestValue( e.getKey(), e.getValue() );
+            putTestValue( prefix + "/" + e.getKey(), e.getValue() );
         }
     }
 
@@ -410,7 +460,7 @@ class CoreIoTests
     void
     putValueRoundtrips()
     {
-        putTestValues( Lang.newMap( String.class, Object.class,
+        Map< String, Object > vals = Lang.newMap( String.class, Object.class,
             "null-val", MingleNull.getInstance(),
             "string-empty", new MingleString( "" ),
             "string-val1", new MingleString( "hello" ),
@@ -484,7 +534,11 @@ class CoreIoTests
                     MingleList.asList( new MingleString( "hello" ) ),
                     MingleNull.getInstance()
                 )
-        ));
+        );
+
+        for ( Map.Entry< String, Object > e : vals.entrySet() ) {
+            putRoundtripValue( e.getKey(), e.getValue() );
+        }
     }
 
     private
@@ -597,8 +651,55 @@ class CoreIoTests
         putPathRoundtrips();
     }
 
+    private
+    static
+    void
+    putSequenceRoundtripValue( String key,
+                               Object val )
+    {
+        putTestValue( "sequence-roundtrip/" + key, val );
+    }
+
+    private
+    static
+    void
+    putSequenceRoundtripVals()
+    {
+        putTestValues( "sequence-roundtrip", 
+            Lang.newMap( String.class, Object.class,
+                "struct-sequence",
+                    MingleList.asList(
+                        new MingleStruct.Builder().
+                            setType( "ns1@v1/S1" ).
+                            build(),
+                        new MingleStruct.Builder().
+                            setType( "ns1@v1/S1" ).
+                            setInt32( "f1", 1 ).
+                            build()
+                    )
+            )
+        );
+    }
+
+    private
+    static
+    void
+    putInvalidDataMessages()
+    {
+        putTestValues( "invalid-data", Lang.newMap( String.class, Object.class,
+            "unexpected-top-level-type-code",
+                "[offset 0]: Expected mingle value but saw type code 0x64",
+            "unexpected-list-val-type-code",
+                "[offset 49]: Expected list value but saw type code 0x64",
+            "unexpected-symmap-val-type-code",
+                "[offset 39]: Expected mingle value but saw type code 0x64"
+        ));
+    }
+
     static
     {
         putRoundtripVals();
+        putSequenceRoundtripVals();
+        putInvalidDataMessages();
     }
 }
