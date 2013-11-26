@@ -121,6 +121,19 @@ class PathTests
             ObjectPaths.format( path, ObjectPaths.SLASH_FORMATTER ) );
     }
 
+    @Test
+    private
+    void
+    testMutableListPath()
+    {
+        ObjectPath< Node > p = ObjectPath.getRoot( new Node( "n1" ) );
+        MutableListPath< Node> lp = p.startMutableList( 4 );
+
+        assertFormat( "/n1[ 4 ]/n2", lp.descend( new Node( "n2" ) ) );
+        assertFormat( "/n1[ 7 ]", lp.setIndex( 7 ) );
+        assertFormat( "/n1[ 8 ]", lp.increment() );
+    }
+
     private
     < V >
     void
@@ -135,7 +148,7 @@ class PathTests
     void
     testPathRootIdentities()
     {
-        ObjectPath< String > root = ObjectPath.newRoot();
+        ObjectPath< String > root = ObjectPath.getRoot();
 
         assertRoot( root, root );
         assertRoot( root, root.descend( "p1" ) );
@@ -143,13 +156,6 @@ class PathTests
 
         assertRoot( root, 
             root.descend( "p1" ).startImmutableList().next().next() );
-
-        // Seems kind of trivial but useful just for code coverage to assert
-        // that newRoot() above really does in fact return a new root
-        state.isFalse(
-            ObjectPaths.rootOf( ObjectPath.< String >getRoot( "p1" ) ).
-                equals( root ) 
-        );
     }
 
     @Test
@@ -254,7 +260,7 @@ class PathTests
         expct.add( p = p.descend( "p2" ) );
         expct.add( p = p.startImmutableList() );
         expct.add( p = p.descend( "p3" ) );
-        expct.add( p = p.getListIndex( 9 ) );
+        expct.add( p = p.startImmutableList( 9 ) );
 
         assertVisit( p, expct );
     }

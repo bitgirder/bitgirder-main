@@ -401,7 +401,7 @@ func TestAtomicTypeIn( t *testing.T ) {
 
 func TestResolveInCore( t *testing.T ) {
     f := func( nm string, expct *QualifiedTypeName ) {
-        decl := &DeclaredTypeName{ []byte( nm ) }
+        decl := &DeclaredTypeName{ nm }
         if qn, ok := ResolveInCore( decl ); ok {
             assert.True( qn.Equals( expct ) )
         } else { t.Fatalf( "Couldn't resolve: %s", nm ) }
@@ -732,7 +732,7 @@ func TestMapImplEachPair( t *testing.T ) {
 }
 
 func TestResolveIn( t *testing.T ) {
-    dn1 := &DeclaredTypeName{ []byte( "T1" ) }
+    dn1 := &DeclaredTypeName{ "T1" }
     ns := MustNamespace( "ns1@v1" )
     qn1 := &QualifiedTypeName{ Namespace: ns, Name: dn1 }
     assert.Equal( qn1, dn1.ResolveIn( ns ) )

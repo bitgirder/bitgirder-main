@@ -12,9 +12,7 @@ import (
 )
 
 func id( strs ...string ) Identifier {
-    parts := make( [][]byte, len( strs ) )
-    for i, str := range strs { parts[ i ] = []byte( str ) }
-    return Identifier( parts )
+    return Identifier( strs )
 }
 
 func ws( str string ) WhitespaceToken { 

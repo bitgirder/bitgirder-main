@@ -98,6 +98,7 @@ func runCheckLoop() {
 }
 
 func main() {
+    log.Printf( "core io checker starting" )
     defer ( initIo() )()
     tests = mg.CoreIoTestsByName()
     runCheckLoop()

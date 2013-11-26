@@ -6,6 +6,7 @@ import (
 //    "log"
     "bytes"
     mg "mingle"
+    "bitgirder/assert"
     "mingle/types"
     "mingle/parser/tree"
 )
@@ -78,13 +79,16 @@ func ( r *p1CompilerRun ) assertExpectedDefsEmpty( m *mg.QnameMap ) {
 func ( r *p1CompilerRun ) assertBuiltTypes( 
     built *types.DefinitionMap, srcIdx int ) {
     m := r.getExpectedDefs( srcIdx )
-    da := newDefAsserter( r.T )
+//    da := newDefAsserter( r.T )
+    a := assert.NewPathAsserter( r.T )
     built.EachDefinition(
         func( defAct types.Definition ) {
             qn := defAct.GetName()
             if expct := m.Get( qn ); expct != nil {
                 defExpct := expct.( types.Definition )
-                da.descend( qn.ExternalForm() ).assertDef( defExpct, defAct )
+//                da.descend( qn.ExternalForm() ).assertDef( defExpct, defAct )
+                da := types.NewDefAsserter( a.Descend( qn.ExternalForm() ) )
+                da.AssertDef( defExpct, defAct )
                 m.Delete( qn )
             } else {
                 r.Fatalf( "No expected result for %s", qn )
@@ -127,9 +131,7 @@ func TestCompilerRunP1( t *testing.T ) {
     units, err := parseP1Sources()
     if err != nil { t.Fatal( err ) }
     for i, e := 0, len( p1Sources ); i < e; i++ {
-//    for i, e := 1, 1; i <= e; i++ {
         for j := 0; j < 2; j++ {
-//        for j := 0; j < 1; j++ {
             ( &p1CompilerRun{ 
                 sourceCount: i + 1, 
                 singleSrc: j == 0, 

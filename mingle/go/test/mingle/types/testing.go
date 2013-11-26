@@ -158,7 +158,7 @@ func ( a *DefAsserter ) assertIdSets( ids1, ids2 []*mg.Identifier ) {
 func ( a *DefAsserter ) assertFieldDef( fd1, fd2 *FieldDefinition ) {
     a.descend( "(Name)" ).Equal( fd1.Name, fd2.Name )
     a.descend( "(Type)" ).True( fd1.Type.Equals( fd2.Type ) )
-    a.descend( "(Default)" ).Equal( fd1.Default, fd2.Default )
+    mg.EqualValues( fd1.Default, fd2.Default, a.descend( "(Default)" ) )
 }
 
 // First check that both have same field sets, then check field by field

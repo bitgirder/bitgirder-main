@@ -11,11 +11,16 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.lang.Lang;
 
 import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ObjectPaths;
 import com.bitgirder.lang.path.PathWiseAsserter;
+
+import com.bitgirder.lang.reflect.ReflectUtils;
 
 import com.bitgirder.test.Test;
 
 import java.util.Iterator;
+
+import java.lang.reflect.Method;
 
 @Test
 final
@@ -37,6 +42,13 @@ class MingleTests
 
 //    private final static String TS2_STRING =
 //        "2007-08-24T13:15:43.000000000-08:00";
+
+    private
+    static
+    interface TestBlock
+    {
+        public void run() throws Exception;
+    }
 
     private
     void
@@ -410,5 +422,178 @@ class MingleTests
         assertTsComp( 0, -1, 0, -1, 0 );
         assertTsComp( 1, -1, 1, -1, 2 );
         assertTsComp( 1, -1, 0, -2, 0 );
+    }
+
+    private
+    void
+    assertValueExceptionMessage( ObjectPath< MingleIdentifier > path,
+                                 String msg,
+                                 MingleValueException mve )
+    {
+        StringBuilder sb = new StringBuilder();
+
+        if ( ! path.isEmpty() ) Mingle.appendIdPath( path, sb ).append( ": " );
+
+        sb.append( msg );
+        state.equalString( sb, mve.getMessage() );
+    }
+
+    private
+    void
+    assertValueException( Class< ? extends MingleValueException > cls,
+                          ObjectPath< MingleIdentifier > path,
+                          String msg,
+                          TestBlock blk )
+        throws Exception
+    {
+        try {
+            blk.run();
+            state.failf( "expected %s", cls );
+        } 
+        catch ( Exception ex )
+        {
+            if ( ! cls.isInstance( ex ) ) throw ex;
+
+            MingleValueException mve = cls.cast( ex );
+
+            state.isTrue( ObjectPaths.areEqual( path, mve.location() ) );
+            assertValueExceptionMessage( path, msg, mve );
+        }
+    }
+
+    private
+    void
+    assertMissingFieldsException( ObjectPath< MingleIdentifier > path,
+                                  String fldList,
+                                  TestBlock blk )
+        throws Exception
+    {
+        assertValueException(
+            MissingFieldsException.class,
+            path,
+            String.format( "missing field(s): %s", fldList ),
+            blk
+        );
+    }
+
+    private
+    void
+    assertAcc( MingleSymbolMapAccessor acc,
+               String meth,
+               CharSequence fld,
+               Object expctVal )
+        throws Exception
+    {
+        Method m = ReflectUtils.getDeclaredMethod(
+            acc.getClass(), meth, new Class< ? >[]{ CharSequence.class } );
+
+        Object val = ReflectUtils.invoke( m, acc, fld );
+
+        state.equal( expctVal, val );
+    }
+
+    @Test
+    private
+    void
+    testSymbolMapAccessorBasic()
+        throws Exception
+    {
+        MingleSymbolMap m = new MingleSymbolMap.Builder().
+            setString( "str1", "hello" ).
+            set( "null1", MingleNull.getInstance() ).
+            set( "struct1", 
+                new MingleStruct.Builder().setType( "ns1@v1/S1" ).build() ).
+            set( "list1", MingleList.empty() ).
+            build();
+        
+        final MingleSymbolMapAccessor acc = MingleSymbolMapAccessor.forMap( m );
+
+        MingleString str1 = new MingleString( "hello" );
+        assertAcc( acc, "getMingleString", "str1", str1 );
+        assertAcc( acc, "getMingleString", "strX", null );
+        assertAcc( acc, "getMingleString", "null1", null );
+        assertAcc( acc, "getString", "str1", "hello" );
+        assertAcc( acc, "getString", "strX", null );
+        assertAcc( acc, "getStructAccessor", "structX", null );
+        assertAcc( acc, "expectMingleString", "str1", str1 );
+        assertAcc( acc, "expectMingleValue", "str1", str1 );
+
+        state.isTrue( acc.getStructAccessor( "struct1" ) 
+            instanceof MingleStructAccessor );
+        
+        state.isTrue( acc.getListAccessor( "list1" ) 
+            instanceof MingleListAccessor );
+
+        assertMissingFieldsException( acc.getPath(), "str-x", new TestBlock() { 
+            public void run() { acc.expectMingleString( "strX" ); }
+        });
+
+        assertAcc( acc, "expectString", "str1", "hello" );
+        
+        assertMissingFieldsException( acc.getPath(), "str-x", new TestBlock() {
+            public void run() { acc.expectString( "strX" ); }
+        });
+    }
+
+    @Test
+    private
+    void
+    testMingleSymbolMapAccessorErrorPaths()
+        throws Exception
+    {
+        ObjectPath< MingleIdentifier > p1 = ObjectPath.getRoot( id( "p1" ) );
+
+        MingleSymbolMap m = new MingleSymbolMap.Builder().
+            setString( "str1", "hello" ).
+            setInt32( "int32Val1", 1 ).
+            build();
+ 
+        final MingleSymbolMapAccessor acc = 
+            MingleSymbolMapAccessor.forMap( m, p1 );
+
+        assertMissingFieldsException( p1, "str-x", new TestBlock() {
+            public void run() { acc.expectString( "strX" ); }
+        });
+
+        assertValueException( 
+            MingleTypeCastException.class, 
+            p1.descend( id( "int32Val1" ) ), 
+            "Expected value of type mingle:core@v1/Buffer but found " +
+                "mingle:core@v1/Int32",
+            new TestBlock() { 
+                public void run() { acc.expectMingleBuffer( "int32Val1" ); }
+            }
+        );
+    }
+
+    @Test
+    public
+    void
+    testListAccessorBasic()
+        throws Exception
+    {
+        MingleListAccessor acc = MingleListAccessor.forList(
+            MingleList.asList(
+                new MingleString( "str1" ),
+                new MingleString( "str2" ),
+                new MingleInt32( 1 ),
+                new MingleInt32( 2 ),
+                new MingleInt32( 3 )
+            )
+        );
+
+        final MingleListAccessor.Traversal t = acc.traversal();
+
+        state.equal( new MingleString( "str1" ), t.nextMingleString() );
+        state.equal( "str2", t.nextString() );
+        state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
+        
+        assertValueException(
+            MingleTypeCastException.class,
+            ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
+            "Expected value of type mingle:core@v1/Buffer but found " +
+                "mingle:core@v1/Int32",
+            new TestBlock() { public void run() { t.nextMingleBuffer(); } }
+        );
     }
 }

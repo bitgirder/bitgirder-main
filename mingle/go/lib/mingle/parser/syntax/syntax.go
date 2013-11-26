@@ -5,18 +5,17 @@ import(
     "io"
     "fmt"
     "strings"
-    "bytes"
     "mingle/parser/lexer"
     "mingle/parser/loc"
 )
 
-type Identifier [][]byte
+type Identifier []string
 
 func ( id Identifier ) String() string {
-    return string( bytes.Join( id, []byte{ '-' } ) )
+    return string( strings.Join( id, "-" ) )
 }
 
-type DeclaredTypeName []byte
+type DeclaredTypeName string
 
 type Namespace struct {
     Parts []Identifier   
@@ -86,11 +85,9 @@ func ( sb *Builder ) convertToken( tok lexer.Token ) Token {
     if tok == nil { return nil }
     switch t := tok.( type ) {
     case lexer.Identifier:
-        buf := [][]byte( t )
-        parts := make( [][]byte, len( buf ) )
-        for i, part := range buf { parts[ i ] = part }
+        parts := []string( t )
         return Identifier( parts )
-    case lexer.DeclaredTypeName: return DeclaredTypeName( []byte( t ) )
+    case lexer.DeclaredTypeName: return DeclaredTypeName( t )
     }
     return Token( tok )
 }

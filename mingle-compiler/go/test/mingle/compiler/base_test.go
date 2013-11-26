@@ -3,7 +3,6 @@ package compiler
 import (
     "testing"
     "fmt"
-//    "log"
     "bytes"
     "bitgirder/assert"
     "mingle/parser/tree"
@@ -121,7 +120,7 @@ func ( et *compilerTest ) assertDefs( cr *CompilationResult ) {
         a2 := a.Descend( nm )
         if builtDef := built.Get( nm ); builtDef == nil {
             a2.Fatalf( "not built" )
-        } else { ( &defAsserter{ a2 } ).assertDef( def, builtDef ) }
+        } else { types.NewDefAsserter( a ).AssertDef( def, builtDef ) }
     })
 }
 
@@ -640,10 +639,8 @@ func TestCompiler( t *testing.T ) {
     }
     a := assert.NewPathAsserter( t )
     for _, test := range tests {
-//        test.PathAsserter = &assert.Asserter{ a.Descend( test.name ) }
         test.PathAsserter = a.Descend( test.name )
         test.t = t
-//        log.Printf( "Testing %s", test.name )
         test.call()
     }
 }

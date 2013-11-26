@@ -65,7 +65,7 @@ class Mingle
         Map< MingleTypeReference, Class< ? extends MingleValue > > 
             VALUE_CLASSES;
 
-    private final static ListTypeReference TYPE_VALUE_LIST;
+    public final static ListTypeReference TYPE_VALUE_LIST;
 
     private final static ObjectPathFormatter< MingleIdentifier > 
         PATH_FORMATTER = new PathFormatterImpl();
@@ -366,12 +366,11 @@ class Mingle
         return implInspect( new StringBuilder(), mv );
     }
 
-    private
     static
     MingleTypeReference
     inferredTypeOf( MingleValue mv )
     {   
-        state.notNull( mv );
+        state.notNull( mv, "mv" );
 
         if ( mv instanceof MingleBoolean ) return TYPE_BOOLEAN;
         if ( mv instanceof MingleInt32 ) return TYPE_INT32;
@@ -386,6 +385,10 @@ class Mingle
         if ( mv instanceof MingleSymbolMap ) return TYPE_SYMBOL_MAP;
         if ( mv instanceof MingleList ) return TYPE_VALUE_LIST;
         if ( mv instanceof MingleNull ) return TYPE_NULL;
+
+        if ( mv instanceof TypedMingleValue ) {
+            return ( (TypedMingleValue) mv ).getTypeReference();
+        }
 
         throw state.createFail( "Unhandled value:", mv.getClass() );
     }
@@ -965,5 +968,29 @@ class Mingle
         if ( p == null ) return null;
 
         return Lang.castUnchecked( (ObjectPath< ? >) p );
+    }
+
+    public
+    static
+    String
+    asJavaEnumString( MingleIdentifier id )
+    {
+        inputs.notNull( id, "id" );
+
+        CharSequence fmt = id.format( MingleIdentifierFormat.LC_UNDERSCORE );
+        return fmt.toString().toUpperCase();
+    }
+
+    public
+    static
+    < E extends Enum< E > >
+    E
+    asJavaEnumValue( Class< E > cls,
+                     MingleIdentifier id )
+    {
+        inputs.notNull( cls, "cls" );
+        inputs.notNull( id, "id" );
+
+        return Enum.valueOf( cls, asJavaEnumString( id ) );
     }
 }

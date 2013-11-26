@@ -9,23 +9,15 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
 import com.bitgirder.lang.TypedString;
 
-import com.bitgirder.io.BinReader;
-
 import com.bitgirder.test.Test;
 import com.bitgirder.test.TestCall;
 import com.bitgirder.test.LabeledTestObject;
 import com.bitgirder.test.InvocationFactory;
 
-import com.bitgirder.testing.TestData;
-
-import java.io.InputStream;
-import java.io.BufferedInputStream;
-
 import java.util.List;
 import java.util.Set;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Queue;
 
 @Test
 final
@@ -34,46 +26,16 @@ class ParseTests
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
+    private static void code( Object... args ) { CodeLoggers.code( args ); }
 
-    private final static String FILE_NAME = "parser-tests.bin";
-    
-    private final static int FILE_VERSION = 1;
-    
-    private final static byte FLD_TEST_TYPE = (byte) 0x01;
-    private final static byte FLD_INPUT = (byte) 0x02;
-    private final static byte FLD_EXPECT = (byte) 0x03;
-    private final static byte FLD_ERROR = (byte) 0x04;
-    private final static byte FLD_END = (byte) 0x05;
-    private final static byte FLD_EXTERNAL_FORM = (byte) 0x06;
-
-    private final static byte TYPE_IDENTIFIER = (byte) 0x01;
-    private final static byte TYPE_NAMESPACE = (byte) 0x02;
-    private final static byte TYPE_DECLARED_TYPE_NAME = (byte) 0x03;
-    private final static byte TYPE_QUALIFIED_TYPE_NAME = (byte) 0x05;
-    private final static byte TYPE_IDENTIFIED_NAME = (byte) 0x06;
-    private final static byte TYPE_REGEX_RESTRICTION = (byte) 0x07;
-    private final static byte TYPE_RANGE_RESTRICTION = (byte) 0x08;
-    private final static byte TYPE_ATOMIC_TYPE_REFERENCE = (byte) 0x09;
-    private final static byte TYPE_LIST_TYPE_REFERENCE = (byte) 0x0a;
-    private final static byte TYPE_NULLABLE_TYPE_REFERENCE = (byte) 0x0b;
-    private final static byte TYPE_NIL = (byte) 0x0c;
-    private final static byte TYPE_INT32 = (byte) 0x0d;
-    private final static byte TYPE_INT64 = (byte) 0x0e;
-    private final static byte TYPE_FLOAT32 = (byte) 0x0f;
-    private final static byte TYPE_FLOAT64 = (byte) 0x10;
-    private final static byte TYPE_STRING = (byte) 0x11;
-    private final static byte TYPE_TIMESTAMP = (byte) 0x12;
-    private final static byte TYPE_BOOLEAN = (byte) 0x13;
-    private final static byte TYPE_PARSE_ERROR = (byte) 0x14;
-    private final static byte TYPE_RESTRICTION_ERROR = (byte) 0x15;
-    private final static byte TYPE_STRING_TOKEN = (byte) 0x16;
-    private final static byte TYPE_NUMERIC_TOKEN = (byte) 0x17;
-    private final static byte TYPE_UINT32 = (byte) 0x18;
-    private final static byte TYPE_UINT64 = (byte) 0x19;
-
-    private final static byte ELT_TYPE_FILE_END = (byte) 0x00;
-    private final static byte ELT_TYPE_PARSE_TEST = (byte) 0x01;
+    private 
+    static 
+    void 
+    codef( String tmpl, 
+           Object... args ) 
+    { 
+        CodeLoggers.code( args ); 
+    }
 
     private final static Map< ErrorOverrideKey, Object > ERR_OVERRIDES =
         Lang.newMap( ErrorOverrideKey.class, Object.class,
@@ -579,400 +541,6 @@ class ParseTests
     }
 
     private
-    final
-    static
-    class InputException
-    extends Exception
-    {
-        private InputException( String msg ) { super( msg ); }
-    }
-
-    private
-    final
-    static
-    class CoreParseTestReader
-    {
-        private final BinReader rd;
-
-        private boolean readHeader;
-
-        private
-        CoreParseTestReader( InputStream is )
-        {
-            rd = BinReader.asReaderLe( new BufferedInputStream( is ) );
-        }
-
-        private
-        Exception
-        failf( String fmt,
-               Object... args )
-        {
-            return new InputException( String.format( fmt, args ) );
-        }
-
-        private
-        void
-        readHeader()
-            throws Exception
-        {
-            int i = rd.readInt();
-
-            if ( i == FILE_VERSION ) readHeader = true;
-            else throw failf( "Unhandled file version: 0x%04x", i );
-        }
-
-        private
-        int
-        readLen( int minVal,
-                 String failTmpl )
-            throws Exception
-        {
-            int res = rd.readInt();
-
-            if ( res < minVal ) throw failf( failTmpl, res );
-            return res;
-        }
-
-        private
-        byte
-        expectTypeCode( byte tc )
-            throws Exception
-        {
-            byte act = rd.readByte();
-
-            if ( act == tc ) return tc;
-            
-            throw failf( "Expected type code 0x%02x but got 0x%02x", tc, act );
-        }
-
-        private
-        TestType
-        readTestType()
-            throws Exception
-        {
-            String ttStr = rd.readUtf8();
-            String enValStr = ttStr.replace( '-', '_' ).toUpperCase();
-
-            return TestType.valueOf( enValStr );
-        }
-
-        private
-        Object
-        readJvPrimVal()
-            throws Exception
-        {
-            byte tc = rd.readByte();
-
-            switch ( tc )
-            {
-                case TYPE_BOOLEAN: return rd.readBoolean();
-                default: throw failf( "Unrecognized prim type: 0x%02x", tc );
-            }
-        }
-
-        // Returns null if an empty string is read
-        private
-        String
-        readOptUtf8()
-            throws Exception
-        {
-            String res = rd.readUtf8();
-            return res.length() == 0 ? null : res;
-        }
-
-        // Read but ignore the actual num token data for now
-        private
-        MingleLexer.Number
-        readNumToken()
-            throws Exception
-        {
-            MingleLexer.Number res = new MingleLexer.Number(
-                Boolean.class.cast( readJvPrimVal() ),
-                readOptUtf8(),
-                readOptUtf8(),
-                readOptUtf8()
-            );
-
-            rd.readUtf8(); // skip expChar
-
-            return res;
-        }
-
-        private
-        MingleIdentifier
-        readIdentifier( boolean expctTc )
-            throws Exception
-        {
-            if ( expctTc ) expectTypeCode( TYPE_IDENTIFIER );
-
-            int len = readLen( 1, "Invalid id parts len: %d" );
-
-            String[] parts = new String[ len ];
-            for ( int i = 0; i < len; ++i ) parts[ i ] = rd.readUtf8();
-
-            return new MingleIdentifier( parts );
-        }
-
-        private
-        MingleIdentifier[]
-        readIdentifiers()
-            throws Exception
-        {
-            int len = readLen( 1, "Invalid namespace parts len: %d" );
-
-            MingleIdentifier[] res = new MingleIdentifier[ len ];
-            for ( int i = 0; i < len; ++i ) res[ i ] = readIdentifier( true );
-
-            return res;
-        }
-
-        private
-        MingleNamespace
-        readNamespace( boolean expectTc )
-            throws Exception
-        {
-            if ( expectTc ) expectTypeCode( TYPE_NAMESPACE );
-
-            return new MingleNamespace( 
-                readIdentifiers(), 
-                readIdentifier( true ) 
-            );
-        }
-
-        private
-        DeclaredTypeName
-        readDeclName( boolean expctType )
-            throws Exception
-        {
-            if ( expctType ) expectTypeCode( TYPE_DECLARED_TYPE_NAME );
-
-            return new DeclaredTypeName( rd.readUtf8() );
-        }
-
-        private
-        QualifiedTypeName
-        readQname()
-            throws Exception
-        {
-            return new QualifiedTypeName(
-                readNamespace( true ), 
-                readDeclName( true ) 
-            );
-        }
-
-        private
-        MingleIdentifiedName
-        readIdentifiedName()
-            throws Exception
-        {
-            return new MingleIdentifiedName(
-                readNamespace( true ), 
-                readIdentifiers() 
-            );
-        }
-
-        private
-        MingleRegexRestriction
-        readRegexRestriction()
-            throws Exception
-        {
-            return MingleRegexRestriction.create( rd.readUtf8() );
-        }
-
-        private
-        MingleRangeRestriction
-        readRangeRestriction( TypeName tn )
-            throws Exception
-        {
-            QualifiedTypeName qn = (QualifiedTypeName) tn;
-            AtomicTypeReference at = new AtomicTypeReference( qn, null );
-            Class< ? extends MingleValue > typeTok = Mingle.valueClassFor( at );
-
-            return MingleRangeRestriction.createChecked(
-                (Boolean) readJvPrimVal(),
-                (MingleValue) readVal(),
-                (MingleValue) readVal(),
-                (Boolean) readJvPrimVal(),
-                typeTok
-            );
-        }
-
-        private
-        MingleValueRestriction
-        readRestriction( TypeName tn )
-            throws Exception
-        {
-            byte tc = rd.readByte();
-
-            switch ( tc )
-            {
-                case TYPE_REGEX_RESTRICTION: return readRegexRestriction();
-                case TYPE_RANGE_RESTRICTION: return readRangeRestriction( tn );
-                case TYPE_NIL: return null;
-
-                default: 
-                    throw failf( "Unhandled restriction type: 0x%02x", tc );
-            }
-        }
-
-        private
-        AtomicTypeReference
-        readAtomicType()
-            throws Exception
-        {
-            TypeName tn = (TypeName) readVal();
-
-            return new AtomicTypeReference( tn, readRestriction( tn ) );
-        }
-
-        private
-        ListTypeReference
-        readListType()
-            throws Exception
-        {
-            return new ListTypeReference(
-                (MingleTypeReference) readVal(),
-                (Boolean) readJvPrimVal()
-            );
-        }
-
-        private
-        NullableTypeReference
-        readNullableType()
-            throws Exception
-        {
-            return new NullableTypeReference( (MingleTypeReference) readVal() );
-        }
-
-        private
-        Object
-        readVal()
-            throws Exception
-        {
-            byte tc = rd.readByte();
-
-            switch ( tc )
-            {
-                case TYPE_NIL: return null;
-                case TYPE_STRING: return new MingleString( rd.readUtf8() );
-                case TYPE_BOOLEAN: 
-                    return MingleBoolean.valueOf( rd.readBoolean() );
-                case TYPE_INT32: return new MingleInt32( rd.readInt() );
-                case TYPE_UINT32: return new MingleUint32( rd.readInt() );
-                case TYPE_INT64: return new MingleInt64( rd.readLong() );
-                case TYPE_UINT64: return new MingleUint64( rd.readLong() );
-                case TYPE_FLOAT32: return new MingleFloat32( rd.readFloat() );
-                case TYPE_FLOAT64: return new MingleFloat64( rd.readDouble() );
-                case TYPE_TIMESTAMP:
-                    return MingleTimestamp.create( rd.readUtf8() );
-                case TYPE_STRING_TOKEN: 
-                    return new MingleString( rd.readUtf8() );
-                case TYPE_NUMERIC_TOKEN: return readNumToken();
-                case TYPE_IDENTIFIER: return readIdentifier( false );
-                case TYPE_NAMESPACE: return readNamespace( false );
-                case TYPE_DECLARED_TYPE_NAME: return readDeclName( false );
-                case TYPE_QUALIFIED_TYPE_NAME: return readQname();
-                case TYPE_IDENTIFIED_NAME: return readIdentifiedName();
-                case TYPE_ATOMIC_TYPE_REFERENCE: return readAtomicType();
-                case TYPE_LIST_TYPE_REFERENCE: return readListType();
-                case TYPE_NULLABLE_TYPE_REFERENCE: return readNullableType();
-
-                default: throw failf( "Unrecognized value type: 0x%02x", tc );
-            }
-        }
-
-        private
-        ErrorExpectation
-        readErrorExpect()
-            throws Exception
-        {
-            byte tc = rd.readByte();
-
-            switch ( tc )
-            {
-                case TYPE_PARSE_ERROR: 
-                    return new ParseErrorExpectation(
-                        rd.readInt(), 
-                        rd.readUtf8() 
-                    );
-
-                case TYPE_RESTRICTION_ERROR:
-                    return new RestrictionErrorExpectation( rd.readUtf8() );
-
-                default: 
-                    throw failf( "Unhandled error expect type: 0x%02x", tc );
-            }
-        }
-
-        private
-        boolean
-        readField( CoreParseTest cpt )
-            throws Exception
-        {
-            byte fld = rd.readByte();
-
-            switch ( fld )
-            {
-                case FLD_TEST_TYPE: cpt.tt = readTestType(); return false;
-                case FLD_INPUT: cpt.in = rd.readUtf8(); return false;
-                case FLD_EXPECT: cpt.expct = readVal(); return false;
-                case FLD_ERROR: cpt.errExpct = readErrorExpect(); return false;
-                case FLD_EXTERNAL_FORM: 
-                    cpt.extForm = rd.readUtf8(); return false;
-                case FLD_END: return true;
-
-                default: throw failf( "Unrecognized field type: 0x%02x", fld );
-            }
-        }
-
-        private
-        CoreParseTest
-        readParseTest()
-            throws Exception
-        {
-            CoreParseTest res = new CoreParseTest();
-
-            while ( ! readField( res ) );
-
-            res.validate();
-
-            return res;
-        }
-
-        private
-        CoreParseTest
-        next()
-            throws Exception
-        {
-            if ( ! readHeader ) readHeader();
-
-            byte b = rd.readByte();
-
-            switch ( b )
-            {
-                case ELT_TYPE_FILE_END: return null;
-                case ELT_TYPE_PARSE_TEST: return readParseTest();
-                default: throw failf( "Unrecognized elt type: 0x%02x", b );
-            }
-        }
-    }
-
-    private
-    CoreParseTest
-    filter( CoreParseTest t )
-    {
-        if ( t.tt == TestType.TYPE_REFERENCE )
-        {
-            if ( t.in.indexOf( "~(" ) >= 0 || t.in.indexOf( "~[" ) >= 0 )
-            {
-//                if ( t.errExpct != null ) t = null;
-            }
-        }
-
-        return t;
-    }
-
-    private
     void
     checkOverrides( List< CoreParseTest > l )
     {
@@ -987,23 +555,258 @@ class ParseTests
         state.isTrue( s.isEmpty(), "Unmatched overrides:", s );
     }
 
+    private
+    final
+    static
+    class ReaderImpl
+    extends MingleTestGen.StructFileReader< CoreParseTest >
+    {
+        private ReaderImpl() { super( "parser-tests.bin" ); }
+
+        private
+        ParseErrorExpectation
+        convertParseErrorExpect( MingleStructAccessor acc )
+        {
+            return new ParseErrorExpectation(
+                acc.expectInt( "col" ),
+                acc.expectString( "message" )
+            );
+        }
+
+        private
+        RestrictionErrorExpectation
+        convertRestrictErrorExpect( MingleStructAccessor acc )
+        {
+            return new RestrictionErrorExpectation(
+                acc.expectString( "message" ) );
+        }
+
+        private
+        MingleLexer.Number
+        convertNumericToken( MingleStructAccessor acc )
+        {
+            // we skip expChar
+
+            return new MingleLexer.Number(
+                acc.expectBoolean( "negative" ),
+                acc.getString( "int" ),
+                acc.getString( "frac" ),
+                acc.getString( "exp" )
+            );
+        }
+
+        private
+        MingleIdentifier
+        convertIdentifier( MingleStructAccessor acc )
+        {
+            MingleListAccessor la = acc.expectListAccessor( "parts" ); 
+
+            List< String > parts = Lang.newList();
+
+            for ( MingleListAccessor.Traversal t = la.traversal();
+                    t.hasNext(); )
+            {
+                parts.add( t.nextString() );
+            }
+
+            return new MingleIdentifier( parts.toArray( new String[] {} ) );
+        }
+
+        private
+        MingleIdentifier[]
+        convertIdList( MingleListAccessor acc )
+        {
+            List< MingleIdentifier > parts = Lang.newList();
+
+            MingleListAccessor.Traversal t = acc.traversal();
+
+            while ( t.hasNext() ) {
+                parts.add( convertIdentifier( t.nextStructAccessor() ) );
+            }
+
+            return parts.toArray( new MingleIdentifier[ parts.size() ] );
+        }
+
+        private
+        MingleNamespace
+        convertNamespace( MingleStructAccessor acc )
+        {
+            return new MingleNamespace(
+                convertIdList( acc.expectListAccessor( "parts" ) ),
+                convertIdentifier( acc.expectStructAccessor( "version" ) )
+            );
+        }
+
+        private
+        DeclaredTypeName
+        convertDeclName( MingleStructAccessor acc )
+        {
+            return new DeclaredTypeName( acc.expectString( "name" ) );
+        }
+
+        private
+        QualifiedTypeName
+        convertQname( MingleStructAccessor acc )
+        {
+            return new QualifiedTypeName(
+                convertNamespace( acc.expectStructAccessor( "namespace" ) ),
+                convertDeclName( acc.expectStructAccessor( "name" ) )
+            );
+        }
+
+        private
+        MingleIdentifiedName
+        convertIdentifiedName( MingleStructAccessor acc )
+        {
+            return new MingleIdentifiedName(
+                convertNamespace( acc.expectStructAccessor( "namespace" ) ),
+                convertIdList( acc.expectListAccessor( "names" ) )
+            );
+        }
+
+        private
+        MingleRegexRestriction
+        convertRegexRestriction( MingleStructAccessor acc )
+        {
+            return MingleRegexRestriction.
+                create( acc.expectString( "pattern" ) );
+        }
+
+        private
+        MingleRangeRestriction
+        convertRangeRestriction( MingleStructAccessor acc,
+                                 QualifiedTypeName qn )
+        {
+            return MingleRangeRestriction.createChecked(
+                acc.expectBoolean( "minClosed" ),
+                acc.getMingleValue( "min" ),
+                acc.getMingleValue( "max" ),
+                acc.expectBoolean( "maxClosed" ),
+                Mingle.valueClassFor( qn )
+            );
+        }
+
+        private
+        MingleValueRestriction
+        convertRestriction( MingleStructAccessor acc,
+                            QualifiedTypeName qn )
+        {
+            String typ = acc.getType().getName().getExternalForm().toString();
+            
+            if ( typ.equals( "RegexRestriction" ) ) {
+                return convertRegexRestriction( acc );
+            } else if ( typ.equals( "RangeRestriction" ) ) {
+                return convertRangeRestriction( acc, qn );
+            }
+
+            throw state.failf( "unhandled restriction: %s", typ );
+        }
+
+        private
+        AtomicTypeReference
+        convertAtomicRef( MingleStructAccessor acc )
+        {
+            TypeName nm = 
+                (TypeName) convertValue( acc.expectStructAccessor( "name" ) );
+
+            MingleValueRestriction rst = null;
+            
+            MingleStructAccessor rstAcc = 
+                acc.getStructAccessor( "restriction" );
+
+            if ( rstAcc != null ) {
+                rst = convertRestriction( rstAcc, (QualifiedTypeName) nm );
+            }
+
+            return new AtomicTypeReference( nm, rst );
+        }
+
+        private
+        ListTypeReference
+        convertListTypeRef( MingleStructAccessor acc )
+        {
+            return new ListTypeReference(
+                (MingleTypeReference) 
+                    convertValue( acc.expectStructAccessor( "elementType" ) ),
+                acc.expectBoolean( "allowsEmpty" )
+            );
+        }
+
+        private
+        NullableTypeReference
+        convertNullableTypeRef( MingleStructAccessor acc )
+        {
+            return new NullableTypeReference(
+                (MingleTypeReference) 
+                    convertValue( acc.expectStructAccessor( "type" ) ) );
+        }
+
+        private
+        Object
+        convertValue( MingleStructAccessor acc )
+        {
+            if ( acc == null ) return null;
+
+            String typ = acc.getType().getName().getExternalForm().toString();
+
+            if ( typ.equals( "ParseErrorExpect" ) ) {
+                return convertParseErrorExpect( acc );
+            } else if ( typ.equals( "RestrictionErrorExpect" ) ) {
+                return convertRestrictErrorExpect( acc );
+            } else if ( typ.equals( "StringToken" ) ) {
+                return acc.expectMingleString( "string" );
+            } else if ( typ.equals( "NumericToken" ) ) {
+                return convertNumericToken( acc );
+            } else if ( typ.equals( "Identifier" ) ) {
+                return convertIdentifier( acc );
+            } else if ( typ.equals( "Namespace" ) ) { 
+                return convertNamespace( acc );
+            } else if ( typ.equals( "DeclaredTypeName" ) ) {
+                return convertDeclName( acc );
+            } else if ( typ.equals( "QualifiedTypeName" ) ) {
+                return convertQname( acc );
+            } else if ( typ.equals( "IdentifiedName" ) ) {
+                return convertIdentifiedName( acc );
+            } else if ( typ.equals( "AtomicTypeReference" ) ) {
+                return convertAtomicRef( acc );
+            } else if ( typ.equals( "ListTypeReference" ) ) {
+                return convertListTypeRef( acc );
+            } else if ( typ.equals( "NullableTypeReference" ) ) {
+                return convertNullableTypeRef( acc );
+            }
+
+            throw state.failf( "unhandled type: %s", typ );
+        }
+
+        public CoreParseTest convertStruct( MingleStruct ms ) 
+        {
+            CoreParseTest res = new CoreParseTest();
+ 
+            MingleStructAccessor acc = MingleStructAccessor.forStruct( ms );
+
+            res.in = acc.expectString( "in" );
+
+            res.tt = Mingle.asJavaEnumValue( TestType.class, 
+                MingleIdentifier.create( acc.expectString( "test-type" ) ) );
+
+            res.extForm = acc.expectString( "externalForm" );
+
+            res.expct = convertValue( acc.getStructAccessor( "expect" ) );
+
+            res.errExpct = (ErrorExpectation) 
+                convertValue( acc.getStructAccessor( "err" ) );
+
+            return res;
+        }
+    }
+
     @InvocationFactory
     private
     List< CoreParseTest >
     testCoreParse()
         throws Exception
     {
-        List< CoreParseTest > res = Lang.newList();
-
-        InputStream is = TestData.openDataFile( FILE_NAME );
-        CoreParseTestReader rd = new CoreParseTestReader( is );
-
-        CoreParseTest t = null;
-//        while ( ( t = rd.next() ) != null ) res.add( t );
-        while ( ( t = rd.next() ) != null ) 
-        {
-            if ( ( t = filter( t ) ) != null ) res.add( t );
-        }
+        List< CoreParseTest > res = new ReaderImpl().read();
 
         checkOverrides( res );
 

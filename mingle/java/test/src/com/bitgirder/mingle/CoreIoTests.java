@@ -57,20 +57,30 @@ class CoreIoTests
     private final static Map< String, Object > TEST_VALS = Lang.newMap();
 
     private PipedProcess checker;
+    private final Object checkerSync = new Object();
 
-    @Before
+    // must be called while holding lock for checkerSync
     private
     void
     startChecker()
         throws Exception
     {
+        state.isTrue( checker == null, "checker already started" );
+
         String cmd = 
             TestData.expectCommand( "check-core-io" ).getAbsolutePath();
 
         checker = PipedProcess.start( cmd );
     }
 
-    @After private void stopChecker() throws Exception { checker.kill(); }
+    @After 
+    private 
+    void 
+    stopChecker() 
+        throws Exception 
+    { 
+        if ( checker != null ) checker.kill(); 
+    }
 
     private 
     static 
@@ -242,8 +252,10 @@ class CoreIoTests
         checkWriteValue()
             throws Exception
         {
-            synchronized ( checker )
+            synchronized ( checkerSync )
             {
+                if ( checker == null ) startChecker();
+
                 checker.usePipe(
                     new ObjectReceiver< InputStream >() {
                         public void receive( InputStream is ) throws Exception {

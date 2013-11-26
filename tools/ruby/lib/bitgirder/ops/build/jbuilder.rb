@@ -18,6 +18,8 @@ module Java
 
 ENV_JBUILDER_TEST_RESOURCES = "JBUILDER_TEST_RESOURCES"
 
+ENV_CODEGEN_GEN_SRC_DIR = "CODEGEN_GEN_SRC_DIR"
+
 NS_STR = "bitgirder:ops:build:java@v1"
 
 include BitGirder::Core
@@ -782,6 +784,11 @@ class AbstractCodegenTask < AbstractJavaModuleTask
     end
 
     private
+    def generated_sources
+        Dir.glob( "#{gen_src_dir}/**/*.java" )
+    end 
+
+    private
     def compile_generated( chain )
         
         argv = []
@@ -792,7 +799,7 @@ class AbstractCodegenTask < AbstractJavaModuleTask
             argv << "-classpath" << cp.join( ":" )
         end
 
-        argv += Dir.glob( "#{gen_src_dir}/**/*.java" )
+        argv += generated_sources
         
         UnixProcessBuilder.new( cmd: jcmd( "javac" ), argv: argv ).system
     end
@@ -804,7 +811,7 @@ class AbstractCodegenTask < AbstractJavaModuleTask
     # Overridable
     public
     def compile_generated?
-        true
+        not generated_sources.empty?
     end
 
     private
@@ -841,6 +848,39 @@ class AbstractCodegenTask < AbstractJavaModuleTask
         info
     end
 end
+
+class RbGenerator < AbstractCodegenTask
+    
+    def initialize( opts )
+        super(
+            opts.merge(
+                generator_key: :rb_gen,
+                build_info_type_name: "RbGenerator"
+            )
+        )
+    end
+
+    def compile_generated?
+        false
+    end
+
+    def run_script( src )
+
+        pb_opts = ruby_ctx.proc_builder_opts( "ruby" )
+        pb_opts[ :argv ] << src
+        pb_opts[ :env ][ ENV_RUBYLIB ] = $:.join( ":" )
+        pb_opts[ :env ][ ENV_CODEGEN_GEN_SRC_DIR ] = gen_src_dir
+        pb_opts[ :env ][ ENV_BITGIRDER_DEBUG ] = "true" if run_ctx[ :verbose ]
+
+        UnixProcessBuilder.system( pb_opts )
+    end
+
+    def generate( srcs, chain )
+        srcs.each { |src| run_script( src ) }
+    end
+end
+
+TaskRegistry::instance.register_path( RbGenerator, :java, :codegen, :rb_gen )
 
 class XjcExecutor < AbstractCodegenTask
     

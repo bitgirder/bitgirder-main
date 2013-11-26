@@ -17,10 +17,7 @@ func assertWriteValueValue(
 ) {
     if val, err := rd.ReadValue(); err == nil {
         if expct == nil { val = NullVal }
-        if tm, tmOk := expct.( Timestamp ); tmOk {
-            a.Truef( tm.Compare( val ) == 0, "input time was %s, got: %s",
-                tm, val )
-        } else { a.Equal( expct, val ) }
+        EqualValues( expct.( Value ), val, a )
     } else { a.Fatal( err ) }
 }
 

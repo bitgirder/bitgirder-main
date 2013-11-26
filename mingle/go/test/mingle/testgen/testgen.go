@@ -11,6 +11,8 @@ import (
     bgio "bitgirder/io"
 )
 
+const typFileEnd = "mingle:testgen@v1/TestFileEnd"
+
 type OutFile struct {
     fname string
 }
@@ -80,4 +82,16 @@ func WriteOutFile( call func( w *mg.BinWriter ) error ) {
     defer w.Close()
     log.Printf( "Writing %s", tgf.Name() )
     if err = call( w ); err != nil { log.Fatal( err ) }
+}
+
+func WriteStructFile( gen func() ( *mg.Struct, error ) ) {
+    WriteOutFile( func( w *mg.BinWriter ) error {
+        var s *mg.Struct
+        var err error
+        for s, err = gen(); err == nil && s != nil; s, err = gen() {
+            if err = w.WriteValue( s ); err != nil { return err }
+        }
+        if err != nil { return err }
+        return w.WriteValue( mg.MustStruct( typFileEnd ) )
+    })
 }

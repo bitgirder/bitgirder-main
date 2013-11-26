@@ -58,9 +58,7 @@ func assertCoreParseError(
 }
 
 func convertPtIdentifier( id pt.Identifier ) *Identifier {
-    parts := make( []idPart, len( id ) )
-    for i, part := range id { parts[ i ] = idPart( part ) }
-    return &Identifier{ parts }
+    return &Identifier{ []string( id ) }
 }
 
 func convertPtIdentifiers( ids []pt.Identifier ) []*Identifier {
@@ -77,7 +75,7 @@ func convertPtNamespace( ns *pt.Namespace ) *Namespace {
 }
 
 func convertPtDeclTypeName( nm pt.DeclaredTypeName ) *DeclaredTypeName {
-    return &DeclaredTypeName{ []byte( nm ) }
+    return &DeclaredTypeName{ string( nm ) }
 }
 
 func convertPtQualifiedTypeName( nm *pt.QualifiedTypeName ) *QualifiedTypeName {

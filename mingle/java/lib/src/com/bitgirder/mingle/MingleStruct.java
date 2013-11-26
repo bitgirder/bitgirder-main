@@ -6,7 +6,8 @@ import com.bitgirder.validation.State;
 public
 final
 class MingleStruct
-implements MingleValue
+implements MingleValue,
+           TypedMingleValue
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
@@ -29,6 +30,13 @@ implements MingleValue
 
     public QualifiedTypeName getType() { return type; }
     public MingleSymbolMap getFields() { return flds; }
+
+    public 
+    MingleTypeReference
+    getTypeReference()
+    {
+        return new AtomicTypeReference( type, null );
+    }
 
     public int hashCode() { return type.hashCode() | flds.hashCode(); }
 

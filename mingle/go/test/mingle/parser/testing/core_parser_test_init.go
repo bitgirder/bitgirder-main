@@ -12,14 +12,14 @@ type NumericToken struct {
     Int, Frac, Exp, ExpChar string 
 }
 
-type Identifier [][]byte
+type Identifier []string
 
 type Namespace struct {
     Parts []Identifier
     Version Identifier
 }
 
-type DeclaredTypeName []byte
+type DeclaredTypeName string
 
 type QualifiedTypeName struct {
     Namespace *Namespace
@@ -180,11 +180,7 @@ func init() {
         numFail( "1eB", 3, `Unexpected char in exponent: "B" (U+0042)` ),
         numFail( "1e", 2, "Number has empty or invalid exponent" ),
     )
-    id := func( parts ...string ) Identifier { 
-        idParts := make( [][]byte, len( parts ) )
-        for i, s := range parts { idParts[ i ] = []byte( s ) }
-        return Identifier( idParts )
-    }
+    id := func( parts ...string ) Identifier { return Identifier( parts ) }
     idSucc := func( in, extForm string, parts ...string ) *CoreParseTest {
         return &CoreParseTest{
             In: in, 
@@ -289,7 +285,7 @@ func init() {
             "Illegal start of identifier part: \" \" (U+0020)" ), 
     )
     declNm := func( nm string ) DeclaredTypeName {
-        return DeclaredTypeName( []byte( nm ) )
+        return DeclaredTypeName( nm )
     }
     declNmSucc := func( nm string ) *CoreParseTest {
         return &CoreParseTest{ 

@@ -12,7 +12,7 @@ import (
 )
 
 func id( part string ) Identifier {
-    return Identifier( [][]byte{ []byte( part ) } ) 
+    return Identifier( []string{ part } )
 }
 
 func declName( nm string ) DeclaredTypeName {
@@ -77,8 +77,8 @@ func TestSkipWsOrComments( t *testing.T ) {
         sb := newSyntaxBuilder( s, false )
         if err := sb.SkipWsOrComments(); err == nil {
             if tn, err := sb.ExpectIdentifier(); err == nil {
-                id := tn.Identifier()
-                assert.Equal( Identifier( [][]byte{ []byte( "a" ) } ), id )
+                idVal := tn.Identifier()
+                assert.Equal( id( "a" ), idVal )
             }
         } else { t.Fatal( err ) }
     }
@@ -164,8 +164,8 @@ func assertScopedVersion(
 }
 
 func TestScopedVersion( t *testing.T ) {
-    v1 := Identifier( [][]byte{ []byte( "v1" ) } )
-    v2 := Identifier( [][]byte{ []byte( "v2" ) } )
+    v1 := id( "v1" )
+    v2 := id( "v2" )
     for _, nsStr := range []string { "ns1:ns2@v1", "ns1:ns2@v2", "ns1:ns2" } {
     for _, scope := range []Identifier { v1, Identifier( nil ) } {
         if ! ( scope == nil && nsStr == "ns1:ns2" ) {
@@ -209,7 +209,7 @@ func TestTokenExpectsWithStripVariants( t *testing.T ) {
         st.expectToken( "numeric", &lexer.NumericToken{ Int: "3" } )
         st.expectSynthEnd()
         skip()
-        st.expectToken( "identifier", Identifier( [][]byte{ []byte( "id" ) } ) )
+        st.expectToken( "identifier", id( "id" ) )
         skip()
         st.expectSynthEnd()
         if ! strip { skip() } // since synth end will have stopped prev skip

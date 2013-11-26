@@ -60,22 +60,14 @@ func asIdentifier( id IdentifierInitializer ) ( *Identifier, error ) {
     return nil, fmt.Errorf( "Unhandled id initializer: %v", id )
 }
 
-type idPart []byte
-
-func compareIdParts( part1, part2 idPart ) int {
-    return bytes.Compare( []byte( part1 ), []byte( part2 ) )
-}
-
 type Identifier struct {
-    parts []idPart
+    parts []string
 }
 
 // Meant for other mingle impl packages only; external callers should not count
 // on the behavior of this remaining stable, or even of it continuing to exist
-func NewIdentifierUnsafe( parts [][]byte ) *Identifier {
-    idParts := make( []idPart, len( parts ) )
-    for i, p := range parts { idParts[ i ] = idPart( p ) }
-    return &Identifier{ idParts }
+func NewIdentifierUnsafe( parts []string ) *Identifier {
+    return &Identifier{ parts }
 }
 
 func idSeparatorFor( idFmt IdentifierFormat ) (sep byte) {
@@ -118,6 +110,12 @@ func ( id *Identifier ) ExternalForm() string {
 }
 
 func ( id *Identifier ) String() string { return id.ExternalForm() }
+
+func compareIdParts( p1, p2 string ) int {
+    if p1 == p2 { return 0 }
+    if p1 < p2 { return -1 }
+    return 1
+}
 
 func ( id *Identifier ) Compare( id2 *Identifier ) int {
     l, r, swap := id, id2, 1
@@ -186,25 +184,20 @@ type TypeName interface{
     typeNameImpl()
 }
 
-type DeclaredTypeName struct {
-    nm []byte
-}
+type DeclaredTypeName struct { nm string }
 
-func NewDeclaredTypeNameUnsafe( nm []byte ) *DeclaredTypeName {
+func NewDeclaredTypeNameUnsafe( nm string ) *DeclaredTypeName {
     return &DeclaredTypeName{ nm }
 }
 
 func ( n *DeclaredTypeName ) typeNameImpl() {}
 
-func ( n *DeclaredTypeName ) String() string { return string( n.nm ) }
+func ( n *DeclaredTypeName ) String() string { return n.nm }
 
 func ( n *DeclaredTypeName ) ExternalForm() string { return n.String() }
 
 func ( n *DeclaredTypeName ) Equals( other TypeName ) bool {
-    if n2, ok := other.( *DeclaredTypeName ); ok {
-        if n2 == nil { return false }
-        return bytes.Compare( n.nm, n2.nm ) == 0
-    }
+    if n2, ok := other.( *DeclaredTypeName ); ok { return n.nm == n2.nm }
     return false
 }
 
@@ -1059,11 +1052,7 @@ var NumericTypes []*AtomicTypeReference
 var CoreNsV1 *Namespace
 
 func init() {
-    id := func( strs []string ) *Identifier {
-        parts := make( []idPart, len( strs ) )
-        for i, str := range strs { parts[ i ] = idPart( []byte( str ) ) }
-        return &Identifier{ parts }
-    }
+    id := func( strs []string ) *Identifier { return &Identifier{ strs } }
     ns := func( parts [][]string, ver []string ) *Namespace {
         ids := make( []*Identifier, len( parts ) )
         for i, part := range parts { ids[ i ] = id( part ) }
@@ -1076,7 +1065,7 @@ func init() {
     coreQnameResolver = make( map[ string ]*QualifiedTypeName )
     f1 := func( 
         s string, ns *Namespace ) ( *QualifiedTypeName, *AtomicTypeReference ) {
-        qn := ( &DeclaredTypeName{ []byte( s ) } ).ResolveIn( ns )
+        qn := ( &DeclaredTypeName{ s } ).ResolveIn( ns )
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
         at := &AtomicTypeReference{ Name: qn }
         return qn, at

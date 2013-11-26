@@ -35,10 +35,7 @@ func sxBldrExt( s string ) *syntax.Builder {
 }
 
 func ConvertSyntaxId( sxId syntax.Identifier ) *Identifier {
-    bufs := [][]byte( sxId )
-    parts := make( []idPart, len( bufs ) )
-    for i, buf := range bufs { parts[ i ] = idPart( buf ) }
-    return &Identifier{ parts }
+    return &Identifier{ sxId }
 }
 
 func ConvertSyntaxNamespace( sxNs *syntax.Namespace ) *Namespace {
@@ -51,7 +48,7 @@ func ConvertSyntaxNamespace( sxNs *syntax.Namespace ) *Namespace {
 
 func ConvertSyntaxDeclaredTypeName( 
     nm syntax.DeclaredTypeName ) *DeclaredTypeName {
-    return &DeclaredTypeName{ []byte( nm ) }
+    return &DeclaredTypeName{ string( nm ) }
 }
 
 func ConvertSyntaxQname( sxQn *syntax.QualifiedTypeName ) *QualifiedTypeName {

@@ -15,19 +15,26 @@ class ObjectPath< E >
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static ObjectPath< Object > ROOT_PATH = 
-        new ObjectPath< Object >( null, null );
+    private final static ObjectPath< Object > EMPTY_PATH = 
+        new ObjectPath< Object >( null );
 
     private final ObjectPath< E > parent; // null only when this is a root
+
+    // parent == null if and only if this is a root
+    private ObjectPath( ObjectPath< E > parent ) { this.parent = parent; }
 
     ObjectPath( ObjectPath< E > parent,
                 String paramName )
     {
-        if ( paramName != null ) inputs.notNull( parent, paramName );
-        this.parent = parent;
+        this( 
+            paramName == null ? 
+                state.notNull( parent, "parent" ) :
+                inputs.notNull( parent, paramName )
+        );
     }
 
     public final ObjectPath< E > getParent() { return parent; }
+    public boolean isEmpty() { return this == EMPTY_PATH; }
 
     public
     final
@@ -136,33 +143,21 @@ class ObjectPath< E >
         return startImmutableList( 0 );
     }
 
-    private
+    public
     final
-    static
-    class RandomAccessIndex< E >
-    extends ListPath< E >
+    MutableListPath< E >
+    startMutableList( int idx )
     {
-        private final int index;
-
-        private
-        RandomAccessIndex( ObjectPath< E > parent,
-                           int index )
-        {
-            super( parent, null );
-            this.index = index;
-        }
-
-        public int getIndex() { return index; }
+        inputs.nonnegativeI( idx, "idx" );
+        return new MutableListPath< E >( this, idx );
     }
 
     public
     final
-    ListPath< E >
-    getListIndex( int index )
+    MutableListPath< E >
+    startMutableList()
     {
-        inputs.nonnegativeI( index, "index" );
-
-        return new RandomAccessIndex< E >( this, index );
+        return startMutableList( 0 ); 
     }
 
     public
@@ -172,7 +167,7 @@ class ObjectPath< E >
     getRoot() 
     { 
         @SuppressWarnings( "unchecked" )
-        ObjectPath< E > res = (ObjectPath< E >) ROOT_PATH;
+        ObjectPath< E > res = (ObjectPath< E >) EMPTY_PATH;
 
         return res;
     }
@@ -186,14 +181,5 @@ class ObjectPath< E >
         inputs.notNull( root, "root" );
 
         return ObjectPath.< E >getRoot().descend( root );
-    }
-
-    public
-    static
-    < E >
-    ObjectPath< E >
-    newRoot()
-    {
-        return new ObjectPath< E >( null, null );
     }
 }

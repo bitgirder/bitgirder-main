@@ -18,11 +18,11 @@ const replChar = rune( 0xfffd )
 
 type Token interface{}
 
-type idPart []byte
+type idPart string
 
-type Identifier [][]byte
+type Identifier []string
 
-type DeclaredTypeName []byte
+type DeclaredTypeName string
 
 type Keyword string
 
@@ -307,7 +307,7 @@ func ( lx *Lexer ) accumulateidPart(
     if r, err = lx.readidPartFirstRune( idSep, partNum ); err == nil { 
         buf.WriteRune( r )
     } else { return }
-    for part == nil && err == nil {
+    for part == "" && err == nil {
         var partDone bool
         switch r, err = lx.readRune(); {
         case isLexErr( err ): {}
@@ -316,20 +316,20 @@ func ( lx *Lexer ) accumulateidPart(
         default: 
             idSep2, partDone, idDone, err = lx.readNonIdentTailChar( r, idSep )
         }
-        if partDone { part = idPart( buf.Bytes() ) }
+        if partDone { part = idPart( buf.String() ) }
     }
     return
 }
 
 func ( lx *Lexer ) parseIdentifier() ( id Identifier, err error ) {
     idSep := lx.initialidPartSep()
-    parts := make( [][]byte, 0, 3 )
+    parts := make( []string, 0, 3 )
     for id == nil && err == nil {
         var part idPart
         var idDone bool
         if part, idSep, idDone, err = 
             lx.accumulateidPart( idSep, len( parts ) ); ! isLexErr( err ) {
-            parts = append( parts, part )
+            parts = append( parts, string( part ) )
             if idDone { id = Identifier( parts ) }
         }
     }
@@ -525,7 +525,7 @@ func ( lx *Lexer ) readDeclaredTypeName() ( tok Token, err error ) {
         case isDeclaredTypeNameTail( r ): buf.WriteRune( r )
         case err == io.EOF || isWhitespace( r ) || isSpecialTokChar( r ):
             if err == nil { lx.unreadRune() } // not on io.EOF
-            tok = DeclaredTypeName( buf.Bytes() )
+            tok = DeclaredTypeName( buf.String() )
         default:
             msg := "Illegal type name rune: %q (%U)"
             err = lx.prevError( msg, string( r ), r )

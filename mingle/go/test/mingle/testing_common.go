@@ -5,9 +5,14 @@ import (
     "bitgirder/objpath"
 )
 
-func EqualValues( expct, act Value, a assert.Failer ) {
-    ( &assert.Asserter{ a } ).Equalf( expct, act,
-        "expected %s but got %s", QuoteValue( expct ), QuoteValue( act ) )
+func EqualValues( expct, act Value, f assert.Failer ) {
+    a := &assert.Asserter{ f } 
+    if tm, tmOk := expct.( Timestamp ); tmOk {
+        a.Truef( tm.Compare( act ) == 0, "input time was %s, got: %s", tm, act )
+    } else { 
+        a.Equalf( expct, act, 
+            "expected %s but got %s", QuoteValue( expct ), QuoteValue( act ) )
+    }
 }
 
 func EqualPaths( expct, act objpath.PathNode, a assert.Failer ) {

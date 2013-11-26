@@ -67,7 +67,7 @@ func ( w *BinWriter ) WriteIdentifier( id *Identifier ) ( err error ) {
     if err = w.WriteTypeCode( tcId ); err != nil { return }
     if err = w.WriteUint8( uint8( len( id.parts ) ) ); err != nil { return }
     for _, part := range id.parts {
-        if err = w.WriteBuffer32( part ); err != nil { return }
+        if err = w.WriteUtf8( part ); err != nil { return }
     }
     return
 }
@@ -109,7 +109,7 @@ func ( w *BinWriter ) WriteNamespace( ns *Namespace ) ( err error ) {
 func ( w *BinWriter ) WriteDeclaredTypeName( 
     n *DeclaredTypeName ) ( err error ) {
     if err = w.WriteTypeCode( tcDeclNm ); err != nil { return }
-    return w.WriteBuffer32( n.nm )
+    return w.WriteUtf8( n.nm )
 }
 
 func ( w *BinWriter ) WriteQualifiedTypeName( 
@@ -360,9 +360,9 @@ func ( r *BinReader ) ReadIdentifier() ( id *Identifier, err error ) {
     if _, err = r.ExpectTypeCode( tcId ); err != nil { return }
     var sz uint8
     if sz, err = r.ReadUint8(); err != nil { return }
-    id = &Identifier{ make( []idPart, sz ) }
+    id = &Identifier{ make( []string, sz ) }
     for i := uint8( 0 ); i < sz; i++ {
-        if id.parts[ i ], err = r.ReadBuffer32(); err != nil { return }
+        if id.parts[ i ], err = r.ReadUtf8(); err != nil { return }
     }
     return    
 }
@@ -421,9 +421,9 @@ func ( r *BinReader ) ReadNamespace() ( ns *Namespace, err error ) {
 func ( r *BinReader ) ReadDeclaredTypeName() ( nm *DeclaredTypeName,    
                                                err error ) {
     if _, err = r.ExpectTypeCode( tcDeclNm ); err != nil { return }
-    var buf []byte
-    if buf, err = r.ReadBuffer32(); err != nil { return }
-    nm = &DeclaredTypeName{ buf }
+    var s string
+    if s, err = r.ReadUtf8(); err != nil { return }
+    nm = &DeclaredTypeName{ s }
     return
 }
 
