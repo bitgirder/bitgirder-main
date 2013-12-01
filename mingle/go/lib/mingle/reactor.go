@@ -1006,13 +1006,21 @@ func ( cr *CastReactor ) ProcessEvent(
     panic( libErrorf( "Unhandled event: %T", ev ) )
 }
 
-func CastValue( 
-    mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
+func castValue( mgVal Value, cr *CastReactor ) ( Value, error ) {
     vb := NewValueBuilder()
-    pg := ImmediatePathGetter{ path }
-    pip := InitReactorPipeline( NewDefaultCastReactor( typ, pg ), vb )
+    pip := InitReactorPipeline( cr, vb )
     if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
     return vb.GetValue(), nil
+}
+
+func CastValue( 
+    mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
+//    vb := NewValueBuilder()
+    pg := ImmediatePathGetter{ path }
+//    pip := InitReactorPipeline( NewDefaultCastReactor( typ, pg ), vb )
+//    if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
+//    return vb.GetValue(), nil
+    return castValue( mgVal, NewDefaultCastReactor( typ, pg ) )
 }
 
 type FieldOrderSpecification struct {

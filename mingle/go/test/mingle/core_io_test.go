@@ -64,3 +64,24 @@ func TestCoreIo( t *testing.T ) {
         }
     }
 }
+
+func TestAsAndFromBytes( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    qn := MustQualifiedTypeName( "ns1@v1/T1" )
+    qn2, err := QualifiedTypeNameFromBytes( QualifiedTypeNameAsBytes( qn ) )
+    if err == nil { a.True( qn.Equals( qn2 ) ) } else { a.Fatal( err ) }
+    typ := MustTypeReference( "L*" )
+    typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
+    if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }
+    p := idPathRootVal.Descend( id( "id1" ) )
+    p2, err := IdPathFromBytes( IdPathAsBytes( p ) )
+    if err == nil { 
+        a.Equal( FormatIdPath( p ), FormatIdPath( p2 ) ) 
+    } else { a.Fatal( err ) }
+    id := MustIdentifier( "id1" )
+    id2, err := IdentifierFromBytes( IdentifierAsBytes( id ) )
+    if err == nil { a.True( id.Equals( id2 ) ) } else { a.Fatal( err ) }
+    ns := MustNamespace( "ns1@v1" )
+    ns2, err := NamespaceFromBytes( NamespaceAsBytes( ns ) )
+    if err == nil { a.True( ns.Equals( ns2 ) ) } else { a.Fatal( err ) }
+}

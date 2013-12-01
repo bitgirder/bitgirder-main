@@ -30,12 +30,10 @@
             "command": "write-parser-tests",
             "argv": [ "--out-file", "${data_gen_dir}/parser-tests.bin" ]
         },
-        "reactor-seq-error-tests": {
+        "reactor-tests": {
             "$type": "bitgirder:ops:build:go@v1/GoCommandRun",
             "command": "write-reactor-tests",
-            "argv": [ 
-                "--out-file", "${data_gen_dir}/reactor-seq-error-tests.bin"
-            ]
+            "argv": [ "--out-file", "${data_gen_dir}/reactor-tests.bin" ]
         }
     }
 }

@@ -53,6 +53,16 @@ func NewWriter( w io.Writer ) *BinWriter {
     return AsWriter( bgio.NewLeWriter( w ) )
 }
 
+// helper to power public funcs that convert a value to []byte
+func writeAsBytes( f func ( *BinWriter ) error ) []byte {
+    buf := &bytes.Buffer{}
+    w := NewWriter( buf )
+    if err := f( w ); err != nil {
+        panic( libErrorf( "unhandled error converting to byte: %s", err ) )
+    }
+    return buf.Bytes()
+}
+
 func ( w *BinWriter ) WriteTypeCode( tc uint8 ) error {
     return w.WriteUint8( tc )
 }
@@ -275,6 +285,36 @@ func ( w *BinWriter ) WriteTypeReference( typ TypeReference ) error {
     panic( fmt.Errorf( "%T: Unhandled type reference: %T", w, typ ) )
 }
 
+func TypeReferenceAsBytes( typ TypeReference ) []byte {
+    return writeAsBytes( func( w *BinWriter ) error { 
+        return w.WriteTypeReference( typ )
+    })
+}
+
+func IdPathAsBytes( p objpath.PathNode ) []byte {
+    return writeAsBytes( func( w *BinWriter ) error {
+        return w.WriteIdPath( p )
+    })
+}
+
+func IdentifierAsBytes( id *Identifier ) []byte {
+    return writeAsBytes( func( w *BinWriter ) error {
+        return w.WriteIdentifier( id )
+    })
+}
+
+func QualifiedTypeNameAsBytes( qn *QualifiedTypeName ) []byte {
+    return writeAsBytes( func( w *BinWriter ) error {
+        return w.WriteQualifiedTypeName( qn )
+    })
+}
+
+func NamespaceAsBytes( ns *Namespace ) []byte {
+    return writeAsBytes( func( w *BinWriter ) error {
+        return w.WriteNamespace( ns )
+    })
+}
+
 type offsetTracker struct {
     rd io.Reader
     off int64
@@ -316,6 +356,10 @@ type BinReader struct {
 func NewReader( r io.Reader ) *BinReader {
     ot := &offsetTracker{ rd: r, off: 0, saved: -1 }
     return &BinReader{ ot: ot, BinReader: bgio.NewLeReader( ot ) }
+}
+
+func NewReaderBytes( buf []byte ) *BinReader {
+    return NewReader( bytes.NewBuffer( buf ) )
 }
 
 func ( r *BinReader ) offset() int64 {
@@ -657,4 +701,24 @@ func ( r *BinReader ) ReadTypeReference() ( typ TypeReference, err error ) {
     }
     err = r.ioErrorf( "Unrecognized type reference code: 0x%02x", tc )
     return
+}
+
+func TypeReferenceFromBytes( buf []byte ) ( TypeReference, error ) {
+    return NewReaderBytes( buf ).ReadTypeReference()
+}
+
+func IdPathFromBytes( buf []byte ) ( objpath.PathNode, error ) {
+    return NewReaderBytes( buf ).ReadIdPath()
+}
+
+func IdentifierFromBytes( buf []byte ) ( *Identifier, error ) {
+    return NewReaderBytes( buf ).ReadIdentifier()
+}
+
+func QualifiedTypeNameFromBytes( buf []byte ) ( *QualifiedTypeName, error ) {
+    return NewReaderBytes( buf ).ReadQualifiedTypeName()
+}
+
+func NamespaceFromBytes( buf []byte ) ( *Namespace, error ) {
+    return NewReaderBytes( buf ).ReadNamespace()
 }

@@ -84,14 +84,17 @@ func WriteOutFile( call func( w *mg.BinWriter ) error ) {
     if err = call( w ); err != nil { log.Fatal( err ) }
 }
 
-func WriteStructFile( gen func() ( *mg.Struct, error ) ) {
+type StructDataSource interface {
+    Len() int
+    StructAt( i int ) *mg.Struct
+}
+
+func WriteStructFile( data StructDataSource ) {
     WriteOutFile( func( w *mg.BinWriter ) error {
-        var s *mg.Struct
-        var err error
-        for s, err = gen(); err == nil && s != nil; s, err = gen() {
-            if err = w.WriteValue( s ); err != nil { return err }
+        for i, e := 0, data.Len(); i < e ; i++ {
+            s := data.StructAt( i )
+            if err := w.WriteValue( s ); err != nil { return err }
         }
-        if err != nil { return err }
         return w.WriteValue( mg.MustStruct( typFileEnd ) )
     })
 }

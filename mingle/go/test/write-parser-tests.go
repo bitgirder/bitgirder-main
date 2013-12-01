@@ -38,16 +38,6 @@ func idAsStruct( id pt.Identifier ) *mg.Struct {
     return mg.MustStruct( ptTyp( "Identifier" ), "parts", mg.NewList( vals ) )
 }
 
-func cptAsStruct( t *pt.CoreParseTest ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "CoreParseTest" ),
-        "test-type", string( t.TestType ),
-        "in", t.In,
-        "external-form", t.ExternalForm,
-        "expect", asValue( t.Expect ),
-        "err", asValue( t.Err ),
-    )
-}
-
 func nsAsStruct( ns *pt.Namespace ) *mg.Struct {
     parts := make( []mg.Value, len( ns.Parts ) )
     for i, part := range ns.Parts { parts[ i ] = asValue( part ) }
@@ -150,13 +140,19 @@ func asValue( val interface{} ) mg.Value {
     panic( fmt.Errorf( "unhandled value: %T", val ) )
 }
 
-func main() {
-    i := 0
-    tests := pt.CoreParseTests
-    gen := func() ( *mg.Struct, error ) {
-        if i == len( tests ) { return nil, nil }
-        defer func() { i += 1 }()
-        return cptAsStruct( tests[ i ] ), nil
-    }
-    testgen.WriteStructFile( gen )
+type testData []*pt.CoreParseTest
+
+func ( td testData ) Len() int { return len( td ) }
+
+func ( td testData ) StructAt( i int ) *mg.Struct { 
+    t := td[ i ]
+    return mg.MustStruct( ptTyp( "CoreParseTest" ),
+        "test-type", string( t.TestType ),
+        "in", t.In,
+        "external-form", t.ExternalForm,
+        "expect", asValue( t.Expect ),
+        "err", asValue( t.Err ),
+    )
 }
+
+func main() { testgen.WriteStructFile( testData( pt.CoreParseTests ) ) }
