@@ -713,7 +713,8 @@ end
 
 module TestData
 
-    ENV_PATH = "TEST_DATA_PATH"
+    ENV_TEST_DATA_PATH = "TEST_DATA_PATH"
+    ENV_TEST_BIN_PATH = "TEST_BIN_PATH"
 
     extend BitGirderMethods
 

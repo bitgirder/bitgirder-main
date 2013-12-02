@@ -314,153 +314,153 @@ module ModelTestInstances
     end
 end
 
-module TestServiceConstants
-
-    require 'set'
-
-    TEST_NS = MingleNamespace.get( "mingle:service:test@v1" );
- 
-    TEST_SVC = MingleIdentifier.get( "test-service" );
-
-    OP_GET_TEST_STRUCT1_INST1 = 
-        MingleIdentifier.get( "get-test-struct1-inst1" )
-
-    OP_REVERSE_STRING = MingleIdentifier.get( "reverse-string" );
-
-    OP_DO_DELAYED_ECHO = MingleIdentifier.get( "do-delayed-echo" );
-
-    OP_DO_AUTHENTICATED_ACTION = 
-        MingleIdentifier.get( "do-authenticated-action" )
-    
-    OP_DO_AUTHORIZED_ACTION = MingleIdentifier.get( "do-authorized-action" );
-
-    OP_TEST_FAILURES = MingleIdentifier.get( "test-failures" );
- 
-    OP_TEST_ASYNC_FAILURES = MingleIdentifier.get( "test-async-failures" );
-
-    THE_UNACCEPTABLE = "a string that should not be passed";
-
-    UNACCEPTABLE_STRING_VALUE_MESSAGE = "Unacceptable string value";
-
-    ID_STR = MingleIdentifier.get( "str" );
-
-    ID_AUTH_TOKEN = MingleIdentifier.get( "auth-token" );
-    
-    ID_AUTH_EXPIRED = MingleIdentifier.get( "auth-expired" );
-
-    ID_FAILURE_TYPE = MingleIdentifier.get( "failure-type" );
-    
-    ID_ECHO_VALUE = MingleIdentifier.get( "echo-value" );
-    
-    ID_DELAY_MILLIS = MingleIdentifier.get( "delay-millis" );
-
-    FAIL_TYPE_EXCEPTION = "exception";
-    FAIL_TYPE_ERROR = "error";
-
-    VALID_AUTH_TOKEN1 = "golden ticket";
-    VALID_AUTH_TOKEN2 = "snickety snicket";
-
-    AUTHENTICATED_TOKENS = 
-        Set.new( [ VALID_AUTH_TOKEN1, VALID_AUTH_TOKEN2 ] ).freeze
-
-    AUTHORIZED_TOKENS = Set.new( [ VALID_AUTH_TOKEN1 ] ).freeze
-
-end
-
-class AbstractMingleServiceTest < BitGirder::Core::BitGirderClass
-
-    require 'test/unit/assertions'
-
-    @@anns = {}
-
-    include Test::Unit::Assertions
-
-    bg_attr :cli
-
-    def self.annotation_context( cls = self )
-        @@anns[ cls ] ||= { :add_method_pending => false, :tests => [] }
-    end
-
-    def self.method_added( name )
-        
-        ctx = annotation_context
-
-        if ctx[ :add_method_pending ]
-
-            ctx[ :tests ] << name
-            ctx[ :add_method_pending ] = false
-        end
-    end
-
-    def self.test_method
-        
-        ctx = annotation_context
-
-        if ctx[ :add_method_pending ]
-            BitGirder::Core::BitGirderLogger.get_logger.warn(
-                "Repeat calls to #{__method__} at #{caller( 1 )[ 0 ]} " \
-                "(missing actual test method?)" )
-        else
-            ctx[ :add_method_pending ] = true
-        end
-    end
-
-    # Returns a modifiable copy of the test method names. TODO: handle inherited
-    # tests.
-    def self.test_methods( cls )
-        Array.new( annotation_context( not_nil( cls, "cls" ) )[ :tests ] )
-    end
-
-    def expect_response( req, ctx )
- 
-        begin
-            @cli.begin( req ) do |resp, ex|
- 
-                begin
-                    if ex
-                        raise ex
-                    else
-                        yield( req, resp )
-                    end
-        
-                    ctx.exit
-     
-                rescue Exception => e 
-                    ctx.fail( e )
-                end
-            end
-    
-        rescue => e
-            ctx.fail( e )
-        end
-    end
- 
-    # blk takes |req, val| where req is the original request and val is the
-    # result value if the response was a success response
-    def expect_success( req, ctx )
-        
-        expect_response( req, ctx ) do |req, resp|
- 
-            if resp.ok?
-                yield req, resp.result 
-            else
-                raise "Request succeeded but service :failed => " +
-                      resp.exception.inspect
-            end
-        end
-    end
-    
-    def expect_failure( req, ctx )
-        
-        expect_response( req, ctx ) do |req, resp|
-            
-            if resp.ok?
-                raise "Request succeeded (expected exception from service"
-            else
-                yield req, resp.exception
-            end
-        end
-    end
-end
+#module TestServiceConstants
+#
+#    require 'set'
+#
+#    TEST_NS = MingleNamespace.get( "mingle:service:test@v1" );
+# 
+#    TEST_SVC = MingleIdentifier.get( "test-service" );
+#
+#    OP_GET_TEST_STRUCT1_INST1 = 
+#        MingleIdentifier.get( "get-test-struct1-inst1" )
+#
+#    OP_REVERSE_STRING = MingleIdentifier.get( "reverse-string" );
+#
+#    OP_DO_DELAYED_ECHO = MingleIdentifier.get( "do-delayed-echo" );
+#
+#    OP_DO_AUTHENTICATED_ACTION = 
+#        MingleIdentifier.get( "do-authenticated-action" )
+#    
+#    OP_DO_AUTHORIZED_ACTION = MingleIdentifier.get( "do-authorized-action" );
+#
+#    OP_TEST_FAILURES = MingleIdentifier.get( "test-failures" );
+# 
+#    OP_TEST_ASYNC_FAILURES = MingleIdentifier.get( "test-async-failures" );
+#
+#    THE_UNACCEPTABLE = "a string that should not be passed";
+#
+#    UNACCEPTABLE_STRING_VALUE_MESSAGE = "Unacceptable string value";
+#
+#    ID_STR = MingleIdentifier.get( "str" );
+#
+#    ID_AUTH_TOKEN = MingleIdentifier.get( "auth-token" );
+#    
+#    ID_AUTH_EXPIRED = MingleIdentifier.get( "auth-expired" );
+#
+#    ID_FAILURE_TYPE = MingleIdentifier.get( "failure-type" );
+#    
+#    ID_ECHO_VALUE = MingleIdentifier.get( "echo-value" );
+#    
+#    ID_DELAY_MILLIS = MingleIdentifier.get( "delay-millis" );
+#
+#    FAIL_TYPE_EXCEPTION = "exception";
+#    FAIL_TYPE_ERROR = "error";
+#
+#    VALID_AUTH_TOKEN1 = "golden ticket";
+#    VALID_AUTH_TOKEN2 = "snickety snicket";
+#
+#    AUTHENTICATED_TOKENS = 
+#        Set.new( [ VALID_AUTH_TOKEN1, VALID_AUTH_TOKEN2 ] ).freeze
+#
+#    AUTHORIZED_TOKENS = Set.new( [ VALID_AUTH_TOKEN1 ] ).freeze
+#
+#end
+#
+#class AbstractMingleServiceTest < BitGirder::Core::BitGirderClass
+#
+#    require 'test/unit/assertions'
+#
+#    @@anns = {}
+#
+#    include Test::Unit::Assertions
+#
+#    bg_attr :cli
+#
+#    def self.annotation_context( cls = self )
+#        @@anns[ cls ] ||= { :add_method_pending => false, :tests => [] }
+#    end
+#
+#    def self.method_added( name )
+#        
+#        ctx = annotation_context
+#
+#        if ctx[ :add_method_pending ]
+#
+#            ctx[ :tests ] << name
+#            ctx[ :add_method_pending ] = false
+#        end
+#    end
+#
+#    def self.test_method
+#        
+#        ctx = annotation_context
+#
+#        if ctx[ :add_method_pending ]
+#            BitGirder::Core::BitGirderLogger.get_logger.warn(
+#                "Repeat calls to #{__method__} at #{caller( 1 )[ 0 ]} " \
+#                "(missing actual test method?)" )
+#        else
+#            ctx[ :add_method_pending ] = true
+#        end
+#    end
+#
+#    # Returns a modifiable copy of the test method names. TODO: handle inherited
+#    # tests.
+#    def self.test_methods( cls )
+#        Array.new( annotation_context( not_nil( cls, "cls" ) )[ :tests ] )
+#    end
+#
+#    def expect_response( req, ctx )
+# 
+#        begin
+#            @cli.begin( req ) do |resp, ex|
+# 
+#                begin
+#                    if ex
+#                        raise ex
+#                    else
+#                        yield( req, resp )
+#                    end
+#        
+#                    ctx.exit
+#     
+#                rescue Exception => e 
+#                    ctx.fail( e )
+#                end
+#            end
+#    
+#        rescue => e
+#            ctx.fail( e )
+#        end
+#    end
+# 
+#    # blk takes |req, val| where req is the original request and val is the
+#    # result value if the response was a success response
+#    def expect_success( req, ctx )
+#        
+#        expect_response( req, ctx ) do |req, resp|
+# 
+#            if resp.ok?
+#                yield req, resp.result 
+#            else
+#                raise "Request succeeded but service :failed => " +
+#                      resp.exception.inspect
+#            end
+#        end
+#    end
+#    
+#    def expect_failure( req, ctx )
+#        
+#        expect_response( req, ctx ) do |req, resp|
+#            
+#            if resp.ok?
+#                raise "Request succeeded (expected exception from service"
+#            else
+#                yield req, resp.exception
+#            end
+#        end
+#    end
+#end
 
 end

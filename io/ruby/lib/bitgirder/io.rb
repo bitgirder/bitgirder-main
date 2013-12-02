@@ -406,6 +406,12 @@ end
 
 module_function :can_connect?
 
+def create_binary_string
+    RubyVersions.when_19x( "" ) { |v| v.force_encoding( "binary" ) }
+end
+
+module_function :create_binary_string
+
 class DataUnitError < StandardError; end
 
 class DataUnit < BitGirderClass

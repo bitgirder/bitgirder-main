@@ -518,551 +518,551 @@ class MingleTests
     end
 end
 
-class ParseErrorExpectation < BitGirderClass
-    bg_attr :col, :processor => :integer, :validation => :nonnegative
-    bg_attr :message
-end
-
-class RestrictionErrorExpectation < BitGirderClass
-    bg_attr :message
-end
-
-PARSE_OVERRIDES = {
-
-    :string => {
-        "\"a\\udd1e\\ud834\"" => 'Trailing surrogate with no lead: \uDD1E'
-    },
-
-    :identifier => {
-        'giving-mixedMessages' => 
-            'Illegal start of identifier part: "M" (0x4D)'
-    },
-
-    :declared_type_name => { 
-        'Bad$Char' => 'Unrecognized token: "$" (0x24)',
-        'Bad_Char' => 'Unrecognized token: "_" (0x5F)'
-    },
-
-    :qualified_type_name => {
-        "ns1@v1/T1#T2" => 'Unrecognized token: "#" (0x23)'
-    },
-
-    :type_reference => {
-            
-        "mingle:core@v1/Float32~[1,2)" => {
-            :external_form => 'mingle:core@v1/Float32~[1.0,2.0)'
-        },
-        "Float32~[1,2)" => {
-            :external_form => 'mingle:core@v1/Float32~[1.0,2.0)'
-        },
-        "mingle:core@v1/Timestamp~[\"2012-01-01T12:00:00Z\",\"2012-01-02T12:00:00Z\"]" => {
-            :external_form => 'mingle:core@v1/Timestamp~["2012-01-01T12:00:00.000000000Z","2012-01-02T12:00:00.000000000Z"]'
-        },
-        "Timestamp~[\"2012-01-01T12:00:00Z\",\"2012-01-02T12:00:00Z\"]" => {
-            :external_form => 'mingle:core@v1/Timestamp~["2012-01-01T12:00:00.000000000Z","2012-01-02T12:00:00.000000000Z"]'
-        },
-        "mingle:core@v1/String ~= \"sdf\"" => 'Unrecognized token: "=" (0x3D)',
-        "mingle:core@v1/String~" => "Expected type restriction but found: END",
-        "Int32~[1,3}" => {
-            :err_message => 'Unexpected char in integer part: "}" (0x7D)',
-            :err_col => 11
-        },
-        "Int32~[-\"abc\",2)" => {
-            :err_message => 'Unexpected char in integer part: "\"" (0x22)',
-            :err_col => 9
-        },
-        "Int32~[--3,4)" => {
-            :err_message => 'Number has empty or invalid integer part',
-            :err_col => 8
-        },
-        "String~\"ab[a-z\"" => 
-            'Invalid regex: premature end of ' +
-            ( RUBY_VERSION >= "1.9" || RubyVersions.jruby? ? 
-                "char-class" : "regular expression" ) +
-            ': /ab[a-z/',
-        
-        "mingle:core@v1/String~=\"sdf\"" => 'Unrecognized token: "=" (0x3D)',
-        "Timestamp~[\"2001-0x-22\",)" => 'invalid date: "2001-0x-22"'
-    }
-}
-
-class ParseTest < BitGirderClass
-
-    include Testing::AssertMethods
-
-    bg_attr :test_type, :processor => :symbol
-    bg_attr :input
-    bg_attr :external_form, :required => false
-    bg_attr :expect, :required => false
-    bg_attr :error, :required => false
-
-    private
-    def get_override
-
-        res = ( PARSE_OVERRIDES[ @test_type ] || {} )[ @input ] || {}
-        res = { :err_message => res } if res.is_a?( String )
-
-        res
-    end
-
-    private
-    def expect_token( cls )
-        
-        lx = MingleLexer.as_instance( @input )
-        tok, loc = lx.expect_token
-        raise "Expected #{cls} but got #{tok.class}" unless tok.is_a?( cls )
-        raise "Trailing input" unless lx.eof?
-
-        tok
-    end
-
-    private
-    def call_parse
-        
-        case @test_type
-        when :string then expect_token( StringToken )
-        when :number then ParsedNumber.parse( @input )
-        when :identifier then MingleIdentifier.parse( @input )
-        when :namespace then MingleNamespace.parse( @input )
-        when :declared_type_name then DeclaredTypeName.parse( @input )
-        when :qualified_type_name then QualifiedTypeName.parse( @input )
-        when :identified_name then MingleIdentifiedName.parse( @input )
-        when :type_reference then MingleTypeReference.parse( @input )
-        else raise "Unhandled test type: #@test_type"
-        end
-    end
-
-    private
-    def assert_num_roundtrip( n )
-        
-        n_str = n.external_form
-        lx = MingleLexer.as_instance( n_str )
-        
-        n2, _ = ParsedNumber.parse( n_str )
-        assert_equal( n, n2 )
-    end
-
-    private
-    def assert_result( res )
-
-        assert_equal( @expect, res )
-        assert_equal( @expect.hash, res.hash )
-        assert( @expect.eql?( res ) )
-
-        unless @external_form.empty?
-            expct = get_override[ :external_form ] || @external_form
-            assert_equal( expct, res.external_form ) 
-        end
-
-        assert_num_roundtrip( res ) if res.is_a?( ParsedNumber )
-    end
-
-    private
-    def get_message_expect
- 
-        msg_expct = get_override[ :err_message ]
-        msg_expct ||= @error.message.gsub( /U\+00([[:xdigit:]]{2})/, '0x\1' )
-    end
-
-    private
-    def assert_parse_error( pe )
-        
-        assert_equal( get_message_expect, pe.err )
-
-        assert_equal( 1, pe.loc.line )
-        assert_equal( get_override[ :err_col ] || @error.col, pe.loc.col )
-    end
-
-    private
-    def assert_restriction_error( re )
-        assert_equal( get_message_expect, re.message )
-    end
-
-    private
-    def assert_error( e )
-        
-        case 
-        when e.is_a?( MingleParseError ) && 
-             @error.is_a?( ParseErrorExpectation )
-            assert_parse_error( e )
-        when e.is_a?( RestrictionTypeError ) &&
-             @error.is_a?( RestrictionErrorExpectation )
-            assert_restriction_error( e )
-        else raise e
-        end
-    end
-
-    public
-    def call
- 
-        begin
-
-#            code( "Parsing: #{self.inspect}" )
-            res = call_parse
-
-            raise "Got #{res}, but expected error #{@error.inspect}" if @error
-            assert_result( res )
-
-        rescue => e
-            assert_error( e )
-        end
-    end
-end
-
-class ParseTests < Testing::TestHolder
-
-    FILE_VERSION1 = 0x01
-    
-    # int8
-    FLD_CODES = {
-        0x01 => :test_type,
-        0x02 => :input,
-        0x03 => :expect,
-        0x04 => :error,
-        0x05 => :end,
-        0x06 => :external_form
-    }
-
-    # int8
-    VAL_TYPES = {
-        0x01 => :identifier,
-        0x02 => :namespace,
-        0x03 => :declared_type_name,
-        0x05 => :qualified_type_name,
-        0x06 => :identified_name,
-        0x07 => :regex_restriction,
-        0x08 => :range_restriction,
-        0x09 => :atomic_type_reference,
-        0x0a => :list_type_reference,
-        0x0b => :nullable_type_reference,
-        0x0c => :nil,
-        0x0d => :int32,
-        0x0e => :int64,
-        0x0f => :float32,
-        0x10 => :float64,
-        0x11 => :string,
-        0x12 => :timestamp,
-        0x13 => :boolean,
-        0x14 => :parse_error,
-        0x15 => :restriction_error,
-        0x16 => :string_token,
-        0x17 => :numeric_token,
-        0x18 => :uint32,
-        0x19 => :uint64
-    }
-    
-    # int8
-    ELT_TYPES = { 0x00 => :file_end, 0x01 => :parse_test }
-
-    def unread8( i )
-
-        if @unread8
-            raisef "Attempt to unread %0x when %0x is already set", @unread8, i
-        else
-            @unread8 = i
-        end
-    end
-
-    def read_int8( rd )
-        ( @unread8 || rd.read_int8 ).tap { @unread8 = nil }
-    end
-
-    def read_named8( rd, map, err_nm, opts = {} )
-        
-        i = read_int8( rd )
-        unread8( i ) if opts[ :unread ]
-
-        map[ i ] or raisef "Unknown #{err_nm} value: 0x%02x", i
-    end
- 
-    def peek_named8( *argv )
-        read_named8( *( argv + [ :unread => true ] ) ) 
-    end
-
-    def read_val_type( rd )
-        read_named8( rd, VAL_TYPES, "value type" )
-    end
-
-    def peek_val_type( rd )
-        peek_named8( rd, VAL_TYPES, "val type" )
-    end
-
-    def read_header( rd )
-        
-        unless ( ver = rd.read_int32 ) == FILE_VERSION1
-            raisef "Unexpected file version: %04x", ver
-        end
-    end
-
-    def expect_value_type( rd, nm )
-        
-        unless ( typ = read_val_type( rd ) ) == nm
-            raise "Expected #{nm}, saw: #{typ}"
-        end
-    end
-
-    def read_prim_value( rd )
-        
-        case vt = read_val_type( rd )
-        when :nil then nil
-        when :boolean then MingleBoolean.for_boolean( rd.read_bool )
-        when :int32 then MingleInt32.new( rd.read_int32 )
-        when :int64 then MingleInt64.new( rd.read_int64 )
-        when :uint32 then MingleUint32.new( rd.read_uint32 )
-        when :uint64 then MingleUint64.new( rd.read_uint64 )
-        when :float32 then MingleFloat32.new( rd.read_float32 )
-        when :float64 then MingleFloat64.new( rd.read_float64 )
-        when :timestamp then MingleTimestamp.rfc3339( rd.read_utf8 )
-        when :string then MingleString.new( rd.read_utf8 )
-        else raise "Unhandled primitive type: #{vt}"
-        end
-    end
-
-    def expect_bool( rd )
-        
-        expect_value_type( rd, :boolean )
-        rd.read_bool
-    end
-
-    def read_string_token( rd )
-        
-        expect_value_type( rd, :string_token )
-        StringToken.new( :val => rd.read_utf8 )
-    end
-
-    def read_numeric_token( rd )
-        
-        expect_value_type( rd, :numeric_token )
-
-        ParsedNumber.new(
-            :negative => expect_bool( rd ),
-            :num => NumericToken.new(
-                :int => rd.read_utf8,
-                :frac => rd.read_utf8,
-                :exp => rd.read_utf8,
-                :exp_char => rd.read_utf8
-            )
-        )
-    end 
-
-    def read_identifier( rd )
-
-        expect_value_type( rd, :identifier )
-
-        parts = Array.new( rd.read_int32 ) { rd.read_utf8 }
-        MingleIdentifier.send( :new, :parts => parts )
-    end
-
-    def read_identifiers( rd )
-        Array.new( rd.read_int32 ) { read_identifier( rd ) }
-    end
-
-    def read_namespace( rd )
- 
-        expect_value_type( rd, :namespace )
-
-        MingleNamespace.send( :new,
-            :parts => read_identifiers( rd ),
-            :version => read_identifier( rd )
-        )
-    end
-
-    def read_declared_type_name( rd )
-        
-        expect_value_type( rd, :declared_type_name )
-        DeclaredTypeName.send( :new, rd.read_utf8 )
-    end
-
-    def read_qualified_type_name( rd )
-        
-        expect_value_type( rd, :qualified_type_name )
-
-        QualifiedTypeName.new(
-            :namespace => read_namespace( rd ),
-            :name => read_declared_type_name( rd )
-        )
-    end
-
-    def read_identified_name( rd )
-        
-        expect_value_type( rd, :identified_name )
-        
-        MingleIdentifiedName.new(
-            :namespace => read_namespace( rd ),
-            :names => read_identifiers( rd )
-        )
-    end
-
-    def read_type_name( rd )
-        
-        case vt = peek_val_type( rd )
-        when :declared_type_name then read_declared_type_name( rd )
-        when :qualified_type_name then read_qualified_type_name( rd )
-        else raise "Unexpected type name: #{vt}"
-        end
-    end
-
-    def read_regex_restriction( rd )
-        RegexRestriction.new( :ext_pattern => rd.read_utf8 )
-    end
-
-    def read_range_restriction( rd )
-        
-        RangeRestriction.new(
-            :min_closed => expect_bool( rd ),
-            :min => read_prim_value( rd ),
-            :max => read_prim_value( rd ),
-            :max_closed => expect_bool( rd )
-        )
-    end
-
-    def read_type_restriction( rd )
-        
-        case vt = read_val_type( rd )
-        when :nil then nil
-        when :regex_restriction then read_regex_restriction( rd )
-        when :range_restriction then read_range_restriction( rd )
-        else raise "Unrecognized restriction type: #{vt}"
-        end
-    end
-
-    def read_atomic_type_reference( rd )
-        
-        expect_value_type( rd, :atomic_type_reference )
-
-        AtomicTypeReference.send( :new,
-            :name => read_type_name( rd ),
-            :restriction => read_type_restriction( rd )
-        )
-    end
-
-    def read_list_type_reference( rd )
-        
-        expect_value_type( rd, :list_type_reference )
-
-        ListTypeReference.send( :new,
-            :element_type => read_type_reference( rd ),
-            :allows_empty => read_prim_value( rd ).to_bool
-        )
-    end
-
-    def read_nullable_type_reference( rd )
-        
-        expect_value_type( rd, :nullable_type_reference )
-
-        NullableTypeReference.send( :new, :type => read_type_reference( rd ) )
-    end
-
-    def read_type_reference( rd )
-
-        case vt = peek_val_type( rd )        
-        when :atomic_type_reference then read_atomic_type_reference( rd )
-        when :list_type_reference then read_list_type_reference( rd )
-        when :nullable_type_reference then read_nullable_type_reference( rd )
-        else raise "Unrecognized type reference type: #{vt}"
-        end
-    end
-        
-    def read_expect_val( rd )
-
-        case vt = peek_val_type( rd )
-        when :string_token then read_string_token( rd )
-        when :numeric_token then read_numeric_token( rd )
-        when :identifier then read_identifier( rd )
-        when :namespace then read_namespace( rd )
-        when :declared_type_name then read_declared_type_name( rd )
-        when :qualified_type_name then read_qualified_type_name( rd )
-        when :identified_name then read_identified_name( rd )
-
-        when :atomic_type_reference, 
-             :list_type_reference,
-             :nullable_type_reference 
-            read_type_reference( rd )
-
-        else raise "Unhandled value type: #{vt}"
-        end
-    end
-
-    def read_parse_error( rd )
-        
-        ParseErrorExpectation.new(
-            :col => rd.read_int32,
-            :message => rd.read_utf8
-        )
-    end
-
-    def read_restriction_error( rd )
-        RestrictionErrorExpectation.new( :message => rd.read_utf8 )
-    end
-
-    def read_error( rd )
-        
-        case err_typ = read_named8( rd, VAL_TYPES, "val type" )
-        when :parse_error then read_parse_error( rd )
-        when :restriction_error then read_restriction_error( rd )
-        else raise "Unhandled error type: #{err_typ}"
-        end
-    end
-
-    def read_next( rd )
- 
-        attrs = {}
-
-        until ( fc = read_named8( rd, FLD_CODES, "field code" ) ) == :end
-            attrs[ fc ] = case fc
-                when :test_type then rd.read_utf8.gsub( '-', '_' )
-                when :input, :external_form then rd.read_utf8
-                when :expect then read_expect_val( rd )
-                when :error then read_error( rd )
-                else raise "Unhandled attribute: #{fc}"
-            end
-        end
-
-        ParseTest.new( attrs )
-    end
-
-    def read_parse_test( rd )
-        
-        case fc = read_named8( rd, ELT_TYPES, "element type" )
-        when :parse_test then read_next( rd )
-        when :file_end then nil
-        else raise "Unhandled: #{fc}"
-        end
-    end
-
-    # Impl note: we first pull the entire test file into a buffer and then wrap
-    # it with StringIO, since using an IO instance directly gives pretty
-    # terrible performance -- the read loop below, as of this writing, took 10s
-    # using io directly, but only .04s when wrapped in a StringIO. Perhaps we'll
-    # later find/build some transparent buffered reader, but for now this will
-    # do.
-    def read_parse_tests
- 
-        res = []
-
-        File.open( Testing.find_test_data( "parser-tests.bin" ) ) do |io|
-
-            sz = BitGirder::Io.fsize( io )
-            buf = BitGirder::Io.read_full( io, sz )
-            str_io = StringIO.new( buf )
-            rd = BitGirder::Io::BinaryReader.new_le( :io => str_io )
-
-            read_header( rd )
-
-            start = Time.now
-            until ( test = read_parse_test( rd ) ) == nil
-                res << test
-            end
-        end
-
-        res
-    end
-
-    # In addition to testing parser coverage, these tests also give us coverage
-    # of external form and equality
-    def test_parse
-        read_parse_tests.each { |t| t.call }
-    end
-end
+#class ParseErrorExpectation < BitGirderClass
+#    bg_attr :col, :processor => :integer, :validation => :nonnegative
+#    bg_attr :message
+#end
+#
+#class RestrictionErrorExpectation < BitGirderClass
+#    bg_attr :message
+#end
+#
+#PARSE_OVERRIDES = {
+#
+#    :string => {
+#        "\"a\\udd1e\\ud834\"" => 'Trailing surrogate with no lead: \uDD1E'
+#    },
+#
+#    :identifier => {
+#        'giving-mixedMessages' => 
+#            'Illegal start of identifier part: "M" (0x4D)'
+#    },
+#
+#    :declared_type_name => { 
+#        'Bad$Char' => 'Unrecognized token: "$" (0x24)',
+#        'Bad_Char' => 'Unrecognized token: "_" (0x5F)'
+#    },
+#
+#    :qualified_type_name => {
+#        "ns1@v1/T1#T2" => 'Unrecognized token: "#" (0x23)'
+#    },
+#
+#    :type_reference => {
+#            
+#        "mingle:core@v1/Float32~[1,2)" => {
+#            :external_form => 'mingle:core@v1/Float32~[1.0,2.0)'
+#        },
+#        "Float32~[1,2)" => {
+#            :external_form => 'mingle:core@v1/Float32~[1.0,2.0)'
+#        },
+#        "mingle:core@v1/Timestamp~[\"2012-01-01T12:00:00Z\",\"2012-01-02T12:00:00Z\"]" => {
+#            :external_form => 'mingle:core@v1/Timestamp~["2012-01-01T12:00:00.000000000Z","2012-01-02T12:00:00.000000000Z"]'
+#        },
+#        "Timestamp~[\"2012-01-01T12:00:00Z\",\"2012-01-02T12:00:00Z\"]" => {
+#            :external_form => 'mingle:core@v1/Timestamp~["2012-01-01T12:00:00.000000000Z","2012-01-02T12:00:00.000000000Z"]'
+#        },
+#        "mingle:core@v1/String ~= \"sdf\"" => 'Unrecognized token: "=" (0x3D)',
+#        "mingle:core@v1/String~" => "Expected type restriction but found: END",
+#        "Int32~[1,3}" => {
+#            :err_message => 'Unexpected char in integer part: "}" (0x7D)',
+#            :err_col => 11
+#        },
+#        "Int32~[-\"abc\",2)" => {
+#            :err_message => 'Unexpected char in integer part: "\"" (0x22)',
+#            :err_col => 9
+#        },
+#        "Int32~[--3,4)" => {
+#            :err_message => 'Number has empty or invalid integer part',
+#            :err_col => 8
+#        },
+#        "String~\"ab[a-z\"" => 
+#            'Invalid regex: premature end of ' +
+#            ( RUBY_VERSION >= "1.9" || RubyVersions.jruby? ? 
+#                "char-class" : "regular expression" ) +
+#            ': /ab[a-z/',
+#        
+#        "mingle:core@v1/String~=\"sdf\"" => 'Unrecognized token: "=" (0x3D)',
+#        "Timestamp~[\"2001-0x-22\",)" => 'invalid date: "2001-0x-22"'
+#    }
+#}
+#
+#class ParseTest < BitGirderClass
+#
+#    include Testing::AssertMethods
+#
+#    bg_attr :test_type, :processor => :symbol
+#    bg_attr :input
+#    bg_attr :external_form, :required => false
+#    bg_attr :expect, :required => false
+#    bg_attr :error, :required => false
+#
+#    private
+#    def get_override
+#
+#        res = ( PARSE_OVERRIDES[ @test_type ] || {} )[ @input ] || {}
+#        res = { :err_message => res } if res.is_a?( String )
+#
+#        res
+#    end
+#
+#    private
+#    def expect_token( cls )
+#        
+#        lx = MingleLexer.as_instance( @input )
+#        tok, loc = lx.expect_token
+#        raise "Expected #{cls} but got #{tok.class}" unless tok.is_a?( cls )
+#        raise "Trailing input" unless lx.eof?
+#
+#        tok
+#    end
+#
+#    private
+#    def call_parse
+#        
+#        case @test_type
+#        when :string then expect_token( StringToken )
+#        when :number then ParsedNumber.parse( @input )
+#        when :identifier then MingleIdentifier.parse( @input )
+#        when :namespace then MingleNamespace.parse( @input )
+#        when :declared_type_name then DeclaredTypeName.parse( @input )
+#        when :qualified_type_name then QualifiedTypeName.parse( @input )
+#        when :identified_name then MingleIdentifiedName.parse( @input )
+#        when :type_reference then MingleTypeReference.parse( @input )
+#        else raise "Unhandled test type: #@test_type"
+#        end
+#    end
+#
+#    private
+#    def assert_num_roundtrip( n )
+#        
+#        n_str = n.external_form
+#        lx = MingleLexer.as_instance( n_str )
+#        
+#        n2, _ = ParsedNumber.parse( n_str )
+#        assert_equal( n, n2 )
+#    end
+#
+#    private
+#    def assert_result( res )
+#
+#        assert_equal( @expect, res )
+#        assert_equal( @expect.hash, res.hash )
+#        assert( @expect.eql?( res ) )
+#
+#        unless @external_form.empty?
+#            expct = get_override[ :external_form ] || @external_form
+#            assert_equal( expct, res.external_form ) 
+#        end
+#
+#        assert_num_roundtrip( res ) if res.is_a?( ParsedNumber )
+#    end
+#
+#    private
+#    def get_message_expect
+# 
+#        msg_expct = get_override[ :err_message ]
+#        msg_expct ||= @error.message.gsub( /U\+00([[:xdigit:]]{2})/, '0x\1' )
+#    end
+#
+#    private
+#    def assert_parse_error( pe )
+#        
+#        assert_equal( get_message_expect, pe.err )
+#
+#        assert_equal( 1, pe.loc.line )
+#        assert_equal( get_override[ :err_col ] || @error.col, pe.loc.col )
+#    end
+#
+#    private
+#    def assert_restriction_error( re )
+#        assert_equal( get_message_expect, re.message )
+#    end
+#
+#    private
+#    def assert_error( e )
+#        
+#        case 
+#        when e.is_a?( MingleParseError ) && 
+#             @error.is_a?( ParseErrorExpectation )
+#            assert_parse_error( e )
+#        when e.is_a?( RestrictionTypeError ) &&
+#             @error.is_a?( RestrictionErrorExpectation )
+#            assert_restriction_error( e )
+#        else raise e
+#        end
+#    end
+#
+#    public
+#    def call
+# 
+#        begin
+#
+##            code( "Parsing: #{self.inspect}" )
+#            res = call_parse
+#
+#            raise "Got #{res}, but expected error #{@error.inspect}" if @error
+#            assert_result( res )
+#
+#        rescue => e
+#            assert_error( e )
+#        end
+#    end
+#end
+#
+#class ParseTests < Testing::TestHolder
+#
+#    FILE_VERSION1 = 0x01
+#    
+#    # int8
+#    FLD_CODES = {
+#        0x01 => :test_type,
+#        0x02 => :input,
+#        0x03 => :expect,
+#        0x04 => :error,
+#        0x05 => :end,
+#        0x06 => :external_form
+#    }
+#
+#    # int8
+#    VAL_TYPES = {
+#        0x01 => :identifier,
+#        0x02 => :namespace,
+#        0x03 => :declared_type_name,
+#        0x05 => :qualified_type_name,
+#        0x06 => :identified_name,
+#        0x07 => :regex_restriction,
+#        0x08 => :range_restriction,
+#        0x09 => :atomic_type_reference,
+#        0x0a => :list_type_reference,
+#        0x0b => :nullable_type_reference,
+#        0x0c => :nil,
+#        0x0d => :int32,
+#        0x0e => :int64,
+#        0x0f => :float32,
+#        0x10 => :float64,
+#        0x11 => :string,
+#        0x12 => :timestamp,
+#        0x13 => :boolean,
+#        0x14 => :parse_error,
+#        0x15 => :restriction_error,
+#        0x16 => :string_token,
+#        0x17 => :numeric_token,
+#        0x18 => :uint32,
+#        0x19 => :uint64
+#    }
+#    
+#    # int8
+#    ELT_TYPES = { 0x00 => :file_end, 0x01 => :parse_test }
+#
+#    def unread8( i )
+#
+#        if @unread8
+#            raisef "Attempt to unread %0x when %0x is already set", @unread8, i
+#        else
+#            @unread8 = i
+#        end
+#    end
+#
+#    def read_int8( rd )
+#        ( @unread8 || rd.read_int8 ).tap { @unread8 = nil }
+#    end
+#
+#    def read_named8( rd, map, err_nm, opts = {} )
+#        
+#        i = read_int8( rd )
+#        unread8( i ) if opts[ :unread ]
+#
+#        map[ i ] or raisef "Unknown #{err_nm} value: 0x%02x", i
+#    end
+# 
+#    def peek_named8( *argv )
+#        read_named8( *( argv + [ :unread => true ] ) ) 
+#    end
+#
+#    def read_val_type( rd )
+#        read_named8( rd, VAL_TYPES, "value type" )
+#    end
+#
+#    def peek_val_type( rd )
+#        peek_named8( rd, VAL_TYPES, "val type" )
+#    end
+#
+#    def read_header( rd )
+#        
+#        unless ( ver = rd.read_int32 ) == FILE_VERSION1
+#            raisef "Unexpected file version: %04x", ver
+#        end
+#    end
+#
+#    def expect_value_type( rd, nm )
+#        
+#        unless ( typ = read_val_type( rd ) ) == nm
+#            raise "Expected #{nm}, saw: #{typ}"
+#        end
+#    end
+#
+#    def read_prim_value( rd )
+#        
+#        case vt = read_val_type( rd )
+#        when :nil then nil
+#        when :boolean then MingleBoolean.for_boolean( rd.read_bool )
+#        when :int32 then MingleInt32.new( rd.read_int32 )
+#        when :int64 then MingleInt64.new( rd.read_int64 )
+#        when :uint32 then MingleUint32.new( rd.read_uint32 )
+#        when :uint64 then MingleUint64.new( rd.read_uint64 )
+#        when :float32 then MingleFloat32.new( rd.read_float32 )
+#        when :float64 then MingleFloat64.new( rd.read_float64 )
+#        when :timestamp then MingleTimestamp.rfc3339( rd.read_utf8 )
+#        when :string then MingleString.new( rd.read_utf8 )
+#        else raise "Unhandled primitive type: #{vt}"
+#        end
+#    end
+#
+#    def expect_bool( rd )
+#        
+#        expect_value_type( rd, :boolean )
+#        rd.read_bool
+#    end
+#
+#    def read_string_token( rd )
+#        
+#        expect_value_type( rd, :string_token )
+#        StringToken.new( :val => rd.read_utf8 )
+#    end
+#
+#    def read_numeric_token( rd )
+#        
+#        expect_value_type( rd, :numeric_token )
+#
+#        ParsedNumber.new(
+#            :negative => expect_bool( rd ),
+#            :num => NumericToken.new(
+#                :int => rd.read_utf8,
+#                :frac => rd.read_utf8,
+#                :exp => rd.read_utf8,
+#                :exp_char => rd.read_utf8
+#            )
+#        )
+#    end 
+#
+#    def read_identifier( rd )
+#
+#        expect_value_type( rd, :identifier )
+#
+#        parts = Array.new( rd.read_int32 ) { rd.read_utf8 }
+#        MingleIdentifier.send( :new, :parts => parts )
+#    end
+#
+#    def read_identifiers( rd )
+#        Array.new( rd.read_int32 ) { read_identifier( rd ) }
+#    end
+#
+#    def read_namespace( rd )
+# 
+#        expect_value_type( rd, :namespace )
+#
+#        MingleNamespace.send( :new,
+#            :parts => read_identifiers( rd ),
+#            :version => read_identifier( rd )
+#        )
+#    end
+#
+#    def read_declared_type_name( rd )
+#        
+#        expect_value_type( rd, :declared_type_name )
+#        DeclaredTypeName.send( :new, rd.read_utf8 )
+#    end
+#
+#    def read_qualified_type_name( rd )
+#        
+#        expect_value_type( rd, :qualified_type_name )
+#
+#        QualifiedTypeName.new(
+#            :namespace => read_namespace( rd ),
+#            :name => read_declared_type_name( rd )
+#        )
+#    end
+#
+#    def read_identified_name( rd )
+#        
+#        expect_value_type( rd, :identified_name )
+#        
+#        MingleIdentifiedName.new(
+#            :namespace => read_namespace( rd ),
+#            :names => read_identifiers( rd )
+#        )
+#    end
+#
+#    def read_type_name( rd )
+#        
+#        case vt = peek_val_type( rd )
+#        when :declared_type_name then read_declared_type_name( rd )
+#        when :qualified_type_name then read_qualified_type_name( rd )
+#        else raise "Unexpected type name: #{vt}"
+#        end
+#    end
+#
+#    def read_regex_restriction( rd )
+#        RegexRestriction.new( :ext_pattern => rd.read_utf8 )
+#    end
+#
+#    def read_range_restriction( rd )
+#        
+#        RangeRestriction.new(
+#            :min_closed => expect_bool( rd ),
+#            :min => read_prim_value( rd ),
+#            :max => read_prim_value( rd ),
+#            :max_closed => expect_bool( rd )
+#        )
+#    end
+#
+#    def read_type_restriction( rd )
+#        
+#        case vt = read_val_type( rd )
+#        when :nil then nil
+#        when :regex_restriction then read_regex_restriction( rd )
+#        when :range_restriction then read_range_restriction( rd )
+#        else raise "Unrecognized restriction type: #{vt}"
+#        end
+#    end
+#
+#    def read_atomic_type_reference( rd )
+#        
+#        expect_value_type( rd, :atomic_type_reference )
+#
+#        AtomicTypeReference.send( :new,
+#            :name => read_type_name( rd ),
+#            :restriction => read_type_restriction( rd )
+#        )
+#    end
+#
+#    def read_list_type_reference( rd )
+#        
+#        expect_value_type( rd, :list_type_reference )
+#
+#        ListTypeReference.send( :new,
+#            :element_type => read_type_reference( rd ),
+#            :allows_empty => read_prim_value( rd ).to_bool
+#        )
+#    end
+#
+#    def read_nullable_type_reference( rd )
+#        
+#        expect_value_type( rd, :nullable_type_reference )
+#
+#        NullableTypeReference.send( :new, :type => read_type_reference( rd ) )
+#    end
+#
+#    def read_type_reference( rd )
+#
+#        case vt = peek_val_type( rd )        
+#        when :atomic_type_reference then read_atomic_type_reference( rd )
+#        when :list_type_reference then read_list_type_reference( rd )
+#        when :nullable_type_reference then read_nullable_type_reference( rd )
+#        else raise "Unrecognized type reference type: #{vt}"
+#        end
+#    end
+#        
+#    def read_expect_val( rd )
+#
+#        case vt = peek_val_type( rd )
+#        when :string_token then read_string_token( rd )
+#        when :numeric_token then read_numeric_token( rd )
+#        when :identifier then read_identifier( rd )
+#        when :namespace then read_namespace( rd )
+#        when :declared_type_name then read_declared_type_name( rd )
+#        when :qualified_type_name then read_qualified_type_name( rd )
+#        when :identified_name then read_identified_name( rd )
+#
+#        when :atomic_type_reference, 
+#             :list_type_reference,
+#             :nullable_type_reference 
+#            read_type_reference( rd )
+#
+#        else raise "Unhandled value type: #{vt}"
+#        end
+#    end
+#
+#    def read_parse_error( rd )
+#        
+#        ParseErrorExpectation.new(
+#            :col => rd.read_int32,
+#            :message => rd.read_utf8
+#        )
+#    end
+#
+#    def read_restriction_error( rd )
+#        RestrictionErrorExpectation.new( :message => rd.read_utf8 )
+#    end
+#
+#    def read_error( rd )
+#        
+#        case err_typ = read_named8( rd, VAL_TYPES, "val type" )
+#        when :parse_error then read_parse_error( rd )
+#        when :restriction_error then read_restriction_error( rd )
+#        else raise "Unhandled error type: #{err_typ}"
+#        end
+#    end
+#
+#    def read_next( rd )
+# 
+#        attrs = {}
+#
+#        until ( fc = read_named8( rd, FLD_CODES, "field code" ) ) == :end
+#            attrs[ fc ] = case fc
+#                when :test_type then rd.read_utf8.gsub( '-', '_' )
+#                when :input, :external_form then rd.read_utf8
+#                when :expect then read_expect_val( rd )
+#                when :error then read_error( rd )
+#                else raise "Unhandled attribute: #{fc}"
+#            end
+#        end
+#
+#        ParseTest.new( attrs )
+#    end
+#
+#    def read_parse_test( rd )
+#        
+#        case fc = read_named8( rd, ELT_TYPES, "element type" )
+#        when :parse_test then read_next( rd )
+#        when :file_end then nil
+#        else raise "Unhandled: #{fc}"
+#        end
+#    end
+#
+#    # Impl note: we first pull the entire test file into a buffer and then wrap
+#    # it with StringIO, since using an IO instance directly gives pretty
+#    # terrible performance -- the read loop below, as of this writing, took 10s
+#    # using io directly, but only .04s when wrapped in a StringIO. Perhaps we'll
+#    # later find/build some transparent buffered reader, but for now this will
+#    # do.
+#    def read_parse_tests
+# 
+#        res = []
+#
+#        File.open( Testing.find_test_data( "parser-tests.bin" ) ) do |io|
+#
+#            sz = BitGirder::Io.fsize( io )
+#            buf = BitGirder::Io.read_full( io, sz )
+#            str_io = StringIO.new( buf )
+#            rd = BitGirder::Io::BinaryReader.new_le( :io => str_io )
+#
+#            read_header( rd )
+#
+#            start = Time.now
+#            until ( test = read_parse_test( rd ) ) == nil
+#                res << test
+#            end
+#        end
+#
+#        res
+#    end
+#
+#    # In addition to testing parser coverage, these tests also give us coverage
+#    # of external form and equality
+#    def test_parse
+#        read_parse_tests.each { |t| t.call }
+#    end
+#end
 
 end

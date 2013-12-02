@@ -437,6 +437,10 @@ class MingleList < MingleValue
                       "type #{coll.class}"
         end
     end
+
+    def self.as_list( *argv )
+        self.new( argv )
+    end
 end
 
 class ParseLocation < BitGirderClass
@@ -2129,7 +2133,7 @@ class MingleSymbolMap < MingleValue
     private_class_method :new
 
     def self.create( map = {} )
-        
+ 
         res = {}
 
         not_nil( map, "map" ).each_pair do |k, v| 
@@ -2584,7 +2588,7 @@ end
 
 module IoConstants
 
-    TYPE_CODE_NIL = 0x00
+    TYPE_CODE_NULL = 0x00
     TYPE_CODE_ID = 0x01
     TYPE_CODE_NS = 0x02
     TYPE_CODE_DECL_NM = 0x03
@@ -2598,16 +2602,20 @@ module IoConstants
     TYPE_CODE_STRING = 0x0b
     TYPE_CODE_INT32 = 0x0c
     TYPE_CODE_INT64 = 0x0d
-    TYPE_CODE_FLOAT32 = 0x0e
-    TYPE_CODE_FLOAT64 = 0x0f
-    TYPE_CODE_TIME_RFC3339 = 0x10
-    TYPE_CODE_BUFFER = 0x11
-    TYPE_CODE_ENUM = 0x12
-    TYPE_CODE_SYM_MAP = 0x13
-    TYPE_CODE_MAP_PAIR = 0x14
-    TYPE_CODE_STRUCT = 0x15
-    TYPE_CODE_LIST = 0x17
-    TYPE_CODE_END = 0x18
+    TYPE_CODE_UINT32 = 0x0e
+    TYPE_CODE_UINT64 = 0x0f
+    TYPE_CODE_FLOAT32 = 0x10
+    TYPE_CODE_FLOAT64 = 0x11
+    TYPE_CODE_TIMESTAMP = 0x12
+    TYPE_CODE_BUFFER = 0x13
+    TYPE_CODE_ENUM = 0x14
+    TYPE_CODE_SYM_MAP = 0x15
+    TYPE_CODE_FIELD = 0x16
+    TYPE_CODE_STRUCT = 0x17
+    TYPE_CODE_LIST = 0x19
+    TYPE_CODE_END = 0x1a
+    TYPE_CODE_ID_PATH = 0x1b
+    TYPE_CODE_ID_PATH_LIST_NODE = 0x1c
 end
 
 class BinIoError < StandardError; end
@@ -2649,106 +2657,165 @@ class BinReader < BinIoBase
         if ( act = read_type_code ) == tc
             tc
         else
-            raise errorf( "Expected type code 0x%02x but got 0x%02x", tc, act )
+            raise errorf( "expected type code 0x%02x but got 0x%02x", tc, act )
         end
     end
 
-    private
-    def buf32_as_utf8
-
-        RubyVersions.when_19x( @rd.read_buffer32 ) do |buf|
-            buf.force_encoding( "utf-8" )
-        end
-    end
+#    private
+#    def buf32_as_utf8
+#
+#        RubyVersions.when_19x( @rd.read_buffer32 ) do |buf|
+#            buf.force_encoding( "utf-8" )
+#        end
+#    end
 
     public
     def read_identifier
         
         expect_type_code( TYPE_CODE_ID )
 
-        parts = Array.new( @rd.read_uint8 ) { buf32_as_utf8 }
+        parts = Array.new( @rd.read_uint8 ) { @rd.read_utf8 }
         MingleIdentifier.send( :new, :parts => parts )
     end
 
+#    private
+#    def read_identifiers
+#        Array.new( @rd.read_uint8 ) { read_identifier }
+#    end
+#
+#    public
+#    def read_namespace
+#        
+#        expect_type_code( TYPE_CODE_NS )
+#
+#        MingleNamespace.send( :new,
+#            :parts => read_identifiers,
+#            :version => read_identifier
+#        )
+#    end
+#
+#    private
+#    def read_declared_type_name
+#    
+#        expect_type_code( TYPE_CODE_DECL_NM )
+#
+#        DeclaredTypeName.send( :new, :name => buf32_as_utf8 )
+#    end
+#
+#    public
+#    def read_qualified_type_name
+#        
+#        expect_type_code( TYPE_CODE_QN )
+#
+#        QualifiedTypeName.new(
+#            :namespace => read_namespace,
+#            :name => read_declared_type_name
+#        )
+#    end
+#
+#    public
+#    def read_type_name
+#
+#        case tc = peek_type_code
+#        when TYPE_CODE_DECL_NM then read_declared_type_name
+#        when TYPE_CODE_QN then read_qualified_type_name
+#        else raise errorf( "Unrecognized type name code: 0x%02x", tc )
+#        end
+#    end
+#
+#    private
+#    def read_restriction
+#        
+#        if ( tc = read_type_code ) == TYPE_CODE_NIL
+#            nil
+#        else
+#            raise error( "Non-nil restrictions not yet implemented" )
+#        end
+#    end
+#
+#    private
+#    def read_atomic_type_reference
+#        
+#        expect_type_code( TYPE_CODE_ATOM_TYP )
+#
+#        AtomicTypeReference.send( :new,
+#            :name => read_type_name,
+#            :restriction => read_restriction
+#        )
+#    end
+#
+#    public
+#    def read_type_reference
+#
+#        case tc = peek_type_code
+#        when TYPE_CODE_ATOM_TYP then read_atomic_type_reference
+#        when TYPE_CODE_LIST_TYP then read_list_type_reference
+#        when TYPE_CODE_NULLABLE_TYP then read_nullable_type_reference
+#        else raise errorf( "Unrecognized type reference code: 0x%02x", tc )
+#        end
+#    end
+
     private
-    def read_identifiers
-        Array.new( @rd.read_uint8 ) { read_identifier }
-    end
-
-    public
-    def read_namespace
+    def read_symbol_map_pairs
         
-        expect_type_code( TYPE_CODE_NS )
+        res = {}
 
-        MingleNamespace.send( :new,
-            :parts => read_identifiers,
-            :version => read_identifier
-        )
+        while true
+            case tc = read_type_code
+            when TYPE_CODE_END then return res
+            when TYPE_CODE_FIELD then res[ read_identifier ] = read_value
+            else raise errorf( "unexpected map pair type code: 0x%02x", tc )
+            end
+        end
+    end
+ 
+    private
+    def read_symbol_map
+        MingleSymbolMap.create( read_symbol_map_pairs )
     end
 
     private
-    def read_declared_type_name
-    
-        expect_type_code( TYPE_CODE_DECL_NM )
-
-        DeclaredTypeName.send( :new, :name => buf32_as_utf8 )
-    end
-
-    public
-    def read_qualified_type_name
+    def read_list
         
-        expect_type_code( TYPE_CODE_QN )
+        @rd.read_int32 # read but ignore size
 
-        QualifiedTypeName.new(
-            :namespace => read_namespace,
-            :name => read_declared_type_name
-        )
-    end
+        vals = []
 
-    public
-    def read_type_name
-
-        case tc = peek_type_code
-        when TYPE_CODE_DECL_NM then read_declared_type_name
-        when TYPE_CODE_QN then read_qualified_type_name
-        else raise errorf( "Unrecognized type name code: 0x%02x", tc )
+        while true
+            case tc = read_type_code
+            when TYPE_CODE_END then return MingleList.new( vals )
+            else vals << impl_read_value( tc )
+            end
         end
     end
 
     private
-    def read_restriction
+    def impl_read_value( tc )
         
-        if ( tc = read_type_code ) == TYPE_CODE_NIL
-            nil
-        else
-            raise error( "Non-nil restrictions not yet implemented" )
+        case tc
+        when TYPE_CODE_NULL then MingleNull::INSTANCE
+        when TYPE_CODE_STRING then MingleString.new( @rd.read_utf8 )
+        when TYPE_CODE_BOOL then MingleBoolean.for_boolean( @rd.read_bool )
+        when TYPE_CODE_BUFFER then MingleBuffer.new( @rd.read_buffer32 )
+        when TYPE_CODE_INT32 then MingleInt32.new( @rd.read_int32 )
+        when TYPE_CODE_UINT32 then MingleUint32.new( @rd.read_uint32 )
+        when TYPE_CODE_INT64 then MingleInt64.new( @rd.read_int64 )
+        when TYPE_CODE_UINT64 then MingleUint64.new( @rd.read_uint64 )
+        when TYPE_CODE_SYM_MAP then read_symbol_map
+        when TYPE_CODE_LIST then read_list
+        else raise errorf( "unrecognized value code: 0x%02x", tc )
         end
-    end
-
-    private
-    def read_atomic_type_reference
-        
-        expect_type_code( TYPE_CODE_ATOM_TYP )
-
-        AtomicTypeReference.send( :new,
-            :name => read_type_name,
-            :restriction => read_restriction
-        )
     end
 
     public
-    def read_type_reference
-
-        case tc = peek_type_code
-        when TYPE_CODE_ATOM_TYP then read_atomic_type_reference
-        when TYPE_CODE_LIST_TYP then read_list_type_reference
-        when TYPE_CODE_NULLABLE_TYP then read_nullable_type_reference
-        else raise errorf( "Unrecognized type reference code: 0x%02x", tc )
-        end
+    def read_value
+        impl_read_value( read_type_code )
     end
 
-    def self.as_bin_reader( io_rd )
-        self.send( :new, :rd => io_rd )
+    def self.as_bin_reader( io )
+        
+        not_nil( io, :io )
+        self.send( :new, :rd => BinaryReader.new_le( :io => io ) )
     end
 end
 
@@ -2764,17 +2831,22 @@ class BinWriter < BinIoBase
     end
 
     private
-    def write_nil
-        write_type_code( TYPE_CODE_NIL )
+    def write_end
+        write_type_code( TYPE_CODE_END )
     end
 
-    private
-    def write_qualified_type_name( qn )
-        
-        write_type_code( TYPE_CODE_QN )
-        write_namespace( qn.namespace )
-        write_declared_type_name( qn.name )
-    end
+#    private
+#    def write_nil
+#        write_type_code( TYPE_CODE_NIL )
+#    end
+#
+#    private
+#    def write_qualified_type_name( qn )
+#        
+#        write_type_code( TYPE_CODE_QN )
+#        write_namespace( qn.namespace )
+#        write_declared_type_name( qn.name )
+#    end
 
     public
     def write_identifier( id )
@@ -2782,66 +2854,142 @@ class BinWriter < BinIoBase
         write_type_code( TYPE_CODE_ID )
 
         @wr.write_uint8( id.parts.size )
-        id.parts.each { |part| @wr.write_buffer32( part ) }
+        id.parts.each { |part| @wr.write_utf8( part ) }
     end
 
-    private
-    def write_identifiers( ids )
-
-        @wr.write_uint8( ids.size )
-        ids.each { |id| write_identifier( id ) }
-    end
-
-    private
-    def write_namespace( ns )
-
-        write_type_code( TYPE_CODE_NS )
-        write_identifiers( ns.parts )
-        write_identifier( ns.version )
-    end
+#    private
+#    def write_identifiers( ids )
+#
+#        @wr.write_uint8( ids.size )
+#        ids.each { |id| write_identifier( id ) }
+#    end
+#
+#    private
+#    def write_namespace( ns )
+#
+#        write_type_code( TYPE_CODE_NS )
+#        write_identifiers( ns.parts )
+#        write_identifier( ns.version )
+#    end
+#    
+#    private
+#    def write_declared_type_name( nm )
+#        
+#        write_type_code( TYPE_CODE_DECL_NM )
+#        @wr.write_buffer32( nm.name )
+#    end
+#
+#    private
+#    def write_type_name( nm )
+#
+#        case nm
+#        when DeclaredTypeName then write_declared_type_name( nm )
+#        when QualifiedTypeName then write_qualified_type_name( nm )
+#        else raise error( "Unhandled type name: #{nm.class}" )
+#        end
+#    end
+#
+#    private
+#    def write_atomic_type_reference( typ )
+#        
+#        write_type_code( TYPE_CODE_ATOM_TYP )
+#        write_type_name( typ.name )
+#
+#        case typ.restriction
+#        when nil then write_nil
+#        else raise error( "Unhandled restriction: #{typ}" )
+#        end
+#    end
+#
+#    public
+#    def write_type_reference( typ )
+#        
+#        case typ
+#        when AtomicTypeReference then write_atomic_type_reference( typ )
+#        when ListTypeReference then write_list_type_reference( typ )
+#        when NullableTypeReference then write_nullable_type_reference( typ )
+#        else raise error( "Unhandled type reference: #{typ.class}" )
+#        end
+#    end
     
     private
-    def write_declared_type_name( nm )
-        
-        write_type_code( TYPE_CODE_DECL_NM )
-        @wr.write_buffer32( nm.name )
+    def write_null
+        write_type_code( TYPE_CODE_NULL )
     end
 
     private
-    def write_type_name( nm )
+    def write_string( val )
+        write_type_code( TYPE_CODE_STRING )
+        @wr.write_utf8( val.to_s )
+    end
 
-        case nm
-        when DeclaredTypeName then write_declared_type_name( nm )
-        when QualifiedTypeName then write_qualified_type_name( nm )
-        else raise error( "Unhandled type name: #{nm.class}" )
+    private
+    def write_bool( val )
+        write_type_code( TYPE_CODE_BOOL )
+        @wr.write_bool( val.to_b )
+    end
+
+    private
+    def write_buffer( val )
+        write_type_code( TYPE_CODE_BUFFER )
+        @wr.write_buffer32( val.buf )
+    end
+
+    %w{ int32 uint32 int64 uint64 }.each do |typ|
+        
+        tc = const_get( "TYPE_CODE_#{typ.upcase}" )
+        wr_sym = "write_#{typ}".to_sym
+
+        define_method( wr_sym ) do |val|
+            write_type_code( tc )
+            @wr.send( wr_sym, val.to_i )
         end
     end
 
     private
-    def write_atomic_type_reference( typ )
+    def write_symbol_map( m )
         
-        write_type_code( TYPE_CODE_ATOM_TYP )
-        write_type_name( typ.name )
+        write_type_code( TYPE_CODE_SYM_MAP )
 
-        case typ.restriction
-        when nil then write_nil
-        else raise error( "Unhandled restriction: #{typ}" )
+        m.each_pair do |fld, val|
+            
+            write_type_code( TYPE_CODE_FIELD )
+            write_identifier( fld )
+            write_value( val )
         end
+
+        write_end
+    end
+
+    private
+    def write_list( l )
+        
+        write_type_code( TYPE_CODE_LIST )
+        @wr.write_int32( l.size )
+        l.each { |v| write_value( v ) }
+        write_end
     end
 
     public
-    def write_type_reference( typ )
+    def write_value( val )
         
-        case typ
-        when AtomicTypeReference then write_atomic_type_reference( typ )
-        when ListTypeReference then write_list_type_reference( typ )
-        when NullableTypeReference then write_nullable_type_reference( typ )
-        else raise error( "Unhandled type reference: #{typ.class}" )
+        case val
+        when MingleNull then write_null
+        when MingleString then write_string( val )
+        when MingleBoolean then write_bool( val )
+        when MingleBuffer then write_buffer( val )
+        when MingleInt32 then write_int32( val )
+        when MingleUint32 then write_uint32( val )
+        when MingleInt64 then write_int64( val )
+        when MingleUint64 then write_uint64( val )
+        when MingleSymbolMap then write_symbol_map( val )
+        when MingleList then write_list( val )
+        else raise "unhandled value: #{val.class}"
         end
     end
 
-    def self.as_bin_writer( io_wr )
-        self.send( :new, :wr => io_wr )
+    def self.as_bin_writer( io )
+        self.send( :new, :wr => BinaryWriter.new_le( :io => io ) )
     end
 end
 

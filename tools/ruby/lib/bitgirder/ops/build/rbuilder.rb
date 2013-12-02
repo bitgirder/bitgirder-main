@@ -193,8 +193,11 @@ class TestRunner < BitGirderClass
             env[ ENV_BITGIRDER_DEBUG ] = TEST_DEBUG_DEFAULT
         end
 
-        env[ ENV_PATH ] = "#{get_run_path}:#{env[ ENV_PATH ]}"
-        env[ TestData::ENV_PATH ] = TestData.get_test_data_path( chain )
+        env[ TestData::ENV_TEST_DATA_PATH ] = 
+            TestData.get_test_data_path( chain )
+
+        env[ TestData::ENV_TEST_BIN_PATH ] = TestData.get_bin_path( chain )
+
         env[ ENV_BITGIRDER_TEST_RUBY ] = opts[ :cmd ]
     end
 

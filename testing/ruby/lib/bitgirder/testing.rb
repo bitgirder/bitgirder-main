@@ -4,13 +4,22 @@ module BitGirder
 module Testing
 
 ENV_TEST_DATA_PATH = "TEST_DATA_PATH"
+ENV_TEST_BIN_PATH = "TEST_BIN_PATH"
 
-def self.find_test_data( name )
+def self.find_test_file( name, path )
     
-    ( ENV[ ENV_TEST_DATA_PATH ] || "" ).split( ":" ).
+    ( ENV[ path ] || "" ).split( ":" ).
         map { |path| "#{path}/#{name}" }.
         find { |f| File.exists?( f ) } or
-        raise "No #{name} found on path $#{ENV_TEST_DATA_PATH}"
+        raise "file '#{name}' not found on path #{path}"
+end
+
+def self.find_test_data( name )
+    self.find_test_file( name, ENV_TEST_DATA_PATH )
+end
+
+def self.find_test_command( name )
+    self.find_test_file( name, ENV_TEST_BIN_PATH )
 end
 
 class AssertionFailure < StandardError; end
