@@ -276,7 +276,8 @@ class CoreIoTests < BitGirderClass
                 MingleFloat64.new(
                     "\x01\x00\x00\x00\x00\x00\x00\x00".unpack( 'E' ).shift ),
 
-#    b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
+            "enum-val1" => 
+                MingleEnum.new( :type => :"ns1@v1/E1", :value => :val1 ),
 
             "symmap-empty" => MingleSymbolMap::EMPTY,
 
@@ -289,8 +290,13 @@ class CoreIoTests < BitGirderClass
                 "k1" => MingleSymbolMap.create( "kk1" => MingleInt32.new( 1 ) )
             ),
 
-#    b.setVal( "struct-empty", MustStruct( "ns1@v1/T1" ) )
-#    b.setVal( "struct-flat", MustStruct( "ns1@v1/T1", "k1", int32( 1 ) ) )
+            "struct-empty" => MingleStruct.new( :type => :"ns1@v1/T1" ),
+
+            "struct-flat" =>
+                MingleStruct.new( 
+                    :type => :"ns1@v1/T1",
+                    :fields => { :k1 => MingleInt32.new( 1 ) }
+                ),
 
             "list-empty" => MingleList.as_list(),
 

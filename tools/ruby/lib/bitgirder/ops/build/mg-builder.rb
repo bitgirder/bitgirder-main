@@ -16,7 +16,7 @@ include BitGirder::Ops::Build
 include MG_LANG
 
 MG_NS = MingleNamespace.get( "bitgirder:ops:build:mingle@v1" )
-TYPE_PROJ_DEF = MingleTypeReference.get( "#{MG_NS}/MingleProject" )
+TYPE_PROJ_DEF = QualifiedTypeName.get( "#{MG_NS}/MingleProject" )
 
 class MingleCompile < StandardModTask
 

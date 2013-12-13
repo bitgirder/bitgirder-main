@@ -133,10 +133,10 @@ class JsonMingleCodec < BitGirderClass
     end
 
     private
-    def parse_type_reference( s, path )
+    def parse_qname( s, path )
         
         begin
-            MingleTypeReference.parse( s )
+            QualifiedTypeName.parse( s )
         rescue MingleParseError => e
             decode_raise( path, e.message )
         end
@@ -156,24 +156,14 @@ class JsonMingleCodec < BitGirderClass
     end
 
     # Returns nil if no KEY_TYPE val is present in h. Raises an exception if it
-    # is but is not parsable, is not an atomic type ref, or the type name is not
-    # a qname
+    # is but is not parsable or is not a qname
     private
     def type_ref_in( h, path )
         
         if typ_str = h[ KEY_TYPE ]
 
             err_path = descend( path, KEY_TYPE )
-
-            typ = parse_type_reference( typ_str, err_path )
-
-            unless typ.is_a?( AtomicTypeReference )
-                decode_raise( err_path, 
-                    "Not an atomic type reference: #{typ_str}" )
-            end
-
-            return typ if typ.name.is_a?( QualifiedTypeName )
-            decode_raise( err_path, "Not a qualified type name: #{typ_str}" )
+            return parse_qname( typ_str, err_path )
         end
     end
 

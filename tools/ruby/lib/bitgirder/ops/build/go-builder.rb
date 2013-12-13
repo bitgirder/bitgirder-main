@@ -16,13 +16,13 @@ include BitGirder::Ops::Build
 ENV_GOPATH = "GOPATH"
 
 TYPE_MOD_BUILD_INFO = 
-    MingleTypeReference.get( :"bitgirder:ops:build:go@v1/ModBuildInfo" )
+    QualifiedTypeName.get( :"bitgirder:ops:build:go@v1/ModBuildInfo" )
 
 TYPE_BIN_BUILD_INFO =
-    MingleTypeReference.get( :"bitgirder:ops:build:go@v1/BinBuildInfo" )
+    QualifiedTypeName.get( :"bitgirder:ops:build:go@v1/BinBuildInfo" )
 
 TYPE_GO_COMMAND_RUN = 
-    MingleTypeReference.get( :"bitgirder:ops:build:go@v1/GoCommandRun" )
+    QualifiedTypeName.get( :"bitgirder:ops:build:go@v1/GoCommandRun" )
 
 # Meant to be mixed into a StandardProjTask
 module GoEnvMixin

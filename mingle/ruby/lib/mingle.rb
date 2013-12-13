@@ -2098,7 +2098,7 @@ end
 
 class MingleTypedValue < MingleValue
 
-    bg_attr :type, :processor => MingleTypeReference
+    bg_attr :type, :processor => QualifiedTypeName
 end
 
 class MingleEnum < MingleTypedValue
@@ -2251,7 +2251,7 @@ end
 
 class MingleStruct < MingleValue
 
-    bg_attr :type, :processor => MingleTypeReference
+    bg_attr :type, :processor => QualifiedTypeName
     
     bg_attr :fields,
             :default => MingleSymbolMap::EMPTY,
@@ -2678,41 +2678,40 @@ class BinReader < BinIoBase
         MingleIdentifier.send( :new, :parts => parts )
     end
 
-#    private
-#    def read_identifiers
-#        Array.new( @rd.read_uint8 ) { read_identifier }
-#    end
-#
-#    public
-#    def read_namespace
-#        
-#        expect_type_code( TYPE_CODE_NS )
-#
-#        MingleNamespace.send( :new,
-#            :parts => read_identifiers,
-#            :version => read_identifier
-#        )
-#    end
-#
-#    private
-#    def read_declared_type_name
-#    
-#        expect_type_code( TYPE_CODE_DECL_NM )
-#
-#        DeclaredTypeName.send( :new, :name => buf32_as_utf8 )
-#    end
-#
-#    public
-#    def read_qualified_type_name
-#        
-#        expect_type_code( TYPE_CODE_QN )
-#
-#        QualifiedTypeName.new(
-#            :namespace => read_namespace,
-#            :name => read_declared_type_name
-#        )
-#    end
-#
+    private
+    def read_identifiers
+        Array.new( @rd.read_uint8 ) { read_identifier }
+    end
+
+    public
+    def read_namespace
+        
+        expect_type_code( TYPE_CODE_NS )
+
+        MingleNamespace.send( :new,
+            :parts => read_identifiers,
+            :version => read_identifier
+        )
+    end
+
+    private
+    def read_declared_type_name
+    
+        expect_type_code( TYPE_CODE_DECL_NM )
+        DeclaredTypeName.send( :new, :name => @rd.read_utf8 )
+    end
+
+    public
+    def read_qualified_type_name
+        
+        expect_type_code( TYPE_CODE_QN )
+
+        QualifiedTypeName.new(
+            :namespace => read_namespace,
+            :name => read_declared_type_name
+        )
+    end
+
 #    public
 #    def read_type_name
 #
@@ -2775,6 +2774,26 @@ class BinReader < BinIoBase
     end
 
     private
+    def read_struct
+        
+        @rd.read_int32 # skip size
+        
+        typ = read_qualified_type_name
+        flds = read_symbol_map_pairs
+
+        MingleStruct.new( :type => typ, :fields => flds )
+    end
+
+    private
+    def read_enum
+
+        MingleEnum.new(
+            :type => read_qualified_type_name,
+            :value => read_identifier
+        )
+    end
+
+    private
     def read_list
         
         @rd.read_int32 # read but ignore size
@@ -2804,6 +2823,8 @@ class BinReader < BinIoBase
         when TYPE_CODE_FLOAT32 then MingleFloat32.new( @rd.read_float32 )
         when TYPE_CODE_FLOAT64 then MingleFloat64.new( @rd.read_float64 )
         when TYPE_CODE_SYM_MAP then read_symbol_map
+        when TYPE_CODE_STRUCT then read_struct
+        when TYPE_CODE_ENUM then read_enum
         when TYPE_CODE_LIST then read_list
         else raise errorf( "unrecognized value code: 0x%02x", tc )
         end
@@ -2841,14 +2862,6 @@ class BinWriter < BinIoBase
 #    def write_nil
 #        write_type_code( TYPE_CODE_NIL )
 #    end
-#
-#    private
-#    def write_qualified_type_name( qn )
-#        
-#        write_type_code( TYPE_CODE_QN )
-#        write_namespace( qn.namespace )
-#        write_declared_type_name( qn.name )
-#    end
 
     public
     def write_identifier( id )
@@ -2859,28 +2872,36 @@ class BinWriter < BinIoBase
         id.parts.each { |part| @wr.write_utf8( part ) }
     end
 
-#    private
-#    def write_identifiers( ids )
-#
-#        @wr.write_uint8( ids.size )
-#        ids.each { |id| write_identifier( id ) }
-#    end
-#
-#    private
-#    def write_namespace( ns )
-#
-#        write_type_code( TYPE_CODE_NS )
-#        write_identifiers( ns.parts )
-#        write_identifier( ns.version )
-#    end
-#    
-#    private
-#    def write_declared_type_name( nm )
-#        
-#        write_type_code( TYPE_CODE_DECL_NM )
-#        @wr.write_buffer32( nm.name )
-#    end
-#
+    private
+    def write_identifiers( ids )
+
+        @wr.write_uint8( ids.size )
+        ids.each { |id| write_identifier( id ) }
+    end
+
+    private
+    def write_namespace( ns )
+
+        write_type_code( TYPE_CODE_NS )
+        write_identifiers( ns.parts )
+        write_identifier( ns.version )
+    end
+    
+    private
+    def write_declared_type_name( nm )
+        
+        write_type_code( TYPE_CODE_DECL_NM )
+        @wr.write_utf8( nm.name )
+    end
+
+    private
+    def write_qualified_type_name( qn )
+        
+        write_type_code( TYPE_CODE_QN )
+        write_namespace( qn.namespace )
+        write_declared_type_name( qn.name )
+    end
+
 #    private
 #    def write_type_name( nm )
 #
@@ -2942,7 +2963,7 @@ class BinWriter < BinIoBase
         tc = const_get( "TYPE_CODE_#{typ.upcase}" )
         wr_sym = "write_#{typ}".to_sym
 
-        to_num = :"to_#{typ[ 0 ]}" # to_i or to_f
+        to_num = typ[ 0 ] == "f" ? :to_f : :to_i
 
         define_method( wr_sym ) do |val|
             write_type_code( tc )
@@ -2951,9 +2972,7 @@ class BinWriter < BinIoBase
     end
 
     private
-    def write_symbol_map( m )
-        
-        write_type_code( TYPE_CODE_SYM_MAP )
+    def write_symbol_map_pairs( m )
 
         m.each_pair do |fld, val|
             
@@ -2963,6 +2982,30 @@ class BinWriter < BinIoBase
         end
 
         write_end
+    end
+
+    private
+    def write_symbol_map( m )
+        
+        write_type_code( TYPE_CODE_SYM_MAP )
+        write_symbol_map_pairs( m )
+    end
+
+    private
+    def write_struct( s )
+        
+        write_type_code( TYPE_CODE_STRUCT )
+        @wr.write_int32( -1 ) # size
+        write_qualified_type_name( s.type )
+        write_symbol_map_pairs( s.fields )
+    end
+
+    private
+    def write_enum( e )
+        
+        write_type_code( TYPE_CODE_ENUM )
+        write_qualified_type_name( e.type )
+        write_identifier( e.value )
     end
 
     private
@@ -2989,6 +3032,8 @@ class BinWriter < BinIoBase
         when MingleFloat32 then write_float32( val )
         when MingleFloat64 then write_float64( val )
         when MingleSymbolMap then write_symbol_map( val )
+        when MingleStruct then write_struct( val )
+        when MingleEnum then write_enum( val )
         when MingleList then write_list( val )
         else raise "unhandled value: #{val.class}"
         end
