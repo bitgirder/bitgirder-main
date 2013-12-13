@@ -169,8 +169,8 @@ module ModelTestInstances
 
         assert( 
             expct == actual,
-            "Objects are not equal: #{expct.inspect} (#{expct.class}) " \
-            "but got #{actual.inspect} (#{actual.class})", 
+            "Objects are not equal: expected #{expct.inspect} " \
+            "(#{expct.class}) but got #{actual.inspect} (#{actual.class})", 
             path )
     end
 

@@ -258,17 +258,23 @@ class CoreIoTests < BitGirderClass
             "uint64-min" => MingleUint64.new( 0 ),
             "uint64-pos1" => MingleUint64.new( 1 ),
 
-#    b.setVal( "float32-val1", Float32( float32( 1 ) ) )
-#    b.setVal( "float32-max", Float32( math.MaxFloat32 ) )
-#    b.setVal( "float32-smallest-nonzero",
-#        Float32( math.SmallestNonzeroFloat32 ) )
-#    b.setVal( "float64-val1", Float64( float64( 1 ) ) )
-#    b.setVal( "float64-max", Float64( math.MaxFloat64 ) )
-#    b.setVal( "float64-smallest-nonzero",
-#        Float64( math.SmallestNonzeroFloat64 ) )
+            "float32-val1" => MingleFloat32.new( 1.0 ),
+
+            "float32-max" => 
+                MingleFloat32.new( "\xFF\xFF\x7F\x7F".unpack( 'e' ).shift ),
+
+            "float32-smallest-nonzero" =>
+                MingleFloat32.new( "\x01\x00\x00\x00".unpack( 'e' ).shift ),
             
-#            "time-val1" =>
-#                MingleTimestamp.rfc3339( "2013-10-19T02:47:00-08:00" ),
+            "float64-val1" => MingleFloat64.new( 1.0 ),
+            
+            "float64-max" =>
+                MingleFloat64.new( 
+                    "\xff\xff\xff\xff\xff\xff\xef\x7f".unpack( 'E' ).shift ),
+            
+            "float64-smallest-nonzero" =>
+                MingleFloat64.new(
+                    "\x01\x00\x00\x00\x00\x00\x00\x00".unpack( 'E' ).shift ),
 
 #    b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
 

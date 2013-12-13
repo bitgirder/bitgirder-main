@@ -2801,6 +2801,8 @@ class BinReader < BinIoBase
         when TYPE_CODE_UINT32 then MingleUint32.new( @rd.read_uint32 )
         when TYPE_CODE_INT64 then MingleInt64.new( @rd.read_int64 )
         when TYPE_CODE_UINT64 then MingleUint64.new( @rd.read_uint64 )
+        when TYPE_CODE_FLOAT32 then MingleFloat32.new( @rd.read_float32 )
+        when TYPE_CODE_FLOAT64 then MingleFloat64.new( @rd.read_float64 )
         when TYPE_CODE_SYM_MAP then read_symbol_map
         when TYPE_CODE_LIST then read_list
         else raise errorf( "unrecognized value code: 0x%02x", tc )
@@ -2935,14 +2937,16 @@ class BinWriter < BinIoBase
         @wr.write_buffer32( val.buf )
     end
 
-    %w{ int32 uint32 int64 uint64 }.each do |typ|
+    %w{ int32 uint32 int64 uint64 float32 float64 }.each do |typ|
         
         tc = const_get( "TYPE_CODE_#{typ.upcase}" )
         wr_sym = "write_#{typ}".to_sym
 
+        to_num = :"to_#{typ[ 0 ]}" # to_i or to_f
+
         define_method( wr_sym ) do |val|
             write_type_code( tc )
-            @wr.send( wr_sym, val.to_i )
+            @wr.send( wr_sym, val.send( to_num ) )
         end
     end
 
@@ -2982,6 +2986,8 @@ class BinWriter < BinIoBase
         when MingleUint32 then write_uint32( val )
         when MingleInt64 then write_int64( val )
         when MingleUint64 then write_uint64( val )
+        when MingleFloat32 then write_float32( val )
+        when MingleFloat64 then write_float64( val )
         when MingleSymbolMap then write_symbol_map( val )
         when MingleList then write_list( val )
         else raise "unhandled value: #{val.class}"
