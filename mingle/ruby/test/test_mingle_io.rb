@@ -43,6 +43,11 @@ class AbstractCoreIoTest < BitGirderClass
         case expct
         when MingleValue then reader.read_value
         when ObjectPath then reader.read_identifier_path
+        when MingleIdentifier then reader.read_identifier
+        when MingleNamespace then reader.read_namespace
+        when QualifiedTypeName then reader.read_qualified_type_name
+        when DeclaredTypeName then reader.read_declared_type_name
+        when MingleTypeReference then reader.read_type_reference
         else raise "Unhandled expect value: #{expct.class}"
         end
     end
@@ -54,6 +59,9 @@ class AbstractCoreIoTest < BitGirderClass
         when MingleValue then ModelTestInstances.assert_equal( expct, act )
         when ObjectPath 
             ObjectPathTests.assert_equal_with_format( expct, act )
+        when MingleIdentifier, MingleNamespace, QualifiedTypeName, 
+             DeclaredTypeName, MingleTypeReference
+            assert_equal( expct, act )
         else raise "unhandled expct val: #{expct.class}"
         end
     end
@@ -78,6 +86,11 @@ class AbstractCoreIoTest < BitGirderClass
         case val
         when MingleValue then writer.write_value( val )
         when ObjectPath then writer.write_identifier_path( val )
+        when MingleIdentifier then writer.write_identifier( val )
+        when MingleNamespace then writer.write_namespace( val )
+        when QualifiedTypeName then writer.write_qualified_type_name( val )
+        when DeclaredTypeName then writer.write_declared_type_name( val )
+        when MingleTypeReference then writer.write_type_reference( val )
         else raise "unhandled write val: #{val.class}"
         end
     end
@@ -291,6 +304,9 @@ class CoreIoTests < BitGirderClass
                 MingleFloat64.new(
                     "\x01\x00\x00\x00\x00\x00\x00\x00".unpack( 'E' ).shift ),
 
+            "time-val1" => 
+                MingleTimestamp.rfc3339( "2013-10-19T02:47:00-08:00" ),
+
             "enum-val1" => 
                 MingleEnum.new( :type => :"ns1@v1/E1", :value => :val1 ),
 
@@ -345,10 +361,75 @@ class CoreIoTests < BitGirderClass
     end
 
     private
+    def add_definition_roundtrip_expect_vals
+        
+        add_expect_vals_with_prefix( "roundtrip", {
+
+            "Identifier/id1" => MingleIdentifier.get( "id1" ),
+            "Identifier/id1-id2" => MingleIdentifier.get( "id1-id2" ),
+
+            "Namespace/ns1@v1" => MingleNamespace.get( "ns1@v1" ),
+            "Namespace/ns1:ns2@v1" => MingleNamespace.get( "ns1:ns2@v1" ),
+
+            "DeclaredTypeName/T1" => DeclaredTypeName.get( "T1" ),
+
+            "QualifiedTypeName/ns1:ns2@v1/T1" => 
+                QualifiedTypeName.get( "ns1:ns2@v1/T1" ),
+
+            "AtomicTypeReference/T1" => MingleTypeReference.get( "T1" ),
+
+            "AtomicTypeReference/mingle:core@v1/String~\"a\"" =>
+                MingleTypeReference.get( "String~\"a\"" ),
+
+            "AtomicTypeReference/mingle:core@v1/String~[\"a\",\"b\"]" =>
+                MingleTypeReference.get( "String~[\"a\",\"b\"]" ),
+
+            "AtomicTypeReference/mingle:core@v1/Timestamp~[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]" =>
+                MingleTypeReference.get( "Timestamp~[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]" ),
+
+            "AtomicTypeReference/mingle:core@v1/Int32~(0,10)" =>
+                MingleTypeReference.get( "Int32~(0,10)" ),
+
+            "AtomicTypeReference/mingle:core@v1/Int64~[0,10]" =>
+                MingleTypeReference.get( "Int64~[0,10]" ),
+
+            "AtomicTypeReference/mingle:core@v1/Uint32~(0,10)" =>
+                MingleTypeReference.get( "Uint32~(0,10)" ),
+
+            "AtomicTypeReference/mingle:core@v1/Uint64~[0,10]" =>
+                MingleTypeReference.get( "Uint64~[0,10]" ),
+
+            "AtomicTypeReference/mingle:core@v1/Float32~(0,1]" =>
+                MingleTypeReference.get( "Float32~(0.0,1.0]" ),
+
+            "AtomicTypeReference/mingle:core@v1/Float64~[0,1)" =>
+                MingleTypeReference.get( "Float64~[0.0,1.0)" ),
+
+            "AtomicTypeReference/mingle:core@v1/Float64~(,)" =>
+                MingleTypeReference.get( "Float64~(,)" ),
+
+            "ListTypeReference/T1*" => MingleTypeReference.get( "T1*" ),
+            "ListTypeReference/T1+" => MingleTypeReference.get( "T1+" ),
+
+            "NullableTypeReference/T1*?" => MingleTypeReference.get( "T1*?" ),
+
+            "AtomicTypeReference/ns1@v1/T1" =>
+                MingleTypeReference.get( "ns1@v1/T1" ),
+
+            "ListTypeReference/ns1@v1/T1*" =>
+                MingleTypeReference.get( "ns1@v1/T1*" ),
+
+            "NullableTypeReference/ns1@v1/T1?" =>
+                MingleTypeReference.get( "ns1@v1/T1?" )
+        })
+    end
+
+    private
     def add_roundtrip_expect_vals
         
         add_value_roundtrip_expect_vals
         add_id_path_roundtrip_expect_vals
+        add_definition_roundtrip_expect_vals
     end
 
     private

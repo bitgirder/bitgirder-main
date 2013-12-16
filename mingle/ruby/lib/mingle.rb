@@ -332,6 +332,14 @@ class MingleTimestamp < MingleValue
         new( Time.at( secs ), false )
     end
 
+    def self.from_seconds_and_nanos( secs, nanos )
+        
+        not_nil( secs, :secs )
+        nonnegative( nanos, :nanos )
+
+        new( Time.at( secs, Rational( nanos, 1000 ) ) )
+    end
+
     # Impl :note => simply calling Time.at( ms / 1000.0 ) doesn't work as we
     # might want, since it ends up passing a Float to Time.at() which apparently
     # performs more calculations or otherwise leads to a time which is close to
@@ -373,6 +381,20 @@ class MingleTimestamp < MingleValue
     def to_f
         @time.to_f
     end
+
+    public
+    def seconds
+        @time.to_i
+    end
+
+    alias sec seconds
+
+    public
+    def nanos
+        @time.nsec
+    end
+
+    alias nsec nanos
 
     public
     def ==( other )
@@ -1903,8 +1925,6 @@ class MingleTypeReference < BitGirderClass
  
     include StringParser
  
-    private_class_method :new
-
     def self.impl_parse( s )
         MingleParser.consume_string( s ) { |p| p.expect_type_reference }
     end
@@ -2037,7 +2057,7 @@ COMPARABLE_TYPES = NUM_TYPES + [ TYPE_STRING, TYPE_TIMESTAMP ]
 
 class ListTypeReference < MingleTypeReference
     
-    bg_attr :element_type
+    bg_attr :element_type, :processor => MingleTypeReference
     bg_attr :allows_empty, :processor => :boolean
 
     public
@@ -2666,14 +2686,6 @@ class BinReader < BinIoBase
         end
     end
 
-#    private
-#    def buf32_as_utf8
-#
-#        RubyVersions.when_19x( @rd.read_buffer32 ) do |buf|
-#            buf.force_encoding( "utf-8" )
-#        end
-#    end
-
     public
     def read_identifier
         
@@ -2699,7 +2711,7 @@ class BinReader < BinIoBase
         )
     end
 
-    private
+    public
     def read_declared_type_name
     
         expect_type_code( TYPE_CODE_DECL_NM )
@@ -2717,47 +2729,91 @@ class BinReader < BinIoBase
         )
     end
 
-#    public
-#    def read_type_name
-#
-#        case tc = peek_type_code
-#        when TYPE_CODE_DECL_NM then read_declared_type_name
-#        when TYPE_CODE_QN then read_qualified_type_name
-#        else raise errorf( "Unrecognized type name code: 0x%02x", tc )
-#        end
-#    end
-#
-#    private
-#    def read_restriction
-#        
-#        if ( tc = read_type_code ) == TYPE_CODE_NIL
-#            nil
-#        else
-#            raise error( "Non-nil restrictions not yet implemented" )
-#        end
-#    end
-#
-#    private
-#    def read_atomic_type_reference
-#        
-#        expect_type_code( TYPE_CODE_ATOM_TYP )
-#
-#        AtomicTypeReference.send( :new,
-#            :name => read_type_name,
-#            :restriction => read_restriction
-#        )
-#    end
-#
-#    public
-#    def read_type_reference
-#
-#        case tc = peek_type_code
-#        when TYPE_CODE_ATOM_TYP then read_atomic_type_reference
-#        when TYPE_CODE_LIST_TYP then read_list_type_reference
-#        when TYPE_CODE_NULLABLE_TYP then read_nullable_type_reference
-#        else raise errorf( "Unrecognized type reference code: 0x%02x", tc )
-#        end
-#    end
+    public
+    def read_type_name
+
+        case tc = peek_type_code
+        when TYPE_CODE_DECL_NM then read_declared_type_name
+        when TYPE_CODE_QN then read_qualified_type_name
+        else raise errorf( "Unrecognized type name code: 0x%02x", tc )
+        end
+    end
+
+    private
+    def read_regex_restriction
+        RegexRestriction.new( :ext_pattern => @rd.read_utf8 )
+    end
+
+    private
+    def read_value_convert_null
+        
+        if ( res = read_value ).is_a?( MingleNull )
+            nil
+        else
+            res
+        end
+    end
+
+    private
+    def read_range_restriction
+        
+        RangeRestriction.new(
+            :min_closed => @rd.read_bool,
+            :min => read_value_convert_null,
+            :max => read_value_convert_null,
+            :max_closed => @rd.read_bool
+        )
+    end
+
+    private
+    def read_restriction
+        
+        case tc = read_type_code
+        when TYPE_CODE_NULL then nil
+        when TYPE_CODE_REGEX_RESTRICT then read_regex_restriction
+        when TYPE_CODE_RANGE_RESTRICT then read_range_restriction
+        else raise errorf( "unhandled restriction type: 0x%02x", tc )
+        end
+    end
+
+    private
+    def read_atomic_type_reference
+        
+        AtomicTypeReference.send( :new,
+            :name => read_type_name,
+            :restriction => read_restriction
+        )
+    end
+
+    private
+    def read_list_type_reference
+        
+        ListTypeReference.new(
+            :element_type => read_type_reference,
+            :allows_empty => @rd.read_bool
+        )
+    end
+
+    private
+    def read_nullable_type_reference
+        NullableTypeReference.new( :type => read_type_reference )
+    end
+
+    public
+    def read_type_reference
+
+        case tc = read_type_code
+        when TYPE_CODE_ATOM_TYP then read_atomic_type_reference
+        when TYPE_CODE_LIST_TYP then read_list_type_reference
+        when TYPE_CODE_NULLABLE_TYP then read_nullable_type_reference
+        else raise errorf( "Unrecognized type reference code: 0x%02x", tc )
+        end
+    end
+
+    private
+    def read_timestamp
+        MingleTimestamp.from_seconds_and_nanos( @rd.read_int64, @rd.read_int32 )
+    end
 
     private
     def read_symbol_map_pairs
@@ -2827,6 +2883,7 @@ class BinReader < BinIoBase
         when TYPE_CODE_UINT64 then MingleUint64.new( @rd.read_uint64 )
         when TYPE_CODE_FLOAT32 then MingleFloat32.new( @rd.read_float32 )
         when TYPE_CODE_FLOAT64 then MingleFloat64.new( @rd.read_float64 )
+        when TYPE_CODE_TIMESTAMP then read_timestamp
         when TYPE_CODE_SYM_MAP then read_symbol_map
         when TYPE_CODE_STRUCT then read_struct
         when TYPE_CODE_ENUM then read_enum
@@ -2896,11 +2953,6 @@ class BinWriter < BinIoBase
         write_type_code( TYPE_CODE_END )
     end
 
-#    private
-#    def write_nil
-#        write_type_code( TYPE_CODE_NIL )
-#    end
-
     public
     def write_identifier( id )
         
@@ -2917,7 +2969,7 @@ class BinWriter < BinIoBase
         ids.each { |id| write_identifier( id ) }
     end
 
-    private
+    public
     def write_namespace( ns )
 
         write_type_code( TYPE_CODE_NS )
@@ -2925,14 +2977,14 @@ class BinWriter < BinIoBase
         write_identifier( ns.version )
     end
     
-    private
+    public
     def write_declared_type_name( nm )
         
         write_type_code( TYPE_CODE_DECL_NM )
         @wr.write_utf8( nm.name )
     end
 
-    private
+    public
     def write_qualified_type_name( qn )
         
         write_type_code( TYPE_CODE_QN )
@@ -2940,38 +2992,73 @@ class BinWriter < BinIoBase
         write_declared_type_name( qn.name )
     end
 
-#    private
-#    def write_type_name( nm )
-#
-#        case nm
-#        when DeclaredTypeName then write_declared_type_name( nm )
-#        when QualifiedTypeName then write_qualified_type_name( nm )
-#        else raise error( "Unhandled type name: #{nm.class}" )
-#        end
-#    end
-#
-#    private
-#    def write_atomic_type_reference( typ )
-#        
-#        write_type_code( TYPE_CODE_ATOM_TYP )
-#        write_type_name( typ.name )
-#
-#        case typ.restriction
-#        when nil then write_nil
-#        else raise error( "Unhandled restriction: #{typ}" )
-#        end
-#    end
-#
-#    public
-#    def write_type_reference( typ )
-#        
-#        case typ
-#        when AtomicTypeReference then write_atomic_type_reference( typ )
-#        when ListTypeReference then write_list_type_reference( typ )
-#        when NullableTypeReference then write_nullable_type_reference( typ )
-#        else raise error( "Unhandled type reference: #{typ.class}" )
-#        end
-#    end
+    private
+    def write_type_name( nm )
+
+        case nm
+        when DeclaredTypeName then write_declared_type_name( nm )
+        when QualifiedTypeName then write_qualified_type_name( nm )
+        else raise error( "Unhandled type name: #{nm.class}" )
+        end
+    end
+
+    private
+    def write_regex_restriction( rgx )
+        
+        write_type_code( TYPE_CODE_REGEX_RESTRICT )
+        @wr.write_utf8( rgx.ext_pattern )
+    end
+
+    private
+    def write_range_restriction( rng )
+        
+        write_type_code( TYPE_CODE_RANGE_RESTRICT )
+
+        @wr.write_bool( rng.min_closed )
+        write_value_convert_nil( rng.min )
+        write_value_convert_nil( rng.max )
+        @wr.write_bool( rng.max_closed )
+    end
+
+    private
+    def write_atomic_type_reference( typ )
+        
+        write_type_code( TYPE_CODE_ATOM_TYP )
+        write_type_name( typ.name )
+
+        case r = typ.restriction
+        when nil then write_type_code( TYPE_CODE_NULL )
+        when RegexRestriction then write_regex_restriction( r )
+        when RangeRestriction then write_range_restriction( r )
+        else raise error( "Unhandled restriction: #{typ}" )
+        end
+    end
+
+    private
+    def write_list_type_reference( typ )
+        
+        write_type_code( TYPE_CODE_LIST_TYP )
+        write_type_reference( typ.element_type )
+        @wr.write_bool( typ.allows_empty )
+    end
+
+    private
+    def write_nullable_type_reference( typ )
+        
+        write_type_code( TYPE_CODE_NULLABLE_TYP )
+        write_type_reference( typ.type )
+    end
+
+    public
+    def write_type_reference( typ )
+        
+        case typ
+        when AtomicTypeReference then write_atomic_type_reference( typ )
+        when ListTypeReference then write_list_type_reference( typ )
+        when NullableTypeReference then write_nullable_type_reference( typ )
+        else raise error( "Unhandled type reference: #{typ.class}" )
+        end
+    end
     
     private
     def write_null
@@ -3007,6 +3094,14 @@ class BinWriter < BinIoBase
             write_type_code( tc )
             @wr.send( wr_sym, val.send( to_num ) )
         end
+    end
+
+    private
+    def write_timestamp( ts )
+        
+        write_type_code( TYPE_CODE_TIMESTAMP )
+        @wr.write_int64( ts.seconds )
+        @wr.write_int32( ts.nanos )
     end
 
     private
@@ -3069,12 +3164,18 @@ class BinWriter < BinIoBase
         when MingleUint64 then write_uint64( val )
         when MingleFloat32 then write_float32( val )
         when MingleFloat64 then write_float64( val )
+        when MingleTimestamp then write_timestamp( val )
         when MingleSymbolMap then write_symbol_map( val )
         when MingleStruct then write_struct( val )
         when MingleEnum then write_enum( val )
         when MingleList then write_list( val )
         else raise "unhandled value: #{val.class}"
         end
+    end
+
+    private
+    def write_value_convert_nil( val )
+        write_value( val == nil ? MingleNull::INSTANCE : val )
     end
 
     public

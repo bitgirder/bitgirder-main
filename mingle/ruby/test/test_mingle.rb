@@ -404,6 +404,10 @@ class MingleTests
         time_ms = ( t1.time.to_i * 1000 ) + ( t1.time.usec / 1000 )
         t3 = MingleTimestamp.from_millis( time_ms )
         assert_equal( t1.rfc3339[ 0 .. -8 ] + ( "0" * 6 ) + "Z", t3.rfc3339 )
+
+        t4_sec, t4_nsec = 1, 123456789
+        t4 = MingleTimestamp.from_seconds_and_nanos( t4_sec, t4_nsec )
+        assert_equal( [ t4_sec, t4_nsec ], [ t4.sec, t4.nsec ] )
     end
 
     # Assumes proper behavior of MingleTimestamp.from_seconds(), as tested
