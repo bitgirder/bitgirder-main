@@ -78,6 +78,8 @@ class AbstractCoreIoTest < BitGirderClass
             @write_buf = StringIO.new( create_binary_string )
             @writer = BinWriter.as_bin_writer( @write_buf )
         end
+
+        @writer
     end
 
     private
@@ -148,6 +150,19 @@ class RoundtripTest < AbstractCoreIoTest
 end
 
 class SequenceRoundtripTest < AbstractCoreIoTest
+
+    def run_test
+        
+        get_expect_value.each do |expct|
+            
+            act = assert_matching_val( expct )
+            write_value( act )
+        end
+
+        assert( reader.rd.eof? )
+
+        check_write_buf
+    end
 end
 
 class CoreIoTests < BitGirderClass
@@ -433,8 +448,26 @@ class CoreIoTests < BitGirderClass
     end
 
     private
+    def add_sequence_expect_vals
+
+        add_expect_val_with_prefix( 
+            "sequence-roundtrip", 
+            "struct-sequence",
+            [ 
+                MingleStruct.new( :type => :"ns1@v1/S1" ),
+
+                MingleStruct.new( 
+                    :type => :"ns1@v1/S1", 
+                    :fields => { :f1 => MingleInt32.new( 1 ) }
+                )
+            ]
+        )
+    end
+
+    private
     def add_expect_vals
         add_roundtrip_expect_vals
+        add_sequence_expect_vals
     end
 
     define_before :add_expect_vals
