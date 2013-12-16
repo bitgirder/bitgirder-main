@@ -7,6 +7,8 @@ include BitGirder::Io
 
 require 'bitgirder/testing'
 
+require 'bitgirder/core/testing'
+
 require 'thread'
 require 'stringio'
 
@@ -15,6 +17,8 @@ module Mingle
 class AbstractCoreIoTest < BitGirderClass
 
     EXPCT_VALS = {}
+
+    include BitGirder::Testing::AssertMethods
 
     bg_attr :name
     bg_attr :data
@@ -38,6 +42,8 @@ class AbstractCoreIoTest < BitGirderClass
         
         case expct
         when MingleValue then reader.read_value
+        when ObjectPath then reader.read_identifier_path
+        else raise "Unhandled expect value: #{expct.class}"
         end
     end
 
@@ -46,6 +52,8 @@ class AbstractCoreIoTest < BitGirderClass
         
         case expct
         when MingleValue then ModelTestInstances.assert_equal( expct, act )
+        when ObjectPath 
+            ObjectPathTests.assert_equal_with_format( expct, act )
         else raise "unhandled expct val: #{expct.class}"
         end
     end
@@ -66,7 +74,12 @@ class AbstractCoreIoTest < BitGirderClass
 
     private
     def write_value( val )
-        writer.write_value( val )
+
+        case val
+        when MingleValue then writer.write_value( val )
+        when ObjectPath then writer.write_identifier_path( val )
+        else raise "unhandled write val: #{val.class}"
+        end
     end
 
     private
@@ -215,16 +228,18 @@ class CoreIoTests < BitGirderClass
     invocation_factory :read_tests
 
     private
-    def add_expect_vals_with_prefix( pref, h )
-        
-        h.each_pair do |k, v| 
-            AbstractCoreIoTest::EXPCT_VALS[ "#{pref}/#{k}" ] = v
-        end
+    def add_expect_val_with_prefix( pref, name, val )
+        AbstractCoreIoTest::EXPCT_VALS[ "#{pref}/#{name}" ] = val
     end
 
     private
-    def add_roundtrip_expect_vals
-        
+    def add_expect_vals_with_prefix( pref, h )
+        h.each_pair { |k, v| add_expect_val_with_prefix( pref, k, v ) }
+    end
+
+    private
+    def add_value_roundtrip_expect_vals
+
         add_expect_vals_with_prefix( "roundtrip", {
 
             "null-val" => MingleNull::INSTANCE,
@@ -310,6 +325,30 @@ class CoreIoTests < BitGirderClass
                 MingleNull::INSTANCE
             )
         })
+    end
+
+    private
+    def add_id_path_roundtrip_expect_vals
+
+        id = lambda { |idx| MingleIdentifier.get( "id#{idx}" ) }
+
+        add = lambda do |nm, path|
+            add_expect_val_with_prefix( "roundtrip", nm, path )
+            path
+        end
+
+        p = add.call( "p1", ObjectPath.get_root( id.call( 1 ) ) )
+        p = add.call( "p2", p.descend( id.call( 2 ) ) )
+        p = add.call( "p3", p.start_list.tap { |lp| lp.index = 2 } )
+        p = add.call( "p4", p.descend( id.call( 3 ) ) )
+        add.call( "p5", ObjectPath.get_root_list.descend( id.call( 1 ) ) )
+    end
+
+    private
+    def add_roundtrip_expect_vals
+        
+        add_value_roundtrip_expect_vals
+        add_id_path_roundtrip_expect_vals
     end
 
     private

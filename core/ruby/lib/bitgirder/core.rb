@@ -1232,7 +1232,7 @@ class ObjectPath
         ListPath.send( :new, nil, 0 )
     end
 
-    private
+    public
     def collect_path
 
         res = [ node = self ]
@@ -1294,6 +1294,10 @@ class ListPath < ObjectPath
 
     def next
         ListPath.send( :new, self.parent, @index + 1 )
+    end
+
+    def index=( index )
+        @index = nonnegative( index, :index )
     end
 end
 

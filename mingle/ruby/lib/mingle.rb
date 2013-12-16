@@ -2652,6 +2652,11 @@ class BinReader < BinIoBase
     end
 
     private
+    def raise_unexpected_type_code( tc, desc )
+        raise errorf( "unexpected type code 0x%02x %s", tc, desc )
+    end
+
+    private
     def expect_type_code( tc )
         
         if ( act = read_type_code ) == tc
@@ -2835,6 +2840,39 @@ class BinReader < BinIoBase
         impl_read_value( read_type_code )
     end
 
+    private
+    def read_identifier_path_next( path )
+        
+        done = false
+
+        case tc = read_type_code
+        when TYPE_CODE_ID
+            id = read_identifier
+            path = path ? path.descend( id ) : ObjectPath.get_root( id )
+        when TYPE_CODE_ID_PATH_LIST_NODE
+            path = path ? path.start_list : ObjectPath.get_root_list
+            path.index = @rd.read_int32
+        when TYPE_CODE_END then done = true
+        else raise_unexpected_type_code( tc, "reading identifier path" )
+        end
+
+        [ path, done ]
+    end
+
+    public
+    def read_identifier_path
+
+        expect_type_code( TYPE_CODE_ID_PATH )
+
+        p, done = nil, false
+
+        while ( ! done )
+            p, done = read_identifier_path_next( p )
+        end
+
+        p
+    end
+
     def self.as_bin_reader( io )
         
         not_nil( io, :io )
@@ -2963,7 +3001,7 @@ class BinWriter < BinIoBase
         tc = const_get( "TYPE_CODE_#{typ.upcase}" )
         wr_sym = "write_#{typ}".to_sym
 
-        to_num = typ[ 0 ] == "f" ? :to_f : :to_i
+        to_num = typ.start_with?( "float" ) ? :to_f : :to_i
 
         define_method( wr_sym ) do |val|
             write_type_code( tc )
@@ -3037,6 +3075,27 @@ class BinWriter < BinIoBase
         when MingleList then write_list( val )
         else raise "unhandled value: #{val.class}"
         end
+    end
+
+    public
+    def write_identifier_path( path )
+        
+        write_type_code( TYPE_CODE_ID_PATH )
+
+        path.collect_path.each do |node|
+
+            case node
+            when DictionaryPath 
+                write_type_code( TYPE_CODE_ID )
+                write_identifier( node.key )
+            when ListPath 
+                write_type_code( TYPE_CODE_ID_PATH_LIST_NODE )
+                @wr.write_int32( node.index )
+            else raise "unhandled path node: #{node.class}"
+            end
+        end
+
+        write_end
     end
 
     def self.as_bin_writer( io )
