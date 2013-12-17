@@ -105,7 +105,6 @@ module AssertMethods
                 raise "Message #{res.message.inspect} does not match #{pat}"
         end
 
-#        res or raise "No expected exception raised"
         res or fail_test( "Expected raise of one of #{excpts.inspect}" )
     end
 end

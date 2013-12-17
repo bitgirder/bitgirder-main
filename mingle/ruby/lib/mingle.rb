@@ -2648,11 +2648,6 @@ class BinIoBase < BitGirderClass
     def error( msg )
         BinIoError.new( msg )
     end
-
-    private
-    def errorf( msg, *argv )
-        error( sprintf( msg, *argv ) )
-    end
 end
 
 class BinReader < BinIoBase
@@ -2660,6 +2655,22 @@ class BinReader < BinIoBase
     private_class_method :new
 
     bg_attr :rd # A BitGirder::Io::BinaryReader
+
+    private
+    def errorf( *argv )
+        
+        offset_adj = -1
+        msg = nil
+
+        case arg = argv.shift
+        when String then msg = arg
+        when Numeric then offset_adj, msg = 1, argv.shift
+        else raise "unexpected arg: #{arg.class}"
+        end
+
+        offset = @rd.pos + offset_adj
+        error( "[offset #{offset}]: " << sprintf( msg, *argv ) )
+    end
 
     private
     def peek_type_code
@@ -2671,6 +2682,7 @@ class BinReader < BinIoBase
         @rd.read_int8
     end
 
+    # assumes tc was just read
     private
     def raise_unexpected_type_code( tc, desc )
         raise errorf( "unexpected type code 0x%02x %s", tc, desc )
@@ -2735,7 +2747,7 @@ class BinReader < BinIoBase
         case tc = peek_type_code
         when TYPE_CODE_DECL_NM then read_declared_type_name
         when TYPE_CODE_QN then read_qualified_type_name
-        else raise errorf( "Unrecognized type name code: 0x%02x", tc )
+        else raise errorf( 0, "Unrecognized type name code: 0x%02x", tc )
         end
     end
 
@@ -2869,6 +2881,7 @@ class BinReader < BinIoBase
         end
     end
 
+    # assumes tc was just read
     private
     def impl_read_value( tc )
         
@@ -2888,7 +2901,7 @@ class BinReader < BinIoBase
         when TYPE_CODE_STRUCT then read_struct
         when TYPE_CODE_ENUM then read_enum
         when TYPE_CODE_LIST then read_list
-        else raise errorf( "unrecognized value code: 0x%02x", tc )
+        else raise errorf( "Unrecognized value code: 0x%02x", tc )
         end
     end
 

@@ -134,6 +134,13 @@ end
 class InvalidDataTest < AbstractCoreIoTest
 
     bg_attr :error
+
+    def run_test
+        
+        err = assert_raised( BinIoError ) { reader.read_value }
+        assert_equal( @error, err.to_s )
+        @ctx.complete
+    end
 end
 
 class RoundtripTest < AbstractCoreIoTest
