@@ -58,7 +58,7 @@ class AbstractCoreIoTest < BitGirderClass
         case expct
         when MingleValue then ModelTestInstances.assert_equal( expct, act )
         when ObjectPath 
-            ObjectPathTests.assert_equal_with_format( expct, act )
+            ObjectPathTestMethods.assert_equal_with_format( expct, act )
         when MingleIdentifier, MingleNamespace, QualifiedTypeName, 
              DeclaredTypeName, MingleTypeReference
             assert_equal( expct, act )

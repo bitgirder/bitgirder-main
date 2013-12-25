@@ -3,7 +3,7 @@ require 'bitgirder/core'
 module BitGirder
 module Core
 
-module ObjectPathTests
+module ObjectPathTestMethods
 
     include BitGirderMethods
 
