@@ -463,4 +463,21 @@ end
 #    end
 #end
 
+module MingleTestStructFile
+
+    QN_FILE_END = QualifiedTypeName.get( :"mingle:testgen@v1/TestFileEnd" )
+
+    def self.each_struct_in( f )
+        
+        File.open( Testing.find_test_data( f ) ) do |io|
+            
+            rd = BinReader.as_bin_reader( io )
+            
+            while ( s = rd.read_value ) && ( s.type != QN_FILE_END )
+                yield( s )
+            end 
+        end
+    end
+end
+
 end
