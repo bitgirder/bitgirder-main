@@ -360,7 +360,7 @@ class ParseTests < Testing::TestHolder
                 :input => flds.expect_string( :in ),
                 :external_form => flds.get_string( :external_form ),
                 :expect => as_expect_value( flds.get_mingle_struct( :expect ) ),
-                :error => as_error( flds.get_mingle_struct( :err ) )
+                :error => as_error( flds.get_mingle_struct( :error ) )
             )
             
             res[ t.input ] = lambda { |ctx| ctx.complete { t.call } }

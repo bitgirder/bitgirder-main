@@ -151,7 +151,7 @@ func ( td testData ) StructAt( i int ) *mg.Struct {
         "in", t.In,
         "external-form", t.ExternalForm,
         "expect", asValue( t.Expect ),
-        "err", asValue( t.Err ),
+        "error", asValue( t.Err ),
     )
 }
 

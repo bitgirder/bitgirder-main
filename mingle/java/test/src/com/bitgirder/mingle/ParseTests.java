@@ -794,7 +794,7 @@ class ParseTests
             res.expct = convertValue( acc.getStructAccessor( "expect" ) );
 
             res.errExpct = (ErrorExpectation) 
-                convertValue( acc.getStructAccessor( "err" ) );
+                convertValue( acc.getStructAccessor( "error" ) );
 
             return res;
         }
