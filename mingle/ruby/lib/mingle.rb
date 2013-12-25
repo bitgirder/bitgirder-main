@@ -2288,22 +2288,6 @@ class MingleStruct < MingleValue
     end
 end
 
-class GenericRaisedMingleError < StandardError
-
-    include BitGirder::Core::BitGirderMethods
-    extend Forwardable
-
-    def_delegators :@me, :type, :fields, :[]
-
-    def initialize( me, trace = nil )
-        
-        @me = not_nil( me, :me )
-
-        super( "#{@me.type}: #{@me[ :message ]}" )
-        set_backtrace( trace ) if trace
-    end
-end
-
 module MingleModels
 
     require 'base64'
@@ -3214,90 +3198,6 @@ class BinWriter < BinIoBase
 
     def self.as_bin_writer( io )
         self.send( :new, :wr => BinaryWriter.new_le( :io => io ) )
-    end
-end
-
-class MingleServiceRequest < BitGirder::Core::BitGirderClass
-    
-    bg_attr :namespace, :processor => MingleNamespace
-
-    bg_attr :service, :processor => MingleIdentifier
-
-    bg_attr :operation, :processor => MingleIdentifier
-    
-    bg_attr :authentication,
-            :required => false,
-            :processor => lambda { |v| MingleModels.as_mingle_value( v ) }
-
-    bg_attr :parameters, 
-            :default => MingleSymbolMap::EMPTY,
-            :processor => MingleSymbolMap
-end
-
-class MingleServiceResponse < BitGirder::Core::BitGirderClass
-    
-    def initialize( res, ex )
-
-        @res = res
-        @ex = ex
-    end
-
-    public
-    def ok?
-        ! @ex
-    end
-
-    alias is_ok ok?
-
-    public
-    def get
-
-        if ok?
-            @res
-        else
-            MingleModels.raise_as_ruby_error( @ex )
-        end
-    end
-
-    public
-    def get_result
-
-        if ok?
-            @res
-        else
-            raise "get_res called on non-ok response"
-        end
-    end
-
-    alias result get_result
-
-    public
-    def get_error
-        
-        if ok?
-            raise "get_error called on ok response"
-        else
-            @ex
-        end
-    end
-
-    alias error get_error
-
-    public
-    def to_s
-        super.inspect
-    end
-
-    def self.create_success( res )
-
-        res = MingleModels.as_mingle_value( res );
-        res = nil if res.is_a?( MingleNull )
-
-        MingleServiceResponse.new( res, nil )
-    end
-
-    def self.create_failure( ex )
-        MingleServiceResponse.new( nil, ex )
     end
 end
 

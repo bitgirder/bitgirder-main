@@ -278,23 +278,6 @@ class MingleTests
         @@mti.assert_equal( msm, MingleSymbolMap.create( h ) )
     end
 
-    def test_mingle_service_request_from_syms
-        
-        expct = 
-            MingleServiceRequest.new(
-                :namespace => "a:namespace@v1",
-                :service => "a-service",
-                :operation => "an-operation" )
-        
-        actual =
-            MingleServiceRequest.new(
-                :namespace => :"a:namespace@v1",
-                :service => :a_service,
-                :operation => :an_operation )
-        
-        @@mti.assert_equal( expct, actual )
-    end
-
     # Will add more as needed
     def test_as_mingle_value
         
@@ -498,27 +481,6 @@ class MingleTests
  
         ms = MingleStruct.new( :type => :"test@v1/Type" )
         assert( ms.fields.empty? )
-    end
-
-    def test_mingle_models_raise
-        
-        mg_ex = MingleStruct.new(
-            :type => :"test@v1/Err1",
-            :fields => { :message => "test-message" }
-        )
-
-        begin
-            MingleModels.raise_as_ruby_error( mg_ex )
-        rescue GenericRaisedMingleError => e
-            assert_equal( mg_ex.type, e.type )
-            assert_equal( "#{mg_ex.type}: #{mg_ex[ :message ]}", e.message )
-        end
-    end
-
-    def test_void_service_response
-        
-        resp = MingleServiceResponse.create_success( MingleNull::INSTANCE )
-        assert_nil( resp.result )
     end
 end
 
