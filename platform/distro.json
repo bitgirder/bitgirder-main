@@ -30,8 +30,8 @@
         [
             "concurrent",
             "core",
+            "io",
             "mingle",
-            "mingle-codec",
             "mysql",
             "ops-java",
             "ops-ruby",

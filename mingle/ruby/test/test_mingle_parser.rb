@@ -76,7 +76,7 @@ PARSE_OVERRIDES = {
 
 class ParseTest < BitGirderClass
 
-    include Testing::AssertMethods
+    include BitGirder::Testing::AssertMethods
 
     bg_attr :test_type, :processor => :symbol
     bg_attr :input
@@ -181,7 +181,7 @@ class ParseTest < BitGirderClass
     end
 
     public
-    def call
+    def start_test
  
         begin
 
@@ -197,7 +197,9 @@ class ParseTest < BitGirderClass
     end
 end
 
-class ParseTests < Testing::TestHolder
+class ParseTests < BitGirderClass
+    
+    include BitGirder::Testing::TestClassMixin
 
     QN_PARSE_ERROR_EXPECT = QualifiedTypeName.
         get( :"mingle:parser:testing@v1/ParseErrorExpect" )
@@ -346,7 +348,8 @@ class ParseTests < Testing::TestHolder
 
     # In addition to testing parser coverage, these tests also give us coverage
     # of external form and equality
-    def read_tests
+    public
+    def invocation_factory_read_tests
         
         res = {}
 
@@ -363,13 +366,11 @@ class ParseTests < Testing::TestHolder
                 :error => as_error( flds.get_mingle_struct( :error ) )
             )
             
-            res[ t.input ] = lambda { |ctx| ctx.complete { t.call } }
+            res[ t.input ] = t
         end
 
         res
     end
-    
-    invocation_factory :read_tests
 end
 
 end

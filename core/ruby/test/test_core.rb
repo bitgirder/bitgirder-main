@@ -12,7 +12,7 @@ module EmptyTestModule; end
 # we want a fallback way to test core if it turns out that there are problems in
 # here which prevent successfully loading or executing other modules, namely
 # BitGirder::Testing
-if $is_bitgirder_test_runner_run
+if $bitgirder_is_test_runner_run
     require 'bitgirder/testing'
     TEST_CLS = Object
     TEST_MIXIN = BitGirder::Testing::TestClassMixin
@@ -26,7 +26,6 @@ end
 
 class TestClassBase < TEST_CLS
 
-    include TEST_MIXIN
     include ASSERT_MOD
     
     def assert_raised( msg, err_cls )
@@ -43,6 +42,8 @@ module BitGirder
 module Core
 
 class RubyVersionsTests < TestClassBase
+    
+    include TEST_MIXIN
     
     def test_geq_result
         
@@ -222,6 +223,8 @@ class MarkerError < StandardError; end
 
 class CoreTests < TestClassBase
     
+    include TEST_MIXIN
+
     include BitGirderMethods
 
     def test_structure_equalities
@@ -232,8 +235,8 @@ class CoreTests < TestClassBase
         assert_equal( s1A, s1B )
         assert( s1A.eql?( s1B ) )
 
-        assert_false( s1A == TestClass1::INST1 )
-        assert_false( s1A.eql?( TestClass1::INST1 ) )
+        assert( s1A != TestClass1::INST1 )
+        assert( ! s1A.eql?( TestClass1::INST1 ) )
     end
 
     def test_install_hash
@@ -541,6 +544,8 @@ class CoreTests < TestClassBase
 end
 
 class ReflectTests < TestClassBase
+    
+    include TEST_MIXIN
 
     def test_instance_methods
         Reflect.instance_methods_of( String ).include?( :to_s )
@@ -548,6 +553,8 @@ class ReflectTests < TestClassBase
 end
 
 class ObjectPathTests < TestClassBase
+    
+    include TEST_MIXIN
 
     def test_default_formatting
         
@@ -579,6 +586,10 @@ class ObjectPathTests < TestClassBase
 end
 
 class WaitConditionTests < TestClassBase
+    
+    include TEST_MIXIN
+
+    include BitGirderMethods
 
     class WaitValue < BitGirderClass
         

@@ -24,10 +24,6 @@ end
 
 class AssertionFailure < StandardError; end
 
-module BeforePhase; end
-module TestPhase; end
-module AfterPhase; end
-
 module AssertMethods
 
     include BitGirder::Core::BitGirderMethods
@@ -109,51 +105,22 @@ module AssertMethods
     end
 end
 
-#def assert_raise( *argv, &blk ); assert_raised( *argv, &blk ); end
-
-# May also have a base class TestClass for classes that want it
 module TestClassMixin
-    include AssertMethods
-end
 
-class AbstractPhaseClass < BitGirder::Core::BitGirderClass
+    require 'set'
 
-    include AssertMethods
+    INCLUDED_BY = Set.new
 
-    bg_abstract :start_impl
+    def self.included( mod )
 
-    public
-    def start_invocation( ctx )
-
-        @ctx = ctx
-        start_impl
+        INCLUDED_BY << mod
+        mod.send( :include, AssertMethods )
     end
 
-    private
-    def inst_set( fld, val )
-
-        not_nil( fld, :fld )
-        @ctx.inst.instance_variable_set( :"@#{fld}", val )
+    def self.mixed_in_by
+        return INCLUDED_BY.to_a
     end
 
-    private
-    def inst_get( fld )
-
-        not_nil( fld, :fld )
-        @ctx.inst.instance_variable_get( :"@#{fld}" )
-    end
-end
-
-class TestHolder < BitGirder::Core::BitGirderClass
-
-    def self.inherited( by )
-        by.send( :include, TestClassMixin )
-    end
-end
-
-class TestRunClass < AbstractPhaseClass
-    include TestClassMixin
-    include TestPhase
 end
 
 end

@@ -104,15 +104,6 @@ class TestingTests
         assert_equal( MarkerError, ex.class )
     end
 
-#    def test_assert_raised_nothing_raised
-#        
-#        begin
-#            assert_raised( MarkerError ) {}
-#        rescue Exception => e 
-#            code( "#{e} (#{e.class})" )
-#        end
-#    end
-
     def test_assert_raised_unmatched_reraises
         
         expct = Exception.new

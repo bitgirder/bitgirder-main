@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+
+require 'bitgirder/core'
+include BitGirder::Core
+
+require 'bitgirder/testing/engine'
+
+module BitGirder
+module Testing
+
+class App < AbstractApplication
+    
+    private
+    def require_test_files
+        
+        require 'bitgirder/testing/self-check-tests'
+    end
+
+    private
+    def validate_run( eng )
+        
+        [ TestClass1, TestClass2, TestClass3 ].each do |cls|
+            code( "validating run for #{cls}" )
+            cls::RUN_CHECK.validate_run( eng, cls )
+        end
+    end
+
+    private
+    def impl_run
+ 
+        require_test_files
+
+        eng = UnitTestEngine.new(
+            :filter => lambda { |inv| ! ( inv.name =~ /_match_filter_/ ) },
+            :event_handler => lambda { |ev, arg| code( "#{ev}: #{arg}" ) }
+        )
+        
+        eng.run
+
+        validate_run( eng )
+    end
+end
+
+BitGirderCliApplication.run( App )
+
+end
+end

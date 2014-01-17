@@ -2,820 +2,109 @@
 
 require 'bitgirder/core'
 require 'bitgirder/testing'
+require 'bitgirder/testing/engine'
 
 include BitGirder::Testing
 include BitGirder::Core
 
-require 'eventmachine'
-
-require 'set'
-
-class App < BitGirderClass
-
-    PHASE_BEFORES = :befores
-    PHASE_TESTS = :tests
-    PHASE_AFTERS = :afters
-    PHASE_ORDER = [ PHASE_BEFORES, PHASE_TESTS, PHASE_AFTERS ]
-        
-    bg_attr :reporter, :required => false
-
-    bg_attr :reporter_require, 
-            :validation => :opt_file_exists,
-            :required => false
-
-    bg_attr :dry_run, :processor => :boolean, :default => false
+class App < AbstractApplication
 
     bg_attr :filter_pattern,
             :default => false,
             :processor => lambda { |s| s && Regexp.new( s ) }
+    
+    private
+    def create_test_engine
         
-    # Only meant to be called internally
-    def self.inst_send( meth, *argv )
-        @@inst.send( meth, *argv )
+        opts = {
+            :event_handler => lambda { |ev, arg| code( "#{ev}: #{arg}" ) }
+        }
+
+        if @filter_pattern
+            opts[ :filter ] = lambda { |inv| inv.name =~ @filter_pattern }
+        end
+
+        UnitTestEngine.new( opts )
     end
 
-    def TestClassMixin.included( cls )
+    private
+    def emit( str )
+        puts str
+    end
+
+    private
+    def result_summary_add_invocations( res, eng )
         
-        App.inst_send( :ensure_tests, cls )
+        eng.results.each do |inv_set|
+            inv_set.invocations.each_pair do |phase, invs|
+                invs.each do |inv|
 
-        def cls.define_phase( phase, argv )
+                    res[ :invocations ] << inv
 
-            raise "Need at least one method name" if argv.empty?
-            App.inst_send( :define_called, self, phase, argv )
-        end
-
-        def cls.define_before( *argv )
-            define_phase( PHASE_BEFORES, argv )
-        end
-
-        def cls.define_test( *argv )
-            define_phase( PHASE_TESTS, argv )
-        end
-
-        def cls.define_after( *argv )
-            define_phase( PHASE_AFTERS, argv )
-        end
-
-        def cls.ignore_test( *argv )
-            App.inst_send( :ignore_test, self, *argv )
-        end
-
-        def cls.blocking( *argv )
-            App.inst_send( :is_blocking, self, *argv )
-        end
- 
-        def cls.method_added( *argv )
-            App.inst_send( :mixin_method_added, self, *argv )
-        end
-
-        def cls.invocation_factory( *argv )
-            App.inst_send( :invocation_factory, self, *argv )
-        end
-
-        def cls.is_test_base
-            App.inst_send( :is_test_base, self )
-        end
-    end
-
-    def initialize( opts )
-
-        super
-        
-        @tests = {}
-
-        # Assert that we are the only instance
-        if self.class.instance_variable_get( :@inst )
-            raise "More than one instance of #{self.class}" 
-        else
-            @@inst = self
-        end
-    end
-
-    private
-    def get_define_method_name_for_phase( phase )
-        "define_#{phase.to_s.sub( /s$/, "" )}"
-    end
-
-    private
-    def assert_not_awaiting_define( called )
- 
-        if @next_define_phase
- 
-            nm = get_define_method_name_for_phase( @next_define_phase )
-
-            raise "#{called} after #{def_meth_name} without an " \
-                  "intervening defined invocation"
-        end
-    end
-
-    private
-    def ensure_method( cls, phase, nm )
-        ensure_tests( cls )[ phase ][ :methods ][ nm ] ||= {}
-    end
-
-    private
-    def define_called( cls, phase, methods )
-        methods.each { |m| ensure_method( cls, phase, m )[ :method ] = m }
-    end
-
-    private
-    def ignore_test( cls, *methods )
-        
-        raise "Need at least one method" if methods.empty?
-
-        ensure_tests( cls )[ PHASE_TESTS ][ :ignore ] += methods
-    end
-
-    private
-    def is_blocking( cls, *argv )
-        
-        argv.each do |arg|
-
-            if arg.is_a?( Symbol )
-                ensure_method( cls, PHASE_TESTS, arg )[ :is_blocking ] = true
-            else
-                raise TypeError, "Invalid arg for is_blocking(): #{arg.inspect}"
-            end
-        end
-    end
-
-    private
-    def ensure_tests( cls )
-
-        if res = @tests[ cls ] 
-            res
-        else
-            res =
-                [ PHASE_TESTS, 
-                  PHASE_BEFORES, 
-                  PHASE_AFTERS ].inject( {} ) do |h, phase|
-                    h.merge!( phase => { :methods => {}, :classes => Set.new } )
-                end
-            
-            res[ PHASE_TESTS ][ :ignore ] = Set.new
-            res[ PHASE_TESTS ][ :inv_facts ] = Set.new
-            
-            @tests[ cls ] = res
-        end
-    end
-
-    private
-    def invocation_factory( cls, meth )
-
-        tests = ensure_tests( cls )[ PHASE_TESTS ]
-
-        if ( inv_facts = tests[ :inv_facts ] ).include?( meth )
-            raise "Invocation factory #{meth} already added"
-        else
-            inv_facts << meth
-        end
-    end
-
-    private
-    def is_test_base( cls )
-        ensure_tests( cls )[ :is_test_base ] = true
-    end
-
-    private
-    def mixin_method_added( cls, meth )
- 
-        tests = ensure_tests( cls )[ PHASE_TESTS ]
-
-        if /^test_/.match( meth.to_s ) && 
-           ( ! tests[ :ignore ].include?( meth ) )
-            ensure_method( cls, PHASE_TESTS, meth )[ :method ] = meth
-        end 
-    end
-
-    private
-    def get_enclosing_module( mod )
-        
-        if md = /^(.+)::[^:]+$/.match( mod.to_s )
-            eval( md[ 1 ] )
-        end
-    end
-
-    private
-    def get_test_run_class_phase( cls )
-        
-        phases = [ BeforePhase, TestPhase, AfterPhase ].select do |phase|
-            cls.included_modules.include?( phase )
-        end
-
-        case phases.size
-
-            when 0 then nil
-
-            when 1 
-                if ( phase = phases.first ) == TestPhase then PHASE_TESTS
-                elsif phase == BeforePhase then PHASE_BEFORES
-                elsif phase == AfterPhase then PHASE_AFTERS
-                end
-
-            else raise "Class #{cls} includes multiple phases: #{phases}"
-        end
-    end
-
-    private
-    def add_test_run_classes
-        
-        classes = Set.new
-
-        ObjectSpace.each_object { |obj| classes << obj if obj.is_a?( Class ) }
-
-        classes.each do |cls|
- 
-            if phase = get_test_run_class_phase( cls )
-                if @tests.key?( encl = get_enclosing_module( cls ) )
-                    @tests[ encl ][ phase ][ :classes ] << cls
-                end
-            end
-        end
-    end
-
-    private
-    def load_tests( ctx )
-        
-        ctx[ :argv_remain ].each do |test_file|
-
-            code "Requiring #{test_file}"
-            require test_file
-        end
-
-        add_test_run_classes
-    end
-
-    class AbstractInvocation < BitGirder::Core::BitGirderClass
-        
-        bg_attr :inst
-
-        # Can be called from any thread; if a block is supplied that block will
-        # be run in the caller's thread
-        public
-        def invocation_complete( err = nil )
-            
-            if @completion_sent
-                if err
-                    warn( err, "Ignoring error (see trace) after completion" )
-                end
-            else
-                if ( ! err ) && block_given?
-                    begin yield; rescue Exception => e; err = e; end
-                end
-
-                # Finish invocation on reactor thread
-                EM.next_tick { @cycle.invocation_complete( self, err ) }
-                
-                @completion_sent = true
-            end
-        end
-
-        # For now all of these point straight to invocation_complete
-        alias fail_invocation invocation_complete
-        alias fail_test invocation_complete
-        alias failed invocation_complete
-        alias complete_invocation invocation_complete
-        alias complete invocation_complete
-        alias succeed invocation_complete
-
-        # The -1 case is for ruby 1.8.7 which, for reasons not clear and
-        # appearing to be in contradiction to the docs in class Proc, is
-        # returned for an empty proc declaring no args
-        private
-        def get_call_argv( arity )
-            
-            case arity
-                when 0, -1 then []
-                when 1 then [ self ]
-                else raise "Invalid arity in invocation #{self}: #{arity}"
-            end
-        end
-
-        private
-        def was_immediate?( argv )
-            argv.size == 0
-        end
-
-        public
-        def start( cycle )
-            
-            @cycle = cycle
-            code( "Starting #{self}" )
-
-            begin
-                start_impl
-            rescue Exception => e
-                fail_test( e )
-            end
-        end
-
-        public
-        def <=>( inv )
-            to_s <=> inv.to_s
-        end
-        
-        # Null checks blk on behalf of public frontends
-        private
-        def do_defer( blk, &on_succ )
-
-            raise "Need a block" unless blk
-
-            op = 
-                lambda do
-                    begin 
-                        blk.call
-                        nil
-                    rescue Exception => e
-                        e
+                    if inv.phase == TestPhase::TEST
+                        key = inv.error ? :failed : :succeeded
+                        res[ key ] = res[ key ] + 1
                     end
                 end
-
-            cb = 
-                lambda { |err| 
-                    if err then fail_invocation( err ) else on_succ.call end
-                }
-            
-            EM.defer( op, cb )
-        end
-
-        # Run block in a deferred pool thread
-        public
-        def defer_block( &blk )
-            do_defer( blk ) {}
-        end
-
-        # Deferred call which runs the block and succeeds the test (or
-        # fails if block fails)
-        public
-        def blocking( &blk )
-            do_defer( blk ) { succeed }
-        end
-    end
-
-    class MethodInvocation < AbstractInvocation
-        
-        bg_attr :method
-
-        # Note -- we don't use the attr name 'blocking' so as not to conflict
-        # with the like-named method AbstractInvocation.blocking()
-        bg_attr :is_blocking, :default => false
-
-        private
-        def use_blocking?( arg_count )
-            @is_blocking || arg_count == 0
-        end
-
-        private
-        def start_impl
-            
-            args = get_call_argv( @method.arity )
-
-            run = lambda { @method.bind( @inst ).call( *args ) }
-
-            if use_blocking?( args.size )
-                blocking &run
-            else
-                run.call
-                succeed if was_immediate?( args )
             end
         end
-
-        public
-        def to_s
-            "#{@inst.class}.#{@method.name}"
-        end
     end
 
-    class BlockInvocation < AbstractInvocation
- 
-        bg_attr :name
-        bg_attr :block
-
-        private
-        def start_impl
-            
-            argv = get_call_argv( @block.arity )
-
-            @block.call( *argv )
-            succeed if was_immediate?( argv )
-        end
-
-        public
-        def to_s
-            "#{inst.class}.#@name"
-        end
-    end
-
-    class TestRunClassInvocation < AbstractInvocation
+    private
+    def prepare_result_summary( eng )
         
-        bg_attr :run_class
-        bg_attr :name
+        res = { :succeeded => 0, :failed => 0, :invocations => [] }
+        
+        result_summary_add_invocations( res, eng )
 
-        private
-        def start_impl
-            @run_class.new.start_invocation( self )
-        end
-
-        alias to_s name
-    end
-
-    class TestCycle < BitGirder::Core::BitGirderClass
-
-        bg_attr :instance
-        bg_attr :cls
-        PHASE_ORDER.each { |phase| bg_attr phase }
-        bg_attr :runner
-        bg_attr :inv_facts
-
-        private
-        def create_inv_fact_invocations
+        res[ :invocations ].sort! do |i1, i2|
             
-            @inv_facts.inject( [] ) do |arr, inv_fact|
-                
-                fact_res = @instance.send( inv_fact )
-    
-                fact_res.each_pair do |nm, blk|
-
-                    arr <<
-                        BlockInvocation.new( 
-                            :inst => @instance, :name => nm, :block => blk )
-                end
-    
-                arr
+            case
+            when ( ! i1.error ) && i2.error then -1
+            when i1.error && ( ! i2.error ) then 1
+            else i1 <=> i2
             end
-        end
-
-        private
-        def get_phase_invocations( phase_nm, phase )
-            
-            arr = phase[ :invocations ]
-
-            if phase_nm == PHASE_TESTS
-
-                create_inv_fact_invocations.each { |inv| arr << inv }
-                arr = arr.select { |inv| @runner.filter_invocation( inv ) }
-            end 
-
-            phase[ :waits ] = Set.new( arr )
-            arr
-        end
-
-        private
-        def phase_has_errors?( phase )
-            phase_results( phase ).values.find { |err| err }
-        end
-
-        private
-        def complete_phase
-
-            phase = @phase_queue.shift
-
-            if phase_has_errors?( phase ) && phase == PHASE_BEFORES
-                @phase_queue = [ PHASE_AFTERS ] # skip tests
-            end
-            
-            advance_phase
-        end
-
-        private
-        def advance_phase
-            
-            if phase_nm = @phase_queue.first
- 
-                phase = @phases[ phase_nm ]
-                arr = get_phase_invocations( phase_nm, phase )
-
-                if arr.empty?
-                    complete_phase
-                else
-                    arr.each { |inv| inv.start( self ) }
-                end
-            else
-                @runner.cycle_complete( self )
-            end
-        end
-
-        public
-        def start
-            
-            @phases =
-                PHASE_ORDER.inject( {} ) do |res, phase|
-                    
-                    invs = instance_variable_get( :"@#{phase}" )
-                    
-                    res[ phase ] = { 
-                        :invocations => invs, 
-#                        :waits => Set.new( invs ),
-                        :results => {},
-                    }
-
-                    res
-                end
-
-            @phase_queue = PHASE_ORDER.dup
-            advance_phase
-        end
-
-        public
-        def invocation_complete( inv, err )
- 
-            phase_nm = @phase_queue.first
-            phase = @phases[ phase_nm ]
-
-            waits, results = *( phase.values_at( :waits, :results ) )
-
-            if waits.include?( inv )
-
-                waits.delete( inv )
-                results[ inv ] = err
-            else
-                raise "Duplicate completion received for #{inv}"
-            end
-    
-            complete_phase if waits.empty?
-        end
-
-        public
-        def to_s
-            "TestCycle[ cls: #@cls ]"
-        end
-
-        public
-        def phase_results( phase )
-            @phases[ phase ][ :results ]
-        end
-    end
-
-    private
-    def create_method_invocations( cls, ctx, inst, phase )
- 
-        ctx[ phase ][ :methods ].inject( [] ) do |res, pair| 
-
-            nm, info = *pair
-
-            info[ :method ] or raise "No method for invocation: #{nm}"
-
-            res << 
-                MethodInvocation.new(
-                    :inst => inst, 
-                    :method => cls.instance_method( info[ :method ] ), 
-                    :is_blocking => info[ :is_blocking ],
-                    :runner => self 
-                )
-        end
-    end
-
-    # Turns FooBarBaz into foo_bar_baz
-    private
-    def to_lc_underscore( str )
-        
-        str[ 0, 1 ].downcase + 
-            str[ 1 .. -1 ].gsub( /[A-Z]/ ) { |m| "_#{m.downcase}" }
-    end
-
-    private
-    def get_test_run_class_name( cls )
-        
-        if md = /(?:(.+)::)?([^:]+?)(Test)?$/.match( cls.to_s )
-            
-            toks = []
-            toks << "#{md[ 1 ]}." if md[ 1 ]
-            toks << "test_" if md[ 3 ]
-            toks << to_lc_underscore( md[ 2 ] )
-
-            toks.join
-        else
-            raise "Invalid test run class name: #{cls}"
-        end
-    end
-
-    private
-    def create_test_run_class_invocations( ctx, inst, phase )
-        
-        ctx[ phase ][ :classes ].inject( [] ) do |res, tr_cls|
- 
-            meths = Reflect.instance_methods_of( tr_cls )
-            unless meths.include?( :start_invocation )
-                raise "#{tr_cls} does not respond to :start_invocation"
-            end
-
-            res <<
-                TestRunClassInvocation.new(
-                    :inst => inst,
-                    :run_class => tr_cls,
-                    :name => get_test_run_class_name( tr_cls ),
-                    :runner => self )
-        end
-    end
-
-    private
-    def get_super_test_class( cls )
-        
-        if ( spr_cls = cls.superclass ) &&
-           spr_cls.included_modules.include?( TestClassMixin )
-            
-            spr_cls
-        else
-            nil
-        end
-    end
-
-    private
-    def expect_test_ctx( cls )
-        @tests[ cls ] or raise "No context for #{cls}"
-    end
-
-    private
-    def create_invocations( cls, ctx, inst, phase )
-        
-        res = 
-            create_method_invocations( cls, ctx, inst, phase ) +
-            create_test_run_class_invocations( ctx, inst, phase )
-
-        if spr_cls = get_super_test_class( cls )
-            
-            spr_ctx = expect_test_ctx( spr_cls )
-            res += create_invocations( spr_cls, spr_ctx, inst, phase )
         end
 
         res
     end
 
     private
-    def get_inv_facts( cls, ctx )
-        
-        res = ctx[ PHASE_TESTS ][ :inv_facts ]
+    def report_inv_result( inv )
 
-        if spr_cls = get_super_test_class( cls )
-            res += get_inv_facts( spr_cls, expect_test_ctx( spr_cls ) )
-        end
-
-        res
-    end
-
-    private
-    def create_test_cycle( cls, ctx )
-            
-        inst = cls.new
-
-        invs = 
-            PHASE_ORDER.inject( {} ) do |h, phase|
-                h[ phase ] = create_invocations( cls, ctx, inst, phase )
-                h
-            end
-        
-        TestCycle.new( 
-            invs.merge( 
-                :instance => inst, 
-                :cls => cls, 
-                :runner => self,
-                :inv_facts => get_inv_facts( cls, ctx )
-            ) 
+        emit( 
+            sprintf( "%s %s in %0.3fs", 
+                inv, 
+                inv.error ? "failed" : "succeeded",
+                inv.end_time - inv.start_time
+            )
         )
-    end
 
-    private
-    def init_test_cycles
-        
-        @tests.inject( Set.new ) do |res, pair|
-            
-            cls, ctx = *pair
-
-            res << create_test_cycle( cls, ctx ) unless ctx[ :is_test_base ]
-            res
+        if inv.error
+            emit( "#{inv.error}: #{ inv.error.backtrace.join( "\n" ) }" )
         end
     end
 
     private
-    def run_tests
+    def report_results( eng )
         
-        if @cycles.empty?
-            complete_run
-        else
-            # Need to iterate through a copy since it's conceivable that simple
-            # cycles might complete immediately as part of start, thus
-            # attempting to modify @cycles via the call to cycle_completed on
-            # this instance
-            @cycles.to_a.each { |cyc| cyc.start }
-        end
-    end
+        summary = prepare_result_summary( eng )
 
-    class DefaultReporter
-        
-        private
-        def flatten_invs( cycles )
-            
-            cycles.values.inject( {} ) do |h, cyc|
+        summary[ :invocations ].each { |inv| report_inv_result( inv ) }
 
-                PHASE_ORDER.each do |phase|
-                    h.merge!( cyc.phase_results( phase ) )
-                end
-
-                h
-            end
-        end
-        
-        public
-        def report( cycles )
-        
-            successes = {}
-            failures = {}
-
-            flatten_invs( cycles ).each_pair do |inv, res|
-                ( res ? failures : successes )[ inv ] = res
-            end
-
-            successes.keys.sort.each { |inv| puts "#{inv} succeeded" }
-
-            failures.sort.each do |pair|
- 
-                inv, err = *pair
-                err_trace = err.backtrace.map { |l| "#{" "*8}#{l}\n" }.join
-                puts "#{inv} failed: #{err} (#{err.class})\n#{err_trace}"
-            end
-
-            puts "#{successes.size} succeeded; #{failures.size} failed"
-        end
+        emit( "Run complete; #{ summary[ :succeeded ] } tests succeeded and " \
+            "#{ summary[ :failed ] } failed" )
     end
 
     private
-    def get_reporter
+    def impl_run
         
-        @reporter_require and require @reporter_require 
-
-        case @reporter
-            
-            when nil then DefaultReporter.new
-
-            # Restrictive set of class names that we'll accept
-            when /[A-Z]\w*(::[A-Z]\w*)*/ then eval( @reporter ).new
-
-            else raise "Unrecognized reporter: #@reporter"
-        end
-    end
-
-    private
-    def complete_run
- 
-        @reporter_inst.report( @results )
-
-        EM.stop
-    end
- 
-    public
-    def cycle_complete( cyc )
- 
-        if @cycles.include?( cyc )
- 
-            @results[ cyc.cls ] = cyc
-            complete_run if @cycles.delete( cyc ).empty?
-        else
-            raise "Got duplicate completion from #{cyc}"
-        end
-    end
-
-    public
-    def filter_invocation( inv )
-        ( ! @filter_pattern ) || @filter_pattern.match( inv.to_s )
-    end
-
-    private
-    def do_dry_run
-
-        @cycles.each do |cyc| 
-            cyc.tests.each { |inv| code( "Would run #{inv}" ) }
-        end
-    end
-
-    private
-    def do_test_run( ctx )
-
-        @reporter_inst = get_reporter # do it now to fail-fast if this fails
-
-        load_tests( ctx )
-        @cycles = init_test_cycles
-        @results = {}
-
-        if @dry_run
-            do_dry_run
-        else
-            EM.kqueue = true if EM.kqueue?
-
-            EM.run do
-                run_tests
-            end
-        end
-    end
-
-    public
-    def run( ctx )
+        $bitgirder_is_test_runner_run = true
+        argv_remain.each { |tf| require( tf ) }
         
-        $is_bitgirder_test_runner_run = true
-        begin
-            do_test_run( ctx )
-        ensure
-            $is_bitgirder_test_runner_run = false
-        end
+        eng = create_test_engine
+        eng.run
+        report_results( eng )
     end
 end
 

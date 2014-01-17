@@ -23,9 +23,7 @@ class AbstractCoreIoTest < BitGirderClass
     bg_attr :name
     bg_attr :data
 
-    attr_accessor :ctx, :peer_q
-
-    bg_abstract :run_test
+    attr_accessor :test_context
 
     private
     def get_expect_value
@@ -119,14 +117,14 @@ class AbstractCoreIoTest < BitGirderClass
 
         buf = get_write_buf # do this here, not on peer thread
 
-        @peer_q << lambda do |io| 
+        @test_context.object.peer_q << lambda do |io| 
             
             wr = BinaryWriter.new_le( :io => io )
             wr.write_utf8( @name )
             wr.write_buffer32( buf )
             
             rd = BinaryReader.new_le( :io => io )
-            @ctx.complete { read_check_res( rd ) }
+            @test_context.complete { read_check_res( rd ) }
         end
     end
 end
@@ -135,17 +133,17 @@ class InvalidDataTest < AbstractCoreIoTest
 
     bg_attr :error
 
-    def run_test
+    def start_test
         
         err = assert_raised( BinIoError ) { reader.read_value }
         assert_equal( @error, err.to_s )
-        @ctx.complete
+        @test_context.complete
     end
 end
 
 class RoundtripTest < AbstractCoreIoTest
 
-    def run_test
+    def start_test
         
         expct = get_expect_value
 
@@ -158,7 +156,7 @@ end
 
 class SequenceRoundtripTest < AbstractCoreIoTest
 
-    def run_test
+    def start_test
         
         get_expect_value.each do |expct|
             
@@ -173,6 +171,8 @@ class SequenceRoundtripTest < AbstractCoreIoTest
 end
 
 class CoreIoTests < BitGirderClass
+
+    attr_reader :peer_q
 
     TC_END = 0x00
     TC_INVALID_DATA_TEST = 0x01
@@ -217,17 +217,6 @@ class CoreIoTests < BitGirderClass
     end
 
     private
-    def add_test( t, res )
-        res[ t.name ] = lambda { |ctx| 
-
-            t.ctx = ctx
-            t.peer_q = @peer_q
-
-            t.run_test
-        }
-    end
-
-    private
     def read_next_test( res, br )
         
         test = case tc = br.read_int8
@@ -240,12 +229,11 @@ class CoreIoTests < BitGirderClass
 
         return false unless test
 
-        add_test( test, res )
-        true
+        res[ test.name ] = test
     end
 
-    private
-    def read_tests
+    public
+    def invocation_factory_read_tests
  
         res = {}
 
@@ -259,8 +247,6 @@ class CoreIoTests < BitGirderClass
 
         res
     end
-
-    invocation_factory :read_tests
 
     private
     def add_expect_val_with_prefix( pref, name, val )
@@ -471,13 +457,11 @@ class CoreIoTests < BitGirderClass
         )
     end
 
-    private
-    def add_expect_vals
+    public
+    def before_add_expect_vals
         add_roundtrip_expect_vals
         add_sequence_expect_vals
     end
-
-    define_before :add_expect_vals
 
     private
     def start_checker( cmd )
@@ -507,8 +491,8 @@ class CoreIoTests < BitGirderClass
         stop_checker if @checker
     end
 
-    private
-    def start_peer_manager
+    public
+    def before_start_peer_manager
         
         @peer_q = Queue.new
 
@@ -516,10 +500,8 @@ class CoreIoTests < BitGirderClass
         @peer_mgr = Thread.new { manage_peer_q( cmd ) }
     end
 
-    define_before :start_peer_manager
-
-    private
-    def stop_peer_manager
+    public
+    def after_stop_peer_manager
         
         return unless @peer_mgr
 
@@ -528,8 +510,6 @@ class CoreIoTests < BitGirderClass
         # If we are able to join retrieve value in case it was an exception
         @peer_mgr.value if @peer_mgr.join( 3 )
     end
-
-    define_after :stop_peer_manager
 end
 
 end

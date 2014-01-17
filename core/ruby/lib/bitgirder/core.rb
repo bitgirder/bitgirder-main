@@ -880,7 +880,7 @@ module BitGirderStructure
     
             def self.bg_abstract( meth )
  
-                define_method( meth ) do
+                define_method( meth ) do |*argv|
                     raise "Abstract method #{self.class}##{meth} " \
                           "not implemented"
                 end

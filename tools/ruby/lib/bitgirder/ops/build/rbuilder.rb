@@ -388,13 +388,7 @@ class SelfCheckRun < BitGirderClass
 
         test_dir, bin_dir = get_mod_dir( :test ), get_mod_dir( :bin )
 
-        argv << file_exists( "#{bin_dir}/unit-test-runner" )
-
-        tr_tests = file_exists( "#{test_dir}/test_runner_tests.rb" )
-        argv << tr_tests
-
-        argv << "--reporter" << "BitGirder::Testing::TestRunnerAssertReporter"
-        argv << "--reporter-require" <<  tr_tests
+        argv << file_exists( "#{bin_dir}/unit-test-self-check" )
         argv << "-v"
         
         UnixProcessBuilder.new( opts ).system
@@ -418,7 +412,6 @@ class RubyTestRunnerSelfCheck < TaskExecutor
         SelfCheckRun.new(
             ws_ctx: ws_ctx,
             ruby_ctx: ruby_ctx,
-            run_log: run_log,
             chain: chain
         ).
         run

@@ -11,6 +11,8 @@ module Io
 include BitGirder::Core
 include BitGirder::Testing
 
+include AssertMethods
+
 module EncTestMethods
 
     def force_enc( str, enc )
