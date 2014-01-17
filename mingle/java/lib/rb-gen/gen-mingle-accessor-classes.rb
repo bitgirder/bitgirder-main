@@ -191,7 +191,6 @@ class Generator < AbstractApplication
 
         src = tmpl.result( binding )
         src = with_line_numbers( src )
-        puts src
 
         File.open( ensure_parent( out_file ), "w" ) { |io| io.print src }
     end
