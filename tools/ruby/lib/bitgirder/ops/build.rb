@@ -87,6 +87,27 @@ module Constants
     MOD_INTEG = Mingle::MingleIdentifier.get( :integ )
 end
 
+class GitRepo < BitGirderClass
+    
+    bg_attr :root, 
+            required: false,
+            default: lambda { Dir.pwd },
+            validation: :file_exists
+
+    bg_attr :git, 
+            validation: :file_exists,
+            default: lambda { which( "git", true ) }
+
+    public
+    def expect_tag
+        
+        out = Dir.chdir( @root ) { `#@git describe --exact-match`.chomp }
+
+        raise "Checkout does not appear to be tagged" unless $?.success?
+        out
+    end
+end
+
 module BuildVersions
 
     def get_version( opts = {} )
@@ -95,13 +116,7 @@ module BuildVersions
            ( ver = run_opts.get_string( :build_version ) )
             ver
         else
-            cmd = which( "hg" )
-            
-            case tag = `hg identify -t`.chomp
-            when "tip", nil, /^\s*$/
-                raise "No build version given or inferred"
-            else tag
-            end
+            GitRepo.new.expect_tag
         end
     end
 
@@ -966,6 +981,22 @@ class BuilderBootstrapInstaller < TaskExecutor
 end
 
 TaskRegistry.instance.register_path( BuilderBootstrapInstaller, :bootstrap )
+
+class BuildVersionPrinter < TaskExecutor
+    
+    public
+    def get_direct_dependencies
+        []
+    end
+
+    public
+    def execute( chain )
+        puts BuildVersions.get_version( :run_opts => @run_opts )
+    end
+end
+
+TaskRegistry.instance.
+    register_path( BuildVersionPrinter, :build_version, :print )
 
 end
 end
