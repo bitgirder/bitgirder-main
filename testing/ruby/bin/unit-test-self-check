@@ -8,6 +8,15 @@ require 'bitgirder/testing/engine'
 module BitGirder
 module Testing
 
+class DuplicateInvocationClass1
+    
+    def test_1; end
+
+    def invocation_factory_1
+        { :test_1 => lambda {} }
+    end
+end
+
 class App < AbstractApplication
     
     private
@@ -17,7 +26,7 @@ class App < AbstractApplication
     end
 
     private
-    def validate_run( eng )
+    def validate_basic_engine_run( eng )
         
         [ TestClass1, TestClass2, TestClass3 ].each do |cls|
             code( "validating run for #{cls}" )
@@ -26,18 +35,45 @@ class App < AbstractApplication
     end
 
     private
-    def impl_run
- 
-        require_test_files
+    def assert_basic_engine_run
 
         eng = UnitTestEngine.new(
             :filter => lambda { |inv| ! ( inv.name =~ /_match_filter_/ ) },
             :event_handler => lambda { |ev, arg| code( "#{ev}: #{arg}" ) }
         )
         
+        eng.load_tests_default
         eng.run
 
-        validate_run( eng )
+        validate_basic_engine_run( eng )
+    end
+
+    private
+    def assert_dup_invocation_error
+        
+        eng = UnitTestEngine.new
+
+        eng.load_test_class( DuplicateInvocationClass1 )
+
+        begin
+            eng.run
+            raise "did not get a duplicate invocation error"
+        rescue DuplicateInvocationDefinitionError => e; end
+    end
+
+    private
+    def assert_empty_engine_run
+        UnitTestEngine.new.run
+    end
+
+    private
+    def impl_run
+ 
+        require_test_files
+
+        assert_basic_engine_run
+        assert_dup_invocation_error
+        assert_empty_engine_run
     end
 end
 

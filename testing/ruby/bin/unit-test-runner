@@ -99,10 +99,12 @@ class App < AbstractApplication
     private
     def impl_run
         
-        $bitgirder_is_test_runner_run = true
+        $bitgirder_is_test_runner_run = true # Used by core/ruby/test/*
+
         argv_remain.each { |tf| require( tf ) }
         
         eng = create_test_engine
+        eng.load_tests_default
         eng.run
         report_results( eng )
     end

@@ -263,6 +263,9 @@ class TestInvocationCancellationError < BitGirderError
             :required => false
 end
 
+class DuplicateInvocationDefinitionError < StandardError
+end
+
 class UnitTestEngine < BitGirderClass
 
     bg_attr :filter,
@@ -273,19 +276,16 @@ class UnitTestEngine < BitGirderClass
 
     attr_reader :run_queue
 
+    private
+    def impl_initialize
+        @test_class_contexts = []
+    end
+
     public
     def send_event( ev, arg )
         
         return unless @event_handler
         @event_handler.call( ev, arg )
-    end
-
-    private
-    def load_tests
-
-        @test_class_contexts = TestClassMixin.mixed_in_by.map do |cls|
-            TestClassContext.new( :test_class => cls )
-        end
     end
 
     private
@@ -309,7 +309,8 @@ class UnitTestEngine < BitGirderClass
         invs.inject( {} ) do |h, inv|
             
             if prev = h[ inv.name ]
-                raise "duplicate invocations: #{inv}"
+                msg = "duplicate invocations: #{inv.to_s}"
+                raise DuplicateInvocationDefinitionError.new msg
             else
                 h[ inv.name ] = inv
             end
@@ -526,7 +527,6 @@ class UnitTestEngine < BitGirderClass
     public
     def run
 
-        load_tests
         create_invocation_sets
 
         start_run
@@ -536,6 +536,16 @@ class UnitTestEngine < BitGirderClass
     public
     def results
         @invocation_sets
+    end
+
+    public
+    def load_test_class( cls )
+        @test_class_contexts << TestClassContext.new( :test_class => cls )
+    end
+
+    public
+    def load_tests_default
+        TestClassMixin.mixed_in_by.each { |cls| load_test_class( cls ) }
     end
 end
 
