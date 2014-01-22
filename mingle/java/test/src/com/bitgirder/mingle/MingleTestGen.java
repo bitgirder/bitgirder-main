@@ -34,15 +34,7 @@ class MingleTestGen
             this.fname = inputs.notNull( fname, "fname" );
         }
 
-        // can be overridden
-        protected
-        boolean
-        accept( MingleStruct ms )
-            throws Exception 
-        { 
-            return true; 
-        }
-
+        // return null to skip this struct
         protected
         abstract
         T
@@ -61,8 +53,9 @@ class MingleTestGen
                 MingleStruct ms = (MingleStruct) r.readValue();
 
                 if ( ms.getType().equals( TYPE_END ) ) break;
-                if ( ! accept( ms ) ) continue;
-                res.add( convertStruct( ms ) );
+                
+                T test = convertStruct( ms );
+                if ( test != null ) res.add( test );
             }
 
             return res;
