@@ -56,7 +56,15 @@ class MingleReactorTests
         call()
             throws Exception
         {
-            state.failf( "unimplemented" );
+            MingleValueReactorPipeline pip = 
+                MingleValueReactors.createValueBuilderPipeline();
+
+            MingleValueReactors.visitValue( val, pip );
+
+            MingleValueBuilder bld = 
+                pip.elementOfType( MingleValueBuilder.class );
+            
+            MingleTests.assertEqual( val, bld.value() );
         }
     }
 
@@ -72,6 +80,14 @@ class MingleReactorTests
         }
 
         private
+        CharSequence
+        makeName( MingleStructAccessor testObj,
+                  CharSequence name )
+        {
+            return testObj.getType().getName() + "/" + name;
+        }
+
+        private
         ValueBuildTest
         convertValueBuildTest( MingleStructAccessor acc )
         {
@@ -80,7 +96,7 @@ class MingleReactorTests
             String nm = String.format( "%s (%s)", 
                 Mingle.inspect( val ), val.getClass().getName() );
 
-            ValueBuildTest res = new ValueBuildTest( nm );
+            ValueBuildTest res = new ValueBuildTest( makeName( acc, nm ) );
             res.val = val;
 
             return res;

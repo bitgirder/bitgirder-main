@@ -25,7 +25,7 @@ implements MingleValue
         this.fields = fields;
     }
 
-    MingleSymbolMap( BuilderImpl< ? > b )
+    MingleSymbolMap( BuilderImpl< ?, ? > b )
     {
         this( Lang.unmodifiableCopy( b.fields ) );
     }
@@ -67,7 +67,8 @@ implements MingleValue
     }
 
     static
-    class BuilderImpl< B extends BuilderImpl< B > >
+    abstract
+    class BuilderImpl< V extends MingleValue, B extends BuilderImpl >
     {
         final Map< MingleIdentifier, MingleValue > fields = Lang.newMap();
     
@@ -253,13 +254,18 @@ implements MingleValue
     
             return castThis();
         }
+
+        public
+        abstract
+        V
+        build();
     }
 
     public
     final
     static
     class Builder
-    extends BuilderImpl< Builder >
+    extends BuilderImpl< MingleSymbolMap, Builder >
     {
         public MingleSymbolMap build() { return buildMap(); }
     }

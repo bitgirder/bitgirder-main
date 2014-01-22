@@ -67,7 +67,7 @@ implements MingleValue,
     final
     static
     class Builder
-    extends MingleSymbolMap.BuilderImpl< Builder >
+    extends MingleSymbolMap.BuilderImpl< MingleStruct, Builder >
     {
         private QualifiedTypeName type;
 
