@@ -55,7 +55,7 @@ func main() {
     parseArgs()
     remoteRoot = s3.TrimLeadingSlash( remoteRoot )
     creds := &s3.Credentials{ 
-        AccessKeyId: s3.AccessKeyId( awsAccountId ), 
+        AccessKey: s3.AccessKey( awsAccountId ), 
         SecretKey: s3.SecretKey( awsSecretKey ),
     }
     cli := s3.NewClient( creds )
