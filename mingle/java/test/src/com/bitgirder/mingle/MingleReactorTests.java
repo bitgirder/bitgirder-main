@@ -5,6 +5,8 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.log.CodeLoggers;
 
+import com.bitgirder.pipeline.Pipelines;
+
 import com.bitgirder.test.Test;
 import com.bitgirder.test.InvocationFactory;
 import com.bitgirder.test.LabeledTestCall;
@@ -62,7 +64,8 @@ class MingleReactorTests
             MingleValueReactors.visitValue( val, pip );
 
             MingleValueBuilder bld = 
-                pip.elementOfType( MingleValueBuilder.class );
+                Pipelines.lastElementOfType( 
+                    pip.pipeline(), MingleValueBuilder.class );
             
             MingleTests.assertEqual( val, bld.value() );
         }

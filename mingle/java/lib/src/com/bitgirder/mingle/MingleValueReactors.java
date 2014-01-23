@@ -31,6 +31,7 @@ class MingleValueReactors
     static
     MingleValueReactorPipeline
     createValueBuilderPipeline()
+        throws Exception
     {
         return new MingleValueReactorPipeline.Builder().
             addReactor( MingleValueBuilder.create() ).

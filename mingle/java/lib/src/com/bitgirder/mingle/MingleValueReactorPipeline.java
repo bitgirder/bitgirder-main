@@ -5,6 +5,9 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.Lang;
 
+import com.bitgirder.pipeline.Pipeline;
+import com.bitgirder.pipeline.Pipelines;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,38 +19,45 @@ implements MingleValueReactor
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final ArrayList< Element< ? > > elements;
+    private final Pipeline< Object > pipeline;
+    private final ElementImpl head;
+
+    private
+    MingleValueReactorPipeline( Pipeline< Object > pipeline,
+                                ElementImpl head )
+    {
+        this.pipeline = pipeline;
+        this.head = head;
+    }
+
+    public Pipeline< Object > pipeline() { return pipeline; }
 
     private
     static
     abstract
-    class Element< T >
+    class ElementImpl
     implements MingleValueReactor
     {
-        T obj;
-
         MingleValueReactor next;
     }
 
     private
     static
     class ReactorElement
-    extends Element< MingleValueReactor >
+    extends ElementImpl
     {
+        final MingleValueReactor rct;
+
+        ReactorElement( MingleValueReactor rct ) { this.rct = rct; }
+
         public
         void
         processEvent( MingleValueReactorEvent ev )
             throws Exception
         {
-            obj.processEvent( ev );
+            rct.processEvent( ev );
             next.processEvent( ev );
         }
-    }
-
-    private
-    MingleValueReactorPipeline( Builder b )
-    {
-        this.elements = new ArrayList< Element< ? > >( b.elements );
     }
 
     public
@@ -56,22 +66,7 @@ implements MingleValueReactor
         throws Exception
     {
         inputs.notNull( ev, "ev" );
-        elements.get( 0 ).processEvent( ev );
-    }
-
-    public
-    < V >
-    V
-    elementOfType( Class< V > cls )
-    {
-        inputs.notNull( cls, "cls" );
-
-        for ( int i = elements.size() - 1; i >= 0; --i ) {
-            Element< ? > elt = elements.get( i );
-            if ( cls.isInstance( elt.obj ) ) return cls.cast( elt.obj );
-        }
-
-        return null;
+        head.processEvent( ev );
     }
 
     public
@@ -79,46 +74,60 @@ implements MingleValueReactor
     static
     class Builder
     {
-        private final List< Element< ? > > elements = Lang.newList();
+        private final Pipelines.Builder< Object > b =
+            new Pipelines.Builder< Object >();
 
         public
         Builder
         addReactor( MingleValueReactor rct )
+            throws Exception
         {
-            inputs.notNull( rct, "rct" );
-
-            ReactorElement elt = new ReactorElement();
-            elt.obj = rct;
-            elements.add( elt );
-
+            b.addElement( inputs.notNull( rct, "rct" ) );
             return this;
+        }
+        
+        private
+        ElementImpl
+        elementForObject( Object obj )
+        {
+            if ( obj instanceof MingleValueReactor ) {
+                return new ReactorElement( (MingleValueReactor) obj );
+            }
+
+            throw state.failf( "unhandled object: %s", obj );
         }
 
         private
-        void
-        initElements()
+        ElementImpl
+        buildChain( Pipeline< Object > pip )
         {
-            for ( int i = 0, e = elements.size(); i < e; ++i )
+            ElementImpl head = null;
+
+            for ( int i = pip.size() - 1; i >= 0; --i ) 
             {
-                Element< ? > elt = elements.get( i );
-    
-                int nextIdx = i + 1;
-    
-                elt.next = nextIdx == e ?
-                    MingleValueReactors.discardReactor() : 
-                    elements.get( nextIdx );
+                MingleValueReactor next = head;
+                head = elementForObject( pip.get( i ) );
+
+                head.next = next == null ? 
+                    MingleValueReactors.discardReactor() : next;
             }
+
+            return head;
         }
 
         public
         MingleValueReactorPipeline
         build()
+            throws Exception
         {
-            inputs.isFalse( elements.isEmpty(), "pipeline is empty" );
+            Pipeline< Object > pipeline = b.build();
 
-            initElements();
+            inputs.isFalse( 
+                Pipelines.isEmpty( pipeline ), "pipeline is empty" );
 
-            return new MingleValueReactorPipeline( this );
+            ElementImpl head = buildChain( pipeline );
+
+            return new MingleValueReactorPipeline( pipeline, head );
         }
     }
 }
