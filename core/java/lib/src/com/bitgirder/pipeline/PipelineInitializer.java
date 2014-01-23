@@ -5,6 +5,5 @@ interface PipelineInitializer< V >
 {
     public
     void
-    initialize( PipelineInitializationContext< V > ctx )
-        throws Exception;
+    initialize( PipelineInitializationContext< V > ctx );
 }

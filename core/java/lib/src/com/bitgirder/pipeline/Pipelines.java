@@ -45,7 +45,6 @@ class Pipelines
         public 
         void 
         addElement( V elt ) 
-            throws Exception
         { 
             inputs.notNull( elt, "elt" );
 
@@ -72,7 +71,6 @@ class Pipelines
         public
         Builder< V >
         addElement( V elt )
-            throws Exception
         {
             init.addElement( inputs.notNull( elt, "elt" ) );
             return this;
@@ -81,7 +79,6 @@ class Pipelines
         public
         Pipeline< V >
         build()
-            throws Exception
         {
             return new DefaultPipeline< V >( new ArrayList< V >( init.pip.l ) );
         }

@@ -17,7 +17,6 @@ class PipelineTests
     public
     void
     testPipelineEmpty()
-        throws Exception
     {
         Pipeline< Object > p = new Pipelines.Builder< Object >().build();
         state.equalInt( 0, p.size() );
@@ -71,7 +70,6 @@ class PipelineTests
         public
         void
         initialize( PipelineInitializationContext< ElementType > ctx )
-            throws Exception
         {
             ctx.addElement( new ElementType2( val ) );
         }
@@ -89,7 +87,6 @@ class PipelineTests
         public
         void
         initialize( PipelineInitializationContext< ElementType > ctx )
-            throws Exception
         {
             ctx.addElement( new ElementType3( val ) );
         }
@@ -108,7 +105,6 @@ class PipelineTests
     public
     void
     testPipelineBasic()
-        throws Exception
     {
         Pipelines.Builder< ElementType > b = 
             new Pipelines.Builder< ElementType >();

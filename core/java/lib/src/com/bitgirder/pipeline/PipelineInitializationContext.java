@@ -12,6 +12,5 @@ interface PipelineInitializationContext< V >
     // with this instance before elt is added to the end of the pipeline.
     public
     void
-    addElement( V elt )
-        throws Exception;
+    addElement( V elt );
 }
