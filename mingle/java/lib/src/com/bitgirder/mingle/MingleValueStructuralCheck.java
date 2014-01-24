@@ -34,32 +34,14 @@ implements MingleValueReactor
     private final static Object LIST_ACC_OBJ =
         MingleValueReactorEvent.Type.START_LIST;
 
-    public
-    static
-    enum TopType
-    {
-        VALUE( MingleValueReactorEvent.Type.VALUE ),
-        LIST( MingleValueReactorEvent.Type.START_LIST ),
-        MAP( MingleValueReactorEvent.Type.START_MAP ),
-        STRUCT( MingleValueReactorEvent.Type.START_STRUCT );
-        
-        private final MingleValueReactorEvent.Type expectType;
-
-        private
-        TopType( MingleValueReactorEvent.Type expectType )
-        {
-            this.expectType = expectType;
-        }
-    }
-
-    private final TopType topType;
+    private final MingleValueReactorTopType topType;
 
     private final Deque< Object > stack = Lang.newDeque();
 
     private boolean done;
 
     private
-    MingleValueStructuralCheck( TopType topType )
+    MingleValueStructuralCheck( MingleValueReactorTopType topType )
     {
         this.topType = topType;
     }
@@ -198,9 +180,7 @@ implements MingleValueReactor
     checkTopType( MingleValueReactorEvent ev )
         throws Exception
     {
-        if ( topType == TopType.VALUE || topType.expectType == ev.type() ) {
-            return;
-        }
+        if ( topType.couldStartWithEvent( ev ) ) return;
 
         failTopType( ev );
     }
@@ -229,13 +209,21 @@ implements MingleValueReactor
 
     private
     void
+    completeValue()
+    {
+        // if this value completed a field value pop the field
+        if ( stack.peek() instanceof MingleIdentifier ) stack.pop();
+
+        if ( stack.isEmpty() ) done = true;
+    }
+
+    private
+    void
     checkValue( MingleValueReactorEvent ev )
         throws Exception
     {
         execValueCheck( ev, null );
-
-        // if this value completed a field value pop the field
-        if ( stack.peek() instanceof MingleIdentifier ) stack.pop();
+        completeValue();
     }
 
     private
@@ -294,10 +282,9 @@ implements MingleValueReactor
 
         Object top = stack.peek();
 
-        if ( top == LIST_ACC_OBJ || top instanceof MapContext )
-        {
+        if ( top == LIST_ACC_OBJ || top instanceof MapContext ) {
             stack.pop();
-            if ( stack.isEmpty() ) done = true;
+            completeValue();
             return;
         }
         
@@ -325,7 +312,7 @@ implements MingleValueReactor
     public
     static
     MingleValueStructuralCheck
-    createWithTopType( TopType topType )
+    createWithTopType( MingleValueReactorTopType topType )
     {
         inputs.notNull( topType, "topType" );
         return new MingleValueStructuralCheck( topType );
@@ -336,6 +323,6 @@ implements MingleValueReactor
     MingleValueStructuralCheck
     create()
     {
-        return createWithTopType( TopType.VALUE );
+        return createWithTopType( MingleValueReactorTopType.VALUE );
     }
 }

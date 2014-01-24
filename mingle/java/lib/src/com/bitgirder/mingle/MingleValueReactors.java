@@ -69,6 +69,7 @@ class MingleValueReactors
         throws Exception
     {
         return new MingleValueReactorPipeline.Builder().
+            addReactor( MingleValueStructuralCheck.create() ).
             addReactor( MingleValueBuilder.create() ).
             build();
     }

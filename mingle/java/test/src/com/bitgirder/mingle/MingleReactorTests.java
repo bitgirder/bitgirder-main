@@ -100,7 +100,7 @@ class MingleReactorTests
     extends TestImpl
     {
         private List< MingleValueReactorEvent > events;
-        private MingleValueStructuralCheck.TopType topType;
+        private MingleValueReactorTopType topType;
 
         private StructuralErrorTest( CharSequence nm ) { super( nm ); }
         
@@ -266,7 +266,7 @@ class MingleReactorTests
             res.expectFailure( 
                 convertReactorError( acc.expectStructAccessor( "error" ) ) );
 
-            res.topType = MingleValueStructuralCheck.TopType.
+            res.topType = MingleValueReactorTopType.
                 valueOf( acc.expectString( "topType" ).toUpperCase() );
 
             return res;
