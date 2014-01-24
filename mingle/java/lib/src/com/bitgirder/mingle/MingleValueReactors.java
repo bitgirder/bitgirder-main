@@ -3,6 +3,8 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.log.CodeLoggers;
+
 import java.util.Map;
 
 public
@@ -11,6 +13,17 @@ class MingleValueReactors
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
+
+    private static void code( Object... args ) { CodeLoggers.code( args ); }
+
+    private 
+    static 
+    void 
+    codef( String tmpl, 
+           Object... args ) 
+    { 
+        CodeLoggers.codef( tmpl, args ); 
+    }
 
     private MingleValueReactors() {}
 
@@ -25,6 +38,28 @@ class MingleValueReactors
     discardReactor() 
     { 
         return DISCARD_REACTOR; 
+    }
+
+    private
+    final
+    static
+    class DebugReactor
+    implements MingleValueReactor
+    {
+        public
+        void
+        processEvent( MingleValueReactorEvent ev )
+        {
+            code( ev.inspect() );
+        }
+    }
+
+    public
+    static
+    MingleValueReactor
+    createDebugReactor()
+    {
+        return new DebugReactor();
     }
 
     public

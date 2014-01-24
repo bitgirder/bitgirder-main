@@ -80,7 +80,6 @@ implements MingleValueReactor
         public
         Builder
         addReactor( MingleValueReactor rct )
-            throws Exception
         {
             b.addElement( inputs.notNull( rct, "rct" ) );
             return this;
@@ -118,7 +117,6 @@ implements MingleValueReactor
         public
         MingleValueReactorPipeline
         build()
-            throws Exception
         {
             Pipeline< Object > pipeline = b.build();
 

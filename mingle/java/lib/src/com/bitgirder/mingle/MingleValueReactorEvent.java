@@ -103,4 +103,26 @@ class MingleValueReactorEvent
     {
         return checkType( val, Type.VALUE, "value()" );
     }
+
+    public
+    String
+    inspect()
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append( "[ type = " ).append( type );
+
+        switch ( type ) {
+        case START_FIELD: sb.append( ", field = " ).append( fld ); break;
+        case START_STRUCT: 
+            sb.append( ", structType = " ).append( structType ); break;
+        case VALUE:
+            sb.append( ", value = " );
+            Mingle.appendInspection( sb, val );
+            break;
+        }
+
+        sb.append( " ]" );
+        
+        return sb.toString();
+    }
 }

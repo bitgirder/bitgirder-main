@@ -3,6 +3,8 @@ package com.bitgirder.test;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import java.util.regex.Pattern;
+
 public
 abstract
 class LabeledTestCall
@@ -47,6 +49,7 @@ implements TestCall,
     LabeledTestCall
     expectFailure( Class< ? extends Throwable > failCls )
     {
+        inputs.notNull( failCls, "failCls" );
         return doExpectFailure( failCls, null );
     }
 
@@ -56,7 +59,23 @@ implements TestCall,
     expectFailure( Class< ? extends Throwable > failCls,
                    CharSequence failPat )
     {
+        inputs.notNull( failCls, "failCls" );
+        inputs.notNull( failPat, "failPat" );
+
         return doExpectFailure( failCls, failPat );
+    }
+
+    public
+    final
+    LabeledTestCall
+    expectFailure( Throwable th )
+    {
+        inputs.notNull( th, "th" );
+
+        String msg = th.getMessage();
+        String pat = msg == null ? null : Pattern.quote( msg );
+        
+        return doExpectFailure( th.getClass(), pat );
     }
 
     public final CharSequence getLabel() { return label; }

@@ -18,6 +18,7 @@ import com.bitgirder.io.CountingInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 
 import java.util.Map;
 import java.util.List;
@@ -519,5 +520,14 @@ class MingleBinReader
     {
         inputs.notNull( is, "is" );
         return new MingleBinReader( new CountingInputStream( is ) );
+    }
+
+    public
+    static
+    MingleBinReader
+    create( byte[] buf )
+    {
+        inputs.notNull( buf, "buf" );
+        return create( new ByteArrayInputStream( buf ) );
     }
 }

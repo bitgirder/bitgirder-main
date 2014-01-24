@@ -23,6 +23,8 @@ extends MingleSymbolMapAccessor
         this.ms = ms;
     }
 
+    public MingleStruct getStruct() { return ms; }
+
     public QualifiedTypeName getType() { return ms.getType(); }
 
     public

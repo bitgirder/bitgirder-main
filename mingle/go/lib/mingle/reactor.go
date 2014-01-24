@@ -405,19 +405,24 @@ func ( sr *StructuralReactor ) checkMapValue(
 
 // sr.stack known to be non-empty when this returns without error, unless top
 // type is value.
-func ( sr *StructuralReactor ) checkValue( valName string ) error {
+func ( sr *StructuralReactor ) checkValueWithNameFunc( 
+    nmFunc func() string ) error {
     if sr.stack.isEmpty() {
         if sr.topTyp == ReactorTopTypeValue { return nil }
-        return sr.getReactorTopTypeError( valName )
+        return sr.getReactorTopTypeError( nmFunc() )
     }
     switch v := sr.stack.peek().( type ) {
     case *Identifier: {}
     case listIndex: {}
     case *structuralMap:
-        if err := sr.checkMapValue( valName, v ); err != nil { return err }
+        if err := sr.checkMapValue( nmFunc(), v ); err != nil { return err }
     default: panic( libErrorf( "Unexpected stack elt for value: %T", v ) )
     }
     return nil
+}
+
+func ( sr *StructuralReactor ) checkValue( valName string ) error {
+    return sr.checkValueWithNameFunc( func() string { return valName } )
 }
 
 func ( sr *StructuralReactor ) prepareListVal() {
@@ -430,13 +435,14 @@ func ( sr *StructuralReactor ) implStartMap() error {
     return nil
 }
 
-func ( sr *StructuralReactor ) startStruct() error {
+func ( sr *StructuralReactor ) startStruct( typ *QualifiedTypeName ) error {
     if err := sr.checkActive( "StartStruct" ); err != nil { return err }
     // skip check if we're pushing the top level struct
     if ! sr.stack.isEmpty() {
-        if err := sr.checkValue( "struct start" ); err != nil { 
-            return err 
+        nmFunc := func() string { 
+            return fmt.Sprintf( "start of struct %s", typ.ExternalForm() )
         }
+        if err := sr.checkValueWithNameFunc( nmFunc ); err != nil { return err }
     }
     return sr.implStartMap()
 }
@@ -476,7 +482,7 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
     if elt := sr.stack.peek(); elt != nil {
         switch v := elt.( type ) {
         case listIndex: 
-            tmpl := "Expected list value but got start of field '%s'"
+            tmpl := "Saw start of field '%s' while expecting a list value"
             return rctErrorf( tmpl, fld )
         case *structuralMap: 
             if err := sr.startMapField( fld, v ); err != nil { return err }
@@ -488,7 +494,7 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
         default: panic( libErrorf( "Invalid stack element: %v (%T)", v, v ) )
         }
     }
-    errLoc := fmt.Sprintf( "field '%s'", fld )
+    errLoc := fmt.Sprintf( "start of field '%s'", fld )
     return getReactorTopTypeError( errLoc, ReactorTopTypeStruct )
 }
 
@@ -504,7 +510,7 @@ func ( sr *StructuralReactor ) end() error {
     if sr.stack.isEmpty() { return sr.getReactorTopTypeError( "end" ) }
     switch v := sr.stack.pop().( type ) {
     case *Identifier:
-        return rctErrorf( "Saw end while expecting value for field '%s'", v )
+        return rctErrorf( "Saw end while expecting a value for field '%s'", v )
     case *structuralMap, listIndex: {} // end() is always okay
     default: panic( libErrorf( "Unexpected stack element: %T", v ) )
     }
@@ -516,7 +522,7 @@ func ( sr *StructuralReactor ) end() error {
 
 func ( sr *StructuralReactor ) update( ev ReactorEvent ) ( bool, error ) {
     switch v := ev.( type ) {
-    case StructStartEvent: return false, sr.startStruct()
+    case StructStartEvent: return false, sr.startStruct( v.Type )
     case MapStartEvent: return false, sr.startMap()
     case ListStartEvent: return false, sr.startList()
     case FieldStartEvent: return false, sr.startField( v.Field )
