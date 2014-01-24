@@ -8,6 +8,7 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.lang.Lang;
 
 import java.util.Deque;
+import java.util.Set;
 
 public
 final
@@ -28,16 +29,10 @@ implements MingleValueReactor
         CodeLoggers.codef( tmpl, args ); 
     }
 
-    // LIST_ACC_OBJ and MAP_ACC_OBJ are opaque objects used in the stack to
-    // indicate that we are accumulating a map or list
-
+    // LIST_ACC_OBJ is used in the stack to indicate that we are accumulating a
+    // list
     private final static Object LIST_ACC_OBJ =
         MingleValueReactorEvent.Type.START_LIST;
-    
-    private final static Object MAP_ACC_OBJ =
-        MingleValueReactorEvent.Type.START_MAP;
-
-    private final static Object END_OBJ = MingleValueReactorEvent.Type.END;
 
     public
     static
@@ -70,6 +65,7 @@ implements MingleValueReactor
     }
 
     private
+    static
     String
     descForEvent( MingleValueReactorEvent ev )
     {
@@ -87,6 +83,7 @@ implements MingleValueReactor
     }
 
     private
+    static
     String
     expectDescFor( Object obj )
     {
@@ -103,6 +100,7 @@ implements MingleValueReactor
     }
 
     private
+    static
     String
     sawDescFor( Object obj )
     {
@@ -126,6 +124,7 @@ implements MingleValueReactor
     }
 
     private
+    static
     void
     failStructure( CharSequence msg )
         throws Exception
@@ -134,6 +133,7 @@ implements MingleValueReactor
     }
 
     private
+    static
     void
     failStructuref( String tmpl,
                     Object... args )
@@ -143,20 +143,33 @@ implements MingleValueReactor
     }
 
     private
+    final
+    static
+    class MapContext
+    {
+        private QualifiedTypeName structType; // null if we're building a MAP
+
+        private final Set< MingleIdentifier > seen = Lang.newSet();
+
+        private
+        void
+        startField( MingleIdentifier fld )
+            throws Exception
+        {
+            if ( seen.add( fld ) ) return;
+
+            failStructuref( "Multiple entries for field: %s", 
+                fld.getExternalForm() );
+        }
+    }
+
+    private
     void
     failUnexpectedMapEnd( Object sawDesc )
         throws Exception
     {
         failStructuref( "Expected field name or end of fields but got %s",
             sawDescFor( sawDesc ) );
-    }
-
-    // indicates whether we're reading a map or struct body
-    private
-    boolean
-    isAccumulatingMap( Object obj )
-    {
-        return obj == MAP_ACC_OBJ || ( obj instanceof QualifiedTypeName );
     }
 
     private
@@ -208,7 +221,7 @@ implements MingleValueReactor
             return; 
         }
 
-        if ( isAccumulatingMap( top ) ) failUnexpectedMapEnd( ev );
+        if ( top instanceof MapContext ) failUnexpectedMapEnd( ev );
 
         failStructuref( "Saw %s while expecting %s", 
             sawDescFor( ev ), expectDescFor( top ) );
@@ -230,7 +243,7 @@ implements MingleValueReactor
     checkStartMap( MingleValueReactorEvent ev )
         throws Exception
     {
-        execValueCheck( ev, MAP_ACC_OBJ );
+        execValueCheck( ev, new MapContext() );
     }
 
     private
@@ -246,7 +259,10 @@ implements MingleValueReactor
     checkStartStruct( MingleValueReactorEvent ev )
         throws Exception
     {
-        execValueCheck( ev, ev.structType() );
+        MapContext mc = new MapContext();
+        mc.structType = ev.structType();
+
+        execValueCheck( ev, mc );
     }
 
     private
@@ -258,7 +274,9 @@ implements MingleValueReactor
 
         Object top = stack.peek();
 
-        if ( top == MAP_ACC_OBJ || ( top instanceof QualifiedTypeName ) ) {
+        if ( top instanceof MapContext ) {
+            MapContext mc = (MapContext) top;
+            mc.startField( ev.field() );
             stack.push( ev.field() );
             return;
         }
@@ -276,8 +294,7 @@ implements MingleValueReactor
 
         Object top = stack.peek();
 
-        if ( top == LIST_ACC_OBJ || top == MAP_ACC_OBJ ||
-                ( top instanceof QualifiedTypeName ) ) 
+        if ( top == LIST_ACC_OBJ || top instanceof MapContext )
         {
             stack.pop();
             if ( stack.isEmpty() ) done = true;

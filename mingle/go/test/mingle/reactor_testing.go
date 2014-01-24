@@ -96,10 +96,10 @@ func initStructuralReactorTests() {
     idPath1 := objpath.RootedAt( idF1 )
     lpRoot := func() *objpath.ListNode { return objpath.RootedAtList() }
     StdReactorTests = append( StdReactorTests,
-        mk1( "Saw start of field 'f2' while expecting a value for 'f1'",
+        mk1( "Saw start of field 'f2' while expecting a value for field 'f1'",
             evStartStruct1, evStartField1, evStartField2,
         ),
-        mk1( "Saw start of field 'f2' while expecting a value for 'f1'",
+        mk1( "Saw start of field 'f2' while expecting a value for field 'f1'",
             evStartStruct1, evStartField1, EvMapStart, evStartField1,
             evStartField2,
         ),

@@ -489,7 +489,8 @@ func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
             sr.stack.pushField( fld )
             return nil
         case *Identifier:
-            tmpl := "Saw start of field '%s' while expecting a value for '%s'"
+            tmpl := 
+                "Saw start of field '%s' while expecting a value for field '%s'"
             return rctErrorf( tmpl, fld, v )
         default: panic( libErrorf( "Invalid stack element: %v (%T)", v, v ) )
         }
