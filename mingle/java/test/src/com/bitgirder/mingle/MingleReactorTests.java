@@ -1,11 +1,15 @@
 package com.bitgirder.mingle;
 
+import static com.bitgirder.mingle.MingleTestMethods.*;
+
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
+
+import com.bitgirder.lang.path.ObjectPath;
 
 import com.bitgirder.pipeline.Pipelines;
 
@@ -24,12 +28,6 @@ class MingleReactorTests
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
-
-    private final static DeclaredTypeName TYP_VALUE_BUILD_TEST =
-        DeclaredTypeName.create( "ValueBuildTest" );
-
-    private final static DeclaredTypeName TYP_STRUCTURAL_REACTOR_ERROR_TEST =
-        DeclaredTypeName.create( "StructuralReactorErrorTest" );
 
     private final static Map< Object, Map< String, String > > STRING_OVERRIDES;
 
@@ -109,8 +107,6 @@ class MingleReactorTests
         call()
             throws Exception
         {
-            code( "expect err: " + expectedFailurePattern() );
-
             MingleValueStructuralCheck chk =
                 MingleValueStructuralCheck.createWithTopType( topType );
 
@@ -123,6 +119,47 @@ class MingleReactorTests
             for ( MingleValueReactorEvent ev : events ) {
                 pip.processEvent( ev );
             }
+        }
+    }
+
+    private
+    final
+    static
+    class CastReactorTest
+    extends TestImpl
+    {
+        private MingleValue in;
+        private MingleValue expect;
+        private ObjectPath< MingleIdentifier > path;
+        private MingleTypeReference type;
+        private String profile;
+
+        private CastReactorTest( CharSequence name ) { super( name ); }
+
+        private
+        MingleValueCastReactor
+        createCastReactor()
+        {
+            return MingleValueCastReactor.create();
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {   
+            MingleValueReactorPipeline pip =
+                new MingleValueReactorPipeline.Builder().
+                    addProcessor( createCastReactor() ).
+                    addReactor( MingleValueBuilder.create() ).
+                    build();
+
+            MingleValueReactors.visitValue( in, pip );
+
+            MingleValueBuilder vb = Pipelines.
+                lastElementOfType( pip.pipeline(), MingleValueBuilder.class );
+
+            MingleTests.assertEqual( expect, vb.value() );
         }
     }
 
@@ -142,10 +179,10 @@ class MingleReactorTests
 
         private
         CharSequence
-        makeName( MingleStructAccessor testObj,
+        makeName( MingleStruct ms,
                   Object name )
         {
-            DeclaredTypeName declNm = testObj.getType().getName();
+            DeclaredTypeName declNm = ms.getType().getName();
 
             if ( name == null ) {
                 Integer seq = seqsByType.get( declNm );
@@ -156,44 +193,73 @@ class MingleReactorTests
 
             return declNm + "/" + name;
         }
+        
+        private
+        QualifiedTypeName
+        asQname( byte[] arr )
+            throws Exception
+        {
+            if ( arr == null ) return null;
+
+            return MingleBinReader.create( arr ).readQualifiedTypeName();
+        }
+
+        private
+        MingleTypeReference
+        asTypeReference( byte[] arr )
+            throws Exception
+        {
+            if ( arr == null ) return null;
+
+            return MingleBinReader.create( arr ).readTypeReference();
+        }
+
+        private
+        ObjectPath< MingleIdentifier >
+        asIdentifierPath( byte[] arr )
+            throws Exception
+        {
+            if ( arr == null ) return null;
+
+            return MingleBinReader.create( arr ).readIdPath();
+        }
 
         private
         void
         setEventStartStruct( MingleValueReactorEvent ev,
-                             MingleStructAccessor acc )
+                             MingleSymbolMap map )
             throws Exception
         {
-            MingleBinReader rd = 
-                MingleBinReader.create( acc.expectByteArray( "type" ) );
-
-            ev.setStartStruct( rd.readQualifiedTypeName() );
+            byte[] arr = mapExpect( map, "type", byte[].class );
+            ev.setStartStruct( asQname( arr ) );
         }
 
         private
         void
         setEventStartField( MingleValueReactorEvent ev,
-                            MingleStructAccessor acc )
+                            MingleSymbolMap map )
             throws Exception
         {
-            MingleBinReader rd =
-                MingleBinReader.create( acc.expectByteArray( "field" ) );
+            byte[] arr = mapExpect( map, "field", byte[].class );
+            MingleBinReader rd = MingleBinReader.create( arr );
 
             ev.setStartField( rd.readIdentifier() );
         }
 
         private
         MingleValueReactorEvent
-        convertReactorEvent( MingleStructAccessor acc )
+        asReactorEvent( MingleStruct ms )
             throws Exception
         {
             MingleValueReactorEvent res = new MingleValueReactorEvent();
 
-            String evName = acc.getType().getName().toString();
+            String evName = ms.getType().getName().toString();
+            MingleSymbolMap map = ms.getFields();
 
             if ( evName.equals( "StructStartEvent" ) ) {
-                setEventStartStruct( res, acc );
+                setEventStartStruct( res, map );
             } else if ( evName.equals( "FieldStartEvent" ) ) {
-                setEventStartField( res, acc );
+                setEventStartField( res, map );
             } else if ( evName.equals( "MapStartEvent" ) ) {
                 res.setStartMap();
             } else if ( evName.equals( "ListStartEvent" ) ) {
@@ -201,7 +267,7 @@ class MingleReactorTests
             } else if ( evName.equals( "EndEvent" ) ) {
                 res.setEnd();
             } else if ( evName.equals( "ValueEvent" ) ) {
-                res.setValue( acc.expectMingleValue( "val" ) );
+                res.setValue( mapExpect( map, "val", MingleValue.class ) );
             } else {
                 state.failf( "unhandled event: %s", evName );
             }
@@ -211,15 +277,13 @@ class MingleReactorTests
 
         private
         List< MingleValueReactorEvent >
-        convertReactorEvents( MingleListAccessor acc )
+        asReactorEvents( MingleList ml )
             throws Exception
         {
             List< MingleValueReactorEvent > res = Lang.newList();
-            
-            MingleListAccessor.Traversal t = acc.traversal();
     
-            while ( t.hasNext() ) {
-                res.add( convertReactorEvent( t.nextStructAccessor() ) );
+            for ( MingleValue mv : ml ) {
+                res.add( asReactorEvent( (MingleStruct) mv ) );
             }
 
             return res;
@@ -227,14 +291,16 @@ class MingleReactorTests
 
         private
         ValueBuildTest
-        convertValueBuildTest( MingleStructAccessor acc )
+        asValueBuildTest( MingleStruct ms )
         {
-            MingleValue val = acc.expectMingleValue( "val" );
+            MingleSymbolMap map = ms.getFields();
+
+            MingleValue val = mapExpect( map, "val", MingleValue.class );
 
             String nm = String.format( "%s (%s)", 
                 Mingle.inspect( val ), val.getClass().getName() );
 
-            ValueBuildTest res = new ValueBuildTest( makeName( acc, nm ) );
+            ValueBuildTest res = new ValueBuildTest( makeName( ms, nm ) );
             res.val = val;
 
             return res;
@@ -242,32 +308,92 @@ class MingleReactorTests
 
         private
         MingleValueReactorException
-        convertReactorError( MingleStructAccessor acc )
+        asReactorError( MingleSymbolMap map )
         {
             return new MingleValueReactorException(
                 overridableString(
                     MingleValueReactorException.class,
-                    acc.expectString( "message" )
+                    mapExpect( map, "message", String.class )
                 )
             );
         }
 
         private
-        StructuralErrorTest
-        convertStructuralErrorTest( MingleStructAccessor acc )
+        MingleValueCastException
+        asValueCastException( MingleSymbolMap map )
             throws Exception
         {
-            StructuralErrorTest res = 
-                new StructuralErrorTest( makeName( acc, null ) );
-
-            res.events =
-                convertReactorEvents( acc.expectListAccessor( "events" ) );
+            if ( map == null ) return null;
             
-            res.expectFailure( 
-                convertReactorError( acc.expectStructAccessor( "error" ) ) );
+            return new MingleValueCastException(
+                mapExpect( map, "message", String.class ),
+                asIdentifierPath( mapExpect( map, "location", byte[].class ) )
+            );
+        }
 
-            res.topType = MingleValueReactorTopType.
-                valueOf( acc.expectString( "topType" ).toUpperCase() );
+        private
+        Exception
+        asError( MingleStruct ms )
+            throws Exception
+        {
+            if ( ms == null ) return null;
+
+            String nm = ms.getType().getName().toString();
+
+            if ( nm.equals( "ValueCastError" ) ) {
+                return asValueCastException( ms.getFields() );
+            }
+
+            throw state.failf( "unhandled error: %s", nm );
+        }
+
+        private
+        StructuralErrorTest
+        asStructuralErrorTest( MingleStruct ms )
+            throws Exception
+        {
+            MingleSymbolMap map = ms.getFields();
+
+            StructuralErrorTest res = 
+                new StructuralErrorTest( makeName( ms, null ) );
+
+            res.events = 
+                asReactorEvents( mapExpect( map, "events", MingleList.class ) );
+ 
+            MingleStruct rctErr = mapExpect( map, "error", MingleStruct.class );
+            res.expectFailure( asReactorError( rctErr.getFields() ) );
+
+            String ttStr =
+                mapExpect( map, "topType", String.class ).toUpperCase();
+            
+            res.topType = MingleValueReactorTopType.valueOf( ttStr );
+
+            return res;
+        }
+
+        private
+        CastReactorTest
+        asCastReactorTest( MingleStruct ms )
+            throws Exception
+        {
+            CastReactorTest res = new CastReactorTest( makeName( ms, null ) );
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.in = mapGet( map, "in", MingleValue.class );
+            res.expect = mapGet( map, "expect", MingleValue.class );
+
+            res.path = 
+                asIdentifierPath( mapExpect( map, "path", byte[].class ) );
+
+            res.type = 
+                asTypeReference( mapExpect( map, "type", byte[].class ) );
+
+            res.profile = mapGet( map, "profile", String.class );
+            
+            MingleStruct errStruct = mapGet( map, "err", MingleStruct.class );
+            Exception err = asError( errStruct );
+            if ( err != null ) res.expectFailure( err );
 
             return res;
         }
@@ -277,14 +403,15 @@ class MingleReactorTests
         convertStruct( MingleStruct ms )
             throws Exception
         {
-            DeclaredTypeName nm = ms.getType().getName();
+            String nm = ms.getType().getName().toString();
+            MingleSymbolMap map = ms.getFields();
 
-            MingleStructAccessor acc = MingleStructAccessor.forStruct( ms );
-
-            if ( nm.equals( TYP_VALUE_BUILD_TEST ) ) {
-                return convertValueBuildTest( acc );
-            } else if ( nm.equals( TYP_STRUCTURAL_REACTOR_ERROR_TEST ) ) {
-                return convertStructuralErrorTest( acc );
+            if ( nm.equals( "ValueBuildTest" ) ) {
+                return asValueBuildTest( ms );
+            } else if ( nm.equals( "StructuralReactorErrorTest" ) ) {
+                return asStructuralErrorTest( ms );
+            } else if ( nm.equals( "CastReactorTest" ) ) {
+                return asCastReactorTest( ms );
             }
             
 //            codef( "skipping test: %s", nm );

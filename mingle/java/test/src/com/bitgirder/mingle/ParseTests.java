@@ -1,5 +1,7 @@
 package com.bitgirder.mingle;
 
+import static com.bitgirder.mingle.MingleTestMethods.*;
+
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
@@ -565,48 +567,46 @@ class ParseTests
 
         private
         ParseErrorExpectation
-        convertParseErrorExpect( MingleStructAccessor acc )
+        convertParseErrorExpect( MingleSymbolMap map )
         {
             return new ParseErrorExpectation(
-                acc.expectInt( "col" ),
-                acc.expectString( "message" )
+                mapExpect( map, "col", Integer.class ),
+                mapExpect( map, "message", String.class )
             );
         }
 
         private
         RestrictionErrorExpectation
-        convertRestrictErrorExpect( MingleStructAccessor acc )
+        convertRestrictErrorExpect( MingleSymbolMap map )
         {
             return new RestrictionErrorExpectation(
-                acc.expectString( "message" ) );
+                mapExpect( map, "message", String.class ) );
         }
 
         private
         MingleLexer.Number
-        convertNumericToken( MingleStructAccessor acc )
+        convertNumericToken( MingleSymbolMap map )
         {
             // we skip expChar
 
             return new MingleLexer.Number(
-                acc.expectBoolean( "negative" ),
-                acc.getString( "int" ),
-                acc.getString( "frac" ),
-                acc.getString( "exp" )
+                mapExpect( map, "negative", Boolean.class ),
+                mapGet( map, "int", String.class ),
+                mapGet( map, "frac", String.class ),
+                mapGet( map, "exp", String.class )
             );
         }
 
         private
         MingleIdentifier
-        convertIdentifier( MingleStructAccessor acc )
+        convertIdentifier( MingleSymbolMap map )
         {
-            MingleListAccessor la = acc.expectListAccessor( "parts" ); 
+            MingleList ml = mapExpect( map, "parts", MingleList.class );
 
             List< String > parts = Lang.newList();
 
-            for ( MingleListAccessor.Traversal t = la.traversal();
-                    t.hasNext(); )
-            {
-                parts.add( t.nextString() );
+            for ( MingleValue mv : ml ) {
+                parts.add( ( (MingleString) mv ).toString() );
             }
 
             return new MingleIdentifier( parts.toArray( new String[] {} ) );
@@ -614,14 +614,13 @@ class ParseTests
 
         private
         MingleIdentifier[]
-        convertIdList( MingleListAccessor acc )
+        convertIdList( MingleList ml )
         {
             List< MingleIdentifier > parts = Lang.newList();
 
-            MingleListAccessor.Traversal t = acc.traversal();
-
-            while ( t.hasNext() ) {
-                parts.add( convertIdentifier( t.nextStructAccessor() ) );
+            for ( MingleValue mv : ml ) {
+                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
+                parts.add( convertIdentifier( map ) );
             }
 
             return parts.toArray( new MingleIdentifier[ parts.size() ] );
@@ -629,74 +628,82 @@ class ParseTests
 
         private
         MingleNamespace
-        convertNamespace( MingleStructAccessor acc )
+        convertNamespace( MingleSymbolMap map )
         {
+            MingleSymbolMap version =
+                mapExpect( map, "version", MingleStruct.class ).getFields();
+
             return new MingleNamespace(
-                convertIdList( acc.expectListAccessor( "parts" ) ),
-                convertIdentifier( acc.expectStructAccessor( "version" ) )
+                convertIdList( mapExpect( map, "parts", MingleList.class ) ),
+                convertIdentifier( version )
             );
         }
 
         private
         DeclaredTypeName
-        convertDeclName( MingleStructAccessor acc )
+        convertDeclName( MingleSymbolMap map )
         {
-            return new DeclaredTypeName( acc.expectString( "name" ) );
+            return new DeclaredTypeName( 
+                mapExpect( map, "name", String.class ) );
         }
 
         private
         QualifiedTypeName
-        convertQname( MingleStructAccessor acc )
+        convertQname( MingleSymbolMap map )
         {
             return new QualifiedTypeName(
-                convertNamespace( acc.expectStructAccessor( "namespace" ) ),
-                convertDeclName( acc.expectStructAccessor( "name" ) )
+                (MingleNamespace) convertValue(
+                    mapExpect( map, "namespace", MingleStruct.class ) ),
+                (DeclaredTypeName) convertValue(
+                    mapExpect( map, "name", MingleStruct.class ) )
             );
         }
 
         private
         MingleIdentifiedName
-        convertIdentifiedName( MingleStructAccessor acc )
+        convertIdentifiedName( MingleSymbolMap map )
         {
             return new MingleIdentifiedName(
-                convertNamespace( acc.expectStructAccessor( "namespace" ) ),
-                convertIdList( acc.expectListAccessor( "names" ) )
+                (MingleNamespace) convertValue(
+                    mapExpect( map, "namespace", MingleStruct.class ) ),
+                convertIdList( mapExpect( map, "names", MingleList.class ) )
             );
         }
 
         private
         MingleRegexRestriction
-        convertRegexRestriction( MingleStructAccessor acc )
+        convertRegexRestriction( MingleSymbolMap map )
         {
             return MingleRegexRestriction.
-                create( acc.expectString( "pattern" ) );
+                create( mapExpect( map, "pattern", String.class ) );
         }
 
         private
         MingleRangeRestriction
-        convertRangeRestriction( MingleStructAccessor acc,
+        convertRangeRestriction( MingleSymbolMap map,
                                  QualifiedTypeName qn )
         {
             return MingleRangeRestriction.createChecked(
-                acc.expectBoolean( "minClosed" ),
-                acc.getMingleValue( "min" ),
-                acc.getMingleValue( "max" ),
-                acc.expectBoolean( "maxClosed" ),
+                mapExpect( map, "minClosed", Boolean.class ),
+                mapGet( map, "min", MingleValue.class ),
+                mapGet( map, "max", MingleValue.class ),
+                mapExpect( map, "maxClosed", Boolean.class ),
                 Mingle.valueClassFor( qn )
             );
         }
 
         private
         MingleValueRestriction
-        convertRestriction( MingleStructAccessor acc,
+        convertRestriction( MingleStruct ms,
                             QualifiedTypeName qn )
         {
-            String typ = acc.getType().getName().getExternalForm().toString();
+            MingleSymbolMap map = ms.getFields();
+            String typ = ms.getType().getName().getExternalForm().toString();
             
             if ( typ.equals( "RegexRestriction" ) ) {
-                return convertRegexRestriction( acc );
+                return convertRegexRestriction( map );
             } else if ( typ.equals( "RangeRestriction" ) ) {
-                return convertRangeRestriction( acc, qn );
+                return convertRangeRestriction( map, qn );
             }
 
             throw state.failf( "unhandled restriction: %s", typ );
@@ -704,18 +711,18 @@ class ParseTests
 
         private
         AtomicTypeReference
-        convertAtomicRef( MingleStructAccessor acc )
+        convertAtomicRef( MingleSymbolMap map )
         {
-            TypeName nm = 
-                (TypeName) convertValue( acc.expectStructAccessor( "name" ) );
+            TypeName nm = (TypeName) 
+                convertValue( mapExpect( map, "name", MingleStruct.class ) );
 
             MingleValueRestriction rst = null;
             
-            MingleStructAccessor rstAcc = 
-                acc.getStructAccessor( "restriction" );
+            MingleStruct rstStruct = 
+                mapGet( map, "restriction", MingleStruct.class );
 
-            if ( rstAcc != null ) {
-                rst = convertRestriction( rstAcc, (QualifiedTypeName) nm );
+            if ( rstStruct != null ) {
+                rst = convertRestriction( rstStruct, (QualifiedTypeName) nm );
             }
 
             return new AtomicTypeReference( nm, rst );
@@ -723,56 +730,60 @@ class ParseTests
 
         private
         ListTypeReference
-        convertListTypeRef( MingleStructAccessor acc )
+        convertListTypeRef( MingleSymbolMap map )
         {
+            MingleStruct eltType =
+                mapExpect( map, "elementType", MingleStruct.class );
+
             return new ListTypeReference(
-                (MingleTypeReference) 
-                    convertValue( acc.expectStructAccessor( "elementType" ) ),
-                acc.expectBoolean( "allowsEmpty" )
+                (MingleTypeReference) convertValue( eltType ),
+                mapExpect( map, "allowsEmpty", Boolean.class )
             );
         }
 
         private
         NullableTypeReference
-        convertNullableTypeRef( MingleStructAccessor acc )
+        convertNullableTypeRef( MingleSymbolMap map )
         {
+            MingleStruct typ = mapExpect( map, "type", MingleStruct.class );
+
             return new NullableTypeReference(
-                (MingleTypeReference) 
-                    convertValue( acc.expectStructAccessor( "type" ) ) );
+                (MingleTypeReference) convertValue( typ ) );
         }
 
         private
         Object
-        convertValue( MingleStructAccessor acc )
+        convertValue( MingleStruct ms )
         {
-            if ( acc == null ) return null;
+            if ( ms == null ) return null;
 
-            String typ = acc.getType().getName().getExternalForm().toString();
+            String typ = ms.getType().getName().getExternalForm().toString();
+            MingleSymbolMap map = ms.getFields();
 
             if ( typ.equals( "ParseErrorExpect" ) ) {
-                return convertParseErrorExpect( acc );
+                return convertParseErrorExpect( map );
             } else if ( typ.equals( "RestrictionErrorExpect" ) ) {
-                return convertRestrictErrorExpect( acc );
+                return convertRestrictErrorExpect( map );
             } else if ( typ.equals( "StringToken" ) ) {
-                return acc.expectMingleString( "string" );
+                return mapExpect( map, "string", MingleString.class );
             } else if ( typ.equals( "NumericToken" ) ) {
-                return convertNumericToken( acc );
+                return convertNumericToken( map );
             } else if ( typ.equals( "Identifier" ) ) {
-                return convertIdentifier( acc );
+                return convertIdentifier( map );
             } else if ( typ.equals( "Namespace" ) ) { 
-                return convertNamespace( acc );
+                return convertNamespace( map );
             } else if ( typ.equals( "DeclaredTypeName" ) ) {
-                return convertDeclName( acc );
+                return convertDeclName( map );
             } else if ( typ.equals( "QualifiedTypeName" ) ) {
-                return convertQname( acc );
+                return convertQname( map );
             } else if ( typ.equals( "IdentifiedName" ) ) {
-                return convertIdentifiedName( acc );
+                return convertIdentifiedName( map );
             } else if ( typ.equals( "AtomicTypeReference" ) ) {
-                return convertAtomicRef( acc );
+                return convertAtomicRef( map );
             } else if ( typ.equals( "ListTypeReference" ) ) {
-                return convertListTypeRef( acc );
+                return convertListTypeRef( map );
             } else if ( typ.equals( "NullableTypeReference" ) ) {
-                return convertNullableTypeRef( acc );
+                return convertNullableTypeRef( map );
             }
 
             throw state.failf( "unhandled type: %s", typ );
@@ -782,19 +793,21 @@ class ParseTests
         {
             CoreParseTest res = new CoreParseTest();
  
-            MingleStructAccessor acc = MingleStructAccessor.forStruct( ms );
+            MingleSymbolMap map = ms.getFields();
 
-            res.in = acc.expectString( "in" );
+            res.in = mapExpect( map, "in", String.class );
 
             res.tt = Mingle.asJavaEnumValue( TestType.class, 
-                MingleIdentifier.create( acc.expectString( "test-type" ) ) );
+                MingleIdentifier.create( 
+                    mapExpect( map, "testType", String.class ) ) );
 
-            res.extForm = acc.expectString( "externalForm" );
+            res.extForm = mapExpect( map, "externalForm", String.class );
 
-            res.expct = convertValue( acc.getStructAccessor( "expect" ) );
+            res.expct = 
+                convertValue( mapGet( map, "expect", MingleStruct.class ) );
 
             res.errExpct = (ErrorExpectation) 
-                convertValue( acc.getStructAccessor( "error" ) );
+                convertValue( mapGet( map, "error", MingleStruct.class ) );
 
             return res;
         }

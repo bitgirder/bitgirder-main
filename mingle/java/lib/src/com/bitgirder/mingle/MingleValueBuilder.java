@@ -5,13 +5,17 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.Lang;
 
+import com.bitgirder.pipeline.PipelineInitializer;
+import com.bitgirder.pipeline.PipelineInitializationContext;
+
 import java.util.Deque;
 import java.util.List;
 
 public
 final 
 class MingleValueBuilder
-implements MingleValueReactor
+implements MingleValueReactor,
+           PipelineInitializer< Object >
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
@@ -21,6 +25,13 @@ implements MingleValueReactor
     private MingleValue val;
 
     private MingleValueBuilder() {}
+
+    public
+    void
+    initialize( PipelineInitializationContext< Object > ctx )
+    {
+        MingleValueReactors.ensureStructuralCheck( ctx );
+    }
 
     private
     MingleValue

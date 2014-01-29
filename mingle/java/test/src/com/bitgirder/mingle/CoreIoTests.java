@@ -615,20 +615,79 @@ class CoreIoTests
 
             QualifiedTypeName.create( "ns1:ns2@v1/T1" ),
 
-            MingleTypeReference.create( "T1" ),
-            MingleTypeReference.create( "String~\"a\"" ),
-            MingleTypeReference.create( "String~[\"a\",\"b\"]" ),
-            MingleTypeReference.create( "Int32~(0,10)" ),
-            MingleTypeReference.create( "Int64~[0,10]" ),
-            MingleTypeReference.create( "Uint32~(0,10)" ),
-            MingleTypeReference.create( "Uint64~[0,10]" ),
-            MingleTypeReference.create( "Float64~(,)" ),
-            MingleTypeReference.create( "T1*" ),
-            MingleTypeReference.create( "T1+" ),
-            MingleTypeReference.create( "T1*?" ),
-            MingleTypeReference.create( "ns1@v1/T1" ),
-            MingleTypeReference.create( "ns1@v1/T1*" ),
-            MingleTypeReference.create( "ns1@v1/T1?" )
+            atomic( declaredName( "T1" ) ),
+
+            atomic( qname( "mingle:core@v1/String" ),
+                MingleRegexRestriction.create( "a" ) ),
+
+            atomic( qname( "mingle:core@v1/String" ),
+                MingleRangeRestriction.create(
+                    true,
+                    new MingleString( "a" ),
+                    new MingleString( "b" ),
+                    true,
+                    MingleString.class
+                )
+            ),
+            
+            atomic( qname( "mingle:core@v1/Int32" ),
+                MingleRangeRestriction.createChecked(
+                    false,
+                    new MingleInt32( 0 ),
+                    new MingleInt32( 10 ),
+                    false,
+                    MingleInt32.class
+                )
+            ),
+            
+            atomic( qname( "mingle:core@v1/Int64" ),
+                MingleRangeRestriction.createChecked(
+                    true,
+                    new MingleInt64( 0L ),
+                    new MingleInt64( 10L ),
+                    true,
+                    MingleInt64.class
+                )
+            ),
+            
+            atomic( qname( "mingle:core@v1/Uint32" ),
+                MingleRangeRestriction.createChecked(
+                    false,
+                    new MingleUint32( 0 ),
+                    new MingleUint32( 10 ),
+                    false,
+                    MingleUint32.class
+                )
+            ),
+            
+            atomic( qname( "mingle:core@v1/Uint64" ),
+                MingleRangeRestriction.createChecked(
+                    true,
+                    new MingleUint64( 0L ),
+                    new MingleUint64( 10L ),
+                    true,
+                    MingleUint64.class
+                )
+            ),
+            
+            atomic( qname( "mingle:core@v1/Float64" ),
+                MingleRangeRestriction.createChecked(
+                    false, null, null, false, MingleFloat64.class )
+            ),
+ 
+            listType( atomic( declaredName( "T1" ) ), true ),
+            
+            listType( atomic( declaredName( "T1" ) ), false ),
+            
+            nullableType( listType( atomic( declaredName( "T1" ) ), true ) ),
+            
+            atomic( qname( "ns1@v1/T1" ) ),
+
+            listType( atomic( qname( "ns1@v1/T1" ) ), true ),
+
+            nullableType( listType( atomic( qname( "ns1@v1/T1" ) ), true ) ),
+ 
+            nullableType( atomic( qname( "ns1@v1/T1" ) ) )
         );
 
         // due to differences in how we serialize some values ("0" vs "0.0"), we
@@ -637,19 +696,41 @@ class CoreIoTests
         putRoundtripValue( 
             "AtomicTypeReference/mingle:core@v1/Timestamp~" +
                 "[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]",
-            MingleTypeReference.create(
-                "Timestamp~[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]"
+            atomic( qname( "mingle:core@v1/Timestamp" ),
+                MingleRangeRestriction.create(
+                    true,
+                    MingleTimestamp.create( "2012-01-01T00:00:00Z" ),
+                    MingleTimestamp.create( "2012-02-01T00:00:00Z" ),
+                    true,
+                    MingleTimestamp.class
+                )
             )
         );
 
         putRoundtripValue(
             "AtomicTypeReference/mingle:core@v1/Float64~[0,1)",
-            MingleTypeReference.create( "Float64~[0.0,1.0)" )
+            atomic( qname( "mingle:core@v1/Float64" ),
+                MingleRangeRestriction.create(
+                    true,
+                    new MingleFloat64( 0.0d ),
+                    new MingleFloat64( 1.0d ),
+                    false,
+                    MingleFloat64.class
+                )
+            )
         );
 
         putRoundtripValue(
             "AtomicTypeReference/mingle:core@v1/Float32~(0,1]",
-            MingleTypeReference.create( "Float32~(0.0,1.0]" )
+            atomic( qname( "mingle:core@v1/Float32" ),
+                MingleRangeRestriction.create(
+                    false,
+                    new MingleFloat32( 0.0f ),
+                    new MingleFloat32( 1.0f ),
+                    true,
+                    MingleFloat32.class
+                )
+            )
         );
     }
 

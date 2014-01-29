@@ -41,12 +41,13 @@ func sliceAsValue( s interface{} ) *mg.List {
 
 type valueError interface {
     error
+    Message() string
     Location() objpath.PathNode
 }
 
 func valueErrorFieldPairs( ve valueError ) []interface{} {
     return []interface{}{
-        "message", ve.Error(),
+        "message", ve.Message(),
         "location", asValue( ve.Location() ),
     }
 }

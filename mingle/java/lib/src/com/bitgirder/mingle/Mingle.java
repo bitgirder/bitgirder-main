@@ -393,412 +393,409 @@ class Mingle
         throw state.createFail( "Unhandled value:", mv.getClass() );
     }
 
-    private
-    static
-    MingleTypeCastException
-    failCastType( MingleTypeReference expct,
-                  MingleValue act,
-                  ObjectPath< MingleIdentifier > loc )
-    {
-        return new MingleTypeCastException( expct, inferredTypeOf( act ), loc );
-    }
+//    private
+//    static
+//    MingleTypeCastException
+//    failCastType( MingleTypeReference expct,
+//                  MingleValue act,
+//                  ObjectPath< MingleIdentifier > loc )
+//    {
+//        return new MingleTypeCastException( expct, inferredTypeOf( act ), loc );
+//    }
+//
+//    private
+//    static
+//    MingleValueCastException
+//    failCastValue( String msg,
+//                   ObjectPath< MingleIdentifier > loc )
+//    {
+//        return new MingleValueCastException( msg, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValueException
+//    initCause( MingleValueException mve,
+//               Throwable cause )
+//    {
+//        mve.initCause( cause );
+//        return mve;
+//    }
+//
+//    private
+//    static
+//    MingleString
+//    castAsString( MingleValue mv,
+//                  MingleTypeReference tcErrTyp,
+//                  ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( mv instanceof MingleString ) return (MingleString) mv;
+//
+//        if ( isNumericValue( mv ) || ( mv instanceof MingleBoolean ) )
+//        {
+//            return new MingleString( mv.toString() );
+//        }
+//
+//        if ( mv instanceof MingleBuffer ) 
+//        {
+//            return new MingleString( ( (MingleBuffer) mv ).asBase64String() );
+//        }
+//
+//        if ( mv instanceof MingleTimestamp )
+//        {
+//            return new MingleString( 
+//                ( (MingleTimestamp) mv ).getRfc3339String() );
+//        }
+//
+//        if ( mv instanceof MingleEnum )
+//        {
+//            MingleEnum me = (MingleEnum) mv;
+//            return new MingleString( me.getValue().getExternalForm() );
+//        }
+//
+//        throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    RuntimeException
+//    numTypeNotHandled( QualifiedTypeName qn )
+//    {
+//        return state.createFail( "Unhandled number:", qn );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsNumber( MingleNumber n,
+//                  QualifiedTypeName qn )
+//    {
+//        if ( qn.equals( QNAME_INT32 ) ) return new MingleInt32( n.intValue() );
+//        else if ( qn.equals( QNAME_INT64 ) )
+//        {
+//            return new MingleInt64( n.longValue() );
+//        }
+//        else if ( qn.equals( QNAME_UINT32 ) )
+//        {
+//            return new MingleUint32( n.intValue() );
+//        }
+//        else if ( qn.equals( QNAME_UINT64 ) )
+//        {
+//            return new MingleUint64( n.longValue() );
+//        }
+//        else if ( qn.equals( QNAME_FLOAT32 ) )
+//        {
+//            return new MingleFloat32( n.floatValue() );
+//        }
+//        else if ( qn.equals( QNAME_FLOAT64 ) )
+//        {
+//            return new MingleFloat64( n.doubleValue() );
+//        }
+//
+//        throw numTypeNotHandled( qn );
+//    }
+//
+//    private
+//    static
+//    boolean
+//    isDecimalString( MingleString s )
+//    {
+//        for ( int i = 0, e = s.length(); i < e; ++i )
+//        {
+//            char ch = s.charAt( i );
+//            if ( ch == '.' || ch == 'e' || ch == 'E' ) return true;
+//        }
+//
+//        return false;
+//    }
+//
+//    private
+//    static
+//    MingleNumber
+//    parseNumInitial( MingleString s,
+//                     QualifiedTypeName qn )
+//    {
+//        if ( qn.equals( QNAME_FLOAT64 ) || isDecimalString( s ) )
+//        {
+//            return MingleFloat64.parseFloat( s );
+//        }
+//
+//        if ( qn.equals( QNAME_INT32 ) ) return MingleInt32.parseInt( s );
+//        else if ( qn.equals( QNAME_INT64 ) ) return MingleInt64.parseInt( s );
+//        else if ( qn.equals( QNAME_UINT32 ) )
+//        {
+//            return MingleUint32.parseUint( s );
+//        }
+//        else if ( qn.equals( QNAME_UINT64 ) )
+//        {
+//            return MingleUint64.parseUint( s );
+//        }
+//        else if ( qn.equals( QNAME_FLOAT32 ) )
+//        {
+//            return MingleFloat32.parseFloat( s );
+//        }
+//
+//        throw numTypeNotHandled( qn );
+//    }
+//
+//    private
+//    static
+//    MingleValueCastException
+//    failCastNumberFormat( NumberFormatException nfe,
+//                          MingleString in,
+//                          ObjectPath< MingleIdentifier > loc )
+//    {   
+//        String msg = nfe.getMessage();
+//
+//        String pref = "For input string: ";
+//        if ( msg.startsWith( pref ) ) msg = "invalid syntax: " + in;
+// 
+//        return failCastValue( msg, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    parseNumber( MingleString ms,
+//                 QualifiedTypeName qn,
+//                 ObjectPath< MingleIdentifier > loc )
+//    {
+//        try 
+//        { 
+//            MingleNumber res = parseNumInitial( ms, qn ); 
+//            return castAsNumber( res, qn );
+//        }
+//        catch ( NumberFormatException nfe )
+//        {
+//            throw failCastNumberFormat( nfe, ms, loc );
+//        }
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsNumber( MingleValue mv,
+//                  AtomicTypeReference at,
+//                  MingleTypeReference tcErrTyp,
+//                  ObjectPath< MingleIdentifier > loc )
+//    {
+//        QualifiedTypeName qn = (QualifiedTypeName) at.getName();
+//
+//        if ( mv instanceof MingleString )
+//        {
+//            return parseNumber( (MingleString) mv, qn, loc );
+//        }
+//        else if ( mv instanceof MingleNumber ) 
+//        {
+//            return castAsNumber( (MingleNumber) mv, qn );
+//        }
+//
+//        throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    MingleBuffer
+//    castAsBuffer( MingleValue mv,
+//                  MingleTypeReference tcErrTyp,
+//                  ObjectPath< MingleIdentifier > loc )  
+//    {
+//        if ( mv instanceof MingleString )
+//        {
+//            try { return MingleBuffer.fromBase64String( (MingleString) mv ); }
+//            catch ( Base64Exception ex )
+//            {
+//                throw initCause( failCastValue( ex.getMessage(), loc ), ex );
+//            }
+//        }
+//
+//        throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    MingleTimestamp
+//    castAsTimestamp( MingleValue mv,
+//                     MingleTypeReference tcErrTyp,
+//                     ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( mv instanceof MingleString )
+//        {
+//            try { return MingleTimestamp.parse( (MingleString) mv ); }
+//            catch ( MingleSyntaxException mse )
+//            {
+//                throw initCause( failCastValue( mse.getMessage(), loc ), mse );
+//            }
+//        }
+//
+//        throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsNull( MingleValue mv,
+//                MingleTypeReference tcErrTyp,
+//                ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( mv instanceof MingleNull ) return mv;
+//
+//        throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsBoolean( MingleValue mv,
+//                   MingleTypeReference tcErrTyp,
+//                   ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( mv instanceof MingleString )
+//        {
+//            try { return MingleBoolean.parse( (MingleString) mv ); }
+//            catch ( MingleSyntaxException mse )
+//            {
+//                throw initCause( failCastValue( mse.getMessage(), loc ), mse );
+//            }
+//        }
+//
+//        throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsUnrestrictedAtomic( MingleValue mv,
+//                              AtomicTypeReference at,
+//                              MingleTypeReference tcErrTyp,
+//                              ObjectPath< MingleIdentifier > loc )
+//    {
+//        TypeName nm = at.getName();
+//
+//        Class< ? extends MingleValue > valCls = valueClassFor( nm );
+//        if ( valCls != null && valCls.isInstance( mv ) ) return mv;
+//
+//        if ( nm.equals( QNAME_STRING ) )
+//        {
+//            return castAsString( mv, tcErrTyp, loc );
+//        }
+//        else if ( isNumberType( at ) ) 
+//        {
+//            return castAsNumber( mv, at, tcErrTyp, loc );
+//        }
+//        else if ( nm.equals( QNAME_BUFFER ) )
+//        {
+//            return castAsBuffer( mv, tcErrTyp, loc );
+//        }
+//        else if ( nm.equals( QNAME_TIMESTAMP ) )
+//        {
+//            return castAsTimestamp( mv, tcErrTyp, loc );
+//        }
+//        else if ( nm.equals( QNAME_BOOLEAN ) )
+//        {
+//            return castAsBoolean( mv, tcErrTyp, loc );
+//        }
+//        else if ( nm.equals( QNAME_NULL ) )
+//        {
+//            return castAsNull( mv, tcErrTyp, loc );
+//        }
+//        else throw failCastType( tcErrTyp, mv, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsAtomic( MingleValue mv,
+//                  AtomicTypeReference at,
+//                  MingleTypeReference tcErrTyp,
+//                  ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( mv instanceof MingleNull )
+//        {
+//            if ( at.equals( TYPE_NULL ) ) return mv;
+//            throw failCastValue( "Value is null", loc );
+//        }
+//
+//        mv = castAsUnrestrictedAtomic( mv, at, tcErrTyp, loc );
+//
+//        MingleValueRestriction vr = at.getRestriction();
+//        if ( vr != null ) vr.validate( mv, loc );
+//
+//        return mv;
+//    }
+//
+//    // This method unconditionally returns a copy of the underlying list,
+//    // whether or not the original could be used as-is. A more optimized
+//    // strategy would be to lazily create a new list only when needed.
+//    private
+//    static
+//    MingleValue
+//    castAsList( MingleValue mv,
+//                ListTypeReference lt,
+//                MingleTypeReference tcErrTyp,
+//                ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( ! ( mv instanceof MingleList ) ) 
+//        {
+//            throw failCastType( tcErrTyp, mv, loc );
+//        }
+//
+//        List< MingleValue > l2 = Lang.newList();
+//        ImmutableListPath< MingleIdentifier > lp = loc.startImmutableList();
+//        MingleTypeReference eltTyp = lt.getElementTypeReference();
+//        Iterator< MingleValue > it = ( (MingleList) mv ).iterator();
+//
+//        if ( ! ( it.hasNext() || lt.allowsEmpty() ) )
+//        {
+//            throw failCastValue( "List is empty", loc );
+//        }
+//
+//        while ( it.hasNext() )
+//        {
+//            l2.add( implCastValue( it.next(), eltTyp, eltTyp, lp ) );
+//            lp = lp.next();
+//        }
+//
+//        return MingleList.createLive( l2 );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    castAsNullable( MingleValue mv,
+//                    NullableTypeReference nt,
+//                    MingleTypeReference tcErrTyp,
+//                    ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( mv instanceof MingleNull ) return mv;
+//        return implCastValue( mv, nt.getTypeReference(), tcErrTyp, loc );
+//    }
+//
+//    private
+//    static
+//    MingleValue
+//    implCastValue( MingleValue mv,
+//                   MingleTypeReference typ,
+//                   MingleTypeReference tcErrTyp,
+//                   ObjectPath< MingleIdentifier > loc )
+//    {
+//        if ( typ instanceof AtomicTypeReference )
+//        {
+//            return castAsAtomic( mv, (AtomicTypeReference) typ, tcErrTyp, loc );
+//        }
+//        else if ( typ instanceof ListTypeReference )
+//        {
+//            return castAsList( mv, (ListTypeReference) typ, tcErrTyp, loc );
+//        }
+//        else if ( typ instanceof NullableTypeReference )
+//        {
+//            NullableTypeReference nt = (NullableTypeReference) typ;
+//            return castAsNullable( mv, nt, tcErrTyp, loc );
+//        }
+//
+//        throw state.createFail( "Unrecognized type reference:", typ );
+//    }
 
-    private
-    static
-    MingleValueCastException
-    failCastValue( String msg,
-                   ObjectPath< MingleIdentifier > loc )
-    {
-        return new MingleValueCastException( msg, loc );
-    }
-
-    private
-    static
-    MingleValueException
-    initCause( MingleValueException mve,
-               Throwable cause )
-    {
-        mve.initCause( cause );
-        return mve;
-    }
-
-    private
-    static
-    MingleString
-    castAsString( MingleValue mv,
-                  MingleTypeReference tcErrTyp,
-                  ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv instanceof MingleString ) return (MingleString) mv;
-
-        if ( isNumericValue( mv ) || ( mv instanceof MingleBoolean ) )
-        {
-            return new MingleString( mv.toString() );
-        }
-
-        if ( mv instanceof MingleBuffer ) 
-        {
-            return new MingleString( ( (MingleBuffer) mv ).asBase64String() );
-        }
-
-        if ( mv instanceof MingleTimestamp )
-        {
-            return new MingleString( 
-                ( (MingleTimestamp) mv ).getRfc3339String() );
-        }
-
-        if ( mv instanceof MingleEnum )
-        {
-            MingleEnum me = (MingleEnum) mv;
-            return new MingleString( me.getValue().getExternalForm() );
-        }
-
-        throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    RuntimeException
-    numTypeNotHandled( QualifiedTypeName qn )
-    {
-        return state.createFail( "Unhandled number:", qn );
-    }
-
-    private
-    static
-    MingleValue
-    castAsNumber( MingleNumber n,
-                  QualifiedTypeName qn )
-    {
-        if ( qn.equals( QNAME_INT32 ) ) return new MingleInt32( n.intValue() );
-        else if ( qn.equals( QNAME_INT64 ) )
-        {
-            return new MingleInt64( n.longValue() );
-        }
-        else if ( qn.equals( QNAME_UINT32 ) )
-        {
-            return new MingleUint32( n.intValue() );
-        }
-        else if ( qn.equals( QNAME_UINT64 ) )
-        {
-            return new MingleUint64( n.longValue() );
-        }
-        else if ( qn.equals( QNAME_FLOAT32 ) )
-        {
-            return new MingleFloat32( n.floatValue() );
-        }
-        else if ( qn.equals( QNAME_FLOAT64 ) )
-        {
-            return new MingleFloat64( n.doubleValue() );
-        }
-
-        throw numTypeNotHandled( qn );
-    }
-
-    private
-    static
-    boolean
-    isDecimalString( MingleString s )
-    {
-        for ( int i = 0, e = s.length(); i < e; ++i )
-        {
-            char ch = s.charAt( i );
-            if ( ch == '.' || ch == 'e' || ch == 'E' ) return true;
-        }
-
-        return false;
-    }
-
-    private
-    static
-    MingleNumber
-    parseNumInitial( MingleString s,
-                     QualifiedTypeName qn )
-    {
-        if ( qn.equals( QNAME_FLOAT64 ) || isDecimalString( s ) )
-        {
-            return MingleFloat64.parseFloat( s );
-        }
-
-        if ( qn.equals( QNAME_INT32 ) ) return MingleInt32.parseInt( s );
-        else if ( qn.equals( QNAME_INT64 ) ) return MingleInt64.parseInt( s );
-        else if ( qn.equals( QNAME_UINT32 ) )
-        {
-            return MingleUint32.parseUint( s );
-        }
-        else if ( qn.equals( QNAME_UINT64 ) )
-        {
-            return MingleUint64.parseUint( s );
-        }
-        else if ( qn.equals( QNAME_FLOAT32 ) )
-        {
-            return MingleFloat32.parseFloat( s );
-        }
-
-        throw numTypeNotHandled( qn );
-    }
-
-    private
-    static
-    MingleValueCastException
-    failCastNumberFormat( NumberFormatException nfe,
-                          MingleString in,
-                          ObjectPath< MingleIdentifier > loc )
-    {   
-        String msg = nfe.getMessage();
-
-        String pref = "For input string: ";
-        if ( msg.startsWith( pref ) ) msg = "invalid syntax: " + in;
- 
-        return failCastValue( msg, loc );
-    }
-
-    private
-    static
-    MingleValue
-    parseNumber( MingleString ms,
-                 QualifiedTypeName qn,
-                 ObjectPath< MingleIdentifier > loc )
-    {
-        try 
-        { 
-            MingleNumber res = parseNumInitial( ms, qn ); 
-            return castAsNumber( res, qn );
-        }
-        catch ( NumberFormatException nfe )
-        {
-            throw failCastNumberFormat( nfe, ms, loc );
-        }
-    }
-
-    private
-    static
-    MingleValue
-    castAsNumber( MingleValue mv,
-                  AtomicTypeReference at,
-                  MingleTypeReference tcErrTyp,
-                  ObjectPath< MingleIdentifier > loc )
-    {
-        QualifiedTypeName qn = (QualifiedTypeName) at.getName();
-
-        if ( mv instanceof MingleString )
-        {
-            return parseNumber( (MingleString) mv, qn, loc );
-        }
-        else if ( mv instanceof MingleNumber ) 
-        {
-            return castAsNumber( (MingleNumber) mv, qn );
-        }
-
-        throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    MingleBuffer
-    castAsBuffer( MingleValue mv,
-                  MingleTypeReference tcErrTyp,
-                  ObjectPath< MingleIdentifier > loc )  
-    {
-        if ( mv instanceof MingleString )
-        {
-            try { return MingleBuffer.fromBase64String( (MingleString) mv ); }
-            catch ( Base64Exception ex )
-            {
-                throw initCause( failCastValue( ex.getMessage(), loc ), ex );
-            }
-        }
-
-        throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    MingleTimestamp
-    castAsTimestamp( MingleValue mv,
-                     MingleTypeReference tcErrTyp,
-                     ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv instanceof MingleString )
-        {
-            try { return MingleTimestamp.parse( (MingleString) mv ); }
-            catch ( MingleSyntaxException mse )
-            {
-                throw initCause( failCastValue( mse.getMessage(), loc ), mse );
-            }
-        }
-
-        throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    MingleValue
-    castAsNull( MingleValue mv,
-                MingleTypeReference tcErrTyp,
-                ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv instanceof MingleNull ) return mv;
-
-        throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    MingleValue
-    castAsBoolean( MingleValue mv,
-                   MingleTypeReference tcErrTyp,
-                   ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv instanceof MingleString )
-        {
-            try { return MingleBoolean.parse( (MingleString) mv ); }
-            catch ( MingleSyntaxException mse )
-            {
-                throw initCause( failCastValue( mse.getMessage(), loc ), mse );
-            }
-        }
-
-        throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    MingleValue
-    castAsUnrestrictedAtomic( MingleValue mv,
-                              AtomicTypeReference at,
-                              MingleTypeReference tcErrTyp,
-                              ObjectPath< MingleIdentifier > loc )
-    {
-        TypeName nm = at.getName();
-
-        Class< ? extends MingleValue > valCls = valueClassFor( nm );
-        if ( valCls != null && valCls.isInstance( mv ) ) return mv;
-
-        if ( nm.equals( QNAME_STRING ) )
-        {
-            return castAsString( mv, tcErrTyp, loc );
-        }
-        else if ( isNumberType( at ) ) 
-        {
-            return castAsNumber( mv, at, tcErrTyp, loc );
-        }
-        else if ( nm.equals( QNAME_BUFFER ) )
-        {
-            return castAsBuffer( mv, tcErrTyp, loc );
-        }
-        else if ( nm.equals( QNAME_TIMESTAMP ) )
-        {
-            return castAsTimestamp( mv, tcErrTyp, loc );
-        }
-        else if ( nm.equals( QNAME_BOOLEAN ) )
-        {
-            return castAsBoolean( mv, tcErrTyp, loc );
-        }
-        else if ( nm.equals( QNAME_NULL ) )
-        {
-            return castAsNull( mv, tcErrTyp, loc );
-        }
-        else throw failCastType( tcErrTyp, mv, loc );
-    }
-
-    private
-    static
-    MingleValue
-    castAsAtomic( MingleValue mv,
-                  AtomicTypeReference at,
-                  MingleTypeReference tcErrTyp,
-                  ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv instanceof MingleNull )
-        {
-            if ( at.equals( TYPE_NULL ) ) return mv;
-            throw failCastValue( "Value is null", loc );
-        }
-
-        mv = castAsUnrestrictedAtomic( mv, at, tcErrTyp, loc );
-
-        MingleValueRestriction vr = at.getRestriction();
-        if ( vr != null ) vr.validate( mv, loc );
-
-        return mv;
-    }
-
-    // This method unconditionally returns a copy of the underlying list,
-    // whether or not the original could be used as-is. A more optimized
-    // strategy would be to lazily create a new list only when needed.
-    private
-    static
-    MingleValue
-    castAsList( MingleValue mv,
-                ListTypeReference lt,
-                MingleTypeReference tcErrTyp,
-                ObjectPath< MingleIdentifier > loc )
-    {
-        if ( ! ( mv instanceof MingleList ) ) 
-        {
-            throw failCastType( tcErrTyp, mv, loc );
-        }
-
-        List< MingleValue > l2 = Lang.newList();
-        ImmutableListPath< MingleIdentifier > lp = loc.startImmutableList();
-        MingleTypeReference eltTyp = lt.getElementTypeReference();
-        Iterator< MingleValue > it = ( (MingleList) mv ).iterator();
-
-        if ( ! ( it.hasNext() || lt.allowsEmpty() ) )
-        {
-            throw failCastValue( "List is empty", loc );
-        }
-
-        while ( it.hasNext() )
-        {
-            l2.add( implCastValue( it.next(), eltTyp, eltTyp, lp ) );
-            lp = lp.next();
-        }
-
-        return MingleList.createLive( l2 );
-    }
-
-    private
-    static
-    MingleValue
-    castAsNullable( MingleValue mv,
-                    NullableTypeReference nt,
-                    MingleTypeReference tcErrTyp,
-                    ObjectPath< MingleIdentifier > loc )
-    {
-        if ( mv instanceof MingleNull ) return mv;
-        return implCastValue( mv, nt.getTypeReference(), tcErrTyp, loc );
-    }
-
-    private
-    static
-    MingleValue
-    implCastValue( MingleValue mv,
-                   MingleTypeReference typ,
-                   MingleTypeReference tcErrTyp,
-                   ObjectPath< MingleIdentifier > loc )
-    {
-        if ( typ instanceof AtomicTypeReference )
-        {
-            return castAsAtomic( mv, (AtomicTypeReference) typ, tcErrTyp, loc );
-        }
-        else if ( typ instanceof ListTypeReference )
-        {
-            return castAsList( mv, (ListTypeReference) typ, tcErrTyp, loc );
-        }
-        else if ( typ instanceof NullableTypeReference )
-        {
-            NullableTypeReference nt = (NullableTypeReference) typ;
-            return castAsNullable( mv, nt, tcErrTyp, loc );
-        }
-
-        throw state.createFail( "Unrecognized type reference:", typ );
-    }
-
-    // Hardcoding impl right now that mv is string since we're only trying to
-    // use this to get past type ref parse tests. Once those are done this will
-    // be replaced with a more broadly applicable version.
     public
     static
     MingleValue
@@ -806,11 +803,12 @@ class Mingle
                MingleTypeReference typ,
                ObjectPath< MingleIdentifier > loc )
     {
-        inputs.notNull( mv, "mv" );
-        inputs.notNull( typ, "typ" );
-        inputs.notNull( loc, "loc" );
- 
-        return implCastValue( mv, typ, typ, loc );
+//        inputs.notNull( mv, "mv" );
+//        inputs.notNull( typ, "typ" );
+//        inputs.notNull( loc, "loc" );
+// 
+//        return implCastValue( mv, typ, typ, loc );
+        throw new UnsupportedOperationException( "Unimplemented" );
     }
 
     public

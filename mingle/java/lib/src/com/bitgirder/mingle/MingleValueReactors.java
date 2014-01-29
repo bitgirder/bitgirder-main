@@ -5,6 +5,9 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.log.CodeLoggers;
 
+import com.bitgirder.pipeline.PipelineInitializationContext;
+import com.bitgirder.pipeline.Pipelines;
+
 import java.util.Map;
 
 public
@@ -190,5 +193,20 @@ class MingleValueReactors
         inputs.notNull( rct, "rct" );
 
         visitValue( mv, rct, new MingleValueReactorEvent() );
+    }
+
+    public
+    static
+    void
+    ensureStructuralCheck( PipelineInitializationContext< Object > ctx )
+    {
+        inputs.notNull( ctx, "ctx" );
+        
+        MingleValueStructuralCheck chk = Pipelines.lastElementOfType(
+            ctx.pipeline(), MingleValueStructuralCheck.class );
+
+        if ( chk != null ) return;
+
+        ctx.addElement( MingleValueStructuralCheck.create() );
     }
 }

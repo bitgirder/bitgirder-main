@@ -1177,7 +1177,7 @@ func TypeOf( mgVal Value ) TypeReference {
 
 type ValueError interface {
     Location() objpath.PathNode
-    Message() string
+    Message() string 
     error
 }
 
@@ -1208,11 +1208,15 @@ func NewMissingFieldsError(
     return &MissingFieldsError{ impl: ValueErrorImpl{ path }, flds: flds2 }
 }
 
-func ( e *MissingFieldsError ) Error() string {
+func ( e *MissingFieldsError ) Message() string {
     strs := make( []string, len( e.flds ) )
     for i, fld := range e.flds { strs[ i ] = fld.ExternalForm() }
     fldsStr := strings.Join( strs, ", " )
-    return e.impl.MakeError( fmt.Sprintf( "missing field(s): %s", fldsStr ) )
+    return fmt.Sprintf( "missing field(s): %s", fldsStr )
+}
+
+func ( e *MissingFieldsError ) Error() string {
+    return e.impl.MakeError( e.Message() )
 }
 
 func ( e *MissingFieldsError ) Location() objpath.PathNode { 
@@ -1231,8 +1235,12 @@ func NewUnrecognizedFieldError(
     return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, fld: fld }
 }
 
+func ( e *UnrecognizedFieldError ) Message() string {
+    return fmt.Sprintf( "unrecognized field: %s", e.fld )
+}
+
 func ( e *UnrecognizedFieldError ) Error() string {
-    return e.impl.MakeError( fmt.Sprintf( "unrecognized field: %s", e.fld ) )
+    return e.impl.MakeError( e.Message() )
 }
 
 func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {

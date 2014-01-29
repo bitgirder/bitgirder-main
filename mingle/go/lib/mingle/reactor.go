@@ -1022,11 +1022,7 @@ func castValue( mgVal Value, cr *CastReactor ) ( Value, error ) {
 
 func CastValue( 
     mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
-//    vb := NewValueBuilder()
     pg := ImmediatePathGetter{ path }
-//    pip := InitReactorPipeline( NewDefaultCastReactor( typ, pg ), vb )
-//    if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
-//    return vb.GetValue(), nil
     return castValue( mgVal, NewDefaultCastReactor( typ, pg ) )
 }
 

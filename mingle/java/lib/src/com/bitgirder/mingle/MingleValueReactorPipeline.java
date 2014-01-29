@@ -61,6 +61,36 @@ implements MingleValueReactor
     }
 
     public
+    static
+    interface Processor
+    {
+        public
+        void
+        processPipelineEvent( MingleValueReactorEvent ev,
+                              MingleValueReactor next )
+            throws Exception;
+    }
+
+    private
+    final
+    static
+    class ProcessorElement
+    extends ElementImpl
+    {
+        private Processor proc;
+
+        private ProcessorElement( Processor proc ) { this.proc = proc; }
+
+        public
+        void
+        processEvent( MingleValueReactorEvent ev )
+            throws Exception
+        {
+            proc.processPipelineEvent( ev, next );
+        }
+    }
+
+    public
     void
     processEvent( MingleValueReactorEvent ev )
         throws Exception
@@ -84,13 +114,23 @@ implements MingleValueReactor
             b.addElement( inputs.notNull( rct, "rct" ) );
             return this;
         }
-        
+
+        public
+        Builder
+        addProcessor( Processor proc )
+        {
+            b.addElement( inputs.notNull( proc, "proc" ) );
+            return this;
+        }
+
         private
         ElementImpl
         elementForObject( Object obj )
         {
             if ( obj instanceof MingleValueReactor ) {
                 return new ReactorElement( (MingleValueReactor) obj );
+            } else if ( obj instanceof Processor ) {
+                return new ProcessorElement( (Processor) obj );
             }
 
             throw state.failf( "unhandled object: %s", obj );
