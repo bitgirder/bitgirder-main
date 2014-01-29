@@ -3,6 +3,13 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.Strings;
+
+import com.bitgirder.lang.path.ObjectPath;
+
+import java.util.List;
+
 public
 final
 class MingleValueReactorEvent
@@ -29,6 +36,8 @@ class MingleValueReactorEvent
     private QualifiedTypeName structType; // valid for START_STRUCT
 
     private MingleValue val; // valid for VALUE
+
+    private ObjectPath< MingleIdentifier > path;
 
     public Type type() { return type; }
 
@@ -104,25 +113,61 @@ class MingleValueReactorEvent
         return checkType( val, Type.VALUE, "value()" );
     }
 
+    // path can be null
+    public
+    void
+    setPath( ObjectPath< MingleIdentifier > path )
+    {
+        this.path = path;
+    }
+
+    // Returns the path value most recently set by a call to setPath(), or null
+    // if none or if clearPath() was called. The path returned from this call
+    // may be a mutable one, but should never change while this instance is
+    // being used in an invocation of MingleValueReactor.processEvent() unless
+    // the reactor itself changes it.
+    public ObjectPath< MingleIdentifier > path() { return path; }
+
+    private
+    void
+    addPair( List< Object > pairs,
+             Object k,
+             Object v )
+    {
+        pairs.add( k );
+        pairs.add( v );
+    }
+
+    private
+    List< Object >
+    inspectionPairs()
+    {
+        List< Object > res = Lang.newList( 8 );
+        
+        addPair( res, "type", type );
+
+        if ( path != null ) { 
+            addPair( res, "path", Mingle.formatIdPath( path ) );
+        }
+
+        switch ( type ) {
+        case START_FIELD: addPair( res, "field", fld ); break;
+        case START_STRUCT: addPair( res, "structType", structType ); break;
+        case VALUE: addPair( res, "value", Mingle.inspect( val ) ); break;
+        }
+
+        return res;
+    }
+
     public
     String
     inspect()
     {
-        StringBuilder sb = new StringBuilder();
-        sb.append( "[ type = " ).append( type );
+        List< Object > pairs = inspectionPairs();
 
-        switch ( type ) {
-        case START_FIELD: sb.append( ", field = " ).append( fld ); break;
-        case START_STRUCT: 
-            sb.append( ", structType = " ).append( structType ); break;
-        case VALUE:
-            sb.append( ", value = " );
-            Mingle.appendInspection( sb, val );
-            break;
-        }
-
-        sb.append( " ]" );
-        
-        return sb.toString();
+        return new StringBuilder().append( "[ " ).
+            append( Strings.crossJoin( "=", ", ", pairs ) ).
+            append( " ]" ).
+            toString();
     }
 }

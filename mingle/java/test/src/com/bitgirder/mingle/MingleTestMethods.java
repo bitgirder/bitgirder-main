@@ -4,6 +4,7 @@ import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ObjectPaths;
 
 final
 class MingleTestMethods
@@ -162,5 +163,31 @@ class MingleTestMethods
     {
         inputs.notNull( id, "id" );
         return mapExpect( m, MingleIdentifier.create( id ), cls );
+    }
+
+    public
+    static
+    void
+    assertIdPathsEqual( ObjectPath< MingleIdentifier > p1,
+                        String p1Name,
+                        ObjectPath< MingleIdentifier > p2,
+                        String p2Name )
+    {
+        state.isTruef( ObjectPaths.areEqual( p1, p2 ),
+            "%s != %s (%s != %s)",
+            p1Name,
+            p2Name,
+            p1 == null ? null : Mingle.formatIdPath( p1 ),
+            p2 == null ? null : Mingle.formatIdPath( p2 )
+        );
+    }
+
+    public
+    static
+    void
+    assertIdPathsEqual( ObjectPath< MingleIdentifier > expct,
+                        ObjectPath< MingleIdentifier > act )
+    {
+        assertIdPathsEqual( expct, "expct", act, "act" );
     }
 }

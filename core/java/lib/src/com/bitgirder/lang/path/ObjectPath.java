@@ -8,6 +8,7 @@ import com.bitgirder.lang.ObjectReceiver;
 
 import java.util.Deque;
 import java.util.Iterator;
+import java.util.Collection;
 
 public
 class ObjectPath< E >
@@ -45,8 +46,9 @@ class ObjectPath< E >
         return DictionaryPath.< E >create( this, key );
     }
 
-    Iterator< ObjectPath< E > >
-    getDescent()
+    public
+    Collection< ObjectPath< E > >
+    collectDescent()
     {
         Deque< ObjectPath< E > > d = Lang.newDeque();
 
@@ -55,7 +57,13 @@ class ObjectPath< E >
             d.push( p );
         }
 
-        return d.iterator();
+        return d;
+    }
+
+    Iterator< ObjectPath< E > >
+    getDescent()
+    {
+        return collectDescent().iterator();
     }
 
     public

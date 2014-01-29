@@ -10,6 +10,8 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.lang.Lang;
 
 import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ListPath;
+import com.bitgirder.lang.path.DictionaryPath;
 
 import com.bitgirder.pipeline.Pipelines;
 
@@ -19,6 +21,7 @@ import com.bitgirder.test.LabeledTestCall;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 import java.util.regex.Pattern;
 
@@ -125,6 +128,104 @@ class MingleReactorTests
     private
     final
     static
+    class EventExpectation
+    {
+        private MingleValueReactorEvent event;
+        private ObjectPath< MingleIdentifier > path;
+    }
+
+    private
+    final
+    static
+    class EventPathTest
+    extends TestImpl
+    implements MingleValueReactor
+    {
+        private ObjectPath< MingleIdentifier > startPath;
+        private ObjectPath< MingleIdentifier > finalPath;
+        private Queue< EventExpectation > events;
+
+        // the most recent path seen
+        private ObjectPath< MingleIdentifier > lastPath;
+
+        private EventPathTest( CharSequence name ) { super( name ); }
+
+        private
+        ObjectPath< MingleIdentifier >
+        append( ObjectPath< MingleIdentifier > head,
+                ObjectPath< MingleIdentifier > tail )
+        {
+            if ( tail == null ) return head;
+
+            for ( ObjectPath< MingleIdentifier > elt : tail.collectDescent() )
+            {
+                if ( elt instanceof DictionaryPath ) 
+                {
+                    DictionaryPath< MingleIdentifier > dp = 
+                        Lang.castUnchecked( elt );
+                    
+                    head = head.descend( dp.getKey() );
+                }
+                else if ( elt instanceof ListPath ) 
+                {
+                    ListPath< ? > lp = (ListPath< ? >) elt;
+                    head = head.startImmutableList( lp.getIndex() );
+                }
+                else state.failf( "unhandled elt: %s", elt );
+            }
+
+            return head;
+        }
+
+        public
+        void
+        processEvent( MingleValueReactorEvent ev )
+        {
+            ObjectPath< MingleIdentifier > expct = events.peek().path;
+            if ( startPath != null ) expct = append( startPath, expct );
+            assertIdPathsEqual( expct, ev.path() );
+
+            lastPath = ev.path();
+            events.remove();
+        }
+
+        private
+        void
+        feedEvents( MingleValueReactor rct )
+            throws Exception
+        {
+            while ( ! events.isEmpty() )
+            {
+                EventExpectation ee = events.peek();
+                rct.processEvent( ee.event );
+            }
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            MinglePathSettingProcessor ps = startPath == null ?
+                MinglePathSettingProcessor.create() :
+                MinglePathSettingProcessor.create( startPath );
+
+            MingleValueReactorPipeline pip =
+                new MingleValueReactorPipeline.Builder().
+                    addProcessor( ps ).
+                    addReactor( MingleValueReactors.createDebugReactor() ).
+                    addReactor( this ).
+                    build();
+ 
+            feedEvents( pip );
+            state.isTrue( events.isEmpty() );
+            assertIdPathsEqual( finalPath, "finalPath", ps.path(), "ps.path" );
+        }
+    }
+
+    private
+    final
+    static
     class CastReactorTest
     extends TestImpl
     {
@@ -140,7 +241,7 @@ class MingleReactorTests
         MingleValueCastReactor
         createCastReactor()
         {
-            return MingleValueCastReactor.create();
+            return MingleValueCastReactor.create( type );
         }
 
         public
@@ -372,6 +473,52 @@ class MingleReactorTests
         }
 
         private
+        Queue< EventExpectation >
+        asEventExpectationQueue( MingleList ml )
+            throws Exception
+        {
+            Queue< EventExpectation > res = Lang.newQueue();
+
+            for ( MingleValue mv : ml ) 
+            {
+                EventExpectation ee = new EventExpectation();
+
+                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
+
+                ee.event = asReactorEvent( 
+                    mapExpect( map, "event", MingleStruct.class ) );
+
+                ee.path =
+                    asIdentifierPath( mapGet( map, "path", byte[].class ) );
+
+                res.add( ee );
+            }
+
+            return res;
+        }
+
+        private
+        EventPathTest
+        asEventPathTest( MingleStruct ms )
+            throws Exception
+        {
+            EventPathTest res = new EventPathTest( makeName( ms, null ) );
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.startPath = 
+                asIdentifierPath( mapGet( map, "startPath", byte[].class ) );
+
+            res.finalPath =
+                asIdentifierPath( mapGet( map, "finalPath", byte[].class ) );
+
+            res.events = asEventExpectationQueue( 
+                mapGet( map, "events", MingleList.class ) );
+
+            return res;
+        }
+
+        private
         CastReactorTest
         asCastReactorTest( MingleStruct ms )
             throws Exception
@@ -410,6 +557,8 @@ class MingleReactorTests
                 return asValueBuildTest( ms );
             } else if ( nm.equals( "StructuralReactorErrorTest" ) ) {
                 return asStructuralErrorTest( ms );
+            } else if ( nm.equals( "EventPathTest" ) ) {
+                return asEventPathTest( ms );
             } else if ( nm.equals( "CastReactorTest" ) ) {
                 return asCastReactorTest( ms );
             }

@@ -197,16 +197,37 @@ class MingleValueReactors
 
     public
     static
-    void
+    MingleValueStructuralCheck
     ensureStructuralCheck( PipelineInitializationContext< Object > ctx )
     {
         inputs.notNull( ctx, "ctx" );
         
-        MingleValueStructuralCheck chk = Pipelines.lastElementOfType(
+        MingleValueStructuralCheck res = Pipelines.lastElementOfType(
             ctx.pipeline(), MingleValueStructuralCheck.class );
 
-        if ( chk != null ) return;
+        if ( res == null ) {
+            res = MingleValueStructuralCheck.create();
+            ctx.addElement( res );
+        }
 
-        ctx.addElement( MingleValueStructuralCheck.create() );
+        return res;
+    }
+
+    public
+    static
+    MinglePathSettingProcessor
+    ensurePathSetter( PipelineInitializationContext< Object > ctx )
+    {
+        inputs.notNull( ctx, "ctx" );
+
+        MinglePathSettingProcessor res = Pipelines.lastElementOfType(
+            ctx.pipeline(), MinglePathSettingProcessor.class );
+
+        if ( res == null ) {
+            res = MinglePathSettingProcessor.create();
+            ctx.addElement( res );
+        }
+
+        return res;
     }
 }

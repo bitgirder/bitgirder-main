@@ -54,6 +54,14 @@ class PathTests
     }
 
     private
+    < V >
+    CharSequence
+    format( ObjectPath< V > p )
+    {
+        return ObjectPaths.format( p, ObjectPaths.DOT_FORMATTER );
+    }
+
+    private
     void
     assertFormat( CharSequence expct,
                   ObjectPath< Node > p )
