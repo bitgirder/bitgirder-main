@@ -23,14 +23,11 @@ implements MingleValue
     asNumberFormatException( NumberFormatException nfe,
                              CharSequence input )
     {
-        if ( INT_STR.matcher( input ).matches() )
-        {
-            String msg = "For input string: \"" + input + "\"";
-            if ( nfe.getMessage().equals( msg ) )
-            {
-                String newMsg = "value out of range: " + input;
-                nfe = new NumberFormatException( newMsg );
-            }
+        // if input was an otherwise valid integer then nfe must be due to a
+        // range violation, which we throw with our own message and type
+        if ( INT_STR.matcher( input ).matches() ) {
+            return new MingleNumberFormatException( 
+                "value out of range: " + input );
         }
 
         return nfe;

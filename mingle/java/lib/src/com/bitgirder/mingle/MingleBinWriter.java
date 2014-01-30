@@ -336,7 +336,7 @@ class MingleBinWriter
         throws IOException
     {
         writeTypeCode( TC_LIST_TYP );
-        writeTypeReference( typ.getElementTypeReference() );
+        writeTypeReference( typ.getElementType() );
         w.writeBoolean( typ.allowsEmpty() );
     }
 
@@ -346,7 +346,7 @@ class MingleBinWriter
         throws IOException
     {
         writeTypeCode( TC_NULLABLE_TYP );
-        writeTypeReference( typ.getTypeReference() );
+        writeTypeReference( typ.getValueType() );
     }
 
     public

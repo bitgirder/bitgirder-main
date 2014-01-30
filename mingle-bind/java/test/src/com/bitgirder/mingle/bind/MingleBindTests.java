@@ -461,7 +461,7 @@ class MingleBindTests
         state.equalInt( l1.size(), l2.size() );
         Iterator< ? > i1 = l1.iterator();
         Iterator< ? > i2 = l2.iterator();
-        MingleTypeReference typ = lt.getElementTypeReference();
+        MingleTypeReference typ = lt.getElementType();
 
         while ( i1.hasNext() ) a.assertElements( i1.next(), i2.next(), typ );
 

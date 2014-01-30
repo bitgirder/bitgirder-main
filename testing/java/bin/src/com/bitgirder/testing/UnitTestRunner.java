@@ -143,15 +143,13 @@ extends ApplicationProcess
         compare( InvocationInfo i1,
                  InvocationInfo i2 )
         {
-            int failComp = 100 * ( failOrder( i1.th ) - failOrder( i2.th ) );
+            int res = failOrder( i1.th ) - failOrder( i2.th );
+            if ( res != 0 ) return res;
 
-            int phaseComp = 
-                10 * ( i1.desc.getPhase().ordinal() -
-                       i2.desc.getPhase().ordinal() );
-            
-            int nmComp = i1.desc.getName().compareTo( i2.desc.getName() );
+            res = i1.desc.getPhase().ordinal() - i2.desc.getPhase().ordinal();
+            if ( res != 0 ) return res;
 
-            return failComp + phaseComp + nmComp;
+            return i1.desc.getName().compareTo( i2.desc.getName() );
         }
     }
 

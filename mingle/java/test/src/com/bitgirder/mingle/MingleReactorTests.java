@@ -262,8 +262,11 @@ class MingleReactorTests
  
             return new MingleValueReactorPipeline.Builder().
                 addProcessor( MinglePathSettingProcessor.create( rtPath ) ).
-                addReactor( MingleValueReactors.createDebugReactor() ).
+                addReactor( 
+                    MingleValueReactors.createDebugReactor( "pre-cast" ) ).
                 addProcessor( createCastReactor() ).
+                addReactor( 
+                    MingleValueReactors.createDebugReactor( "post-cast" ) ).
                 addReactor( MingleValueBuilder.create() ).
                 build();
         }

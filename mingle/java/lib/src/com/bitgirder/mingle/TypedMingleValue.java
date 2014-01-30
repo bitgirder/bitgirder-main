@@ -4,5 +4,5 @@ interface TypedMingleValue
 {
     public
     MingleTypeReference
-    getTypeReference();
+    getValueType();
 }

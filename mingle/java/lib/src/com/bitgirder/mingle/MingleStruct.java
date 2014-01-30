@@ -33,7 +33,7 @@ implements MingleValue,
 
     public 
     MingleTypeReference
-    getTypeReference()
+    getValueType()
     {
         return new AtomicTypeReference( type, null );
     }

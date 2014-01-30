@@ -3,6 +3,10 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import static com.bitgirder.log.CodeLoggers.Statics.*;
+
+import com.bitgirder.lang.Lang;
+
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
 import com.bitgirder.lang.path.MutableListPath;
@@ -11,6 +15,8 @@ import com.bitgirder.lang.path.DictionaryPath;
 
 import com.bitgirder.pipeline.PipelineInitializationContext;
 import com.bitgirder.pipeline.PipelineInitializer;
+
+import java.util.Deque;
 
 public
 final
@@ -25,6 +31,9 @@ implements MingleValueReactorPipeline.Processor,
 
     // true between arrival of START_LIST and completion of the first list value
     private boolean awaitingList0;
+
+    private final Deque< MingleValueReactorEvent.Type > endTypes = 
+        Lang.newDeque();
 
     private 
     MinglePathSettingProcessor( ObjectPath< MingleIdentifier > start )
@@ -68,11 +77,13 @@ implements MingleValueReactorPipeline.Processor,
 
     private
     void
-    prepareStartList()
+    prepareStartList( MingleValueReactorEvent ev )
     {
         // The call to updateList() would be updating the containing list, not
         // the one being started.
         updateList();
+
+        endTypes.push( ev.type() );
 
         // Set awaitingList0 for this list being started
         awaitingList0 = true;
@@ -80,51 +91,79 @@ implements MingleValueReactorPipeline.Processor,
 
     private
     void
-    prepareStartField( MingleIdentifier fld )
+    prepareStartField( MingleValueReactorEvent ev )
     {
+        endTypes.push( ev.type() );
+    
+        MingleIdentifier fld = ev.field();
         path = path == null ? ObjectPath.getRoot( fld ) : path.descend( fld );
     }
 
     private
     void
-    prepareEnd()
+    prepareStartStruct( MingleValueReactorEvent ev )
     {
-//        if ( path instanceof ListPath ) pathPop();
+        endTypes.push( ev.type() );
+        prepareValue();
+    }
+
+    private
+    void
+    prepareStartMap( MingleValueReactorEvent ev )
+    {
+        endTypes.push( ev.type() );
+        prepareValue();
     }
 
     private
     void
     prepareEvent( MingleValueReactorEvent ev )
     {
+        codef( "in prepareEvent, awaitingList0: %s, path type: %s",
+            awaitingList0, path == null ? null : path.getClass().getSimpleName()
+        );
+
         switch ( ev.type() ) {
         case VALUE: prepareValue(); break;
-        case START_STRUCT: prepareValue(); break;
-        case START_MAP: prepareValue(); break;
-        case START_LIST: prepareStartList(); break;
-        case START_FIELD: prepareStartField( ev.field() ); break;
-        case END: prepareEnd(); break;
+        case START_STRUCT: prepareStartStruct( ev ); break;
+        case START_MAP: prepareStartMap( ev ); break;
+        case START_LIST: prepareStartList( ev ); break;
+        case START_FIELD: prepareStartField( ev ); break;
+        case END: break;
         default: state.failf( "unhandled event: %s", ev.type() );
         }
 
         ev.setPath( path );
     }
 
-//    // if we were accumulating a field value we pop the field from the path;
-//    // otherwise there is nothing to do (end of list will have popped list
-//    // earlier in prepareEnd())
     private
     void
     valueCompleted()
     {
-        if ( path instanceof DictionaryPath ) pathPop();
+        if ( endTypes.isEmpty() ) return;
+
+        if ( endTypes.peek() == MingleValueReactorEvent.Type.START_FIELD ) {
+            endTypes.pop();
+            pathPop();
+        }
+//        if ( path instanceof DictionaryPath ) pathPop();
     }
 
     private
     void
     endCompleted()
     {
-        if ( path instanceof DictionaryPath || path instanceof ListPath ) {
+        MingleValueReactorEvent.Type evTyp = endTypes.pop();
+
+        switch ( evTyp ) {
+        case START_FIELD: pathPop(); break;
+        case START_LIST: 
             pathPop();
+            valueCompleted();
+            break;
+        case START_STRUCT: valueCompleted(); break;
+        case START_MAP: valueCompleted(); break;
+        default: state.failf( "unexpected end type: %s", evTyp );
         }
     }
 

@@ -464,7 +464,7 @@ class MingleBinders
         List< Object > res = Lang.newList();
 
         ImmutableListPath< MingleIdentifier > lp = path.startImmutableList();
-        MingleTypeReference eltTyp = typ.getElementTypeReference();
+        MingleTypeReference eltTyp = typ.getElementType();
 
         for ( MingleValue listVal : ml )
         {
@@ -686,7 +686,7 @@ class MingleBinders
         else
         {
             ImmutableListPath< String > lp = path.startImmutableList();
-            MingleTypeReference eltTyp = typ.getElementTypeReference();
+            MingleTypeReference eltTyp = typ.getElementType();
             MingleList.Builder b = new MingleList.Builder();
     
             for ( Object listVal : jList )
@@ -1028,7 +1028,7 @@ class MingleBinders
         else
         {
             ImmutableListPath< String > lp = path.startImmutableList();
-            MingleTypeReference eltTyp = typ.getElementTypeReference();
+            MingleTypeReference eltTyp = typ.getElementType();
 
             for ( Object elt : l )
             {

@@ -21,7 +21,7 @@ extends MingleTypeReference
         this.allowsEmpty = allowsEmpty;
     }
 
-    public MingleTypeReference getElementTypeReference() { return ref; }
+    public MingleTypeReference getElementType() { return ref; }
     public boolean allowsEmpty() { return allowsEmpty; }
 
     public

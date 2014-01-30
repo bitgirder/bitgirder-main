@@ -49,11 +49,18 @@ class MingleValueReactors
     class DebugReactor
     implements MingleValueReactor
     {
+        private final String prefix;
+
+        private DebugReactor( String prefix ) { this.prefix = prefix; }
+
         public
         void
         processEvent( MingleValueReactorEvent ev )
         {
-            code( ev.inspect() );
+            String evStr = ev.inspect();
+            if ( prefix != null ) evStr = prefix + " " + evStr;
+
+            code( evStr );
         }
     }
 
@@ -62,7 +69,16 @@ class MingleValueReactors
     MingleValueReactor
     createDebugReactor()
     {
-        return new DebugReactor();
+        return new DebugReactor( null );
+    }
+
+    public
+    static
+    MingleValueReactor
+    createDebugReactor( String prefix )
+    {
+        inputs.notNull( prefix, "prefix" );
+        return new DebugReactor( prefix );
     }
 
     public

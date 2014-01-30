@@ -18,7 +18,7 @@ extends MingleTypeReference
         this.ref = inputs.notNull( ref, "ref" );
     }
 
-    public MingleTypeReference getTypeReference() { return ref; }
+    public MingleTypeReference getValueType() { return ref; }
 
     public
     int

@@ -97,13 +97,13 @@ class Mingle
         {
             return 
                 atomicTypeReferenceIn( 
-                    ( (ListTypeReference) ref ).getElementTypeReference() );
+                    ( (ListTypeReference) ref ).getElementType() );
         }
         else if ( ref instanceof NullableTypeReference )
         {
             return
                 atomicTypeReferenceIn(
-                    ( (NullableTypeReference) ref ).getTypeReference() );
+                    ( (NullableTypeReference) ref ).getValueType() );
         }
         else throw state.createFail( "Unexpected type ref:", ref );
     }
@@ -129,12 +129,12 @@ class Mingle
         else if ( t instanceof ListTypeReference )
         {
             return typeNameIn( 
-                ( (ListTypeReference) t ).getElementTypeReference() );
+                ( (ListTypeReference) t ).getElementType() );
         }
         else if ( t instanceof NullableTypeReference )
         {
             return typeNameIn(
-                ( (NullableTypeReference) t ).getTypeReference() );
+                ( (NullableTypeReference) t ).getValueType() );
         }
         else throw state.createFail( "Unhandled type reference:", t );
     }
@@ -389,7 +389,7 @@ class Mingle
         if ( mv instanceof MingleNull ) return TYPE_NULL;
 
         if ( mv instanceof TypedMingleValue ) {
-            return ( (TypedMingleValue) mv ).getTypeReference();
+            return ( (TypedMingleValue) mv ).getValueType();
         }
 
         throw state.createFail( "Unhandled value:", mv.getClass() );
@@ -573,6 +573,8 @@ class Mingle
             throw failCastNumberRange( ms, loc );
         } catch ( NumberFormatUnderflowException nfue ) {
             throw failCastNumberRange( ms, loc );
+        } catch ( MingleNumberFormatException mnfe ) {
+            throw failCastValue( mnfe.getMessage(), loc );
         } catch ( NumberFormatException nfe ) {
             throw failCastNumberFormat( nfe, ms, loc );
         }
@@ -763,7 +765,7 @@ class Mingle
 //
 //        List< MingleValue > l2 = Lang.newList();
 //        ImmutableListPath< MingleIdentifier > lp = loc.startImmutableList();
-//        MingleTypeReference eltTyp = lt.getElementTypeReference();
+//        MingleTypeReference eltTyp = lt.getElementType();
 //        Iterator< MingleValue > it = ( (MingleList) mv ).iterator();
 //
 //        if ( ! ( it.hasNext() || lt.allowsEmpty() ) )
@@ -789,7 +791,7 @@ class Mingle
 //                    ObjectPath< MingleIdentifier > loc )
 //    {
 //        if ( mv instanceof MingleNull ) return mv;
-//        return implCastValue( mv, nt.getTypeReference(), tcErrTyp, loc );
+//        return implCastValue( mv, nt.getValueType(), tcErrTyp, loc );
 //    }
 //
 //    private

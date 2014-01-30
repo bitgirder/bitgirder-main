@@ -21,6 +21,12 @@ implements MingleValueReactorPipeline.Processor,
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
+    private final static FieldTyper DEFAULT_FIELD_TYPER = new FieldTyper() {
+        public MingleTypeReference fieldTypeFor( MingleIdentifier fld ) {
+            return Mingle.TYPE_VALUE;
+        }
+    };
+
     private final Deque< Object > stack = Lang.newDeque();
 
     private MingleValueCastReactor() {}
@@ -31,6 +37,15 @@ implements MingleValueReactorPipeline.Processor,
     {
         MingleValueReactors.ensureStructuralCheck( ctx );
         MingleValueReactors.ensurePathSetter( ctx );
+    }
+
+    public
+    static
+    interface FieldTyper
+    {
+        public 
+        MingleTypeReference
+        fieldTypeFor( MingleIdentifier fld );
     }
 
     private
@@ -72,16 +87,16 @@ implements MingleValueReactorPipeline.Processor,
     class ListCast
     {
         private final ListTypeReference type;
-        private final MingleTypeReference callType;
+        private final MingleTypeReference callTyp;
 
         private boolean sawValues;
 
         private 
         ListCast( ListTypeReference type,
-                  MingleTypeReference callType ) 
+                  MingleTypeReference callTyp ) 
         { 
             this.type = type; 
-            this.callType = callType;
+            this.callTyp = callTyp;
         }
     }
 
@@ -116,7 +131,7 @@ implements MingleValueReactorPipeline.Processor,
             return;
         }
 
-        processValueWithType( ev, typ.getTypeReference(), callTyp, next );
+        processValueWithType( ev, typ.getValueType(), callTyp, next );
     }
 
     private
@@ -142,16 +157,17 @@ implements MingleValueReactorPipeline.Processor,
     private
     void
     processValue( MingleValueReactorEvent ev,
-                  Object obj,
                   MingleValueReactor next )
         throws Exception
     {
+        Object obj = stack.peek();
+
         if ( obj instanceof MingleTypeReference ) {
-            MingleTypeReference typ = (MingleTypeReference) obj;
+            MingleTypeReference typ = (MingleTypeReference) stack.pop();
             processValueWithType( ev, typ, typ, next );
         } else if ( obj instanceof ListCast ) {
             ListCast lc = (ListCast) obj;
-            MingleTypeReference typ = lc.type.getElementTypeReference();
+            MingleTypeReference typ = lc.type.getElementType();
             processValueWithType( ev, typ, typ, next );
             lc.sawValues = true;
         } else {
@@ -161,21 +177,43 @@ implements MingleValueReactorPipeline.Processor,
 
     private
     void
+    processStartListWithAtomicType( MingleValueReactorEvent ev,
+                                    AtomicTypeReference at,
+                                    MingleTypeReference callTyp,
+                                    MingleValueReactor next )
+        throws Exception
+    {
+        if ( at.equals( Mingle.TYPE_VALUE ) ) 
+        {
+            processStartListWithType( 
+                ev, Mingle.TYPE_VALUE_LIST, callTyp, next );
+
+            return;
+        }
+
+        failCastType( ev, callTyp, Mingle.TYPE_VALUE_LIST );
+    }
+
+    private
+    void
     processStartListWithType( MingleValueReactorEvent ev,
                               MingleTypeReference typ,
-                              MingleTypeReference callType,
+                              MingleTypeReference callTyp,
                               MingleValueReactor next )
         throws Exception
     {
-        if ( typ instanceof ListTypeReference ) {
-            stack.push( new ListCast( (ListTypeReference) typ, callType ) );
+        if ( typ instanceof AtomicTypeReference ) {
+            AtomicTypeReference at = (AtomicTypeReference) typ;
+            processStartListWithAtomicType( ev, at, callTyp, next );
+        } else if ( typ instanceof ListTypeReference ) {
+            stack.push( new ListCast( (ListTypeReference) typ, callTyp ) );
             next.processEvent( ev );
         } else if ( typ instanceof NullableTypeReference ) {
             NullableTypeReference nt = (NullableTypeReference) typ;
-            MingleTypeReference eltTyp = nt.getTypeReference();
-            processStartListWithType( ev, eltTyp, callType, next );
+            MingleTypeReference valTyp = nt.getValueType();
+            processStartListWithType( ev, valTyp, callTyp, next );
         } else {
-            failCastType( ev, callType, Mingle.TYPE_VALUE_LIST );
+            failCastType( ev, callTyp, Mingle.TYPE_VALUE_LIST );
         }
     }
 
@@ -188,16 +226,100 @@ implements MingleValueReactorPipeline.Processor,
         Object obj = stack.peek();
 
         if ( obj instanceof MingleTypeReference ) {
-            MingleTypeReference typ = (MingleTypeReference) obj;
+            MingleTypeReference typ = (MingleTypeReference) stack.pop();
             processStartListWithType( ev, typ, typ, next );
         } else if ( obj instanceof ListCast ) {
             ListCast lc = (ListCast) obj;
             lc.sawValues = true;
-            MingleTypeReference eltTyp = lc.type.getElementTypeReference();
+            MingleTypeReference eltTyp = lc.type.getElementType();
             processStartListWithType( ev, eltTyp, lc.type, next );
         } else {
             failUnhandledStackValue( obj );
         }
+    }
+
+    private
+    void
+    implStartMap( MingleValueReactorEvent ev,
+                  FieldTyper ft,
+                  MingleValueReactor next )
+        throws Exception
+    {
+        stack.push( ft );
+        next.processEvent( ev );
+    }
+
+    private
+    void
+    processStartMapWithAtomicType( MingleValueReactorEvent ev,
+                                   AtomicTypeReference at,
+                                   MingleTypeReference callTyp,
+                                   MingleValueReactor next )
+        throws Exception
+    {
+        if ( at.equals( Mingle.TYPE_SYMBOL_MAP ) || 
+             at.equals( Mingle.TYPE_VALUE ) )
+        {
+            implStartMap( ev, DEFAULT_FIELD_TYPER, next );
+            return;
+        }
+
+        failCastType( ev, callTyp, at );
+    }
+
+    private
+    void
+    processStartMapWithType( MingleValueReactorEvent ev,
+                             MingleTypeReference typ,
+                             MingleTypeReference callTyp,
+                             MingleValueReactor next )
+        throws Exception
+    {
+        if ( typ instanceof AtomicTypeReference ) {
+            AtomicTypeReference at = (AtomicTypeReference) typ;
+            processStartMapWithAtomicType( ev, at, callTyp, next );
+        } else if ( typ instanceof NullableTypeReference ) {
+            NullableTypeReference nt = (NullableTypeReference) typ;
+            MingleTypeReference valTyp = nt.getValueType();
+            processStartMapWithType( ev, valTyp, callTyp, next );
+        } else {
+            failCastType( ev, callTyp, typ );
+        }
+    }
+
+    private
+    void
+    processStartMap( MingleValueReactorEvent ev,
+                     MingleValueReactor next )
+        throws Exception
+    {
+        Object obj = stack.peek();
+
+        if ( obj instanceof MingleTypeReference ) {
+            MingleTypeReference typ = (MingleTypeReference) stack.pop();
+            processStartMapWithType( ev, typ, typ, next );
+        } else if ( obj instanceof ListCast ) {
+            ListCast lc = (ListCast) obj;
+            lc.sawValues = true;
+            MingleTypeReference typ = lc.type.getElementType();
+            processStartMapWithType( ev, typ, typ, next );
+        } else {
+            failUnhandledStackValue( obj );
+        }
+    }
+
+    private
+    void
+    processStartField( MingleValueReactorEvent ev,
+                       MingleValueReactor next )
+        throws Exception
+    {
+        FieldTyper ft = state.cast( FieldTyper.class, stack.peek() );
+
+        MingleTypeReference typ = ft.fieldTypeFor( ev.field() );
+        stack.push( typ );
+
+        next.processEvent( ev );
     }
 
     private
@@ -208,11 +330,19 @@ implements MingleValueReactorPipeline.Processor,
                                       MingleValueReactor next )
         throws Exception
     {
-        if ( at.getName().equals( ev.structType() ) ) {
-            next.processEvent( ev );
+        boolean ok = at.getName().equals( ev.structType() ) || 
+            at.equals( Mingle.TYPE_VALUE );
+
+        if ( ( ! ok ) && at.equals( Mingle.TYPE_SYMBOL_MAP ) ) {
+            ok = true;
+            ev.setStartMap();
+        }
+
+        if ( ok ) {
+            implStartMap( ev, DEFAULT_FIELD_TYPER, next );
             return;
         }
-            
+ 
         AtomicTypeReference failTyp = 
             new AtomicTypeReference( ev.structType(), null );
 
@@ -232,8 +362,8 @@ implements MingleValueReactorPipeline.Processor,
             processStartStructWithAtomicType( ev, at, callTyp, next );
         } else if ( typ instanceof NullableTypeReference ) {
             NullableTypeReference nt = (NullableTypeReference) typ;
-            MingleTypeReference ntTyp = nt.getTypeReference();
-            processStartStructWithType( ev, ntTyp, callTyp, next );
+            MingleTypeReference valTyp = nt.getValueType();
+            processStartStructWithType( ev, valTyp, callTyp, next );
         } else {
             failCastType( ev, callTyp, typ );
         }
@@ -248,12 +378,12 @@ implements MingleValueReactorPipeline.Processor,
         Object obj = stack.peek();
 
         if ( obj instanceof MingleTypeReference ) {
-            MingleTypeReference typ = (MingleTypeReference) obj;
+            MingleTypeReference typ = (MingleTypeReference) stack.pop();
             processStartStructWithType( ev, typ, typ, next );
         } else if ( obj instanceof ListCast ) {
             ListCast lc = (ListCast) obj;
             lc.sawValues = true;
-            MingleTypeReference eltTyp = lc.type.getElementTypeReference();
+            MingleTypeReference eltTyp = lc.type.getElementType();
             processStartStructWithType( ev, eltTyp, eltTyp, next );
         } else {
             failUnhandledStackValue( obj );
@@ -266,12 +396,14 @@ implements MingleValueReactorPipeline.Processor,
                 MingleValueReactor next )
         throws Exception
     {
-        if ( stack.peek() instanceof ListCast ) {
+        if ( stack.peek() instanceof ListCast ) 
+        {
             ListCast lc = (ListCast) stack.pop();
             if ( ! ( lc.sawValues || lc.type.allowsEmpty() ) ) {
                 failCastf( ev, "List is empty" );
             }
-        }
+        } 
+        else if ( stack.peek() instanceof FieldTyper ) stack.pop();
 
         next.processEvent( ev );
     }
@@ -283,11 +415,11 @@ implements MingleValueReactorPipeline.Processor,
         throws Exception
     {
         switch ( ev.type() ) {
-        case VALUE: processValue( ev, stack.peek(), next ); return;
+        case VALUE: processValue( ev, next ); return;
         case START_LIST: processStartList( ev, next ); return;
-        case START_MAP: next.processEvent( ev ); return;
+        case START_MAP: processStartMap( ev, next ); return;
         case START_STRUCT: processStartStruct( ev, next ); return;
-        case START_FIELD: next.processEvent( ev ); return;
+        case START_FIELD: processStartField( ev, next ); return;
         case END: processEnd( ev, next ); return;
         }
 

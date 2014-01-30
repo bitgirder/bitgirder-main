@@ -527,7 +527,7 @@ class TypeDefinitionBuilder< T extends TypeDefinition >
         return
             JvTypeExpression.withParams( 
                 JV_QNAME_JLIST, 
-                jvTypeOf( ref.getElementTypeReference(), false ) 
+                jvTypeOf( ref.getElementType(), false ) 
             );
     }
 
@@ -787,7 +787,7 @@ class TypeDefinitionBuilder< T extends TypeDefinition >
     jvListConstExpressionOf( ListTypeReference mgTyp,
                              MingleList ml )
     {
-        MingleTypeReference typ = mgTyp.getElementTypeReference();
+        MingleTypeReference typ = mgTyp.getElementType();
         Iterator< MingleValue > it = ml.iterator();
 
         JvExpression res =
