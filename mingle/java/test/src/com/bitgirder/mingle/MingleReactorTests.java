@@ -237,6 +237,115 @@ class MingleReactorTests
     private
     final
     static
+    class FieldTyperImpl
+    implements MingleValueCastReactor.FieldTyper
+    {
+        private final Map< MingleIdentifier, MingleTypeReference > types;
+
+        private
+        FieldTyperImpl( Object... pairs )
+        {
+            this.types = Lang.newMap( 
+                MingleIdentifier.class, MingleTypeReference.class, pairs );
+        }
+
+        public
+        MingleTypeReference
+        fieldTypeFor( MingleIdentifier fld,
+                      ObjectPath< MingleIdentifier > path )
+        {
+            MingleTypeReference res = types.get( fld );
+            if ( res != null ) return res;
+
+            throw new MingleValueCastException(
+                "unrecognized field: " + fld, path );
+        }
+    }
+
+    private
+    final
+    static
+    class CastDelegateImpl
+    implements MingleValueCastReactor.Delegate
+    {
+        private final static Map< QualifiedTypeName, FieldTyperImpl >
+            FIELD_TYPERS = Lang.newMap();
+
+        public
+        MingleValueCastReactor.FieldTyper
+        fieldTyperFor( QualifiedTypeName qn,
+                       ObjectPath< MingleIdentifier > path )
+            throws MingleValueCastException
+        {
+            if ( qn.equals( qname( "ns1@v1/FailType" ) ) ) {
+                throw new MingleValueCastException( 
+                    "test-message-fail-type", path );
+            }
+
+            return FIELD_TYPERS.get( qn );
+        }
+
+        public
+        boolean
+        inferStructFor( QualifiedTypeName qn )
+        {
+            return FIELD_TYPERS.containsKey( qn );
+        }
+
+        private
+        MingleValue
+        castS3String( String s,
+                      ObjectPath< MingleIdentifier > path )
+            throws MingleValueCastException
+        {
+            if ( s.equals( "cast1" ) ) {
+                return new MingleInt32( 1 );
+            } else if ( s.equals( "cast2" ) ) {
+                return new MingleInt32( -1 );
+            } else if ( s.equals( "cast3" ) ) {
+                String msg = "test-message-cast3";
+                throw new MingleValueCastException( msg, path );
+            }
+
+            throw new MingleValueCastException( "Unexpected val: " + s, path );
+        }
+
+        public
+        MingleValue
+        castAtomic( MingleValue mv,
+                    AtomicTypeReference at,
+                    ObjectPath< MingleIdentifier > path )
+            throws MingleValueCastException
+        {
+            if ( ! at.getName().equals( qname( "ns1@v1/S3" ) ) ) return null;
+            
+            if ( mv instanceof MingleString ) {
+                return castS3String( mv.toString(), path );
+            }
+
+            throw Mingle.failCastType( at, mv, path );
+        }
+
+        static
+        {
+            FIELD_TYPERS.put( 
+                qname( "ns1@v1/T1" ),
+                new FieldTyperImpl( id( "f1" ), Mingle.TYPE_INT32 )
+            );
+
+            FIELD_TYPERS.put(
+                qname( "ns1@v1/T2" ),
+                new FieldTyperImpl( 
+                    id( "f1" ), Mingle.TYPE_INT32,
+                    id( "f2" ), atomic( qname( "ns1@v1/T1" ) )
+                )
+            );
+        }
+    }
+
+    private
+    final
+    static
     class CastReactorTest
     extends TestImpl
     {
@@ -250,7 +359,19 @@ class MingleReactorTests
         MingleValueCastReactor
         createCastReactor()
         {
-            return MingleValueCastReactor.create( type );
+            MingleValueCastReactor.Builder b =
+                new MingleValueCastReactor.Builder().
+                    setTargetType( type );
+
+            if ( profile != null ) 
+            {
+                state.isTruef( profile.equals( "interface-impl" ),
+                    "unhandled profile: %s", profile );
+                
+                b.setDelegate( new CastDelegateImpl() );
+            }
+
+            return b.build();
         }
 
         private

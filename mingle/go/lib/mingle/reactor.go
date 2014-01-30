@@ -732,6 +732,16 @@ type listCast struct {
 
 type CastInterface interface {
 
+    // Called when start of a symbol map arrives when an atomic type having name
+    // qn (or a nullable or list type containing such an atomic type) is the
+    // cast reactor's expected type. Returning true from this function will
+    // cause the cast reactor to treat the symbol map start as if it were a
+    // struct start with atomic type qn. 
+    //
+    // One motivating use for this is for cast reactors that react to inputs
+    // conforming to a known schema and receive unadorned maps for structured
+    // field values and wish to cause further processing to behave as if the
+    // struct were explicitly signalled in the input
     InferStructFor( qn *QualifiedTypeName ) bool
 
     FieldTyperFor( qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error )

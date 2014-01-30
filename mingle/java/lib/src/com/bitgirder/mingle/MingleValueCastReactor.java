@@ -5,6 +5,8 @@ import com.bitgirder.validation.State;
 
 import static com.bitgirder.log.CodeLoggers.Statics.*;
 
+import com.bitgirder.lang.path.ObjectPath;
+
 import com.bitgirder.pipeline.PipelineInitializationContext;
 import com.bitgirder.pipeline.PipelineInitializer;
 
@@ -21,15 +23,81 @@ implements MingleValueReactorPipeline.Processor,
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static FieldTyper DEFAULT_FIELD_TYPER = new FieldTyper() {
-        public MingleTypeReference fieldTypeFor( MingleIdentifier fld ) {
+    public
+    static
+    interface FieldTyper
+    {
+        public 
+        MingleTypeReference
+        fieldTypeFor( MingleIdentifier fld,
+                      ObjectPath< MingleIdentifier > path )
+            throws MingleValueCastException;
+    }
+
+    private final static FieldTyper DEFAULT_FIELD_TYPER = new FieldTyper() 
+    {
+        public 
+        MingleTypeReference 
+        fieldTypeFor( MingleIdentifier fld,
+                      ObjectPath< MingleIdentifier > path ) 
+        {
             return Mingle.TYPE_VALUE;
         }
     };
 
+    public
+    static
+    interface Delegate
+    {
+        public 
+        FieldTyper 
+        fieldTyperFor( QualifiedTypeName qn,
+                       ObjectPath< MingleIdentifier > path )
+            throws MingleValueCastException;
+        
+        public
+        boolean
+        inferStructFor( QualifiedTypeName qn );
+
+        // returns a non-null MingleValue (which may be an instanceof of
+        // MingleNull) or throws a cast exception if this delegate can
+        // definitively perform the atomic cast. Return java null to indicate
+        // that the reactor should take its default action and execute the cast.
+        public
+        MingleValue
+        castAtomic( MingleValue mv,
+                    AtomicTypeReference at,
+                    ObjectPath< MingleIdentifier > path )
+            throws MingleValueCastException;
+    }
+
+    private final static Delegate DEFAULT_DELEGATE = new Delegate() 
+    {
+        public 
+        FieldTyper 
+        fieldTyperFor( QualifiedTypeName qn,
+                       ObjectPath< MingleIdentifier > path ) 
+        {
+            return DEFAULT_FIELD_TYPER;
+        }
+
+        public boolean inferStructFor( QualifiedTypeName qn ) { return false; }
+
+        public
+        MingleValue
+        castAtomic( MingleValue mv,
+                    AtomicTypeReference at,
+                    ObjectPath< MingleIdentifier > path )
+        {
+            return null;
+        }
+    };
+
+    private final Delegate del;
+
     private final Deque< Object > stack = Lang.newDeque();
 
-    private MingleValueCastReactor() {}
+    private MingleValueCastReactor( Builder b ) { this.del = b.del; }
 
     public
     void
@@ -37,15 +105,6 @@ implements MingleValueReactorPipeline.Processor,
     {
         MingleValueReactors.ensureStructuralCheck( ctx );
         MingleValueReactors.ensurePathSetter( ctx );
-    }
-
-    public
-    static
-    interface FieldTyper
-    {
-        public 
-        MingleTypeReference
-        fieldTypeFor( MingleIdentifier fld );
     }
 
     private
@@ -110,8 +169,11 @@ implements MingleValueReactorPipeline.Processor,
                         MingleValueReactor next )
         throws Exception
     {
-        MingleValue mv = 
-            Mingle.castAtomic( ev.value(), typ, callTyp, ev.path() );
+        MingleValue in = ev.value();
+        ObjectPath< MingleIdentifier > path = ev.path();
+
+        MingleValue mv = del.castAtomic( in, typ, path );
+        if ( mv == null ) mv = Mingle.castAtomic( in, typ, callTyp, path );
 
         ev.setValue( mv );
 
@@ -250,6 +312,24 @@ implements MingleValueReactorPipeline.Processor,
     }
 
     private
+    boolean
+    inferredStructForMap( MingleValueReactorEvent ev,
+                          AtomicTypeReference at,
+                          MingleValueReactor next )
+        throws Exception
+    {
+        TypeName nm = at.getName();
+        if ( ! ( nm instanceof QualifiedTypeName ) ) return false;
+
+        QualifiedTypeName qn = (QualifiedTypeName) nm;
+        if ( ! del.inferStructFor( qn ) ) return false;
+
+        ev.setStartStruct( qn );
+        completeStartStruct( ev, next );
+        return true;
+    }
+
+    private
     void
     processStartMapWithAtomicType( MingleValueReactorEvent ev,
                                    AtomicTypeReference at,
@@ -264,6 +344,8 @@ implements MingleValueReactorPipeline.Processor,
             return;
         }
 
+        if ( inferredStructForMap( ev, at, next ) ) return;
+        
         failCastType( ev, callTyp, at );
     }
 
@@ -316,10 +398,29 @@ implements MingleValueReactorPipeline.Processor,
     {
         FieldTyper ft = state.cast( FieldTyper.class, stack.peek() );
 
-        MingleTypeReference typ = ft.fieldTypeFor( ev.field() );
+        // ev.path() will be something like 'foo.f1', but we pass just 'foo' to
+        // the field typer
+        ObjectPath< MingleIdentifier > loc = ev.path().getParent();
+        MingleTypeReference typ = ft.fieldTypeFor( ev.field(), loc );
+
+        state.isFalsef( typ == null, "field typer %s returned null for %s",
+            ft, ev.field() );
+
         stack.push( typ );
 
         next.processEvent( ev );
+    }
+
+    private
+    void
+    completeStartStruct( MingleValueReactorEvent ev,
+                         MingleValueReactor next )
+        throws Exception
+    {
+        FieldTyper ft = del.fieldTyperFor( ev.structType(), ev.path() );
+        if ( ft == null ) ft = DEFAULT_FIELD_TYPER;
+
+        implStartMap( ev, ft, next );
     }
 
     private
@@ -330,16 +431,16 @@ implements MingleValueReactorPipeline.Processor,
                                       MingleValueReactor next )
         throws Exception
     {
-        boolean ok = at.getName().equals( ev.structType() ) || 
-            at.equals( Mingle.TYPE_VALUE );
-
-        if ( ( ! ok ) && at.equals( Mingle.TYPE_SYMBOL_MAP ) ) {
-            ok = true;
+        if ( at.equals( Mingle.TYPE_SYMBOL_MAP ) ) {
             ev.setStartMap();
-        }
+            processStartMapWithAtomicType( ev, at, callTyp, next );
+            return;
+        } 
 
-        if ( ok ) {
-            implStartMap( ev, DEFAULT_FIELD_TYPER, next );
+        if ( at.getName().equals( ev.structType() ) || 
+             at.equals( Mingle.TYPE_VALUE ) )
+        {
+            completeStartStruct( ev, next );
             return;
         }
  
@@ -432,10 +533,41 @@ implements MingleValueReactorPipeline.Processor,
     create( MingleTypeReference typ )
     {
         inputs.notNull( typ, "typ" );
+        return new Builder().setTargetType( typ ).build();
+    }
 
-        MingleValueCastReactor res = new MingleValueCastReactor();
-        res.push( typ );
+    public
+    final
+    static
+    class Builder
+    {
+        private MingleTypeReference typ;
+        private Delegate del = DEFAULT_DELEGATE;
 
-        return res;
+        public
+        Builder
+        setTargetType( MingleTypeReference typ )
+        {
+            this.typ = inputs.notNull( typ, "typ" );
+            return this;
+        }
+
+        public
+        Builder
+        setDelegate( Delegate del )
+        {
+            this.del = inputs.notNull( del, "del" );
+            return this;
+        }
+
+        public
+        MingleValueCastReactor
+        build()
+        {
+            MingleValueCastReactor res = new MingleValueCastReactor( this );
+            res.push( typ );
+
+            return res;
+        }
     }
 }
