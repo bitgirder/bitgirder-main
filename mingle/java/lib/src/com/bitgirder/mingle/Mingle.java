@@ -393,25 +393,37 @@ class Mingle
         throw state.createFail( "Unhandled value:", mv.getClass() );
     }
 
-//    private
-//    static
-//    MingleTypeCastException
-//    failCastType( MingleTypeReference expct,
-//                  MingleValue act,
-//                  ObjectPath< MingleIdentifier > loc )
-//    {
-//        return new MingleTypeCastException( expct, inferredTypeOf( act ), loc );
-//    }
-//
-//    private
-//    static
-//    MingleValueCastException
-//    failCastValue( String msg,
-//                   ObjectPath< MingleIdentifier > loc )
-//    {
-//        return new MingleValueCastException( msg, loc );
-//    }
-//
+    static
+    MingleValueCastException
+    failCastType( MingleTypeReference expct,
+                  MingleTypeReference act,
+                  ObjectPath< MingleIdentifier > loc )
+    {
+        String msg = String.format( "Expected value of type %s but found %s",
+            expct, act );
+
+        return new MingleValueCastException( msg, loc );
+    }
+
+    static
+    MingleValueCastException
+    failCastType( MingleTypeReference expct,
+                  MingleValue act,
+                  ObjectPath< MingleIdentifier > loc )
+    {
+        return failCastType( expct, inferredTypeOf( act ), loc );
+    }
+
+    private
+    static
+    MingleValueCastException
+    failCastValue( String msg,
+                   ObjectPath< MingleIdentifier > loc )
+    {
+        if ( loc == null ) loc = ObjectPath.getRoot();
+        return new MingleValueCastException( msg, loc );
+    }
+
 //    private
 //    static
 //    MingleValueException
@@ -421,41 +433,38 @@ class Mingle
 //        mve.initCause( cause );
 //        return mve;
 //    }
-//
-//    private
-//    static
-//    MingleString
-//    castAsString( MingleValue mv,
-//                  MingleTypeReference tcErrTyp,
-//                  ObjectPath< MingleIdentifier > loc )
-//    {
-//        if ( mv instanceof MingleString ) return (MingleString) mv;
-//
-//        if ( isNumericValue( mv ) || ( mv instanceof MingleBoolean ) )
-//        {
-//            return new MingleString( mv.toString() );
-//        }
-//
-//        if ( mv instanceof MingleBuffer ) 
-//        {
-//            return new MingleString( ( (MingleBuffer) mv ).asBase64String() );
-//        }
-//
-//        if ( mv instanceof MingleTimestamp )
-//        {
-//            return new MingleString( 
-//                ( (MingleTimestamp) mv ).getRfc3339String() );
-//        }
-//
-//        if ( mv instanceof MingleEnum )
-//        {
-//            MingleEnum me = (MingleEnum) mv;
-//            return new MingleString( me.getValue().getExternalForm() );
-//        }
-//
-//        throw failCastType( tcErrTyp, mv, loc );
-//    }
-//
+
+    private
+    static
+    MingleString
+    castAsString( MingleValue mv,
+                  MingleTypeReference typ,
+                  ObjectPath< MingleIdentifier > loc )
+    {
+        if ( mv instanceof MingleString ) return (MingleString) mv;
+
+        if ( isNumericValue( mv ) || ( mv instanceof MingleBoolean ) ) {
+            return new MingleString( mv.toString() );
+        }
+
+        if ( mv instanceof MingleBuffer ) {
+            return new MingleString( ( (MingleBuffer) mv ).asBase64String() );
+        }
+
+        if ( mv instanceof MingleTimestamp ) 
+        {
+            return new MingleString( 
+                ( (MingleTimestamp) mv ).getRfc3339String() );
+        }
+
+        if ( mv instanceof MingleEnum ) {
+            MingleEnum me = (MingleEnum) mv;
+            return new MingleString( me.getValue().getExternalForm() );
+        }
+
+        throw failCastType( typ, mv, loc );
+    }
+
 //    private
 //    static
 //    RuntimeException
@@ -661,24 +670,24 @@ class Mingle
 //
 //        throw failCastType( tcErrTyp, mv, loc );
 //    }
-//
-//    private
-//    static
-//    MingleValue
-//    castAsUnrestrictedAtomic( MingleValue mv,
-//                              AtomicTypeReference at,
+
+    private
+    static
+    MingleValue
+    castAsUnrestrictedAtomic( MingleValue mv,
+                              AtomicTypeReference at,
 //                              MingleTypeReference tcErrTyp,
-//                              ObjectPath< MingleIdentifier > loc )
-//    {
-//        TypeName nm = at.getName();
-//
-//        Class< ? extends MingleValue > valCls = valueClassFor( nm );
-//        if ( valCls != null && valCls.isInstance( mv ) ) return mv;
-//
-//        if ( nm.equals( QNAME_STRING ) )
-//        {
-//            return castAsString( mv, tcErrTyp, loc );
-//        }
+                              ObjectPath< MingleIdentifier > loc )
+    {
+        TypeName nm = at.getName();
+
+        Class< ? extends MingleValue > valCls = valueClassFor( nm );
+        if ( valCls != null && valCls.isInstance( mv ) ) return mv;
+
+        if ( nm.equals( QNAME_STRING ) )
+        {
+            return castAsString( mv, at, loc );
+        }
 //        else if ( isNumberType( at ) ) 
 //        {
 //            return castAsNumber( mv, at, tcErrTyp, loc );
@@ -699,8 +708,28 @@ class Mingle
 //        {
 //            return castAsNull( mv, tcErrTyp, loc );
 //        }
-//        else throw failCastType( tcErrTyp, mv, loc );
-//    }
+        else throw failCastType( at, mv, loc );
+    }
+
+    static
+    MingleValue
+    castAtomic( MingleValue mv,
+                AtomicTypeReference at,
+                ObjectPath< MingleIdentifier > loc )
+    {
+        if ( mv instanceof MingleNull ) {
+            if ( at.equals( TYPE_NULL ) ) return mv;
+            throw failCastValue( "Value is null", loc );
+        }
+
+        mv = castAsUnrestrictedAtomic( mv, at, loc );
+
+        MingleValueRestriction vr = at.getRestriction();
+        if ( vr != null ) vr.validate( mv, loc );
+
+        return mv;
+    }
+
 //
 //    private
 //    static
@@ -710,8 +739,7 @@ class Mingle
 //                  MingleTypeReference tcErrTyp,
 //                  ObjectPath< MingleIdentifier > loc )
 //    {
-//        if ( mv instanceof MingleNull )
-//        {
+//        if ( mv instanceof MingleNull ) {
 //            if ( at.equals( TYPE_NULL ) ) return mv;
 //            throw failCastValue( "Value is null", loc );
 //        }

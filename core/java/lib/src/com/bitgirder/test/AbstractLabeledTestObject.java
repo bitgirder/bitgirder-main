@@ -11,15 +11,15 @@ implements LabeledTestObject
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final CharSequence lbl;
+    private final String lbl;
 
     protected
     AbstractLabeledTestObject( CharSequence lbl )
     {
-        this.lbl = inputs.notNull( lbl, "lbl" );
+        this.lbl = inputs.notNull( lbl, "lbl" ).toString();
     }
 
-    public final CharSequence getLabel() { return lbl; }
+    public final String getLabel() { return lbl; }
 
     // overridable
     public Object getInvocationTarget() { return this; }

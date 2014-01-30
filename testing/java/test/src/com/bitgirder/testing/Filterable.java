@@ -54,7 +54,7 @@ class Filterable
         @Test public void test1() {}
         @Test public void test2() {}
 
-        public CharSequence getLabel() { return "inst" + i; }
+        public String getLabel() { return "inst" + i; }
 
         public Object getInvocationTarget() { return this; }
     }

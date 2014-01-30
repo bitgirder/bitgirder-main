@@ -8,6 +8,6 @@ interface LabeledTestObject
     getInvocationTarget();
 
     public
-    CharSequence
+    String
     getLabel();
 }

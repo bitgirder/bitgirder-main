@@ -556,7 +556,7 @@ class MingleTests
         });
 
         assertValueException( 
-            MingleTypeCastException.class, 
+            MingleValueCastException.class, 
             p1.descend( id( "int32Val1" ) ), 
             "Expected value of type mingle:core@v1/Buffer but found " +
                 "mingle:core@v1/Int32",
@@ -589,7 +589,7 @@ class MingleTests
         state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
         
         assertValueException(
-            MingleTypeCastException.class,
+            MingleValueCastException.class,
             ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
             "Expected value of type mingle:core@v1/Buffer but found " +
                 "mingle:core@v1/Int32",

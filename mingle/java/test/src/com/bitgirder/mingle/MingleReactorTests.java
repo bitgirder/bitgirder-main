@@ -8,6 +8,7 @@ import com.bitgirder.validation.State;
 import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.Strings;
 
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ListPath;
@@ -33,6 +34,8 @@ class MingleReactorTests
     private final static State state = new State();
 
     private final static Map< Object, Map< String, String > > STRING_OVERRIDES;
+
+    private final static Map< Object, Object > OBJECT_OVERRIDES;
 
     private static void code( Object... args ) { CodeLoggers.code( args ); }
 
@@ -64,6 +67,14 @@ class MingleReactorTests
     extends LabeledTestCall
     {
         private TestImpl( CharSequence nm ) { super( nm ); }
+        private TestImpl() { super(); }
+
+        void
+        setLabel( Object... pairs )
+        {
+            setLabel( getClass().getSimpleName() + ":" + 
+                Strings.crossJoin( "=", ",", pairs ) );
+        }
     }
 
     private
@@ -235,8 +246,6 @@ class MingleReactorTests
         private MingleTypeReference type;
         private String profile;
 
-        private CastReactorTest( CharSequence name ) { super( name ); }
-
         private
         MingleValueCastReactor
         createCastReactor()
@@ -244,16 +253,27 @@ class MingleReactorTests
             return MingleValueCastReactor.create( type );
         }
 
+        private
+        MingleValueReactorPipeline
+        createPipeline()
+        {
+            ObjectPath< MingleIdentifier > rtPath = 
+                ObjectPath.getRoot( MingleIdentifier.create( "in-val" ) );
+            
+            return new MingleValueReactorPipeline.Builder().
+                addReactor( MingleValueReactors.createDebugReactor() ).
+                addProcessor( MinglePathSettingProcessor.create( rtPath ) ).
+                addProcessor( createCastReactor() ).
+                addReactor( MingleValueBuilder.create() ).
+                build();
+        }
+
         public
         void
         call()
             throws Exception
         {   
-            MingleValueReactorPipeline pip =
-                new MingleValueReactorPipeline.Builder().
-                    addProcessor( createCastReactor() ).
-                    addReactor( MingleValueBuilder.create() ).
-                    build();
+            MingleValueReactorPipeline pip = createPipeline();
 
             MingleValueReactors.visitValue( in, pip );
 
@@ -293,6 +313,14 @@ class MingleReactorTests
             }
 
             return declNm + "/" + name;
+        }
+
+        private
+        MingleValue
+        valOrNull( MingleValue mv )
+        {
+            if ( mv == null ) return MingleNull.getInstance();
+            return mv;
         }
         
         private
@@ -519,28 +547,60 @@ class MingleReactorTests
         }
 
         private
+        void
+        setCastReactorTestValues( CastReactorTest t,
+                                  MingleSymbolMap map )
+            throws Exception
+        {
+            t.in = valOrNull( mapGet( map, "in", MingleValue.class ) );
+
+            t.expect = valOrNull( mapGet( map, "expect", MingleValue.class ) );
+
+            t.path = asIdentifierPath( mapExpect( map, "path", byte[].class ) );
+
+            t.type = asTypeReference( mapExpect( map, "type", byte[].class ) );
+
+            t.profile = mapGet( map, "profile", String.class );
+            
+            MingleStruct errStruct = mapGet( map, "err", MingleStruct.class );
+            Exception err = asError( errStruct );
+            if ( err != null ) t.expectFailure( err );
+        }
+
+        private
+        void
+        setCastReactorLabel( CastReactorTest t )
+        {
+            String inVal = null;
+
+            if ( t.in != null ) 
+            {
+                inVal = String.format( "%s (%s)",
+                    Mingle.inspect( t.in ), Mingle.inferredTypeOf( t.in ) );
+            }
+
+            t.setLabel(
+                "in", inVal,
+                "type", t.type,
+                "expect", t.expect == null ? null : Mingle.inspect( t.expect ),
+                "profile", t.profile
+            );
+        }
+
+        private
         CastReactorTest
         asCastReactorTest( MingleStruct ms )
             throws Exception
         {
-            CastReactorTest res = new CastReactorTest( makeName( ms, null ) );
+            CastReactorTest res = new CastReactorTest();
 
             MingleSymbolMap map = ms.getFields();
+            setCastReactorTestValues( res, map );
 
-            res.in = mapGet( map, "in", MingleValue.class );
-            res.expect = mapGet( map, "expect", MingleValue.class );
+            setCastReactorLabel( res );
 
-            res.path = 
-                asIdentifierPath( mapExpect( map, "path", byte[].class ) );
-
-            res.type = 
-                asTypeReference( mapExpect( map, "type", byte[].class ) );
-
-            res.profile = mapGet( map, "profile", String.class );
-            
-            MingleStruct errStruct = mapGet( map, "err", MingleStruct.class );
-            Exception err = asError( errStruct );
-            if ( err != null ) res.expectFailure( err );
+            Object ov = OBJECT_OVERRIDES.get( res.getLabel() );
+            if ( ov != null ) res.expect = (MingleValue) ov;
 
             return res;
         }
@@ -601,6 +661,23 @@ class MingleReactorTests
         addStringOverride( MingleValueReactorException.class,
             "StartField() called, but struct is built",
             "Saw start of field 'f1' after value was built"
+        );
+
+        OBJECT_OVERRIDES = Lang.newMap();
+
+        OBJECT_OVERRIDES.put(
+            "CastReactorTest:in=2007-08-24T21:15:43.123450000Z (mingle:core@v1/Timestamp),type=mingle:core@v1/String,expect=\"2007-08-24T13:15:43.12345-08:00\",profile=null",
+            new MingleString( "2007-08-24T21:15:43.123450000Z" )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "CastReactorTest:in=1.0 (mingle:core@v1/Float64),type=mingle:core@v1/String,expect=\"1\",profile=null",
+            new MingleString( "1.0" )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "CastReactorTest:in=1.0 (mingle:core@v1/Float32),type=mingle:core@v1/String,expect=\"1\",profile=null",
+            new MingleString( "1.0" )
         );
     }
 }

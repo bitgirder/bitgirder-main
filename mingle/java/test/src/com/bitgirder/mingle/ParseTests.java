@@ -333,13 +333,14 @@ class ParseTests
         }
 
         public
-        CharSequence
+        String
         getLabel()
         {
             return Strings.crossJoin( "=", ",",
                 "in", Lang.getRfc4627String( in ),
                 "tt", tt
-            );
+            ).
+            toString();
         }
 
         public Object getInvocationTarget() { return this; }

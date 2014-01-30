@@ -19,18 +19,18 @@ class Tests
     implements LabeledTestObject
     {
         private final Object invTarg;
-        private final CharSequence label;
+        private final String label;
 
         private
         LabeledTestObjectImpl( Object invTarg,
                                CharSequence label )
         {
             this.invTarg = invTarg;
-            this.label = label;
+            this.label = label.toString();
         }
 
         public Object getInvocationTarget() { return invTarg; }
-        public CharSequence getLabel() { return label; }
+        public String getLabel() { return label; }
     }
 
     public

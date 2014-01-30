@@ -15,7 +15,7 @@ implements TestCall,
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final CharSequence label;
+    private String label;
 
     private Class< ? extends Throwable > failCls;
     private CharSequence failPat;
@@ -23,8 +23,10 @@ implements TestCall,
     protected
     LabeledTestCall( CharSequence label )
     {
-        this.label = inputs.notNull( label, "label" );
+        this.label = inputs.notNull( label, "label" ).toString();
     }
+
+    protected LabeledTestCall() {}
 
     // failCls or failPat may be null, since those are either or both valid
     // return values for the failure expectation methods. It is not allowed
@@ -78,7 +80,28 @@ implements TestCall,
         return doExpectFailure( th.getClass(), pat );
     }
 
-    public final CharSequence getLabel() { return label; }
+    public 
+    final 
+    String
+    getLabel() 
+    { 
+        if ( label == null ) return toString();
+        return label; 
+    }
+
+    public
+    final
+    void
+    setLabel( CharSequence label )
+    {
+        inputs.notNull( label, "label" );
+
+        state.isTruef( this.label == null, 
+            "label already set: %s", this.label );
+
+        this.label = label.toString();
+    }
+
     public final Object getInvocationTarget() { return this; }
 
     // expectedFailure(Class|Pattern) are not final and may be overridden if an
