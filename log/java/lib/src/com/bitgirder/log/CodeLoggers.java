@@ -118,4 +118,23 @@ class CodeLoggers
     {
         warn( th, String.format( tmpl, msg ) );
     }
+
+    public
+    final
+    static
+    class Statics
+    {
+        private Statics() {}
+
+        public static void code( Object... args ) { CodeLoggers.code( args ); }
+    
+        public
+        static 
+        void 
+        codef( String tmpl, 
+               Object... args ) 
+        { 
+            CodeLoggers.codef( tmpl, args ); 
+        }
+    }
 }

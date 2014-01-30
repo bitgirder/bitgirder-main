@@ -753,6 +753,7 @@ class LangTests
     void
     assertUintParseFail( int sz,
                          String in,
+                         Class< ? extends NumberFormatException > thCls,
                          String tmpl )
     {
         state.isTrue( sz == 32 || sz == 64 );
@@ -764,6 +765,7 @@ class LangTests
         }
         catch ( NumberFormatException nfe )
         {
+            if ( ! thCls.isInstance( nfe ) ) throw nfe;
             state.equal( nfe.getMessage(), String.format( tmpl, in ) );
         }
     }
@@ -804,12 +806,15 @@ class LangTests
         assertUintString( "2147483648", Integer.MIN_VALUE );
         assertUintString( "4294967295", -1 );
 
-        assertUintParseFail( 32, "-1", "Number is negative: %s" );
+        assertUintParseFail( 32, "-1", NumberFormatUnderflowException.class, 
+            "Number is negative: %s" );
 
-        assertUintParseFail( 
-            32, "4294967296", "Number is too large for uint32: %s" );
+        assertUintParseFail( 32, "4294967296",
+            NumberFormatOverflowException.class,
+            "Number is too large for uint32: %s" );
 
-        assertUintParseFail( 32, "", "Empty number" );
+        assertUintParseFail( 32, "", NumberFormatException.class, 
+            "Empty number" );
     }
 
     @Test
@@ -831,11 +836,14 @@ class LangTests
         assertUintString( "9223372036854775808", Long.MIN_VALUE );
         assertUintString( "18446744073709551615", -1L );
 
-        assertUintParseFail( 64, "-1", "Number is negative: %s" );
+        assertUintParseFail( 64, "-1", NumberFormatUnderflowException.class, 
+            "Number is negative: %s" );
 
         assertUintParseFail( 
-            64, "18446744073709551616", "Number is too large for uint64: %s" );
+            64, "18446744073709551616", NumberFormatOverflowException.class,
+            "Number is too large for uint64: %s" );
 
-        assertUintParseFail( 64, "", "Empty number" );
+        assertUintParseFail( 64, "", NumberFormatException.class, 
+            "Empty number" );
     }
 }

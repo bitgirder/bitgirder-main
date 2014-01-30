@@ -259,10 +259,10 @@ class MingleReactorTests
         {
             ObjectPath< MingleIdentifier > rtPath = 
                 ObjectPath.getRoot( MingleIdentifier.create( "in-val" ) );
-            
+ 
             return new MingleValueReactorPipeline.Builder().
-                addReactor( MingleValueReactors.createDebugReactor() ).
                 addProcessor( MinglePathSettingProcessor.create( rtPath ) ).
+                addReactor( MingleValueReactors.createDebugReactor() ).
                 addProcessor( createCastReactor() ).
                 addReactor( MingleValueBuilder.create() ).
                 build();
@@ -588,6 +588,19 @@ class MingleReactorTests
         }
 
         private
+        void
+        setCastReactorOverrides( CastReactorTest t )
+        {
+            Object ov = OBJECT_OVERRIDES.get( t.getLabel() );
+            
+            if ( ov instanceof MingleValue ) {
+                t.expect = (MingleValue) ov;
+            } else if ( ov instanceof MingleValueCastException ) {
+                t.resetExpectFailure( (MingleValueCastException) ov );
+            }
+        }
+
+        private
         CastReactorTest
         asCastReactorTest( MingleStruct ms )
             throws Exception
@@ -598,9 +611,7 @@ class MingleReactorTests
             setCastReactorTestValues( res, map );
 
             setCastReactorLabel( res );
-
-            Object ov = OBJECT_OVERRIDES.get( res.getLabel() );
-            if ( ov != null ) res.expect = (MingleValue) ov;
+            setCastReactorOverrides( res );
 
             return res;
         }
@@ -678,6 +689,32 @@ class MingleReactorTests
         OBJECT_OVERRIDES.put(
             "CastReactorTest:in=1.0 (mingle:core@v1/Float32),type=mingle:core@v1/String,expect=\"1\",profile=null",
             new MingleString( "1.0" )
+        );
+
+        ObjectPath< MingleIdentifier > inValRoot =
+            ObjectPath.< MingleIdentifier >
+                getRoot( MingleIdentifier.create( "in-val" ) );
+
+        OBJECT_OVERRIDES.put(
+            "CastReactorTest:in=\"abc$/@\" (mingle:core@v1/String),type=mingle:core@v1/Buffer,expect=null,profile=null",
+            new MingleValueCastException(
+                "Length of input 'abc$/@' (6) is not a multiple of 4", 
+                inValRoot
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "CastReactorTest:in=\"s\" (mingle:core@v1/String),type=mingle:core@v1/Boolean,expect=null,profile=null",
+            new MingleValueCastException(
+                "(at or near char 1) Invalid boolean string: s", inValRoot )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "CastReactorTest:in=2012-01-01T00:00:00.000000000Z (mingle:core@v1/Timestamp),type=mingle:core@v1/Timestamp~[\"2000-01-01T00:00:00.000000000Z\",\"2001-01-01T00:00:00.000000000Z\"],expect=null,profile=null",
+            new MingleValueCastException(
+                "Value 2012-01-01T00:00:00.000000000Z does not satisfy restriction [\"2000-01-01T00:00:00.000000000Z\",\"2001-01-01T00:00:00.000000000Z\"]",
+                inValRoot
+            )
         );
     }
 }

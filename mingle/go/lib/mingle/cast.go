@@ -101,19 +101,26 @@ func valueCastErrorForNumError(
 }
 
 func parseIntInitial(
-    s String,
+    ms String,
     bitSize int,
-    numType TypeReference ) ( sInt int64, uInt uint64, err error ) {
-    if indx := strings.IndexAny( string( s ), "eE." ); indx >= 0 {
+    numType TypeReference,
+    path idPath,
+) ( sInt int64, uInt uint64, err error ) {
+    s := strings.TrimSpace( string( ms ) )
+    if indx := strings.IndexAny( s, "eE." ); indx >= 0 {
         var f float64
-        f, err = strconv.ParseFloat( string( s ), 64 )
+        f, err = strconv.ParseFloat( s, 64 )
         if err == nil { sInt, uInt  = int64( f ), uint64( f ) }
     } else { 
         if numType == TypeUint32 || numType == TypeUint64 {
-            uInt, err = strconv.ParseUint( string( s ), 10, bitSize )
-            sInt = int64( uInt ) // do this even if err != nil
+            if len( s ) > 0 && s[ 0 ] == '-' {
+                err = NewValueCastErrorf( path, "value out of range: %s", s )
+            } else {
+                uInt, err = strconv.ParseUint( s, 10, bitSize )
+                sInt = int64( uInt ) // do this even if err != nil
+            }
         } else {
-            sInt, err = strconv.ParseInt( string( s ), 10, bitSize )
+            sInt, err = strconv.ParseInt( s, 10, bitSize )
             uInt = uint64( sInt )
         }
     }
@@ -125,9 +132,10 @@ func parseInt(
     bitSize int, 
     numTyp TypeReference, 
     at *AtomicTypeReference, 
-    path idPath ) ( Value, error ) {
-    sInt, uInt, err := parseIntInitial( s, bitSize, numTyp )
-    if err == nil {
+    path idPath,
+) ( Value, error ) {
+    sInt, uInt, parseErr := parseIntInitial( s, bitSize, numTyp, path )
+    if parseErr == nil {
         switch numTyp {
         case TypeInt32: return Int32( sInt ), nil
         case TypeInt64: return Int64( sInt ), nil
@@ -138,10 +146,12 @@ func parseInt(
             panic( NewValueCastErrorf( path, msg, numTyp ) )
         }
     } 
-    if ne, ok := err.( *strconv.NumError ); ok {
-        return nil, valueCastErrorForNumError( path, at, ne )
+    switch err := parseErr.( type ) {
+    case *strconv.NumError:
+        return nil, valueCastErrorForNumError( path, at, err )
+    case *ValueCastError: return nil, err
     }
-    return nil, NewValueCastErrorf( path, err.Error() )
+    return nil, NewValueCastErrorf( path, parseErr.Error() )
 }
 
 func castInt32( 

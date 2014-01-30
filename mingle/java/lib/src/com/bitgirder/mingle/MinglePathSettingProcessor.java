@@ -89,7 +89,7 @@ implements MingleValueReactorPipeline.Processor,
     void
     prepareEnd()
     {
-        if ( path instanceof ListPath ) pathPop();
+//        if ( path instanceof ListPath ) pathPop();
     }
 
     private
@@ -109,9 +109,9 @@ implements MingleValueReactorPipeline.Processor,
         ev.setPath( path );
     }
 
-    // if we were accumulating a field value we pop the field from the path;
-    // otherwise there is nothing to do (end of list will have popped list
-    // earlier in prepareEnd())
+//    // if we were accumulating a field value we pop the field from the path;
+//    // otherwise there is nothing to do (end of list will have popped list
+//    // earlier in prepareEnd())
     private
     void
     valueCompleted()
@@ -121,11 +121,20 @@ implements MingleValueReactorPipeline.Processor,
 
     private
     void
+    endCompleted()
+    {
+        if ( path instanceof DictionaryPath || path instanceof ListPath ) {
+            pathPop();
+        }
+    }
+
+    private
+    void
     eventProcessed( MingleValueReactorEvent ev )
     {
         switch ( ev.type() ) {
         case VALUE: valueCompleted(); break;
-        case END: valueCompleted(); break;
+        case END: endCompleted(); break;
         }
     }
 

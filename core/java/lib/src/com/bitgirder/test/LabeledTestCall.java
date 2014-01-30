@@ -35,10 +35,12 @@ implements TestCall,
     private
     LabeledTestCall
     doExpectFailure( Class< ? extends Throwable > failCls,
-                     CharSequence failPat )
+                     CharSequence failPat,
+                     boolean isReset )
     {
         state.isTrue( 
-            this.failCls == null, "A failure expectation is already set" );
+            isReset || this.failCls == null, 
+            "A failure expectation is already set" );
 
         this.failCls = failCls;
         this.failPat = failPat;
@@ -52,7 +54,7 @@ implements TestCall,
     expectFailure( Class< ? extends Throwable > failCls )
     {
         inputs.notNull( failCls, "failCls" );
-        return doExpectFailure( failCls, null );
+        return doExpectFailure( failCls, null, false );
     }
 
     public
@@ -64,7 +66,20 @@ implements TestCall,
         inputs.notNull( failCls, "failCls" );
         inputs.notNull( failPat, "failPat" );
 
-        return doExpectFailure( failCls, failPat );
+        return doExpectFailure( failCls, failPat, false );
+    }
+
+    private
+    LabeledTestCall
+    doExpectFailure( Throwable th,
+                     boolean isReset )
+    {
+        inputs.notNull( th, "th" );
+
+        String msg = th.getMessage();
+        String pat = msg == null ? null : Pattern.quote( msg );
+        
+        return doExpectFailure( th.getClass(), pat, isReset );
     }
 
     public
@@ -72,12 +87,15 @@ implements TestCall,
     LabeledTestCall
     expectFailure( Throwable th )
     {
-        inputs.notNull( th, "th" );
+        return doExpectFailure( th, false );
+    }
 
-        String msg = th.getMessage();
-        String pat = msg == null ? null : Pattern.quote( msg );
-        
-        return doExpectFailure( th.getClass(), pat );
+    public
+    final
+    LabeledTestCall
+    resetExpectFailure( Throwable th )
+    {
+        return doExpectFailure( th, true );
     }
 
     public 

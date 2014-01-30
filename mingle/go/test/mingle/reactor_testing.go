@@ -1167,11 +1167,12 @@ func ( t *crtInit ) addIdentityNumTests() {
         { val: Float64( 1.0 ), str: "1", typ: TypeFloat64 },
     }
     for _, numCtx := range numTests {
-    for _, valCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
-        t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
-    }}
+        for _, valCtx := range numTests {
+            t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
+        }
+    }
 }
 
 func ( t *crtInit ) addTruncateNumTests() {
@@ -1207,9 +1208,9 @@ func ( t *crtInit ) addNumTests() {
     rngErr( "9223372036854775808", TypeInt64 )
     rngErr( "-9223372036854775809", TypeInt64 )
     rngErr( "4294967296", TypeUint32 )
-    t.addVcError( "-1", TypeUint32, "invalid syntax: -1" )
+    t.addVcError( "-1", TypeUint32, "value out of range: -1" )
     rngErr( "18446744073709551616", TypeUint64 )
-    t.addVcError( "-1", TypeUint64, "invalid syntax: -1" )
+    t.addVcError( "-1", TypeUint64, "value out of range: -1" )
     t.addVcError(
         12, "Int32~[0,10)", "Value 12 does not satisfy restriction [0,10)" )
 }

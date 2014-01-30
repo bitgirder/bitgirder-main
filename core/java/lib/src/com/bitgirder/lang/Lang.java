@@ -186,21 +186,19 @@ class Lang
     {
         String numStr = inputs.notNull( s, "s" ).toString().trim();
 
-        if ( numStr.length() == 0 ) 
-        {
+        if ( numStr.length() == 0 ) {
             throw new NumberFormatException( "Empty number" );
         }
 
         BigInteger bi = new BigInteger( s.toString() );
 
-        if ( bi.signum() < 0 ) 
-        {
-            throw new NumberFormatException( "Number is negative: " + s );
+        if ( bi.signum() < 0 ) {
+            throw new NumberFormatUnderflowException( 
+                "Number is negative: " + s );
         }
 
-        if ( bi.compareTo( max ) > 0 )
-        {
-            throw new NumberFormatException( 
+        if ( bi.compareTo( max ) > 0 ) {
+            throw new NumberFormatOverflowException( 
                 "Number is too large for " + errNm + ": " + s );
         }
 
