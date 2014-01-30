@@ -672,6 +672,19 @@ class Mingle
     private
     static
     MingleValue
+    castAsEnum( MingleEnum me,
+                AtomicTypeReference at,
+                MingleTypeReference callTyp,
+                ObjectPath< MingleIdentifier > loc )
+    {
+        if ( me.getType().equals( at.getName() ) ) return me;
+
+        throw failCastType( callTyp, me, loc );
+    }
+
+    private
+    static
+    MingleValue
     castAsUnrestrictedAtomic( MingleValue mv,
                               AtomicTypeReference at,
                               MingleTypeReference callTyp,
@@ -684,23 +697,19 @@ class Mingle
 
         if ( nm.equals( QNAME_STRING ) ) {
             return castAsString( mv, at, callTyp, loc );
-        }
-        else if ( isNumberType( at ) ) {
+        } else if ( isNumberType( at ) ) {
             return castAsNumber( mv, at, callTyp, loc );
-        }
-        else if ( nm.equals( QNAME_BUFFER ) ) {
+        } else if ( nm.equals( QNAME_BUFFER ) ) {
             return castAsBuffer( mv, callTyp, loc );
-        }
-        else if ( nm.equals( QNAME_TIMESTAMP ) ) {
+        } else if ( nm.equals( QNAME_TIMESTAMP ) ) {
             return castAsTimestamp( mv, callTyp, loc );
-        }
-        else if ( nm.equals( QNAME_BOOLEAN ) ) {
+        } else if ( nm.equals( QNAME_BOOLEAN ) ) {
             return castAsBoolean( mv, callTyp, loc );
-        }
-        else if ( nm.equals( QNAME_NULL ) ) {
+        } else if ( nm.equals( QNAME_NULL ) ) {
             return castAsNull( mv, callTyp, loc );
-        }
-        else {
+        } else if ( mv instanceof MingleEnum ) {
+            return castAsEnum( (MingleEnum) mv, at, callTyp, loc );
+        } else {
             throw failCastType( at, mv, loc );
         }
     }
