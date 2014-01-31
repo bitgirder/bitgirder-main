@@ -142,7 +142,6 @@ implements MingleValueReactorPipeline.Processor,
             endTypes.pop();
             pathPop();
         }
-//        if ( path instanceof DictionaryPath ) pathPop();
     }
 
     private
