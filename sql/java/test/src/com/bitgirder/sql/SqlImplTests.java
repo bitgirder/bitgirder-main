@@ -147,7 +147,7 @@ extends AbstractSqlTests
 
         public
         final
-        CharSequence
+        String
         getLabel()
         {
             StringBuilder sb = new StringBuilder( getClass().getSimpleName() );
@@ -162,7 +162,7 @@ extends AbstractSqlTests
 
             appendLabel( sb );
 
-            return sb;
+            return sb.toString();
         }
 
         public
@@ -548,7 +548,7 @@ extends AbstractSqlTests
         }
 
         public
-        CharSequence
+        String
         getLabel()
         {
             return Strings.crossJoin( "=", ",",
@@ -559,7 +559,8 @@ extends AbstractSqlTests
                 "expctObj", 
                     expctObj == null 
                         ? "null" : expctObj.getClass().getSimpleName()
-            );
+            ).
+            toString();
         }
 
         private
@@ -922,7 +923,7 @@ extends AbstractSqlTests
     {
         public
         final
-        CharSequence
+        String
         getLabel()
         {
             return getClass().getSimpleName(); 

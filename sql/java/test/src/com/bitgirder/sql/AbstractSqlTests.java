@@ -572,7 +572,7 @@ extends AbstractLabeledTestObject
         }
 
         public
-        CharSequence
+        String
         getLabel()
         {
             StringBuilder res = new StringBuilder();
@@ -588,7 +588,7 @@ extends AbstractLabeledTestObject
             
             if ( tag != null ) res.append( ",tag=" ).append( tag );
 
-            return res;
+            return res.toString();
         }
 
         private
@@ -684,7 +684,7 @@ extends AbstractLabeledTestObject
 
         private TestWithConnCall( Method m ) { this.m = m; }
 
-        public CharSequence getLabel() { return m.getName(); }
+        public String getLabel() { return m.getName(); }
 
         protected
         void

@@ -825,8 +825,8 @@ class MingleReactorTests
                 return asEventPathTest( ms );
             } else if ( nm.equals( "CastReactorTest" ) ) {
                 return asCastReactorTest( ms );
-            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
-                return asFieldOrderPathTest( ms );
+//            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
+//                return asFieldOrderPathTest( ms );
             }
             
 //            codef( "skipping test: %s", nm );

@@ -411,7 +411,11 @@ class TestingTests
             super( makeLabel( FailingCall.class, ctx ) );
 
             this.ctx = ctx;
-            expectFailure( ctx.expctCls, ctx.pat );
+            
+            if ( ctx.expctCls != null ) {
+                if ( ctx.pat == null ) expectFailure( ctx.expctCls );
+                else expectFailure( ctx.expctCls, ctx.pat );
+            }
         }
 
         public
