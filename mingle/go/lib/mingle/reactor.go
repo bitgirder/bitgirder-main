@@ -1048,6 +1048,8 @@ type FieldOrder []FieldOrderSpecification
 // will be sent to the associated FieldOrderReactor's downstream processors
 // ahead of f2. For fields not appearing in an ordering, there are no guarantees
 // as to when they will appear relative to ordered fields. 
+//
+// returning nil is allowed and is equivalent to returning the empty ordering
 type FieldOrderGetter interface {
     FieldOrderFor( qn *QualifiedTypeName ) FieldOrder
 }
@@ -1114,27 +1116,6 @@ func ( foc *fieldOrderCtx ) sendEvent(
     foc.acc = append( foc.acc, ev )
     return nil
 }
-
-//func ( foc *fieldOrderCtx ) startField( fld *Identifier ) error {
-//    foc.checkAccNil( fmt.Sprintf( "at start of field %s", fld ) )
-//    foc.accFld = fld
-//    if ! foc.valStates.HasKey( fld ) { return nil }
-//    vs := foc.valStates.Get( fld )
-//    switch v := vs.( type ) {
-//    case bool:
-//        if v { panic( foc.failRepeated( fld ) ) }
-//        nxt := foc.nextFieldSpec()
-//        if nxt.Field.Equals( fld ) { return nil }
-//        if nxt.Required {
-//            return NewMissingFieldsError(   
-//                foc.encl.GetPath(), []*Identifier{ nxt.Field } )
-//        }
-//        foc.acc = []ReactorEvent{}
-//        return nil
-//    case []ReactorEvent: panic( foc.failRepeated( fld ) )
-//    }
-//    panic( libErrorf( "Unhandled val state: %T", vs ) )
-//}
 
 func ( foc *fieldOrderCtx ) startField( fld *Identifier ) {
     foc.checkAccNil( fmt.Sprintf( "at start of field %s", fld ) )

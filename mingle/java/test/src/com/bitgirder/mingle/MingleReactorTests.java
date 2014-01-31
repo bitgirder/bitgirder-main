@@ -5,7 +5,7 @@ import static com.bitgirder.mingle.MingleTestMethods.*;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
-import com.bitgirder.log.CodeLoggers;
+import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
@@ -36,17 +36,6 @@ class MingleReactorTests
     private final static Map< Object, Map< String, String > > STRING_OVERRIDES;
 
     private final static Map< Object, Object > OBJECT_OVERRIDES;
-
-    private static void code( Object... args ) { CodeLoggers.code( args ); }
-
-    private 
-    static 
-    void 
-    codef( String tmpl, 
-           Object... args ) 
-    { 
-        CodeLoggers.codef( tmpl, args ); 
-    }
 
     private
     static
@@ -405,6 +394,46 @@ class MingleReactorTests
     }
 
     private
+    final
+    static
+    class FieldOrderPathTest
+    extends TestImpl
+    implements MingleValueReactor
+    {
+        private List< MingleValueReactorEvent > source;
+        private Queue< EventExpectation > expect;
+        private List< MingleIdentifier > order;
+
+        public
+        void
+        processEvent( MingleValueReactorEvent ev )
+        {
+            EventExpectation ee = expect.remove();
+            ee.event.setPath( ee.path );
+
+            assertEventsEqual( ee.event, "ee.event", ev, "ev" );
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            codef( "order: %s", order );
+
+            MingleValueReactorPipeline pip =
+                new MingleValueReactorPipeline.Builder().
+                    addProcessor( MinglePathSettingProcessor.create() ).
+                    addReactor( MingleValueReactors.createDebugReactor() ).
+                    addReactor( this ).
+                    build();
+
+            for ( MingleValueReactorEvent ev : source ) pip.processEvent( ev );
+            state.isTrue( expect.isEmpty() );
+        }
+    }
+
+    private
     static
     class TestImplReader
     extends MingleTestGen.StructFileReader< TestImpl >
@@ -442,7 +471,31 @@ class MingleReactorTests
             if ( mv == null ) return MingleNull.getInstance();
             return mv;
         }
-        
+
+        private
+        MingleIdentifier
+        asIdentifier( byte[] arr )
+            throws Exception
+        {
+            if ( arr == null ) return null;
+            
+            return MingleBinReader.create( arr ).readIdentifier();
+        }
+
+        private
+        List< MingleIdentifier >
+        asIdentifierList( MingleList ml )
+            throws Exception
+        {
+            List< MingleIdentifier > res = Lang.newList();
+
+            for ( MingleValue mv : ml ) {
+                res.add( asIdentifier( ( (MingleBuffer) mv ).array() ) );
+            }
+
+            return res;
+        }
+
         private
         QualifiedTypeName
         asQname( byte[] arr )
@@ -490,9 +543,7 @@ class MingleReactorTests
             throws Exception
         {
             byte[] arr = mapExpect( map, "field", byte[].class );
-            MingleBinReader rd = MingleBinReader.create( arr );
-
-            ev.setStartField( rd.readIdentifier() );
+            ev.setStartField( asIdentifier( arr ) );
         }
 
         private
@@ -736,6 +787,28 @@ class MingleReactorTests
             return res;
         }
 
+        private
+        FieldOrderPathTest
+        asFieldOrderPathTest( MingleStruct ms )
+            throws Exception
+        {
+            FieldOrderPathTest res = new FieldOrderPathTest();
+            res.setLabel( makeName( ms, null ) );
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.source = asReactorEvents(
+                mapExpect( map, "source", MingleList.class ) );
+
+            res.expect = asEventExpectationQueue(
+                mapExpect( map, "expect", MingleList.class ) );
+
+            res.order = asIdentifierList(
+                mapExpect( map, "order", MingleList.class ) );
+
+            return res;
+        }
+
         protected
         TestImpl
         convertStruct( MingleStruct ms )
@@ -752,6 +825,8 @@ class MingleReactorTests
                 return asEventPathTest( ms );
             } else if ( nm.equals( "CastReactorTest" ) ) {
                 return asCastReactorTest( ms );
+            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
+                return asFieldOrderPathTest( ms );
             }
             
 //            codef( "skipping test: %s", nm );
