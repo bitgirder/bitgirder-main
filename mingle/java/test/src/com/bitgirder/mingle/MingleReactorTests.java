@@ -126,7 +126,7 @@ class MingleReactorTests
 
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
-                    addReactor( MingleValueReactors.createDebugReactor() ).
+//                    addReactor( MingleValueReactors.createDebugReactor() ).
                     addReactor( chk ).
                     build();
 
@@ -224,7 +224,7 @@ class MingleReactorTests
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
                     addProcessor( ps ).
-                    addReactor( MingleValueReactors.createDebugReactor() ).
+//                    addReactor( MingleValueReactors.createDebugReactor() ).
                     addReactor( this ).
                     build();
  
@@ -383,11 +383,7 @@ class MingleReactorTests
  
             return new MingleValueReactorPipeline.Builder().
                 addProcessor( MinglePathSettingProcessor.create( rtPath ) ).
-                addReactor( 
-                    MingleValueReactors.createDebugReactor( "pre-cast" ) ).
                 addProcessor( createCastReactor() ).
-                addReactor( 
-                    MingleValueReactors.createDebugReactor( "post-cast" ) ).
                 addReactor( MingleValueBuilder.create() ).
                 build();
         }

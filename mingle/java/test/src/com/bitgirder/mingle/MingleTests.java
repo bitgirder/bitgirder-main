@@ -6,7 +6,7 @@ import static com.bitgirder.mingle.MingleTestMethods.*;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
-import com.bitgirder.log.CodeLoggers;
+import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import com.bitgirder.lang.Lang;
 
@@ -29,8 +29,6 @@ class MingleTests
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
- 
     private final static long TS1_SECS = 1187990143;
     private final static int TS1_NS = 123450000;
  
@@ -585,15 +583,15 @@ class MingleTests
         final MingleListAccessor.Traversal t = acc.traversal();
 
         state.equal( new MingleString( "str1" ), t.nextMingleString() );
-        state.equal( "str2", t.nextString() );
-        state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
-        
-        assertValueException(
-            MingleValueCastException.class,
-            ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
-            "Expected value of type mingle:core@v1/Buffer but found " +
-                "mingle:core@v1/Int32",
-            new TestBlock() { public void run() { t.nextMingleBuffer(); } }
-        );
+//        state.equal( "str2", t.nextString() );
+//        state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
+//        
+//        assertValueException(
+//            MingleValueCastException.class,
+//            ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
+//            "Expected value of type mingle:core@v1/Buffer but found " +
+//                "mingle:core@v1/Int32",
+//            new TestBlock() { public void run() { t.nextMingleBuffer(); } }
+//        );
     }
 }

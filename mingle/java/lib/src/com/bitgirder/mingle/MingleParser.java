@@ -468,14 +468,14 @@ class MingleParser
     private
     MingleValue
     castRangeValue( MingleValue v,
-                    MingleTypeReference t,
+                    AtomicTypeReference t,
                     MingleIdentifier bound,
                     int errPos )
         throws MingleSyntaxException
     {
         ObjectPath< MingleIdentifier > p = ObjectPath.getRoot( bound );
 
-        try { return Mingle.castValue( v, t, p ); }
+        try { return Mingle.castAtomic( v, t, t, p ); }
         catch ( MingleValueException mve )
         {
             throw failf( errPos, "Invalid %s value in range restriction: %s", 

@@ -272,4 +272,45 @@ class PathTests
 
         assertVisit( p, expct );
     }
+
+    private
+    void
+    assertImmutableInstance( ObjectPath< ? > p )
+    {
+        state.isTruef(
+            p instanceof DictionaryPath ||
+            p instanceof ImmutableListPath,
+            "not immutable (or known to be): %s", p );
+    }
+
+    private
+    < V >
+    void
+    assertAsImmutablePath( ObjectPath< V > expct )
+    {
+        ObjectPath< V > act = ObjectPaths.asImmutablePath( expct );
+
+        for ( ObjectPath< V > p : act.collectDescent() ) {
+            assertImmutableInstance( p );
+        }
+
+        state.isTrue( ObjectPaths.areEqual( expct, act ) );
+    }
+
+    @Test
+    public
+    void
+    testAsImmutablePath()
+    {
+        assertAsImmutablePath( ObjectPath.< String >getRoot() );
+
+        ObjectPath< String > p = ObjectPath.getRoot( "n1" ).
+            descend( "n2" ).
+            startImmutableList( 5 ).
+            descend( "n3" ).
+            startMutableList( 3 ).
+            descend( "n4" );
+        
+        for ( ; p != null; p = p.getParent() ) assertAsImmutablePath( p );
+    }
 }

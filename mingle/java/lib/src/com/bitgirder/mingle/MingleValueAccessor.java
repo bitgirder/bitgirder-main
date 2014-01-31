@@ -3,6 +3,8 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import static com.bitgirder.log.CodeLoggers.Statics.*;
+
 import com.bitgirder.lang.path.ObjectPath;
 
 abstract
@@ -37,6 +39,22 @@ class MingleValueAccessor
             "expected " + expctTyp + " but got " + valTyp, path );
     }
 
+    // we take advantage here of the fact that all accessor cast targets are
+    // atomic types or ar TYPE_VALUE_LIST
+    private
+    MingleValue
+    castValue( MingleValue val,
+               MingleTypeReference typ,
+               ObjectPath< MingleIdentifier > path )
+    {
+        if ( typ.equals( Mingle.TYPE_VALUE_LIST ) ) {
+            if ( val instanceof MingleList ) return val;
+            throw Mingle.failCastType( typ, val, path );
+        }
+
+        return Mingle.castAtomic( val, (AtomicTypeReference) typ, typ, path );
+    }
+
     final
     MingleValue
     accessValue( MingleValue val,
@@ -50,6 +68,6 @@ class MingleValueAccessor
 
         if ( typ == null ) return accessValueByClass( val, path, valCls );
 
-        return Mingle.castValue( val, typ, path );
+        return castValue( val, typ, path );
     }
 }

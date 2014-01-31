@@ -3,6 +3,10 @@ package com.bitgirder.lang.path;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+
+import java.util.Iterator;
+
 public
 final
 class ObjectPaths
@@ -144,5 +148,42 @@ class ObjectPaths
 
         if ( ! areEqualNodes( p1, p2 ) ) return false;
         return areEqual( p1.getParent(), p2.getParent() );
+    }
+
+    private
+    static
+    < V >
+    ObjectPath< V >
+    applyImmutablePath( ObjectPath< V > targ,
+                        ObjectPath< V > elt )
+    {
+        if ( elt instanceof DictionaryPath ) {
+            DictionaryPath< V > dp = Lang.castUnchecked( elt );
+            return targ.descend( dp.getKey() );
+        } else if ( elt instanceof ListPath ) {
+            ListPath< V > lp = Lang.castUnchecked( elt );
+            return targ.startImmutableList( lp.getIndex() );
+        } else {
+            throw state.createFailf( "unhandled path type: %s", elt );
+        }
+    }
+
+    // currently makes a copy; more efficient versions may opt to only make
+    // copies as needed
+    public
+    static
+    < V >
+    ObjectPath< V >
+    asImmutablePath( ObjectPath< V > p )
+    {
+        inputs.notNull( p, "p" );
+
+        ObjectPath< V > res = ObjectPath.getRoot();
+
+        for ( Iterator< ObjectPath< V > > it = p.getDescent(); it.hasNext(); ) {
+            res = applyImmutablePath( res, it.next() );
+        }
+
+        return res;
     }
 }

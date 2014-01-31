@@ -119,10 +119,6 @@ implements MingleValueReactorPipeline.Processor,
     void
     prepareEvent( MingleValueReactorEvent ev )
     {
-        codef( "in prepareEvent, awaitingList0: %s, path type: %s",
-            awaitingList0, path == null ? null : path.getClass().getSimpleName()
-        );
-
         switch ( ev.type() ) {
         case VALUE: prepareValue(); break;
         case START_STRUCT: prepareStartStruct( ev ); break;
@@ -202,6 +198,8 @@ implements MingleValueReactorPipeline.Processor,
     create( ObjectPath< MingleIdentifier > start )
     {
         inputs.notNull( start, "start" );
+
+        start = ObjectPaths.asImmutablePath( start );
         return new MinglePathSettingProcessor( start );
     }
 }
