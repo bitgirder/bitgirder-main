@@ -402,7 +402,7 @@ class MingleReactorTests
     {
         private List< MingleValueReactorEvent > source;
         private Queue< EventExpectation > expect;
-        private List< MingleIdentifier > order;
+        private Map< QualifiedTypeName, List< MingleIdentifier > > orders;
 
         public
         void
@@ -419,7 +419,7 @@ class MingleReactorTests
         call()
             throws Exception
         {
-            codef( "order: %s", order );
+            codef( "orders: %s", orders );
 
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
@@ -788,6 +788,30 @@ class MingleReactorTests
         }
 
         private
+        Map< QualifiedTypeName, List< MingleIdentifier > >
+        asFieldOrderMapByType( MingleList ml )
+            throws Exception
+        {
+            Map< QualifiedTypeName, List< MingleIdentifier > > res =
+                Lang.newMap();
+
+            for ( MingleValue mv : ml ) 
+            {
+                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
+
+                QualifiedTypeName type = asQname(
+                    mapExpect( map, "type", byte[].class ) );
+
+                List< MingleIdentifier > ord = asIdentifierList(
+                    mapExpect( map, "order", MingleList.class ) );
+                
+                Lang.putUnique( res, type, ord );
+            }
+
+            return res;
+        }
+
+        private
         FieldOrderPathTest
         asFieldOrderPathTest( MingleStruct ms )
             throws Exception
@@ -803,8 +827,8 @@ class MingleReactorTests
             res.expect = asEventExpectationQueue(
                 mapExpect( map, "expect", MingleList.class ) );
 
-            res.order = asIdentifierList(
-                mapExpect( map, "order", MingleList.class ) );
+            res.orders = asFieldOrderMapByType(
+                mapExpect( map, "orders", MingleList.class ) );
 
             return res;
         }
@@ -825,8 +849,8 @@ class MingleReactorTests
                 return asEventPathTest( ms );
             } else if ( nm.equals( "CastReactorTest" ) ) {
                 return asCastReactorTest( ms );
-//            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
-//                return asFieldOrderPathTest( ms );
+            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
+                return asFieldOrderPathTest( ms );
             }
             
 //            codef( "skipping test: %s", nm );
