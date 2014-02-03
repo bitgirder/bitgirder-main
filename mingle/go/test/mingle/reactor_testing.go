@@ -6,6 +6,7 @@ import (
     "fmt"
     "encoding/base64"
     "bytes"
+    "strconv"
 //    "log"
 )
 
@@ -231,10 +232,15 @@ func initStructuralReactorTests() {
     )
 }
 
+type FieldOrderReactorTestOrder struct {
+    Order []*Identifier
+    Type *QualifiedTypeName
+}
+
 type FieldOrderReactorTest struct {
     Source []ReactorEvent
     Expect Value
-    Order []*Identifier
+    Orders []FieldOrderReactorTestOrder
 }
 
 func initFieldOrderValueTests() {
@@ -290,7 +296,13 @@ func initFieldOrderValueTests() {
             &FieldOrderReactorTest{ 
                 Source: src, 
                 Expect: expct, 
-                Order: []*Identifier{ ids[ 0 ], ids[ 3 ], ids[ 2 ], ids[ 1 ] },
+                Orders: []FieldOrderReactorTestOrder{
+                    { 
+                        Type: t1,
+                        Order: []*Identifier{ 
+                            ids[ 0 ], ids[ 3 ], ids[ 2 ], ids[ 1 ] },
+                    },
+                },
             },
         )
     }
@@ -326,7 +338,11 @@ func initFieldOrderValueTests() {
                     EvEnd,
                 EvEnd,
             },
-            Order: []*Identifier{ ids[ 1 ], ids[ 0 ], ids[ 2 ] },
+            Orders: []FieldOrderReactorTestOrder{
+                { Type: t1, 
+                  Order: []*Identifier{ ids[ 1 ], ids[ 0 ], ids[ 2 ] },
+                },
+            },
             Expect: MustStruct( t1,
                 ids[ 0 ], i1,
                 ids[ 1 ], MustStruct( t1,
@@ -412,7 +428,13 @@ func initFieldOrderMissingFieldTests() {
 type FieldOrderPathTest struct {
     Source []ReactorEvent
     Expect []EventExpectation
-    Order []*Identifier
+    Orders []FieldOrderReactorTestOrder
+}
+
+func mustInt( s string ) int {
+    res, err := strconv.Atoi( s )
+    if ( err != nil ) { panic( err ) }
+    return res
 }
 
 func initFieldOrderPathTests() {
@@ -426,46 +448,153 @@ func initFieldOrderPathTests() {
     }
     ss := func( i int ) StructStartEvent { return StructStartEvent{ typ( i ) } }
     fld := func( i int ) FieldStartEvent { return FieldStartEvent{ id( i ) } }
-    p := func( i int ) objpath.PathNode { return objpath.RootedAt( id( i ) ) }
+    p := func( i int, tail ...interface{} ) objpath.PathNode { 
+        res := objpath.RootedAt( id( i ) ) 
+        for _, elt := range tail { 
+            switch v := elt.( type ) {
+            case int: res = res.Descend( id( v ) ) 
+            case string: res = res.StartList().SetIndex( mustInt( v ) )
+            default: panic( libErrorf( "unhandled elt: %T", elt ) )
+            }
+        }
+        return res
+    }
     expct1 := []EventExpectation{
         { ss( 1 ), nil },
-            { fld( 2 ), p( 2 ) },
-            { EvListStart, p( 2 ) },
-                { val1, p( 2 ).StartList().SetIndex( 0 ) },
-                { val1, p( 2 ).StartList().SetIndex( 1 ) },
-            { EvEnd, p( 2 ) },
             { fld( 0 ), p( 0 ) },
             { val1, p( 0 ) },
-            { fld( 3 ), p( 3 ) },
-            { ss( 2 ), p( 3 ) },
-                { fld( 1 ), p( 3 ).Descend( id( 1 ) ) },
-                { val1, p( 3 ).Descend( id( 1 ) ) },
-                { fld( 2 ), p( 3 ).Descend( id( 2 ) ) },
-                { EvListStart, p( 3 ).Descend( id( 2 ) ) },
-                    { val1, 
-                      p( 3 ).Descend( id( 2 ) ).StartList().SetIndex( 0 ) },
-                    { val1, 
-                      p( 3 ).Descend( id( 2 ) ).StartList().SetIndex( 1 ) },
-                { EvEnd, p( 3 ).Descend( id( 2 ) ) },
-            { EvEnd, p( 3 ) },
             { fld( 1 ), p( 1 ) },
             { EvMapStart, p( 1 ) },
-                { fld( 1 ), p( 1 ).Descend( id( 1 ) ) },
-                { val1, p( 1 ).Descend( id( 1 ) ) },
-                { fld( 0 ), p( 1 ).Descend( id( 0 ) ) },
-                { val1, p( 1 ).Descend( id( 0 ) ) },
+                { fld( 1 ), p( 1, 1 ) },
+                { val1, p( 1, 1 ) },
+                { fld( 0 ), p( 1, 0 ) },
+                { val1, p( 1, 0 ) },
             { EvEnd, p( 1 ) },
+            { fld( 2 ), p( 2 ) },
+            { EvListStart, p( 2 ) },
+                { val1, p( 2, "0" ) },
+                { val1, p( 2, "1" ) },
+            { EvEnd, p( 2 ) },
+            { fld( 3 ), p( 3 ) },
+            { ss( 2 ), p( 3 ) },
+                { fld( 0 ), p( 3, 0 ) },
+                { val1, p( 3, 0 ) },
+                { fld( 1 ), p( 3, 1 ) },
+                { EvListStart, p( 3, 1 ) },
+                    { val1, p( 3, 1, "0" ) },
+                    { val1, p( 3, 1, "1" ) },
+                { EvEnd, p( 3, 1 ) },
+            { EvEnd, p( 3 ) },
+            { fld( 4 ), p( 4 ) },
+            { ss( 1 ), p( 4 ) },
+                { fld( 0 ), p( 4, 0 ) },
+                { val1, p( 4, 0 ) },
+                { fld( 1 ), p( 4, 1 ) },
+                { ss( 3 ), p( 4, 1 ) },
+                    { fld( 0 ), p( 4, 1, 0 ) },
+                    { val1, p( 4, 1, 0 ) },
+                    { fld( 1 ), p( 4, 1, 1 ) },
+                    { val1, p( 4, 1, 1 ) },
+                { EvEnd, p( 4, 1 ) },
+                { fld( 2 ), p( 4, 2 ) },
+                { ss( 3 ), p( 4, 2 ) },
+                    { fld( 0 ), p( 4, 2, 0 ) },
+                    { val1, p( 4, 2, 0 ) },
+                    { fld( 1 ), p( 4, 2, 1 ) },
+                    { val1, p( 4, 2, 1 ) },
+                { EvEnd, p( 4, 2 ) },
+                { fld( 3 ), p( 4, 3 ) },
+                { EvMapStart, p( 4, 3 ) },
+                    { fld( 0 ), p( 4, 3, 0 ) },
+                    { ss( 3 ), p( 4, 3, 0 ) },
+                        { fld( 0 ), p( 4, 3, 0, 0 ) },
+                        { val1, p( 4, 3, 0, 0 ) },
+                        { fld( 1 ), p( 4, 3, 0, 1 ) },
+                        { val1, p( 4, 3, 0, 1 ) },
+                    { EvEnd, p( 4, 3, 0 ) },
+                    { fld( 1 ), p( 4, 3, 1 ) },
+                    { ss( 3 ), p( 4, 3, 1 ) },
+                        { fld( 0 ), p( 4, 3, 1, 0 ) },
+                        { val1, p( 4, 3, 1, 0 ) },
+                        { fld( 1 ), p( 4, 3, 1, 1 ) },
+                        { val1, p( 4, 3, 1, 1 ) },
+                    { EvEnd, p( 4, 3, 1 ) },
+                { EvEnd, p( 4, 3 ) },
+                { fld( 4 ), p( 4, 4 ) },
+                { EvListStart, p( 4, 4 ) },
+                    { ss( 3 ), p( 4, 4, "0" ) },
+                        { fld( 0 ), p( 4, 4, "0", 0 ) },
+                        { val1, p( 4, 4, "0", 0 ) },
+                        { fld( 1 ), p( 4, 4, "0", 1 ) },
+                        { val1, p( 4, 4, "0", 1 ) },
+                    { EvEnd, p( 4, 4, "0" ) },
+                    { ss( 3 ), p( 4, 4, "1" ) },
+                        { fld( 0 ), p( 4, 4, "1", 0 ) },
+                        { val1, p( 4, 4, "1", 0 ) },
+                        { fld( 1 ), p( 4, 4, "1", 1 ) },
+                        { val1, p( 4, 4, "1", 1 ) },
+                    { EvEnd, p( 4, 4, "1" ) },
+                { EvEnd, p( 4, 4 ) },
+            { EvEnd, p( 4 ) },
         { EvEnd, nil },
     }
-    ord1 := []*Identifier{ id( 2 ), id( 0 ), id( 3 ), id( 1 ) }
+    ords1 := []FieldOrderReactorTestOrder{
+        { 
+            Type: ss( 1 ).Type,
+            Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ), id( 3 ), id( 4 ) },
+        },
+        {
+            Type: ss( 2 ).Type,
+            Order: []*Identifier{ id( 0 ), id( 1 ) },
+        },
+        {
+            Type: ss( 3 ).Type,
+            Order: []*Identifier{ id( 0 ), id( 1 ) },
+        },
+    }
     evs := [][]ReactorEvent{
         []ReactorEvent{ val1 },
         []ReactorEvent{ EvMapStart, fld( 1 ), val1, fld( 0 ), val1, EvEnd },
         []ReactorEvent{ EvListStart, val1, val1, EvEnd },
         []ReactorEvent{ 
             ss( 2 ), 
-                fld( 1 ), val1, 
-                fld( 2 ), EvListStart, val1, val1, EvEnd,
+                fld( 0 ), val1, 
+                fld( 1 ), EvListStart, val1, val1, EvEnd,
+            EvEnd,
+        },
+        // val for f4 is nested and has nested ss2 instances that are in varying
+        // need of reordering
+        []ReactorEvent{ 
+            ss( 1 ),
+                fld( 0 ), val1,
+                fld( 4 ), EvListStart,
+                    ss( 3 ),
+                        fld( 0 ), val1,
+                        fld( 1 ), val1,
+                    EvEnd,
+                    ss( 3 ),
+                        fld( 1 ), val1,
+                        fld( 0 ), val1,
+                    EvEnd,
+                EvEnd,
+                fld( 2 ), ss( 3 ),
+                    fld( 1 ), val1,
+                    fld( 0 ), val1,
+                EvEnd,
+                fld( 3 ), EvMapStart,
+                    fld( 0 ), ss( 3 ),
+                        fld( 1 ), val1,
+                        fld( 0 ), val1,
+                    EvEnd,
+                    fld( 1 ), ss( 3 ),
+                        fld( 0 ), val1,
+                        fld( 1 ), val1,
+                    EvEnd,
+                EvEnd,
+                fld( 1 ), ss( 3 ),
+                    fld( 0 ), val1,
+                    fld( 1 ), val1,
+                EvEnd,
             EvEnd,
         },
     }
@@ -476,17 +605,17 @@ func initFieldOrderPathTests() {
             res = append( res, evs[ i ]... )
         }
         return append( res, EvEnd )
-    } 
+    }
     for _, ord := range [][]int{
-        []int{ 0, 1, 2, 3 },
-        []int{ 3, 2, 1, 0 },
-        []int{ 2, 0, 3, 1 },
+        []int{ 0, 1, 2, 3, 4 },
+        []int{ 4, 3, 2, 1, 0 },
+        []int{ 2, 4, 0, 3, 1 },
     } {
         AddStdReactorTests(
             &FieldOrderPathTest{
                 Source: mkSrc( ord... ),
                 Expect: expct1,
-                Order: ord1,
+                Orders: ords1,
             },
         )
     }
@@ -500,7 +629,12 @@ func initFieldOrderPathTests() {
                 { val1, p( 1 ) },
                 { EvEnd, nil },
             },
-            Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ) },
+            Orders: []FieldOrderReactorTestOrder{
+                { 
+                    Type: ss( 1 ).Type,
+                    Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ) },
+                },
+            },
         },
     )
 }

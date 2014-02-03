@@ -80,7 +80,7 @@ func fopTestAsValue( t *mg.FieldOrderPathTest ) mg.Value {
     return mkStruct( "FieldOrderPathTest",
         "source", asValue( t.Source ),
         "expect", asValue( t.Expect ),
-        "order", asValue( t.Order ),
+        "orders", asValue( t.Orders ),
     )
 }
 
@@ -88,7 +88,7 @@ func fieldOrderReactorTestAsValue( t *mg.FieldOrderReactorTest ) mg.Value {
     return mkStruct( "FieldOrderReactorTest",
         "source", asValue( t.Source ),
         "expect", t.Expect,
-        "order", asValue( t.Order ),
+        "orders", asValue( t.Orders ),
     )
 }
 
@@ -131,6 +131,14 @@ func fieldOrderSpecAsValue( s mg.FieldOrderSpecification ) mg.Value {
     return mkStruct( "FieldOrderSpecification",
         "field", asValue( s.Field ),
         "required", s.Required,
+    )
+}
+
+func fieldOrderReactorTestOrderAsValue( 
+    ord mg.FieldOrderReactorTestOrder ) mg.Value {
+    return mkStruct( "FieldOrderReactorTestOrder",
+        "type", asValue( ord.Type ),
+        "order", asValue( ord.Order ),
     )
 }
 
@@ -187,6 +195,9 @@ func asValue( val interface{} ) mg.Value {
         return mkStruct( "ReactorError", "message", v.Error() )
     case *mg.UnrecognizedFieldError: return ufeAsValue( v )
     case *mg.MissingFieldsError: return mfeAsValue( v )
+    case []mg.FieldOrderReactorTestOrder: return sliceAsValue( v )
+    case mg.FieldOrderReactorTestOrder: 
+        return fieldOrderReactorTestOrderAsValue( v )
     case *mg.FieldOrderPathTest: return fopTestAsValue( v )
     case *mg.FieldOrderMissingFieldsTest: return fomfTestAsValue( v )
     case mg.FieldOrder: return sliceAsValue( []mg.FieldOrderSpecification( v ) )

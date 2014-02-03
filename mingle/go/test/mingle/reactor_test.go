@@ -148,15 +148,17 @@ func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
 }
 
 // simple fixed impl of FieldOrderGetter
-type fogImpl []*Identifier
+type fogImpl []FieldOrderReactorTestOrder
 
 func ( fog fogImpl ) FieldOrderFor( qn *QualifiedTypeName ) FieldOrder {
-    if qn.Equals( MustQualifiedTypeName( "ns1@v1/S1" ) ) { 
-        ord := make( []FieldOrderSpecification, len( fog ) )
-        for i, fld := range fog { 
-            ord[ i ] = FieldOrderSpecification{ Field: fld }
+    for _, ord := range fog {
+        if ord.Type.Equals( qn ) {
+            res := make( []FieldOrderSpecification, len( ord.Order ) )
+            for i, fld := range ord.Order { 
+                res[ i ] = FieldOrderSpecification{ Field: fld }
+            }
+            return FieldOrder( res )
         }
-        return FieldOrder( ord )
     }
     return nil
 }
@@ -179,12 +181,13 @@ func ( ocr *orderCheckReactor ) push( val interface{} ) {
 
 type orderTracker struct {
     ocr *orderCheckReactor
+    ord FieldOrderReactorTestOrder
     idx int
 }
 
 func ( ot *orderTracker ) checkField( fld *Identifier ) {
     fldIdx := -1
-    for i, id := range ot.ocr.fo.Order {
+    for i, id := range ot.ord.Order {
         if id.Equals( fld ) { 
             fldIdx = i
             break
@@ -196,14 +199,19 @@ func ( ot *orderTracker ) checkField( fld *Identifier ) {
     case fldIdx > ot.idx: ot.idx = fldIdx // assume skipping optional fields
     default:
         ot.ocr.Fatalf( "Expected field %s but saw %s",
-            ot.ocr.fo.Order[ ot.idx ], fld )
+            ot.ord.Order[ ot.idx ], fld )
     }
 }
 
 func ( ocr *orderCheckReactor ) startStruct( qn *QualifiedTypeName ) {
-    if qn.Equals( MustQualifiedTypeName( "ns1@v1/S1" ) ) {
-        ocr.push( &orderTracker{ ocr: ocr, idx: 0 } )
-    } else { ocr.push( "struct" ) }
+    for _, ord := range ocr.fo.Orders {
+        if ord.Type.Equals( qn ) {
+            ot := &orderTracker{ ocr: ocr, idx: 0, ord: ord }
+            ocr.push( ot )
+            return
+        }
+    }
+    ocr.push( "struct" )
 }
 
 func ( ocr *orderCheckReactor ) startField( fld *Identifier ) {
@@ -232,7 +240,7 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
         stack: &list.List{},
     }
     pip := InitReactorPipeline(
-        NewFieldOrderReactor( fogImpl( fo.Order ) ),
+        NewFieldOrderReactor( fogImpl( fo.Orders ) ),
         chk,
         vb,
     )
@@ -246,7 +254,7 @@ func ( c *ReactorTestCall ) callFieldOrderPath( fo *FieldOrderPathTest ) {
     c.assertEventExpectations(
         eventSliceSource( fo.Source ),
         fo.Expect,
-        []interface{}{ NewFieldOrderReactor( fogImpl( fo.Order ) ) },
+        []interface{}{ NewFieldOrderReactor( fogImpl( fo.Orders ) ) },
     )
 }
 
