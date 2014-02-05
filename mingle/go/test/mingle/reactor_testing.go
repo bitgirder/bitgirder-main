@@ -161,6 +161,10 @@ func initStructuralReactorTests() {
         mk3( nil, EventExpectation{ EvListStart, nil } ),
         mk3( nil,
             EventExpectation{ EvListStart, nil },
+            EventExpectation{ EvEnd, nil },
+        ),
+        mk3( nil,
+            EventExpectation{ EvListStart, nil },
             EventExpectation{ evValue1, lpRoot().SetIndex( 0 ) },
             EventExpectation{ EvEnd, nil },
         ),
@@ -315,16 +319,16 @@ func initFieldOrderValueTests() {
                     { 
                         Type: t1,
                         Order: []*Identifier{ 
-                            ids[ 0 ], ids[ 3 ], ids[ 2 ], ids[ 1 ] },
+                            ids[ 0 ], ids[ 1 ], ids[ 2 ], ids[ 3 ] },
                     },
                 },
             },
         )
     }
     for _, ord := range [][]int {
-        []int{ 0, 3, 2, 1 }, // first one should be straight passthrough
-        []int{ 0, 1, 2, 3 },
+        []int{ 0, 1, 2, 3 }, // first one should be straight passthrough
         []int{ 3, 2, 1, 0 },
+        []int{ 0, 3, 2, 1 }, 
         []int{ 0, 2, 3, 1 },
         []int{ 0, 1 },
         []int{ 0, 2 },
@@ -369,6 +373,29 @@ func initFieldOrderValueTests() {
     )
     // Test generic un-field-ordered values at the top-level as well
     for i := 0; i < 4; i++ { addTest1( fldEvs[ i ], fldVals[ i ] ) }
+    // Test arbitrary values with no orders in play
+    addTest2 := func( expct Value, src ...ReactorEvent ) {
+        AddStdReactorTests(
+            &FieldOrderReactorTest{
+                Source: src,
+                Expect: expct,
+                Orders: []FieldOrderReactorTestOrder{},
+            },
+        )
+    }
+    addTest2( i1, val1 )
+    addTest2( MustList(), EvListStart, EvEnd )
+    addTest2( MustList( i1 ), EvListStart, val1, EvEnd )
+    addTest2( MustSymbolMap(), EvMapStart, EvEnd )
+    addTest2( 
+        MustSymbolMap( ids[ 0 ], i1 ), 
+        EvMapStart, flds[ 0 ], val1, EvEnd,
+    )
+    addTest2( MustStruct( ss1.Type ), ss1, EvEnd )
+    addTest2( 
+        MustStruct( ss1.Type, ids[ 0 ], i1 ),
+        ss1, flds[ 0 ], val1, EvEnd,
+    )
 }
 
 type FieldOrderMissingFieldsTest struct {
@@ -634,6 +661,36 @@ func initFieldOrderPathTests() {
             },
         )
     }
+    AddStdReactorTests(
+        &FieldOrderPathTest{
+            Source: []ReactorEvent{
+                ss( 1 ),
+                    fld( 0 ), val1,
+                    fld( 7 ), val1,
+                    fld( 2 ), val1,
+                    fld( 1 ), val1,
+                EvEnd,
+            },
+            Expect: []EventExpectation{
+                { ss( 1 ), nil },
+                { fld( 0 ), p( 0 ) },
+                { val1, p( 0 ) },
+                { fld( 7 ), p( 7 ) },
+                { val1, p( 7 ) },
+                { fld( 1 ), p( 1 ) },
+                { val1, p( 1 ) },
+                { fld( 2 ), p( 2 ) },
+                { val1, p( 2 ) },
+                { EvEnd, nil },
+            },
+            Orders: []FieldOrderReactorTestOrder{
+                {
+                    Type: ss( 1 ).Type,
+                    Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ) },
+                },
+            },
+        },
+    )
     // Regression for bug fixed in previous commit (f7fa84122047)
     AddStdReactorTests(
         &FieldOrderPathTest{

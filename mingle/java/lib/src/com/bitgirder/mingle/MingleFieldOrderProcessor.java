@@ -152,7 +152,7 @@ implements MingleValueReactorPipeline.Processor,
                 return false;
             }
 
-            return true;
+            return specs.containsKey( fld );
         }
 
         private
@@ -195,7 +195,6 @@ implements MingleValueReactorPipeline.Processor,
         boolean
         isOptional( MingleIdentifier fld )
         {
-            codef( "in isOptional( %s ), specs: %s", fld, specs );
             return ! specs.get( fld ).required();
         }
 
@@ -317,13 +316,15 @@ implements MingleValueReactorPipeline.Processor,
     // current stack top to continue accumulating the container
     private
     void
-    processStartContainer( MingleValueReactorEvent ev )
+    processStartContainer( MingleValueReactorEvent ev,
+                           MingleValueReactor next )
         throws Exception
     {
         if ( stack.peek() instanceof StructAcc ) {
             push( ( (StructAcc) stack.peek() ).fieldReactor(), ev );
         } else {
-            push( stack.peek(), ev );
+            MingleValueReactor rct = stack.isEmpty() ? next : stack.peek();
+            push( rct, ev );
         }
     }
 
@@ -350,13 +351,12 @@ implements MingleValueReactorPipeline.Processor,
         throws Exception
     {
         MingleValueReactorFieldOrder ord = og.fieldOrderFor( ev.structType() );
-        codef( "ord for %s: %s", ev.structType(), ord );
 
         if ( ord == null ) {
-            processStartContainer( ev );
+            processStartContainer( ev, next );
             return;
         }
-            
+ 
         StructAcc acc = new StructAcc();
         acc.order = ord;
         structAccSetNext( acc, next );
@@ -389,8 +389,8 @@ implements MingleValueReactorPipeline.Processor,
         throws Exception
     {
         switch ( ev.type() ) {
-        case START_LIST: processStartContainer( ev ); break;
-        case START_MAP: processStartContainer( ev ); break;
+        case START_LIST: processStartContainer( ev, next ); break;
+        case START_MAP: processStartContainer( ev, next ); break;
         case START_STRUCT: processStartStruct( ev, next ); break;
         case VALUE: processValue( ev ); break;
         case START_FIELD: stack.peek().processEvent( ev ); break;

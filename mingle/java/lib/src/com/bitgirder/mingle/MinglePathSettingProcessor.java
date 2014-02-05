@@ -54,6 +54,8 @@ implements MingleValueReactorPipeline.Processor,
     void 
     pathPop() 
     { 
+        if ( path == null ) return;
+
         path = path.getParent(); 
         if ( path != null && path.isEmpty() ) path = null;
     }

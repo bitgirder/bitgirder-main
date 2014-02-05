@@ -23,6 +23,7 @@ import com.bitgirder.test.LabeledTestCall;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Deque;
 
 import java.util.regex.Pattern;
 
@@ -393,18 +394,17 @@ class MingleReactorTests
     }
 
     private
-    final
     static
-    class FieldOrderPathTest
+    abstract
+    class FieldOrderTest
     extends TestImpl
-    implements MingleValueReactor,
-               MingleFieldOrderProcessor.OrderGetter
+    implements MingleFieldOrderProcessor.OrderGetter
     {
-        private List< MingleValueReactorEvent > source;
-        private Queue< EventExpectation > expect;
-        private Map< QualifiedTypeName, List< MingleIdentifier > > orders;
+        List< MingleValueReactorEvent > source;
+        Map< QualifiedTypeName, List< MingleIdentifier > > orders;
 
         public
+        final
         MingleValueReactorFieldOrder
         fieldOrderFor( QualifiedTypeName type )
         {
@@ -420,6 +420,140 @@ class MingleReactorTests
             return new MingleValueReactorFieldOrder( l );
         }
 
+        final
+        MingleFieldOrderProcessor
+        createFieldOrderProcessor()
+        {
+            return MingleFieldOrderProcessor.create( this );
+        }
+    }
+
+    private
+    final
+    static
+    class FieldOrderReactorTest
+    extends FieldOrderTest
+    implements MingleValueReactor
+    {
+        private MingleValue expect;
+
+        private final Deque< Object > stack = Lang.newDeque();
+
+        private
+        final
+        static
+        class FieldTracker
+        {
+            private final MingleValueReactorFieldOrder ord;
+
+            private int expctIdx;
+
+            private 
+            FieldTracker( MingleValueReactorFieldOrder ord )
+            {
+                this.ord = ord;
+            }
+
+            private
+            int
+            orderIndexOfField( MingleIdentifier fld )
+            {
+                for ( int i = 0, e = ord.fields().size(); i < e; ++i ) {
+                    if ( ord.fields().get( i ).field().equals( fld ) ) {
+                        return i;
+                    }
+                }
+
+                return -1;
+            }
+ 
+            private
+            void
+            checkField( MingleIdentifier fld )
+            {
+                int idx = orderIndexOfField( fld );
+
+                if ( idx < 0 ) return;
+
+                if ( idx >= expctIdx ) {
+                    expctIdx = idx;
+                    return;
+                }
+
+                state.failf( 
+                    "Expected field %s (ord[ %d ]) but saw %s (ord[ %d ])",
+                    ord.fields().get( expctIdx ).field(), expctIdx, fld, idx );
+            }
+        }
+
+        private
+        void
+        pushStruct( QualifiedTypeName type )
+        {
+            MingleValueReactorFieldOrder ord = fieldOrderFor( type );
+
+            if ( ord == null ) {
+                stack.push( type );
+                return;
+            }
+
+            stack.push( new FieldTracker( ord ) );
+        }
+
+        private
+        void
+        startField( MingleIdentifier fld )
+        {
+            if ( stack.peek() instanceof FieldTracker ) {
+                ( (FieldTracker) stack.peek() ).checkField( fld );
+            }
+        }
+
+        public
+        void
+        processEvent( MingleValueReactorEvent ev )
+        {
+            switch ( ev.type() ) {
+            case START_LIST: stack.push( "list" ); break;
+            case START_MAP: stack.push( "map" ); break;
+            case START_STRUCT: pushStruct( ev.structType() ); break;
+            case START_FIELD: startField( ev.field() ); break;
+            case END: stack.pop(); break;
+            }
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            MingleValueBuilder vb = MingleValueBuilder.create();
+
+            MingleValueReactorPipeline pip =
+                new MingleValueReactorPipeline.Builder().
+                    addProcessor( createFieldOrderProcessor() ).
+                    addReactor( this ).
+                    addReactor( vb ).
+                    build();
+
+            for ( MingleValueReactorEvent ev : source ) {
+                pip.processEvent( ev );
+            }
+
+            MingleTests.assertEqual( expect, vb.value() );
+        }
+    }
+
+    private
+    final
+    static
+    class FieldOrderPathTest
+    extends FieldOrderTest
+    implements MingleValueReactor,
+               MingleFieldOrderProcessor.OrderGetter
+    {
+        private Queue< EventExpectation > expect;
+
         public
         void
         processEvent( MingleValueReactorEvent ev )
@@ -428,13 +562,6 @@ class MingleReactorTests
             ee.event.setPath( ee.path );
 
             assertEventsEqual( ee.event, "ee.event", ev, "ev" );
-        }
-
-        private
-        MingleFieldOrderProcessor
-        createFieldOrderProcessor()
-        {
-            return MingleFieldOrderProcessor.create( this );
         }
 
         public
@@ -836,23 +963,49 @@ class MingleReactorTests
         }
 
         private
+        MingleSymbolMap
+        initFieldOrderTest( FieldOrderTest t,
+                            MingleStruct ms )
+            throws Exception
+        {
+            t.setLabel( makeName( ms, null ) );
+
+            MingleSymbolMap res = ms.getFields();
+
+            t.source = asReactorEvents(
+                mapExpect( res, "source", MingleList.class ) );
+
+            t.orders = asFieldOrderMapByType(
+                mapExpect( res, "orders", MingleList.class ) );
+            
+            return res;
+        }
+
+        private
+        FieldOrderReactorTest
+        asFieldOrderReactorTest( MingleStruct ms )
+            throws Exception
+        {
+            FieldOrderReactorTest res = new FieldOrderReactorTest();
+
+            MingleSymbolMap map = initFieldOrderTest( res, ms );
+
+            res.expect = mapExpect( map, "expect", MingleValue.class );
+
+            return res;
+        }
+
+        private
         FieldOrderPathTest
         asFieldOrderPathTest( MingleStruct ms )
             throws Exception
         {
             FieldOrderPathTest res = new FieldOrderPathTest();
-            res.setLabel( makeName( ms, null ) );
 
-            MingleSymbolMap map = ms.getFields();
-
-            res.source = asReactorEvents(
-                mapExpect( map, "source", MingleList.class ) );
+            MingleSymbolMap map = initFieldOrderTest( res, ms );
 
             res.expect = asEventExpectationQueue(
                 mapExpect( map, "expect", MingleList.class ) );
-
-            res.orders = asFieldOrderMapByType(
-                mapExpect( map, "orders", MingleList.class ) );
 
             return res;
         }
@@ -873,6 +1026,8 @@ class MingleReactorTests
                 return asEventPathTest( ms );
             } else if ( nm.equals( "CastReactorTest" ) ) {
                 return asCastReactorTest( ms );
+            } else if ( nm.equals( "FieldOrderReactorTest" ) ) {
+                return asFieldOrderReactorTest( ms );
             } else if ( nm.equals( "FieldOrderPathTest" ) ) {
                 return asFieldOrderPathTest( ms );
             }

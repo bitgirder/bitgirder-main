@@ -194,13 +194,11 @@ func ( ot *orderTracker ) checkField( fld *Identifier ) {
         }
     }
     if fldIdx < 0 { return } // Okay -- not a constrained field
-    switch {
-    case fldIdx == ot.idx: ot.idx++
-    case fldIdx > ot.idx: ot.idx = fldIdx // assume skipping optional fields
-    default:
-        ot.ocr.Fatalf( "Expected field %s but saw %s",
-            ot.ord.Order[ ot.idx ], fld )
+    if fldIdx >= ot.idx {
+        ot.idx = fldIdx // if '>' then assume we skipped some optional fields
+        return
     }
+    ot.ocr.Fatalf( "Expected field %s but saw %s", ot.ord.Order[ ot.idx ], fld )
 }
 
 func ( ocr *orderCheckReactor ) startStruct( qn *QualifiedTypeName ) {
