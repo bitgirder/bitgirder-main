@@ -152,13 +152,7 @@ type fogImpl []FieldOrderReactorTestOrder
 
 func ( fog fogImpl ) FieldOrderFor( qn *QualifiedTypeName ) FieldOrder {
     for _, ord := range fog {
-        if ord.Type.Equals( qn ) {
-            res := make( []FieldOrderSpecification, len( ord.Order ) )
-            for i, fld := range ord.Order { 
-                res[ i ] = FieldOrderSpecification{ Field: fld }
-            }
-            return FieldOrder( res )
-        }
+        if ord.Type.Equals( qn ) { return ord.Order }
     }
     return nil
 }
@@ -181,14 +175,14 @@ func ( ocr *orderCheckReactor ) push( val interface{} ) {
 
 type orderTracker struct {
     ocr *orderCheckReactor
-    ord FieldOrderReactorTestOrder
+    ord FieldOrder
     idx int
 }
 
 func ( ot *orderTracker ) checkField( fld *Identifier ) {
     fldIdx := -1
-    for i, id := range ot.ord.Order {
-        if id.Equals( fld ) { 
+    for i, spec := range ot.ord {
+        if spec.Field.Equals( fld ) { 
             fldIdx = i
             break
         }
@@ -198,13 +192,13 @@ func ( ot *orderTracker ) checkField( fld *Identifier ) {
         ot.idx = fldIdx // if '>' then assume we skipped some optional fields
         return
     }
-    ot.ocr.Fatalf( "Expected field %s but saw %s", ot.ord.Order[ ot.idx ], fld )
+    ot.ocr.Fatalf( "Expected field %s but saw %s", ot.ord[ ot.idx ].Field, fld )
 }
 
 func ( ocr *orderCheckReactor ) startStruct( qn *QualifiedTypeName ) {
     for _, ord := range ocr.fo.Orders {
         if ord.Type.Equals( qn ) {
-            ot := &orderTracker{ ocr: ocr, idx: 0, ord: ord }
+            ot := &orderTracker{ ocr: ocr, idx: 0, ord: ord.Order }
             ocr.push( ot )
             return
         }

@@ -536,9 +536,7 @@ class MingleReactorTests
                     addReactor( vb ).
                     build();
 
-            for ( MingleValueReactorEvent ev : source ) {
-                pip.processEvent( ev );
-            }
+            for ( MingleValueReactorEvent ev : source ) pip.processEvent( ev );
 
             MingleTests.assertEqual( expect, vb.value() );
         }

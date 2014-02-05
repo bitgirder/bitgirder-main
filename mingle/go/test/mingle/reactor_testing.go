@@ -252,8 +252,17 @@ func initStructuralReactorTests() {
 }
 
 type FieldOrderReactorTestOrder struct {
-    Order []*Identifier
+    Order FieldOrder
     Type *QualifiedTypeName
+}
+
+func testOrderWithIds( 
+    typ *QualifiedTypeName, ids ...*Identifier ) FieldOrderReactorTestOrder {
+    ord := make( []FieldOrderSpecification, len( ids ) )
+    for i, id := range ids { 
+        ord[ i ] = FieldOrderSpecification{ Field: id, Required: false }
+    }
+    return FieldOrderReactorTestOrder{ Type: typ, Order: ord }
 }
 
 type FieldOrderReactorTest struct {
@@ -316,11 +325,8 @@ func initFieldOrderValueTests() {
                 Source: src, 
                 Expect: expct, 
                 Orders: []FieldOrderReactorTestOrder{
-                    { 
-                        Type: t1,
-                        Order: []*Identifier{ 
-                            ids[ 0 ], ids[ 1 ], ids[ 2 ], ids[ 3 ] },
-                    },
+                    testOrderWithIds( t1,
+                        ids[ 0 ], ids[ 1 ], ids[ 2 ], ids[ 3 ] ),
                 },
             },
         )
@@ -358,9 +364,7 @@ func initFieldOrderValueTests() {
                 EvEnd,
             },
             Orders: []FieldOrderReactorTestOrder{
-                { Type: t1, 
-                  Order: []*Identifier{ ids[ 1 ], ids[ 0 ], ids[ 2 ] },
-                },
+                testOrderWithIds( t1, ids[ 1 ], ids[ 0 ], ids[ 2 ] ),
             },
             Expect: MustStruct( t1,
                 ids[ 0 ], i1,
@@ -581,18 +585,10 @@ func initFieldOrderPathTests() {
         { EvEnd, nil },
     }
     ords1 := []FieldOrderReactorTestOrder{
-        { 
-            Type: ss( 1 ).Type,
-            Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ), id( 3 ), id( 4 ) },
-        },
-        {
-            Type: ss( 2 ).Type,
-            Order: []*Identifier{ id( 0 ), id( 1 ) },
-        },
-        {
-            Type: ss( 3 ).Type,
-            Order: []*Identifier{ id( 0 ), id( 1 ) },
-        },
+        testOrderWithIds( ss( 1 ).Type,
+            id( 0 ), id( 1 ), id( 2 ), id( 3 ), id( 4 ) ),
+        testOrderWithIds( ss( 2 ).Type, id( 0 ), id( 1 ) ),
+        testOrderWithIds( ss( 3 ).Type, id( 0 ), id( 1 ) ),
     }
     evs := [][]ReactorEvent{
         []ReactorEvent{ val1 },
@@ -684,10 +680,7 @@ func initFieldOrderPathTests() {
                 { EvEnd, nil },
             },
             Orders: []FieldOrderReactorTestOrder{
-                {
-                    Type: ss( 1 ).Type,
-                    Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ) },
-                },
+                testOrderWithIds( ss( 1 ).Type, id( 0 ), id( 1 ), id( 2 ) ),
             },
         },
     )
@@ -702,10 +695,7 @@ func initFieldOrderPathTests() {
                 { EvEnd, nil },
             },
             Orders: []FieldOrderReactorTestOrder{
-                { 
-                    Type: ss( 1 ).Type,
-                    Order: []*Identifier{ id( 0 ), id( 1 ), id( 2 ) },
-                },
+                testOrderWithIds( ss( 1 ).Type, id( 0 ), id( 1 ), id( 2 ) ),
             },
         },
     )
