@@ -288,7 +288,7 @@ class PathTests
     void
     assertAsImmutablePath( ObjectPath< V > expct )
     {
-        ObjectPath< V > act = ObjectPaths.asImmutablePath( expct );
+        ObjectPath< V > act = ObjectPaths.asImmutableCopy( expct );
 
         for ( ObjectPath< V > p : act.collectDescent() ) {
             assertImmutableInstance( p );

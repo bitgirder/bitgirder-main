@@ -39,6 +39,20 @@ class MingleValueReactorEvent
 
     private ObjectPath< MingleIdentifier > path;
 
+    public
+    MingleValueReactorEvent
+    copy( boolean copyPath )
+    {
+        MingleValueReactorEvent res = new MingleValueReactorEvent();
+        res.type = this.type;
+        res.fld = this.fld;
+        res.structType = this.structType;
+        res.val = this.val;
+        if ( copyPath ) res.path = this.path;
+        
+        return res;
+    }
+
     public Type type() { return type; }
 
     private

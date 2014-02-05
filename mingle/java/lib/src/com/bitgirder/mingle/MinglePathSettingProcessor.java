@@ -13,7 +13,7 @@ import com.bitgirder.lang.path.MutableListPath;
 import com.bitgirder.lang.path.ListPath;
 import com.bitgirder.lang.path.DictionaryPath;
 
-import com.bitgirder.pipeline.PipelineInitializationContext;
+import com.bitgirder.pipeline.PipelineInitializerContext;
 import com.bitgirder.pipeline.PipelineInitializer;
 
 import java.util.Deque;
@@ -45,7 +45,7 @@ implements MingleValueReactorPipeline.Processor,
 
     public
     void
-    initialize( PipelineInitializationContext< Object > ctx )
+    initialize( PipelineInitializerContext< Object > ctx )
     {
         MingleValueReactors.ensureStructuralCheck( ctx );
     }
@@ -115,6 +115,17 @@ implements MingleValueReactorPipeline.Processor,
         prepareValue();
     }
 
+    // if this is the end of a list, we pop the path before sending the event,
+    // though we'll pop the START_LIST from endTypes afterwards
+    private
+    void
+    prepareEnd()
+    {
+        if ( endTypes.peek() == MingleValueReactorEvent.Type.START_LIST ) {
+            pathPop();
+        }
+    }
+
     private
     void
     prepareEvent( MingleValueReactorEvent ev )
@@ -125,7 +136,7 @@ implements MingleValueReactorPipeline.Processor,
         case START_MAP: prepareStartMap( ev ); break;
         case START_LIST: prepareStartList( ev ); break;
         case START_FIELD: prepareStartField( ev ); break;
-        case END: break;
+        case END: prepareEnd(); break;
         default: state.failf( "unhandled event: %s", ev.type() );
         }
 
@@ -153,8 +164,8 @@ implements MingleValueReactorPipeline.Processor,
         switch ( evTyp ) {
         case START_FIELD: pathPop(); break;
         case START_LIST: 
-            pathPop();
-            valueCompleted();
+//            pathPop(); 
+            valueCompleted(); 
             break;
         case START_STRUCT: valueCompleted(); break;
         case START_MAP: valueCompleted(); break;
@@ -198,7 +209,7 @@ implements MingleValueReactorPipeline.Processor,
     {
         inputs.notNull( start, "start" );
 
-        start = ObjectPaths.asImmutablePath( start );
+        start = ObjectPaths.asImmutableCopy( start );
         return new MinglePathSettingProcessor( start );
     }
 }

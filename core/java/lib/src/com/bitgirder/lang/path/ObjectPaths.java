@@ -174,7 +174,7 @@ class ObjectPaths
     static
     < V >
     ObjectPath< V >
-    asImmutablePath( ObjectPath< V > p )
+    asImmutableCopy( ObjectPath< V > p )
     {
         inputs.notNull( p, "p" );
 

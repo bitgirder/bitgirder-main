@@ -159,6 +159,11 @@ func initStructuralReactorTests() {
              EventExpectation{ evValue1, idPath1 },
         ),
         mk3( nil, EventExpectation{ EvListStart, nil } ),
+        mk3( nil,
+            EventExpectation{ EvListStart, nil },
+            EventExpectation{ evValue1, lpRoot().SetIndex( 0 ) },
+            EventExpectation{ EvEnd, nil },
+        ),
         mk3( lpRoot(),
              EventExpectation{ EvListStart, nil },
              EventExpectation{ EvMapStart, lpRoot() },
@@ -183,6 +188,16 @@ func initStructuralReactorTests() {
              EventExpectation{ evStartField1, idPath1 },
              EventExpectation{ EvMapStart, idPath1 },
         ),
+        mk3( nil,
+            EventExpectation{ evStartStruct1, nil },
+            EventExpectation{ evStartField1, idPath1 },
+            EventExpectation{ EvListStart, idPath1 },
+            EventExpectation{ evValue1, idPath1.StartList().SetIndex( 0 ) },
+            EventExpectation{ evValue1, idPath1.StartList().SetIndex( 1 ) },
+            EventExpectation{ EvEnd, idPath1 },
+            EventExpectation{ EvEnd, nil },
+        ),
+        // a somewhat elaborate test with a non-trivial expected final path
         mk3( idPath1.Descend( idF2 ).
                      StartList().
                      Next().

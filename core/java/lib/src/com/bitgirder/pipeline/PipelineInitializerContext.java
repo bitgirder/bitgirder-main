@@ -1,7 +1,7 @@
 package com.bitgirder.pipeline;
 
 public
-interface PipelineInitializationContext< V >
+interface PipelineInitializerContext< V >
 {
     // the current pipeline; not guaranteed to remain the same across the life
     // of this instance

@@ -213,7 +213,6 @@ class MingleReactorTests
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
                     addProcessor( ps ).
-//                    addReactor( MingleValueReactors.createDebugReactor() ).
                     addReactor( this ).
                     build();
  
@@ -398,11 +397,28 @@ class MingleReactorTests
     static
     class FieldOrderPathTest
     extends TestImpl
-    implements MingleValueReactor
+    implements MingleValueReactor,
+               MingleFieldOrderProcessor.OrderGetter
     {
         private List< MingleValueReactorEvent > source;
         private Queue< EventExpectation > expect;
         private Map< QualifiedTypeName, List< MingleIdentifier > > orders;
+
+        public
+        MingleValueReactorFieldOrder
+        fieldOrderFor( QualifiedTypeName type )
+        {
+            List< MingleIdentifier > order = orders.get( type );
+            if ( order == null ) return null;
+
+            List< MingleValueReactorFieldSpecification > l = Lang.newList();
+
+            for ( MingleIdentifier id : order ) {
+                l.add( new MingleValueReactorFieldSpecification( id, false ) );
+            }
+
+            return new MingleValueReactorFieldOrder( l );
+        }
 
         public
         void
@@ -414,17 +430,25 @@ class MingleReactorTests
             assertEventsEqual( ee.event, "ee.event", ev, "ev" );
         }
 
+        private
+        MingleFieldOrderProcessor
+        createFieldOrderProcessor()
+        {
+            return MingleFieldOrderProcessor.create( this );
+        }
+
         public
         void
         call()
             throws Exception
         {
-            codef( "orders: %s", orders );
-
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
-                    addProcessor( MinglePathSettingProcessor.create() ).
-                    addReactor( MingleValueReactors.createDebugReactor() ).
+//                    addReactor( 
+//                        MingleValueReactors.createDebugReactor( "PRE" ) ).
+                    addProcessor( createFieldOrderProcessor() ).
+                    addReactor(
+                        MingleValueReactors.createDebugReactor( "POST" ) ).
                     addReactor( this ).
                     build();
 

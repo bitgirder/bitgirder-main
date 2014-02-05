@@ -6,8 +6,9 @@ import com.bitgirder.validation.State;
 import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ObjectPaths;
 
-import com.bitgirder.pipeline.PipelineInitializationContext;
+import com.bitgirder.pipeline.PipelineInitializerContext;
 import com.bitgirder.pipeline.PipelineInitializer;
 
 import com.bitgirder.lang.Lang;
@@ -101,7 +102,7 @@ implements MingleValueReactorPipeline.Processor,
 
     public
     void
-    initialize( PipelineInitializationContext< Object > ctx )
+    initialize( PipelineInitializerContext< Object > ctx )
     {
         MingleValueReactors.ensureStructuralCheck( ctx );
         MingleValueReactors.ensurePathSetter( ctx );
@@ -109,10 +110,18 @@ implements MingleValueReactorPipeline.Processor,
 
     private
     void
+    failCast( ObjectPath< MingleIdentifier > path,
+              String msg )
+    {
+        throw new MingleValueCastException( msg, path );
+    }
+
+    private
+    void
     failCast( MingleValueReactorEvent ev,
               String msg )
     {
-        throw new MingleValueCastException( msg, ev.path() );
+        failCast( ev.path(), msg );
     }
 
     private
@@ -150,12 +159,18 @@ implements MingleValueReactorPipeline.Processor,
 
         private boolean sawValues;
 
+        private ObjectPath< MingleIdentifier > startPath;
+
         private 
         ListCast( ListTypeReference type,
-                  MingleTypeReference callTyp ) 
+                  MingleTypeReference callTyp,
+                  ObjectPath< MingleIdentifier > startPath ) 
         { 
             this.type = type; 
             this.callTyp = callTyp;
+
+            this.startPath = startPath == null ? 
+                null : ObjectPaths.asImmutableCopy( startPath );
         }
     }
 
@@ -268,7 +283,8 @@ implements MingleValueReactorPipeline.Processor,
             AtomicTypeReference at = (AtomicTypeReference) typ;
             processStartListWithAtomicType( ev, at, callTyp, next );
         } else if ( typ instanceof ListTypeReference ) {
-            stack.push( new ListCast( (ListTypeReference) typ, callTyp ) );
+            ListTypeReference lt = (ListTypeReference) typ;
+            stack.push( new ListCast( lt, callTyp, ev.path() ) );
             next.processEvent( ev );
         } else if ( typ instanceof NullableTypeReference ) {
             NullableTypeReference nt = (NullableTypeReference) typ;
@@ -501,7 +517,7 @@ implements MingleValueReactorPipeline.Processor,
         {
             ListCast lc = (ListCast) stack.pop();
             if ( ! ( lc.sawValues || lc.type.allowsEmpty() ) ) {
-                failCastf( ev, "List is empty" );
+                failCast( lc.startPath, "List is empty" );
             }
         } 
         else if ( stack.peek() instanceof FieldTyper ) stack.pop();

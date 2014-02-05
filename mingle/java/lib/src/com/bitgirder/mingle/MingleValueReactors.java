@@ -5,7 +5,7 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.log.CodeLoggers;
 
-import com.bitgirder.pipeline.PipelineInitializationContext;
+import com.bitgirder.pipeline.PipelineInitializerContext;
 import com.bitgirder.pipeline.Pipelines;
 
 import java.util.Map;
@@ -214,7 +214,7 @@ class MingleValueReactors
     public
     static
     MingleValueStructuralCheck
-    ensureStructuralCheck( PipelineInitializationContext< Object > ctx )
+    ensureStructuralCheck( PipelineInitializerContext< Object > ctx )
     {
         inputs.notNull( ctx, "ctx" );
         
@@ -232,7 +232,7 @@ class MingleValueReactors
     public
     static
     MinglePathSettingProcessor
-    ensurePathSetter( PipelineInitializationContext< Object > ctx )
+    ensurePathSetter( PipelineInitializerContext< Object > ctx )
     {
         inputs.notNull( ctx, "ctx" );
 

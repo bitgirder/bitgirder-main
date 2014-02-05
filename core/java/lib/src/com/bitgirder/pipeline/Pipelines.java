@@ -35,7 +35,7 @@ class Pipelines
     final
     static
     class InitializerImpl< V >
-    implements PipelineInitializationContext< V >
+    implements PipelineInitializerContext< V >
     {
         private final DefaultPipeline< V > pip = 
             new DefaultPipeline< V >( new ArrayList< V >() );
@@ -65,7 +65,7 @@ class Pipelines
     {
         private final InitializerImpl< V > init = new InitializerImpl< V >();
 
-        // Behaves similarly to PipelineInitializationContext.addElement(); see
+        // Behaves similarly to PipelineInitializerContext.addElement(); see
         // that method for a note about what happens when elt implemnts
         // PipelineInitializer
         public

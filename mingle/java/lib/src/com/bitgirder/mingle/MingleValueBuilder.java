@@ -6,7 +6,7 @@ import com.bitgirder.validation.State;
 import com.bitgirder.lang.Lang;
 
 import com.bitgirder.pipeline.PipelineInitializer;
-import com.bitgirder.pipeline.PipelineInitializationContext;
+import com.bitgirder.pipeline.PipelineInitializerContext;
 
 import java.util.Deque;
 import java.util.List;
@@ -28,7 +28,7 @@ implements MingleValueReactor,
 
     public
     void
-    initialize( PipelineInitializationContext< Object > ctx )
+    initialize( PipelineInitializerContext< Object > ctx )
     {
         MingleValueReactors.ensureStructuralCheck( ctx );
     }
