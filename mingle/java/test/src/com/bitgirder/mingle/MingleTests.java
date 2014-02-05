@@ -19,6 +19,7 @@ import com.bitgirder.lang.reflect.ReflectUtils;
 import com.bitgirder.test.Test;
 
 import java.util.Iterator;
+import java.util.List;
 
 import java.lang.reflect.Method;
 
@@ -467,7 +468,7 @@ class MingleTests
         throws Exception
     {
         assertValueException(
-            MissingFieldsException.class,
+            MingleMissingFieldsException.class,
             path,
             String.format( "missing field(s): %s", fldList ),
             blk
@@ -583,15 +584,33 @@ class MingleTests
         final MingleListAccessor.Traversal t = acc.traversal();
 
         state.equal( new MingleString( "str1" ), t.nextMingleString() );
-//        state.equal( "str2", t.nextString() );
-//        state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
-//        
-//        assertValueException(
-//            MingleValueCastException.class,
-//            ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
-//            "Expected value of type mingle:core@v1/Buffer but found " +
-//                "mingle:core@v1/Int32",
-//            new TestBlock() { public void run() { t.nextMingleBuffer(); } }
-//        );
+        state.equal( "str2", t.nextString() );
+        state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
+        
+        assertValueException(
+            MingleValueCastException.class,
+            ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
+            "Expected value of type mingle:core@v1/Buffer but found " +
+                "mingle:core@v1/Int32",
+            new TestBlock() { public void run() { t.nextMingleBuffer(); } }
+        );
+    }
+
+    @Test
+    public
+    void
+    testMissingFieldsExceptionMessage()
+    {
+        List< MingleIdentifier > flds = Lang.newList();
+
+        flds.add( id( "f2" ) );
+
+        state.equal( "missing field(s): f2",
+            new MingleMissingFieldsException( flds, null ).getMessage() );
+        
+        flds.add( id( "f1" ) );
+
+        state.equal( "missing field(s): f1, f2",
+            new MingleMissingFieldsException( flds, null ).getMessage() );
     }
 }

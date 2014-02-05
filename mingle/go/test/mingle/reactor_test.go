@@ -250,13 +250,6 @@ func ( c *ReactorTestCall ) callFieldOrderPath( fo *FieldOrderPathTest ) {
     )
 }
 
-type staticFieldOrderGetter []FieldOrderSpecification
-
-func ( s staticFieldOrderGetter ) FieldOrderFor( 
-    qn *QualifiedTypeName ) FieldOrder {
-    return FieldOrder( s )
-}
-
 func ( c *ReactorTestCall ) assertMissingFieldsError(
     mfe *MissingFieldsError, err error ) {
     if mfe == nil { c.Fatal( err ) }
@@ -269,7 +262,7 @@ func ( c *ReactorTestCall ) assertMissingFieldsError(
 func ( c *ReactorTestCall ) callFieldOrderMissingFields(
     mf *FieldOrderMissingFieldsTest ) {
     vb := NewValueBuilder()
-    ord := NewFieldOrderReactor( staticFieldOrderGetter( mf.Order ) )
+    ord := NewFieldOrderReactor( fogImpl( mf.Orders ) )
     rct := InitReactorPipeline( ord, vb )
     for _, ev := range mf.Source {
         if err := rct.ProcessEvent( ev ); err != nil { 

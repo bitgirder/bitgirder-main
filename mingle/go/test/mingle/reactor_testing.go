@@ -403,7 +403,7 @@ func initFieldOrderValueTests() {
 }
 
 type FieldOrderMissingFieldsTest struct {
-    Order FieldOrder
+    Orders []FieldOrderReactorTestOrder
     Source []ReactorEvent
     Expect Value
     Error *MissingFieldsError
@@ -421,6 +421,7 @@ func initFieldOrderMissingFieldTests() {
         },
     )
     t1 := qname( "ns1@v1/S1" )
+    ords := []FieldOrderReactorTestOrder{ { Order: ord, Type: t1 } }
     mkSrc := func( flds []int ) []ReactorEvent {
         evs := []interface{}{ StructStartEvent{ t1 } }
         for _, fld := range flds {
@@ -439,7 +440,7 @@ func initFieldOrderMissingFieldTests() {
     addSucc := func( flds ...int ) {
         AddStdReactorTests(
             &FieldOrderMissingFieldsTest{
-                Order: ord,
+                Orders: ords,
                 Source: mkSrc( flds ),
                 Expect: mkVal( flds ),
             },
@@ -455,7 +456,7 @@ func initFieldOrderMissingFieldTests() {
         for i, missId := range missIds { miss[ i ] = fldId( missId ) }
         AddStdReactorTests(
             &FieldOrderMissingFieldsTest{
-                Order: ord,
+                Orders: ords,
                 Source: mkSrc( flds ),
                 Error: NewMissingFieldsError( nil, miss ),
             },

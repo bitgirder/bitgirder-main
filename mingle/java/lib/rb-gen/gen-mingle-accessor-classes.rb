@@ -215,7 +215,11 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+
 import com.bitgirder.lang.path.ObjectPath;
+
+import java.util.List;
 
 public
 class MingleSymbolMapAccessor
@@ -263,7 +267,12 @@ extends MingleValueAccessor
         );
 
         if ( res instanceof MingleNull ) {
-            if ( expct ) throw new MissingFieldsException( path, fld );
+
+            if ( expct ) {
+                List< MingleIdentifier > flds = Lang.singletonList( fld );
+                throw new MingleMissingFieldsException( flds, path );
+            }
+
             return null;
         }
 

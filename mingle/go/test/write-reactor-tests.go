@@ -68,7 +68,7 @@ func mfeAsValue( mfe *mg.MissingFieldsError ) mg.Value {
 
 func fomfTestAsValue( t *mg.FieldOrderMissingFieldsTest ) mg.Value {
     pairs := []interface{}{
-        "order", asValue( t.Order ),
+        "orders", asValue( t.Orders ),
         "source", asValue( t.Source ),
         "expect", asValue( t.Expect ),
     }

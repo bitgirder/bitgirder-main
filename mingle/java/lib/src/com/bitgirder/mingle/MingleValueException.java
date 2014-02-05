@@ -22,7 +22,9 @@ extends RuntimeException
         super();
 
         this.err = state.notNull( err, "err" );
-        this.loc = state.notNull( loc, "loc" );
+
+        this.loc = loc == null ? 
+            ObjectPath.< MingleIdentifier >getRoot() : loc;
     }
 
     public final String error() { return err; }

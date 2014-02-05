@@ -17,6 +17,7 @@ import java.util.Deque;
 import java.util.Queue;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public
 final
@@ -105,10 +106,12 @@ implements MingleValueReactorPipeline.Processor,
         // never null
         private MingleValueReactorFieldOrder order;
 
-        // fieldQueue, saved, and specs are lazily instantiated upon arrival of
-        // this instance's START_STRUCT event
+        // fieldQueue, saved, specs, and requiredRemaining are lazily
+        // instantiated upon arrival of this instance's START_STRUCT event
 
         private Queue< MingleIdentifier > fieldQueue;
+
+        private Set< MingleIdentifier > requiredRemaining;
 
         private Map< MingleIdentifier, List< MingleValueReactorEvent > > saved;
 
@@ -132,10 +135,12 @@ implements MingleValueReactorPipeline.Processor,
             saved = Lang.newMap();
             fieldQueue = Lang.newQueue();
             specs = Lang.newMap();
+            requiredRemaining = Lang.newSet();
 
             for ( MingleValueReactorFieldSpecification spec : order.fields() ) {
                 fieldQueue.add( spec.field() );
                 specs.put( spec.field(), spec );
+                if ( spec.required() ) requiredRemaining.add( spec.field() );
             }
 
             next.processEvent( ev );
@@ -164,6 +169,7 @@ implements MingleValueReactorPipeline.Processor,
                 "saw field '%s' while curFld is '%s'", ev.field(), curFld );
  
             curFld = ev.field();
+            requiredRemaining.remove( curFld );
 
             if ( shouldAccumulate( curFld ) ) {
                 curAcc = Lang.newList();
@@ -284,6 +290,13 @@ implements MingleValueReactorPipeline.Processor,
             throws Exception
         {
             sendReadyFields( true );
+
+            if ( ! requiredRemaining.isEmpty() ) 
+            {
+                throw new MingleMissingFieldsException(
+                    requiredRemaining, ev.path() );
+            }
+
             next.processEvent( ev );              
         }
     }
