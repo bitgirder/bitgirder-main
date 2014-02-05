@@ -401,23 +401,14 @@ class MingleReactorTests
     implements MingleFieldOrderProcessor.OrderGetter
     {
         List< MingleValueReactorEvent > source;
-        Map< QualifiedTypeName, List< MingleIdentifier > > orders;
+        Map< QualifiedTypeName, MingleValueReactorFieldOrder > orders;
 
         public
         final
         MingleValueReactorFieldOrder
         fieldOrderFor( QualifiedTypeName type )
         {
-            List< MingleIdentifier > order = orders.get( type );
-            if ( order == null ) return null;
-
-            List< MingleValueReactorFieldSpecification > l = Lang.newList();
-
-            for ( MingleIdentifier id : order ) {
-                l.add( new MingleValueReactorFieldSpecification( id, false ) );
-            }
-
-            return new MingleValueReactorFieldOrder( l );
+            return orders.get( type );
         }
 
         final
@@ -937,11 +928,39 @@ class MingleReactorTests
         }
 
         private
-        Map< QualifiedTypeName, List< MingleIdentifier > >
+        MingleValueReactorFieldSpecification
+        asFieldOrderSpecification( MingleSymbolMap map )
+            throws Exception
+        {
+            return new MingleValueReactorFieldSpecification(
+                asIdentifier( mapExpect( map, "field", byte[].class ) ),
+                mapExpect( map, "required", Boolean.class )
+            );
+        }
+
+        private
+        MingleValueReactorFieldOrder
+        asFieldOrder( MingleList ml )
+            throws Exception
+        {
+            List< MingleValueReactorFieldSpecification > fields =
+                Lang.newList();
+
+            for ( MingleValue mv : ml )
+            {
+                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
+                fields.add( asFieldOrderSpecification( map ) );
+            }
+
+            return new MingleValueReactorFieldOrder( fields );
+        }
+
+        private
+        Map< QualifiedTypeName, MingleValueReactorFieldOrder >
         asFieldOrderMapByType( MingleList ml )
             throws Exception
         {
-            Map< QualifiedTypeName, List< MingleIdentifier > > res =
+            Map< QualifiedTypeName, MingleValueReactorFieldOrder > res =
                 Lang.newMap();
 
             for ( MingleValue mv : ml ) 
@@ -951,7 +970,7 @@ class MingleReactorTests
                 QualifiedTypeName type = asQname(
                     mapExpect( map, "type", byte[].class ) );
 
-                List< MingleIdentifier > ord = asIdentifierList(
+                MingleValueReactorFieldOrder ord = asFieldOrder(
                     mapExpect( map, "order", MingleList.class ) );
                 
                 Lang.putUnique( res, type, ord );
