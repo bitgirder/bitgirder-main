@@ -60,6 +60,11 @@ func ( l *ListNode ) SetIndex( indx int ) *ListNode {
     return l
 }
 
+func ( l *ListNode ) Increment() *ListNode {
+    l.indx++
+    return l
+}
+
 type AppendFunc func( s string )
 
 type Formatter interface {
@@ -115,6 +120,33 @@ func Visit( p PathNode, v Visitor ) error {
         }
     }
     return nil
+}
+
+type copyVisitor struct { p PathNode }
+
+func ( cv *copyVisitor ) Descend( elt interface{} ) error {
+    if cv.p == nil {
+        cv.p = RootedAt( elt )
+    } else {
+        cv.p = cv.p.Descend( elt )
+    }
+    return nil
+}
+
+func ( cv *copyVisitor ) List( idx int ) error {
+    if cv.p == nil {
+        cv.p = RootedAtList().SetIndex( idx )
+    } else {
+        cv.p = cv.p.StartList().SetIndex( idx )
+    }
+    return nil
+}
+
+func CopyOf( p PathNode ) PathNode {
+    if p == nil { return nil }
+    cv := &copyVisitor{}
+    Visit( p, cv )
+    return cv.p
 }
 
 type formatVisitor struct {

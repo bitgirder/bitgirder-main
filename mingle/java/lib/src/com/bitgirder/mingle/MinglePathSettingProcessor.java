@@ -64,6 +64,8 @@ implements MingleValueReactorPipeline.Processor,
     void
     updateList()
     {
+        codef( "in updateList, path: %s, awaitingList0: %s",
+            path, awaitingList0 );
         if ( awaitingList0 ) {
             if ( path == null ) path = ObjectPath.getRoot();
             path = path.startMutableList();
@@ -81,9 +83,7 @@ implements MingleValueReactorPipeline.Processor,
     void
     prepareStartList( MingleValueReactorEvent ev )
     {
-        // The call to updateList() would be updating the containing list, not
-        // the one being started.
-        updateList();
+        prepareValue(); // this list is itself a value somewhere
 
         endTypes.push( ev.type() );
 
@@ -164,13 +164,10 @@ implements MingleValueReactorPipeline.Processor,
         MingleValueReactorEvent.Type evTyp = endTypes.pop();
 
         switch ( evTyp ) {
-        case START_FIELD: pathPop(); break;
         case START_LIST: 
-//            pathPop(); 
-            valueCompleted(); 
-            break;
-        case START_STRUCT: valueCompleted(); break;
-        case START_MAP: valueCompleted(); break;
+        case START_STRUCT: 
+        case START_MAP: 
+            valueCompleted(); break;
         default: state.failf( "unexpected end type: %s", evTyp );
         }
     }
@@ -211,7 +208,9 @@ implements MingleValueReactorPipeline.Processor,
     {
         inputs.notNull( start, "start" );
 
-        start = ObjectPaths.asImmutableCopy( start );
+        start = ObjectPaths.asMutableCopy( start );
+        codef( "start path instanceof: %s", start.getClass() );
+        
         return new MinglePathSettingProcessor( start );
     }
 }

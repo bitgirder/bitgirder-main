@@ -548,7 +548,7 @@ func ( r *BinReader ) readScalarValue(
     case tcEnum: val, err = r.readEnum()
     default: panic( libErrorf( "Not a scalar val type: 0x%02x", tc ) )
     }
-    if err == nil { err = rep.ProcessEvent( ValueEvent{ val } ) }
+    if err == nil { err = rep.ProcessEvent( NewValueEvent( val ) ) }
     return 
 }
 
@@ -557,10 +557,10 @@ func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
         tc, err := r.ReadTypeCode()
         if err != nil { return err }
         switch tc {
-        case tcEnd: return rep.ProcessEvent( EvEnd )
+        case tcEnd: return rep.ProcessEvent( NewEndEvent() )
         case tcField:
             id, err := r.ReadIdentifier()
-            if err == nil { err = rep.ProcessEvent( FieldStartEvent{ id } ) }
+            if err == nil { err = rep.ProcessEvent( NewFieldStartEvent( id ) ) }
             if err != nil { return err }
             if err := r.implReadValue( rep ); err != nil { return err }
         default: return r.ioErrorf( "Unexpected map pair code: 0x%02x", tc )
@@ -570,14 +570,14 @@ func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readSymbolMap( rep ReactorEventProcessor ) error {
-    if err := rep.ProcessEvent( EvMapStart ); err != nil { return err }
+    if err := rep.ProcessEvent( NewMapStartEvent() ); err != nil { return err }
     return r.readMapFields( rep )
 }
 
 func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err }
     if qn, err := r.ReadQualifiedTypeName(); err == nil {
-        if err = rep.ProcessEvent( StructStartEvent{ qn } ); err != nil { 
+        if err = rep.ProcessEvent( NewStructStartEvent( qn ) ); err != nil { 
             return err 
         }
     } else { return err }
@@ -586,13 +586,13 @@ func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
 
 func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err } // skip size
-    if err := rep.ProcessEvent( EvListStart ); err != nil { return err }
+    if err := rep.ProcessEvent( NewListStartEvent() ); err != nil { return err }
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
         if tc == tcEnd {
             if _, err = r.ReadTypeCode(); err != nil { return err }
-            return rep.ProcessEvent( EvEnd )
+            return rep.ProcessEvent( NewEndEvent() )
         } else { 
             if err = r.implReadValue( rep ); err != nil { return err } 
         }

@@ -275,34 +275,51 @@ class PathTests
 
     private
     void
-    assertImmutableInstance( ObjectPath< ? > p )
+    assertMutableInstance( ObjectPath< ? > p,
+                           boolean wantMutable )
     {
-        state.isTruef(
-            p instanceof DictionaryPath ||
-            p instanceof ImmutableListPath,
-            "not immutable (or known to be): %s", p );
+        // we don't yet have mutable dictionary paths, but if/when we do we'd
+        // check that here
+        if ( p instanceof DictionaryPath ) return;
+
+        ListPath< ? > lp = state.cast( ListPath.class, p );
+
+        if ( wantMutable ) state.cast( MutableListPath.class, lp );
+        else state.cast( ImmutableListPath.class, lp );
     }
 
     private
     < V >
     void
-    assertAsImmutablePath( ObjectPath< V > expct )
+    assertCopy( ObjectPath< V > expct,
+                boolean mutable )   
     {
-        ObjectPath< V > act = ObjectPaths.asImmutableCopy( expct );
+        ObjectPath< V > act = mutable ?
+            ObjectPaths.asMutableCopy( expct ) :
+            ObjectPaths.asImmutableCopy( expct );
 
         for ( ObjectPath< V > p : act.collectDescent() ) {
-            assertImmutableInstance( p );
+            assertMutableInstance( p, mutable );
         }
 
         state.isTrue( ObjectPaths.areEqual( expct, act ) );
     }
 
+    private
+    < V >
+    void
+    assertCopy( ObjectPath< V > expct )
+    {
+        assertCopy( expct, true );
+        assertCopy( expct, false );
+    }
+
     @Test
     public
     void
-    testAsImmutablePath()
+    testCopies()
     {
-        assertAsImmutablePath( ObjectPath.< String >getRoot() );
+        assertCopy( ObjectPath.< String >getRoot() );
 
         ObjectPath< String > p = ObjectPath.getRoot( "n1" ).
             descend( "n2" ).
@@ -311,6 +328,6 @@ class PathTests
             startMutableList( 3 ).
             descend( "n4" );
         
-        for ( ; p != null; p = p.getParent() ) assertAsImmutablePath( p );
+        for ( ; p != null; p = p.getParent() ) assertCopy( p );
     }
 }

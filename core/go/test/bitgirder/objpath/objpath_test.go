@@ -14,6 +14,8 @@ func assertDeepEq( expct, act interface{}, t *testing.T ) {
     }
 }
 
+func formatDot( p PathNode ) string { return Format( p, StringDotFormatter ) }
+
 type pathBuildVisitor struct {
     p PathNode
     calls int
@@ -77,6 +79,8 @@ func TestVisitAbortOnError( t *testing.T ) {
 
 type eltType string
 
+func ( et eltType ) String() string { return string( et ) }
+
 type fmtTest struct {
     path PathNode
     expct string
@@ -90,6 +94,8 @@ func ( ft *fmtTest ) call( t *testing.T ) {
     if str != ft.expct { t.Fatalf( "expected %#v but got %#v", ft.expct, str ) }
 }
 
+// In addition to testing formatting, these tests give us coverage of various
+// path functions (SetIndex(), Descend(), Increment(), etc)
 func TestPathFormatter( t *testing.T ) {
     fmtTests := []*fmtTest {
 
@@ -102,6 +108,15 @@ func TestPathFormatter( t *testing.T ) {
                   Descend( eltType( "p2" ) ).
                   Descend( eltType( "p3" ) ),
             expct: "p1.p2.p3",
+        },
+
+        &fmtTest{
+            path: RootedAt( eltType( "p1" ) ).
+                  StartList().
+                  SetIndex( 4 ).
+                  Increment().
+                  Descend( eltType( "p2" ) ),
+            expct: "p1[ 5 ].p2",
         },
 
         &fmtTest{
@@ -194,4 +209,23 @@ func TestParentOfUtilMethod( t *testing.T ) {
     chk( p1.StartList() )
     chk( p1.StartList().SetIndex( 3 ) )
     chk( p1.StartList().Next() )
+}
+
+func assertCopy( p PathNode, t *testing.T ) PathNode {
+    p2 := CopyOf( p )
+    assertDeepEq( formatDot( p ), formatDot( p2 ), t )
+    return p
+}
+
+func TestCopy( t *testing.T ) {
+    assertDeepEq( nil, CopyOf( nil ), t )
+    assertCopy( RootedAtList(), t )
+    p1 := RootedAt( eltType( "p1" ) )
+    p1 = assertCopy( p1, t ).Descend( "p2" )
+    p1 = assertCopy( p1, t ).StartList()
+    p1 = assertCopy( p1, t ).( *ListNode ).SetIndex( 8 )
+    p2 := CopyOf( p1 )
+    fmt2PreMut := formatDot( p2 )
+    p1.( *ListNode ).Increment()
+    assertDeepEq( fmt2PreMut, formatDot( p2 ), t )
 }

@@ -143,7 +143,6 @@ class MingleReactorTests
     implements MingleValueReactor
     {
         private ObjectPath< MingleIdentifier > startPath;
-        private ObjectPath< MingleIdentifier > finalPath;
         private Queue< EventExpectation > events;
 
         // the most recent path seen
@@ -183,7 +182,6 @@ class MingleReactorTests
         processEvent( MingleValueReactorEvent ev )
         {
             ObjectPath< MingleIdentifier > expct = events.peek().path;
-            if ( startPath != null ) expct = append( startPath, expct );
             assertIdPathsEqual( expct, ev.path() );
 
             lastPath = ev.path();
@@ -213,13 +211,13 @@ class MingleReactorTests
 
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
+                    addReactor( MingleValueReactors.createDebugReactor() ).
                     addProcessor( ps ).
                     addReactor( this ).
                     build();
  
             feedEvents( pip );
             state.isTrue( events.isEmpty() );
-            assertIdPathsEqual( finalPath, "finalPath", ps.path(), "ps.path" );
         }
     }
 
@@ -882,9 +880,6 @@ class MingleReactorTests
 
             res.startPath = 
                 asIdentifierPath( mapGet( map, "startPath", byte[].class ) );
-
-            res.finalPath =
-                asIdentifierPath( mapGet( map, "finalPath", byte[].class ) );
 
             res.events = asEventExpectationQueue( 
                 mapGet( map, "events", MingleList.class ) );

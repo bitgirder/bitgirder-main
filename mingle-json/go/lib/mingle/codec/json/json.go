@@ -255,12 +255,12 @@ func ( c *JsonCodec ) visitList(
     path objpath.PathNode, 
     rep mg.ReactorEventProcessor ) error {
     lp := startList( path )
-    if err := rep.ProcessEvent( mg.EvListStart ); err != nil { return err }
+    if err := rep.ProcessEvent( mg.NewListStartEvent() ); err != nil { return err }
     for _, val := range l {
         if err := c.visitValue( val, lp, rep ); err != nil { return err }
         lp = lp.Next()
     }
-    return rep.ProcessEvent( mg.EvEnd )
+    return rep.ProcessEvent( mg.NewEndEvent() )
 }
 
 // m[ $constant ] known to be present, though not necessarily valid
@@ -307,7 +307,7 @@ func ( c *JsonCodec ) visitFields(
             }
         }
     }
-    return rep.ProcessEvent( mg.EvEnd )
+    return rep.ProcessEvent( mg.NewEndEvent() )
 }
 
 func expectQname( 
@@ -352,7 +352,7 @@ func ( c *JsonCodec ) visitMap(
         if path == nil {
             return visitErrorf( path, "Missing type key (%q)", jsonKeyType )
         }
-        if err := rep.ProcessEvent( mg.EvMapStart ); err != nil { return err }
+        if err := rep.ProcessEvent( mg.NewMapStartEvent() ); err != nil { return err }
     }
     return c.visitFields( m, path, rep )
 }

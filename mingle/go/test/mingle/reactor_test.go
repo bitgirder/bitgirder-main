@@ -124,19 +124,20 @@ func assertEventPathReactorOn(
     }
 }
 
-func ( c *ReactorTestCall ) callEventPath(
-    pt *EventPathTest ) {
+func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
+    
+    rct := NewPathSettingProcessor();
+    if pt.StartPath != nil { rct.SetStartPath( pt.StartPath ) }
+
+    chk := newEventPathCheckReactor( pt.Events, c.PathAsserter )
+
+//    pip := InitReactorPipeline( NewDebugReactor( c ), rct, chk )
+    pip := InitReactorPipeline( rct, chk )
+    
     src := eventExpectSource( pt.Events )
-    assertEventPathReactorOn( src, pt.Events, c.Descend( "epRctChk" ) )
-    pip := c.assertEventExpectations( src, pt.Events, []interface{}{} )
-    sr := pip.MustFindByKey( ReactorKeyStructuralReactor ).
-              ( *StructuralReactor )
-//    c.Logf( "Checking final paths, start path: %v", pt.StartPath )
-    var act idPath
-    if pt.StartPath == nil { 
-        act = sr.GetPath() 
-    } else { act = sr.AppendPath( pt.StartPath ) }
-    c.Equal( pt.FinalPath, act )
+    if err := FeedEventSource( src, pip ); err != nil { c.Fatal( err ) }
+
+    chk.complete()
 }
 
 func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
@@ -551,10 +552,13 @@ func ( c *ReactorTestCall ) call() {
 }
 
 func TestReactors( t *testing.T ) {
-    a := assert.NewListPathAsserter( t )
+    a := assert.NewPathAsserter( t )
+    la := a.StartList();
     for _, rt := range StdReactorTests {
-        ( &ReactorTestCall{ PathAsserter: a, Test: rt } ).call()
-        a = a.Next()
+        ta := la
+        if nt, ok := rt.( NamedTest ); ok { ta = a.Descend( nt.TestName() ) }
+        ( &ReactorTestCall{ PathAsserter: ta, Test: rt } ).call()
+        la = la.Next()
     }
 }
 

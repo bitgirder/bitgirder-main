@@ -105,7 +105,6 @@ func eventPathTestAsValue( t *mg.EventPathTest ) mg.Value {
     return mkStruct( "EventPathTest",
         "events", asValue( t.Events ),
         "start-path", asValue( t.StartPath ),
-        "final-path", asValue( t.FinalPath ),
     )
 }
 

@@ -547,11 +547,11 @@ func ( rti *rtInit ) addDefaultPathTests() {
     }
     qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
     t1 := qn1.AsAtomicType()
-    ss1 := mg.StructStartEvent{ qn1 }
+    ss1 := mg.NewStructStartEvent( qn1 )
     fse := func( fld string ) mg.FieldStartEvent {
-        return mg.FieldStartEvent{ id( fld ) }
+        return mg.NewFieldStartEvent( id( fld ) )
     }
-    iv1 := mg.ValueEvent{ mg.Int32( 1 ) }
+    iv1 := mg.NewValueEvent( mg.Int32( 1 ) )
     src, expct := []mg.ReactorEvent{}, []mg.EventExpectation{}
     apnd := func( ev mg.ReactorEvent, p objpath.PathNode, synth bool ) {
         if ! synth { src = append( src, ev ) }
@@ -561,18 +561,18 @@ func ( rti *rtInit ) addDefaultPathTests() {
     apnd( fse( "f1" ), p( "f1" ), false )
     apnd( iv1, p( "f1" ), false )
     apnd( fse( "f2" ), p( "f2" ), false )
-    apnd( mg.EvListStart, p( "f2" ), false )
+    apnd( mg.NewListStartEvent(), p( "f2" ), false )
     apnd( iv1, p( "f2" ).StartList().SetIndex( 0 ), false )
     apnd( iv1, p( "f2" ).StartList().SetIndex( 1 ), false )
-    apnd( mg.EvEnd, p( "f2" ), false )
+    apnd( mg.NewEndEvent(), p( "f2" ), false )
     apnd( fse( "f3" ), p( "f3" ), false )
-    apnd( mg.EvMapStart, p( "f3" ), false )
+    apnd( mg.NewMapStartEvent(), p( "f3" ), false )
     apnd( fse( "f1" ), p( "f3" ).Descend( id( "f1" ) ), false )
     apnd( iv1, p( "f3" ).Descend( id( "f1" ) ), false )
-    apnd( mg.EvEnd, p( "f3" ), false )
+    apnd( mg.NewEndEvent(), p( "f3" ), false )
     apnd( fse( "f4" ), p( "f4" ), true )
     apnd( iv1, p( "f4" ), true )
-    apnd( mg.EvEnd, nil, false )
+    apnd( mg.NewEndEvent(), nil, false )
     rti.addTests(
         &EventPathTest{ Source: src, Expect: expct, Type: t1, Map: dm } )
 }

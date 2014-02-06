@@ -265,7 +265,7 @@ func ( cr *castReactor ) feedDefault(
     fld *mg.Identifier, defl mg.Value, rep mg.ReactorEventProcessor ) error {
     cr.deflFeed = mg.NewEventPathReactor( rep )
     defer func() { cr.deflFeed = nil }()
-    fs := mg.FieldStartEvent{ fld }
+    fs := mg.NewFieldStartEvent( fld )
     if err := cr.deflFeed.ProcessEvent( fs ); err != nil { return err }
     return mg.VisitValue( defl, cr.deflFeed )
 }
@@ -488,7 +488,7 @@ type parametersReactor struct { rep mg.ReactorEventProcessor }
 
 func ( pr parametersReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
     if ss, ok := ev.( mg.StructStartEvent ); ok {
-        if ss.Type.Equals( typeTypedParameterMap ) { ev = mg.EvMapStart }
+        if ss.Type.Equals( typeTypedParameterMap ) { ev = mg.NewMapStartEvent() }
     }
     return pr.rep.ProcessEvent( ev )
 }

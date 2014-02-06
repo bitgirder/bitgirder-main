@@ -5,7 +5,9 @@ import (
     "fmt"
     "bitgirder/objpath"
     "bytes"
+    "strings"
 //    "log"
+    "bitgirder/stack"
 )
 
 type ReactorError struct { msg string }
@@ -18,31 +20,88 @@ func rctErrorf( tmpl string, args ...interface{} ) *ReactorError {
     return rctError( fmt.Sprintf( tmpl, args... ) )
 }
 
-type ReactorEvent interface { reactorEventImpl() }
+type ReactorEvent interface {
 
-type ValueEvent struct { Val Value }
-func ( ve ValueEvent ) reactorEventImpl() {}
+    // may be the empty path
+    GetPath() objpath.PathNode
 
-type StructStartEvent struct { Type *QualifiedTypeName }
-func ( sse StructStartEvent ) reactorEventImpl() {}
+    SetPath( path objpath.PathNode )
+}
 
-type MapStartEvent int
-func ( mse MapStartEvent ) reactorEventImpl() {}
+type reactorEventImpl struct {
+    path objpath.PathNode
+}
 
-const EvMapStart = MapStartEvent( 0 )
+func ( ri *reactorEventImpl ) GetPath() objpath.PathNode { return ri.path }
 
-type FieldStartEvent struct { Field *Identifier }
-func ( fse FieldStartEvent ) reactorEventImpl() {}
+func ( ri *reactorEventImpl ) SetPath( path objpath.PathNode ) { 
+    ri.path = path 
+}
 
-type ListStartEvent int
-func( lse ListStartEvent ) reactorEventImpl() {}
+type ValueEvent struct { 
+    *reactorEventImpl
+    Val Value 
+}
 
-const EvListStart = ListStartEvent( 0 )
+func NewValueEvent( val Value ) ValueEvent { 
+    return ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
+}
 
-type EndEvent int
-func ( ee EndEvent ) reactorEventImpl() {}
+type StructStartEvent struct { 
+    *reactorEventImpl
+    Type *QualifiedTypeName 
+}
 
-const EvEnd = EndEvent( 0 )
+func NewStructStartEvent( typ *QualifiedTypeName ) StructStartEvent {
+    return StructStartEvent{ Type: typ, reactorEventImpl: &reactorEventImpl{} }
+}
+
+type MapStartEvent struct {
+    *reactorEventImpl
+}
+
+func NewMapStartEvent() MapStartEvent {
+    return MapStartEvent{ reactorEventImpl: &reactorEventImpl{} }
+}
+
+type FieldStartEvent struct { 
+    *reactorEventImpl
+    Field *Identifier 
+}
+
+func NewFieldStartEvent( fld *Identifier ) FieldStartEvent {
+    return FieldStartEvent{ Field: fld, reactorEventImpl: &reactorEventImpl{} }
+}
+
+type ListStartEvent struct {
+    *reactorEventImpl
+}
+
+func NewListStartEvent() ListStartEvent {
+    return ListStartEvent{ reactorEventImpl: &reactorEventImpl{} }
+}
+
+type EndEvent struct {
+    *reactorEventImpl
+}
+
+func NewEndEvent() EndEvent {
+    return EndEvent{ reactorEventImpl: &reactorEventImpl{} }
+}
+
+func EventToString( ev ReactorEvent ) string {
+    pairs := [][]string{ { "type", fmt.Sprintf( "%T", ev ) } }
+    switch v := ev.( type ) {
+    case ValueEvent: 
+        pairs = append( pairs, []string{ "value", QuoteValue( v.Val ) } )
+    }
+    if p := ev.GetPath(); p != nil {
+        pairs = append( pairs, []string{ "path", FormatIdPath( p ) } )
+    }
+    elts := make( []string, len( pairs ) )
+    for i, pair := range pairs { elts[ i ] = strings.Join( pair, " = " ) }
+    return fmt.Sprintf( "[ %s ]", strings.Join( elts, ", " ) )
+}
 
 type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
 
@@ -169,29 +228,29 @@ func ( rp *ReactorPipeline ) MustFindByKey( k ReactorKey ) KeyedProcessor {
 func visitSymbolMap( 
     m *SymbolMap, callStart bool, rep ReactorEventProcessor ) error {
     if callStart {
-        if err := rep.ProcessEvent( EvMapStart ); err != nil { return err }
+        if err := rep.ProcessEvent( NewMapStartEvent() ); err != nil { return err }
     }
     err := m.EachPairError( func( fld *Identifier, val Value ) error {
-        ev := FieldStartEvent{ fld }
+        ev := NewFieldStartEvent( fld )
         if err := rep.ProcessEvent( ev ); err != nil { return err }
         return VisitValue( val, rep )
     })
     if err != nil { return err }
-    return rep.ProcessEvent( EvEnd )
+    return rep.ProcessEvent( NewEndEvent() )
 }
 
 func visitStruct( ms *Struct, rep ReactorEventProcessor ) error {
-    ev := StructStartEvent{ ms.Type }
+    ev := NewStructStartEvent( ms.Type )
     if err := rep.ProcessEvent( ev ); err != nil { return err }
     return visitSymbolMap( ms.Fields, false, rep )
 }
 
 func visitList( ml *List, rep ReactorEventProcessor ) error {
-    if err := rep.ProcessEvent( EvListStart ); err != nil { return err }
+    if err := rep.ProcessEvent( NewListStartEvent() ); err != nil { return err }
     for _, val := range ml.Values() {
         if err := VisitValue( val, rep ); err != nil { return err }
     }
-    return rep.ProcessEvent( EvEnd )
+    return rep.ProcessEvent( NewEndEvent() )
 }
 
 func VisitValue( mv Value, rep ReactorEventProcessor ) error {
@@ -200,7 +259,7 @@ func VisitValue( mv Value, rep ReactorEventProcessor ) error {
     case *SymbolMap: return visitSymbolMap( v, true, rep )
     case *List: return visitList( v, rep )
     }
-    return rep.ProcessEvent( ValueEvent{ mv } )
+    return rep.ProcessEvent( NewValueEvent( mv ) )
 }
 
 type ReactorTopType int
@@ -564,6 +623,126 @@ func EnsureStructuralReactor( rpi *ReactorPipelineInit ) *StructuralReactor {
     return sr
 }
 
+type endType int
+
+const (
+    endTypeList = endType( iota )
+    endTypeMap
+    endTypeStruct
+    endTypeField
+)
+
+
+type PathSettingProcessor struct {
+    endTypes *stack.Stack
+    awaitingList0 bool
+    path objpath.PathNode
+}
+
+func NewPathSettingProcessor() *PathSettingProcessor {
+    return &PathSettingProcessor{ endTypes: stack.NewStack() }
+}
+
+func ( proc *PathSettingProcessor ) SetStartPath( p objpath.PathNode ) {
+    if p == nil { return }
+    proc.path = objpath.CopyOf( p )
+}
+
+func ( proc *PathSettingProcessor ) Init( rpi *ReactorPipelineInit ) {
+    EnsureStructuralReactor( rpi )
+}
+
+func ( proc *PathSettingProcessor ) pathPop() {
+    if proc.path != nil { proc.path = proc.path.Parent() }
+}
+
+func ( proc *PathSettingProcessor ) updateList() {
+    if proc.awaitingList0 {
+        if proc.path == nil { 
+            proc.path = objpath.RootedAtList() 
+        } else {
+            proc.path = proc.path.StartList()
+        }
+        proc.awaitingList0 = false
+    } else {
+        if lp, ok := proc.path.( *objpath.ListNode ); ok { lp.Increment() }
+    }
+}
+
+func ( proc *PathSettingProcessor ) prepareValue() { proc.updateList() }
+
+func ( proc *PathSettingProcessor ) prepareListStart() {
+    proc.prepareValue() // this list may be a new value in a nested list
+    proc.endTypes.Push( endTypeList )
+    proc.awaitingList0 = true
+}
+
+func ( proc *PathSettingProcessor ) prepareStructure( et endType ) {
+    proc.prepareValue()
+    proc.endTypes.Push( et )
+}
+
+func ( proc *PathSettingProcessor ) prepareStartField( f *Identifier ) {
+    proc.endTypes.Push( endTypeField )
+    if proc.path == nil {
+        proc.path = objpath.RootedAt( f )
+    } else {
+        proc.path = proc.path.Descend( f )
+    }
+}
+
+func ( proc *PathSettingProcessor ) prepareEnd() {
+    if top := proc.endTypes.Peek(); top != nil {
+        if top.( endType ) == endTypeList { proc.pathPop() }
+    }
+}
+
+func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
+    switch v := ev.( type ) {
+    case ValueEvent: proc.prepareValue()
+    case ListStartEvent: proc.prepareListStart()
+    case MapStartEvent: proc.prepareStructure( endTypeMap )
+    case StructStartEvent: proc.prepareStructure( endTypeStruct )
+    case FieldStartEvent: proc.prepareStartField( v.Field )
+    case EndEvent: proc.prepareEnd()
+    }
+    if proc.path != nil { ev.SetPath( proc.path ) }
+}
+
+func ( proc *PathSettingProcessor ) processedValue() {
+    if top := proc.endTypes.Peek(); top != nil {
+        if top.( endType ) == endTypeField { 
+            proc.endTypes.Pop()
+            proc.pathPop() 
+        }
+    }
+}
+
+func ( proc *PathSettingProcessor ) processedEnd() {
+    et := proc.endTypes.Pop().( endType )
+    switch et {
+    case endTypeList, endTypeStruct, endTypeMap: proc.processedValue()
+    default: panic( libErrorf( "unexpected end type for END: %d", et ) )
+    }
+}
+
+func ( proc *PathSettingProcessor ) eventProcessed( ev ReactorEvent ) {
+    switch ev.( type ) {
+    case ValueEvent: proc.processedValue()
+    case EndEvent: proc.processedEnd()
+    }
+}
+
+func ( proc *PathSettingProcessor ) ProcessEvent(
+    ev ReactorEvent,
+    rep ReactorEventProcessor,
+) error {
+    proc.prepareEvent( ev )
+    if err := rep.ProcessEvent( ev ); err != nil { return err }
+    proc.eventProcessed( ev )
+    return nil
+}
+
 type accImpl interface {
     valueReady( val Value ) 
     end() ( Value, error )
@@ -857,7 +1036,7 @@ func ( cr *CastReactor ) completeValue(
     switch typVal := t.( type ) {
     case *AtomicTypeReference: 
         v2, err := cr.castAtomic( ve.Val, typVal )
-        if err == nil { return rep.ProcessEvent( ValueEvent{ v2 } ) }
+        if err == nil { return rep.ProcessEvent( NewValueEvent( v2 ) ) }
         return err
     case *NullableTypeReference: 
         if _, ok := ve.Val.( *Null ); ok { return rep.ProcessEvent( ve ) }
@@ -933,7 +1112,7 @@ func ( cr *CastReactor ) completeStartMap(
     }
     if qn := cr.inferredStructTypeOf( typ ); qn != nil {
         at := &AtomicTypeReference{ Name: qn }
-        return cr.completeStartStruct( StructStartEvent{ qn }, at, rep )
+        return cr.completeStartStruct( NewStructStartEvent( qn ), at, rep )
     }
     return cr.newTypeCastError( TypeSymbolMap )
 }
@@ -959,7 +1138,7 @@ func ( cr *CastReactor ) completeStartStruct(
     at := &AtomicTypeReference{ Name: ss.Type }
     switch {
     case t.Equals( at ) || t.Equals( TypeValue ): expctTyp, ev = at, ss
-    case t.Equals( TypeSymbolMap ): expctTyp, ev = TypeSymbolMap, EvMapStart
+    case t.Equals( TypeSymbolMap ): expctTyp, ev = TypeSymbolMap, NewMapStartEvent()
     default: return cr.newTypeCastError( at )
     }
     ft, err := cr.iface.FieldTyperFor( ss.Type, cr )
@@ -1522,8 +1701,8 @@ func ( sr *ServiceRequestReactor ) end() error {
         sr.paramsSynth = true
         ep, err := sr.iface.GetParametersProcessor( sr );
         if err != nil { return err }
-        if err := ep.ProcessEvent( EvMapStart ); err != nil { return err }
-        if err := ep.ProcessEvent( EvEnd ); err != nil { return err }
+        if err := ep.ProcessEvent( NewMapStartEvent() ); err != nil { return err }
+        if err := ep.ProcessEvent( NewEndEvent() ); err != nil { return err }
     }
     return nil
 }
@@ -1654,14 +1833,12 @@ func ( sr *ServiceResponseReactor ) ProcessEvent( ev ReactorEvent ) error {
 }
 
 type DebugLogger interface {
-    Logf( tmpl string, args ...interface{} )
+    Log( msg string )
 }
 
-type DebugLoggerFunc func( string, ...interface{} )
+type DebugLoggerFunc func( string )
 
-func ( f DebugLoggerFunc ) Logf( tmpl string, args ...interface{} ) {
-    f( tmpl, args... )
-}
+func ( f DebugLoggerFunc ) Log( msg string ) { f( msg ) }
 
 type debugReactor struct { 
     l DebugLogger 
@@ -1674,11 +1851,7 @@ func ( dr *debugReactor ) Init( rpi *ReactorPipelineInit ) {
 }
 
 func ( dr *debugReactor ) ProcessEvent( ev ReactorEvent ) error {
-    var path string
-    if dr.pg == nil { 
-        path = "< path unknown >" 
-    } else { path = FormatIdPath( dr.pg.GetPath() ) }
-    dr.l.Logf( "%s: %v (%T)", path, ev, ev )
+    dr.l.Log( EventToString( ev ) )
     return nil
 }
 
