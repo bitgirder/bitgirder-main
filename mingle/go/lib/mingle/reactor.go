@@ -6,8 +6,8 @@ import (
     "bitgirder/objpath"
     "bytes"
     "strings"
-    "log"
     "bitgirder/stack"
+//    "log"
 )
 
 type ReactorError struct { msg string }
@@ -251,8 +251,11 @@ func ( rp *ReactorPipeline ) MustFindByKey( k ReactorKey ) KeyedProcessor {
 
 func visitSymbolMap( 
     m *SymbolMap, callStart bool, rep ReactorEventProcessor ) error {
+
     if callStart {
-        if err := rep.ProcessEvent( NewMapStartEvent() ); err != nil { return err }
+        if err := rep.ProcessEvent( NewMapStartEvent() ); err != nil { 
+            return err 
+        }
     }
     err := m.EachPairError( func( fld *Identifier, val Value ) error {
         ev := NewFieldStartEvent( fld )
@@ -305,9 +308,9 @@ func ( t ReactorTopType ) String() string {
     panic( libErrorf( "Unhandled reactor top type: %d", t ) )
 }
 
-func getReactorTopTypeError( valName string, tt ReactorTopType ) error {
-    return rctErrorf( "Expected %s but got %s", tt, valName )
-}
+//func getReactorTopTypeError( valName string, tt ReactorTopType ) error {
+//    return rctErrorf( "Expected %s but got %s", tt, valName )
+//}
 
 type structuralMap struct {
     pending *Identifier
@@ -436,16 +439,13 @@ func ( epr *EventPathReactor ) ProcessEvent( ev ReactorEvent ) error {
 }
 
 type StructuralReactor struct {
-    stack *eventStack
+    stack *stack.Stack
     topTyp ReactorTopType
     done bool
 }
 
 func NewStructuralReactor( topTyp ReactorTopType ) *StructuralReactor {
-    return &StructuralReactor{ 
-        stack: newEventStack(),
-        topTyp: topTyp,
-    }
+    return &StructuralReactor{ stack: stack.NewStack(), topTyp: topTyp }
 }
 
 const ReactorKeyStructuralReactor = ReactorKey( "mingle.StructuralReactor" )
@@ -454,184 +454,342 @@ func ( sr *StructuralReactor ) Key() ReactorKey {
     return ReactorKeyStructuralReactor
 }
 
-func ( sr *StructuralReactor ) GetPath() objpath.PathNode {
-    return sr.stack.GetPath()
+//func ( sr *StructuralReactor ) GetPath() objpath.PathNode {
+//    return sr.stack.GetPath()
+//}
+//
+//func ( sr *StructuralReactor ) AppendPath( 
+//    p objpath.PathNode ) objpath.PathNode {
+//    return sr.stack.AppendPath( p )
+//}
+
+//func ( sr *StructuralReactor ) getReactorTopTypeError( valName string ) error {
+//    return getReactorTopTypeError( valName, sr.topTyp )
+//}
+//
+//func ( sr *StructuralReactor ) checkActive( call string ) error {
+//    if sr.done { return rctErrorf( "%s() called, but struct is built", call ) }
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) mapIsTop() *structuralMap {
+//    if elt := sr.stack.peek(); elt != nil {
+//        if m, ok := elt.( *structuralMap ); ok { return m }
+//    }
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) checkMapValue( 
+//    valName string, m *structuralMap ) error {
+//    if m.pending != nil { return nil }
+//    tmpl := "Expected field name or end of fields but got %s"
+//    return rctErrorf( tmpl, valName )
+//}
+//
+//// sr.stack known to be non-empty when this returns without error, unless top
+//// type is value.
+//func ( sr *StructuralReactor ) checkValueWithNameFunc( 
+//    nmFunc func() string ) error {
+//    if sr.stack.isEmpty() {
+//        if sr.topTyp == ReactorTopTypeValue { return nil }
+//        return sr.getReactorTopTypeError( nmFunc() )
+//    }
+//    switch v := sr.stack.peek().( type ) {
+//    case *Identifier: {}
+//    case listIndex: {}
+//    case *structuralMap:
+//        if err := sr.checkMapValue( nmFunc(), v ); err != nil { return err }
+//    default: panic( libErrorf( "Unexpected stack elt for value: %T", v ) )
+//    }
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) checkValue( valName string ) error {
+//    return sr.checkValueWithNameFunc( func() string { return valName } )
+//}
+//
+//func ( sr *StructuralReactor ) prepareListVal() {
+//    sr.stack.prepareListVal()
+//}
+//
+//func ( sr *StructuralReactor ) implStartMap() error {
+//    sr.prepareListVal()
+//    sr.stack.pushMap( newStructuralMap() )
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) startStruct( typ *QualifiedTypeName ) error {
+//    if err := sr.checkActive( "StartStruct" ); err != nil { return err }
+//    // skip check if we're pushing the top level struct
+//    if ! sr.stack.isEmpty() {
+//        nmFunc := func() string { 
+//            return fmt.Sprintf( "start of struct %s", typ.ExternalForm() )
+//        }
+//        if err := sr.checkValueWithNameFunc( nmFunc ); err != nil { return err }
+//    }
+//    return sr.implStartMap()
+//}
+//
+//func ( sr *StructuralReactor ) startMap() error {
+//    if err := sr.checkActive( "StartMap" ); err != nil { return err }
+//    if err := sr.checkValue( "map start" ); err != nil { return err }
+//    return sr.implStartMap()
+//}
+//
+//// Note about the prepareListVal() call below: it has nothing to do with the
+//// list we're starting; it pertains to the (possible) list to which we're adding
+//// the current list as a value.
+//func ( sr *StructuralReactor ) startList() error {
+//    if err := sr.checkActive( "StartList" ); err != nil { return err }
+//    if err := sr.checkValue( "list start" ); err != nil { return err }
+//    sr.prepareListVal() 
+//    sr.stack.pushList( listIndex( -1 ) )
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) startMapField( 
+//    fld *Identifier, m *structuralMap ) error {
+//    if m.pending != nil {
+//        panic( libErrorf( "startMapField while pending: %s", m.pending ) )
+//    }
+//    if m.keys.HasKey( fld ) {
+//        return rctErrorf( "Multiple entries for field: %s", fld )
+//    }
+//    m.keys.Put( fld, true )
+//    m.pending = fld
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
+//    if err := sr.checkActive( "StartField" ); err != nil { return err }
+//    if elt := sr.stack.peek(); elt != nil {
+//        switch v := elt.( type ) {
+//        case listIndex: 
+//            tmpl := "Saw start of field '%s' while expecting a list value"
+//            return rctErrorf( tmpl, fld )
+//        case *structuralMap: 
+//            if err := sr.startMapField( fld, v ); err != nil { return err }
+//            sr.stack.pushField( fld )
+//            return nil
+//        case *Identifier:
+//            tmpl := 
+//                "Saw start of field '%s' while expecting a value for field '%s'"
+//            return rctErrorf( tmpl, fld, v )
+//        default: panic( libErrorf( "Invalid stack element: %v (%T)", v, v ) )
+//        }
+//    }
+//    errLoc := fmt.Sprintf( "start of field '%s'", fld )
+//    return getReactorTopTypeError( errLoc, ReactorTopTypeStruct )
+//}
+//
+//func ( sr *StructuralReactor ) value( isAtomic bool ) error {
+//    if err := sr.checkActive( "Value" ); err != nil { return err }
+//    if err := sr.checkValue( "value" ); err != nil { return err }
+//    if isAtomic { sr.prepareListVal() }
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) end() error {
+//    if err := sr.checkActive( "End" ); err != nil { return err }
+//    if sr.stack.isEmpty() { return sr.getReactorTopTypeError( "end" ) }
+//    switch v := sr.stack.pop().( type ) {
+//    case *Identifier:
+//        return rctErrorf( "Saw end while expecting a value for field '%s'", v )
+//    case *structuralMap, listIndex: {} // end() is always okay
+//    default: panic( libErrorf( "Unexpected stack element: %T", v ) )
+//    }
+//    // if we're not done then we just completed an intermediate value which
+//    // needs to be processed
+//    if sr.done = sr.stack.isEmpty(); ! sr.done { return sr.value( false ) }
+//    return nil
+//}
+//
+//func ( sr *StructuralReactor ) update( ev ReactorEvent ) ( bool, error ) {
+//    switch v := ev.( type ) {
+//    case *StructStartEvent: return false, sr.startStruct( v.Type )
+//    case *MapStartEvent: return false, sr.startMap()
+//    case *ListStartEvent: return false, sr.startList()
+//    case *FieldStartEvent: return false, sr.startField( v.Field )
+//    case *ValueEvent: return true, sr.value( true )
+//    case *EndEvent: return true, sr.end()
+//    }
+//    panic( libErrorf( "Unhandled event: %T", ev ) )
+//}
+//
+//func ( sr *StructuralReactor ) mapValue( m *structuralMap ) { m.pending = nil }
+//
+//func ( sr *StructuralReactor ) downstreamDone( ev ReactorEvent, isValue bool ) {
+//    if isValue {
+//        if _, ok := sr.stack.peek().( *Identifier ); ok { sr.stack.pop() }
+//        if m := sr.mapIsTop(); m != nil { sr.mapValue( m ) }
+//    }
+//}
+//
+//func ( sr *StructuralReactor ) ProcessEvent(
+//    ev ReactorEvent, rep ReactorEventProcessor ) error {
+//    if isValue, err := sr.update( ev ); err == nil {
+//        if err = rep.ProcessEvent( ev ); err == nil {
+//            sr.downstreamDone( ev, isValue )
+//        } else { return err }
+//    } else { return err }
+//    return nil
+//}
+
+type listAccType int
+
+type mapStructureCheck struct {
+    seen *IdentifierMap
 }
 
-func ( sr *StructuralReactor ) AppendPath( 
-    p objpath.PathNode ) objpath.PathNode {
-    return sr.stack.AppendPath( p )
+func newMapStructureCheck() *mapStructureCheck {
+    return &mapStructureCheck{ seen: NewIdentifierMap() }
 }
 
-func ( sr *StructuralReactor ) getReactorTopTypeError( valName string ) error {
-    return getReactorTopTypeError( valName, sr.topTyp )
-}
-
-func ( sr *StructuralReactor ) checkActive( call string ) error {
-    if sr.done { return rctErrorf( "%s() called, but struct is built", call ) }
+func ( mc *mapStructureCheck ) startField( fld *Identifier ) error {
+    if mc.seen.HasKey( fld ) {
+        return rctErrorf( "Multiple entries for field: %s", fld.ExternalForm() )
+    }
+    mc.seen.Put( fld, true )
     return nil
 }
 
-func ( sr *StructuralReactor ) mapIsTop() *structuralMap {
-    if elt := sr.stack.peek(); elt != nil {
-        if m, ok := elt.( *structuralMap ); ok { return m }
-    }
-    return nil
-}
-
-func ( sr *StructuralReactor ) checkMapValue( 
-    valName string, m *structuralMap ) error {
-    if m.pending != nil { return nil }
-    tmpl := "Expected field name or end of fields but got %s"
-    return rctErrorf( tmpl, valName )
-}
-
-// sr.stack known to be non-empty when this returns without error, unless top
-// type is value.
-func ( sr *StructuralReactor ) checkValueWithNameFunc( 
-    nmFunc func() string ) error {
-    if sr.stack.isEmpty() {
-        if sr.topTyp == ReactorTopTypeValue { return nil }
-        return sr.getReactorTopTypeError( nmFunc() )
-    }
-    switch v := sr.stack.peek().( type ) {
-    case *Identifier: {}
-    case listIndex: {}
-    case *structuralMap:
-        if err := sr.checkMapValue( nmFunc(), v ); err != nil { return err }
-    default: panic( libErrorf( "Unexpected stack elt for value: %T", v ) )
-    }
-    return nil
-}
-
-func ( sr *StructuralReactor ) checkValue( valName string ) error {
-    return sr.checkValueWithNameFunc( func() string { return valName } )
-}
-
-func ( sr *StructuralReactor ) prepareListVal() {
-    sr.stack.prepareListVal()
-}
-
-func ( sr *StructuralReactor ) implStartMap() error {
-    sr.prepareListVal()
-    sr.stack.pushMap( newStructuralMap() )
-    return nil
-}
-
-func ( sr *StructuralReactor ) startStruct( typ *QualifiedTypeName ) error {
-    if err := sr.checkActive( "StartStruct" ); err != nil { return err }
-    // skip check if we're pushing the top level struct
-    if ! sr.stack.isEmpty() {
-        nmFunc := func() string { 
-            return fmt.Sprintf( "start of struct %s", typ.ExternalForm() )
-        }
-        if err := sr.checkValueWithNameFunc( nmFunc ); err != nil { return err }
-    }
-    return sr.implStartMap()
-}
-
-func ( sr *StructuralReactor ) startMap() error {
-    if err := sr.checkActive( "StartMap" ); err != nil { return err }
-    if err := sr.checkValue( "map start" ); err != nil { return err }
-    return sr.implStartMap()
-}
-
-// Note about the prepareListVal() call below: it has nothing to do with the
-// list we're starting; it pertains to the (possible) list to which we're adding
-// the current list as a value.
-func ( sr *StructuralReactor ) startList() error {
-    if err := sr.checkActive( "StartList" ); err != nil { return err }
-    if err := sr.checkValue( "list start" ); err != nil { return err }
-    sr.prepareListVal() 
-    sr.stack.pushList( listIndex( -1 ) )
-    return nil
-}
-
-func ( sr *StructuralReactor ) startMapField( 
-    fld *Identifier, m *structuralMap ) error {
-    if m.pending != nil {
-        panic( libErrorf( "startMapField while pending: %s", m.pending ) )
-    }
-    if m.keys.HasKey( fld ) {
-        return rctErrorf( "Multiple entries for field: %s", fld )
-    }
-    m.keys.Put( fld, true )
-    m.pending = fld
-    return nil
-}
-
-func ( sr *StructuralReactor ) startField( fld *Identifier ) error {
-    if err := sr.checkActive( "StartField" ); err != nil { return err }
-    if elt := sr.stack.peek(); elt != nil {
-        switch v := elt.( type ) {
-        case listIndex: 
-            tmpl := "Saw start of field '%s' while expecting a list value"
-            return rctErrorf( tmpl, fld )
-        case *structuralMap: 
-            if err := sr.startMapField( fld, v ); err != nil { return err }
-            sr.stack.pushField( fld )
-            return nil
-        case *Identifier:
-            tmpl := 
-                "Saw start of field '%s' while expecting a value for field '%s'"
-            return rctErrorf( tmpl, fld, v )
-        default: panic( libErrorf( "Invalid stack element: %v (%T)", v, v ) )
-        }
-    }
-    errLoc := fmt.Sprintf( "start of field '%s'", fld )
-    return getReactorTopTypeError( errLoc, ReactorTopTypeStruct )
-}
-
-func ( sr *StructuralReactor ) value( isAtomic bool ) error {
-    if err := sr.checkActive( "Value" ); err != nil { return err }
-    if err := sr.checkValue( "value" ); err != nil { return err }
-    if isAtomic { sr.prepareListVal() }
-    return nil
-}
-
-func ( sr *StructuralReactor ) end() error {
-    if err := sr.checkActive( "End" ); err != nil { return err }
-    if sr.stack.isEmpty() { return sr.getReactorTopTypeError( "end" ) }
-    switch v := sr.stack.pop().( type ) {
-    case *Identifier:
-        return rctErrorf( "Saw end while expecting a value for field '%s'", v )
-    case *structuralMap, listIndex: {} // end() is always okay
-    default: panic( libErrorf( "Unexpected stack element: %T", v ) )
-    }
-    // if we're not done then we just completed an intermediate value which
-    // needs to be processed
-    if sr.done = sr.stack.isEmpty(); ! sr.done { return sr.value( false ) }
-    return nil
-}
-
-func ( sr *StructuralReactor ) update( ev ReactorEvent ) ( bool, error ) {
+func ( sr *StructuralReactor ) descForEvent( ev ReactorEvent ) string {
     switch v := ev.( type ) {
-    case *StructStartEvent: return false, sr.startStruct( v.Type )
-    case *MapStartEvent: return false, sr.startMap()
-    case *ListStartEvent: return false, sr.startList()
-    case *FieldStartEvent: return false, sr.startField( v.Field )
-    case *ValueEvent: return true, sr.value( true )
-    case *EndEvent: return true, sr.end()
+    case *ListStartEvent: return "list start"
+    case *MapStartEvent: return "map start"
+    case *EndEvent: return "end"
+    case *ValueEvent: return "value"
+    case *FieldStartEvent: return sr.sawDescFor( v.Field )
+    case *StructStartEvent: return sr.sawDescFor( v.Type )
     }
-    panic( libErrorf( "Unhandled event: %T", ev ) )
+    panic( libErrorf( "unhandled event: %T", ev ) )
 }
 
-func ( sr *StructuralReactor ) mapValue( m *structuralMap ) { m.pending = nil }
-
-func ( sr *StructuralReactor ) downstreamDone( ev ReactorEvent, isValue bool ) {
-    if isValue {
-        if _, ok := sr.stack.peek().( *Identifier ); ok { sr.stack.pop() }
-        if m := sr.mapIsTop(); m != nil { sr.mapValue( m ) }
+func ( sr *StructuralReactor ) expectDescFor( val interface{} ) string {
+    if val == nil { return "BEGIN" }
+    switch v := val.( type ) {
+    case *Identifier: 
+        return fmt.Sprintf( "a value for field '%s'", v.ExternalForm() )
+    case listAccType: return "a list value"
     }
+    panic( libErrorf( "unhandled desc value: %T", val ) )
 }
 
-func ( sr *StructuralReactor ) ProcessEvent(
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
-    if isValue, err := sr.update( ev ); err == nil {
-        if err = rep.ProcessEvent( ev ); err == nil {
-            sr.downstreamDone( ev, isValue )
-        } else { return err }
-    } else { return err }
+func ( sr *StructuralReactor ) sawDescFor( val interface{} ) string {
+    if val == nil { return "BEGIN" }
+    switch v := val.( type ) {
+    case *Identifier: 
+        return fmt.Sprintf( "start of field '%s'", v.ExternalForm() )
+    case *QualifiedTypeName:
+        return fmt.Sprintf( "start of struct %s", v.ExternalForm() )
+    case ReactorEvent: return sr.descForEvent( v )
+    }
+    panic( libErrorf( "unhandled val: %T", val ) )
+}
+
+func ( sr *StructuralReactor ) checkNotDone( ev ReactorEvent ) error {
+    if ! sr.done { return nil }
+    return rctErrorf( "Saw %s after value was built", sr.sawDescFor( ev ) );
+}
+
+func ( sr *StructuralReactor ) failTopType( ev ReactorEvent ) error {
+    desc := sr.descForEvent( ev )
+    return rctErrorf( "Expected %s but got %s", sr.topTyp, desc )
+}
+
+func ( sr *StructuralReactor ) couldStartWithEvent( ev ReactorEvent ) bool {
+    topIsVal := sr.topTyp == ReactorTopTypeValue
+    switch ev.( type ) {
+    case *ValueEvent: return topIsVal
+    case *ListStartEvent: return sr.topTyp == ReactorTopTypeList || topIsVal
+    case *MapStartEvent: return sr.topTyp == ReactorTopTypeMap || topIsVal
+    case *StructStartEvent: return sr.topTyp == ReactorTopTypeStruct || topIsVal
+    }
+    return false
+}
+
+func ( sr *StructuralReactor ) checkTopType( ev ReactorEvent ) error {
+    if sr.couldStartWithEvent( ev ) { return nil }    
+    return sr.failTopType( ev )
+}
+
+func ( sr *StructuralReactor ) failUnexpectedMapEnd( val interface{} ) error {
+    desc := sr.sawDescFor( val )
+    return rctErrorf( "Expected field name or end of fields but got %s", desc )
+}
+
+func ( sr *StructuralReactor ) execValueCheck( 
+    ev ReactorEvent, pushIfOk interface{} ) error {
+
+    top := sr.stack.Peek()
+
+    switch v := top.( type ) {
+    case nil, listAccType, *Identifier:
+        if v == nil {
+            if err := sr.checkTopType( ev ); err != nil { return err }
+        }
+        if pushIfOk != nil { sr.stack.Push( pushIfOk ) }
+        return nil
+    case *mapStructureCheck: return sr.failUnexpectedMapEnd( ev )
+    }
+
+    return rctErrorf( "Saw %s while expecting %s", 
+        sr.sawDescFor( ev ), sr.expectDescFor( top ) );
+}
+
+func ( sr *StructuralReactor ) completeValue() {
+    if _, ok := sr.stack.Peek().( *Identifier ); ok { sr.stack.Pop() }
+    sr.done = sr.stack.IsEmpty()
+}
+
+func ( sr *StructuralReactor ) checkValue( ev ReactorEvent ) error {
+    if err := sr.execValueCheck( ev, nil ); err != nil { return err }
+    sr.completeValue()
+    return nil
+}
+
+func ( sr *StructuralReactor ) checkStructureStart( ev ReactorEvent ) error {
+    return sr.execValueCheck( ev, newMapStructureCheck() )
+}
+
+func ( sr *StructuralReactor ) checkFieldStart( fs *FieldStartEvent ) error {
+    if sr.stack.IsEmpty() { return sr.failTopType( fs ) }
+    top := sr.stack.Peek()
+    if mc, ok := top.( *mapStructureCheck ); ok {
+        if err := mc.startField( fs.Field ); err != nil { return err }
+        sr.stack.Push( fs.Field )
+        return nil
+    }
+    return rctErrorf( "Saw start of field '%s' while expecting %s",
+        fs.Field.ExternalForm(), sr.expectDescFor( top ) )
+}
+
+func ( sr *StructuralReactor ) checkListStart( le *ListStartEvent ) error {
+    return sr.execValueCheck( le, listAccType( 1 ) )
+}
+
+func ( sr *StructuralReactor ) checkEnd( ee *EndEvent ) error {
+    if sr.stack.IsEmpty() { return sr.failTopType( ee ) }
+    top := sr.stack.Peek()
+    switch top.( type ) {
+    case *mapStructureCheck, listAccType:
+        sr.stack.Pop()
+        sr.completeValue()
+        return nil
+    }
+    return rctErrorf( "Saw end while expecting %s", sr.expectDescFor( top ) )
+}
+
+func ( sr *StructuralReactor ) ProcessEvent( ev ReactorEvent ) error {
+    if err := sr.checkNotDone( ev ); err != nil { return err }
+    switch v := ev.( type ) {
+    case *ValueEvent: return sr.checkValue( v )
+    case *StructStartEvent, *MapStartEvent: return sr.checkStructureStart( ev )
+    case *FieldStartEvent: return sr.checkFieldStart( v )
+    case *EndEvent: return sr.checkEnd( v )
+    case *ListStartEvent: return sr.checkListStart( v )
+    default: panic( libErrorf( "unhandled event: %T", ev ) )
+    }
     return nil
 }
 
@@ -643,7 +801,7 @@ func EnsureStructuralReactor( rpi *ReactorPipelineInit ) *StructuralReactor {
         panic( libErrorf( tmpl, k, elt ) )
     }
     sr := NewStructuralReactor( ReactorTopTypeValue )
-    rpi.AddPipelineProcessor( sr )
+    rpi.AddEventProcessor( sr )
     return sr
 }
 
@@ -1073,7 +1231,6 @@ func ( cr *CastReactor ) implStartMap(
     ev ReactorEvent, ft FieldTyper, next ReactorEventProcessor ) error {
 
     cr.stack.Push( ft )
-    log.Printf( "pushed field typer: %v", ft )
     return next.ProcessEvent( ev )
 }
 

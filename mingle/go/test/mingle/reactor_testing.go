@@ -138,7 +138,7 @@ func initStructuralReactorTests() {
             evStartStruct1, evStartField1, NewMapStartEvent(), evStartField1,
             evStartField2,
         ),
-        mk1( "StartField() called, but struct is built",
+        mk1( "Saw start of field 'f1' after value was built",
             evStartStruct1, NewEndEvent(), evStartField1,
         ),
         mk1( "Expected field name or end of fields but got value",

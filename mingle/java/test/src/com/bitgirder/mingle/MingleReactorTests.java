@@ -34,21 +34,7 @@ class MingleReactorTests
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static Map< Object, Map< String, String > > STRING_OVERRIDES;
-
     private final static Map< Object, Object > OBJECT_OVERRIDES;
-
-    private
-    static
-    String
-    overridableString( Object overrideKey,
-                       String strKey )
-    {
-        Map< String, String > m = STRING_OVERRIDES.get( overrideKey );
-
-        if ( m == null || ( ! m.containsKey( strKey ) ) ) return strKey;
-        return m.get( strKey );
-    }
 
     private
     static
@@ -778,11 +764,7 @@ class MingleReactorTests
         asReactorError( MingleSymbolMap map )
         {
             return new MingleValueReactorException(
-                overridableString(
-                    MingleValueReactorException.class,
-                    mapExpect( map, "message", String.class )
-                )
-            );
+                mapExpect( map, "message", String.class ) );
         }
 
         private
@@ -1121,32 +1103,8 @@ class MingleReactorTests
         return new TestImplReader().read();
     }
 
-    private
-    static
-    void
-    addStringOverride( Object overrideKey,
-                       String strKey,
-                       String override )
-    {
-        Map< String, String > m = STRING_OVERRIDES.get( overrideKey );
-
-        if ( m == null ) {
-            m = Lang.newMap();
-            STRING_OVERRIDES.put( overrideKey, m );
-        }
-
-        Lang.putUnique( m, strKey, override );
-    }
-
     static
     {
-        STRING_OVERRIDES = Lang.newMap();
-
-        addStringOverride( MingleValueReactorException.class,
-            "StartField() called, but struct is built",
-            "Saw start of field 'f1' after value was built"
-        );
-
         OBJECT_OVERRIDES = Lang.newMap();
 
         OBJECT_OVERRIDES.put(

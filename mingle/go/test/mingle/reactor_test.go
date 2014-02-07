@@ -68,17 +68,17 @@ func TestReactorPipelineImpl( t *testing.T ) {
 
 func ( c *ReactorTestCall ) feedStructureEvents( 
     evs []ReactorEvent, tt ReactorTopType ) ( *StructuralReactor, error ) {
+
     rct := NewStructuralReactor( tt )
-//    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
     pip := InitReactorPipeline( rct )
-    for _, ev := range evs { 
-        if err := pip.ProcessEvent( ev ); err != nil { return nil, err }
-    }
+    src := eventSliceSource( evs )
+    if err := FeedEventSource( src, pip ); err != nil { return nil, err }
     return rct, nil
 }
 
 func ( c *ReactorTestCall ) callStructuralError(
     ss *StructuralReactorErrorTest ) {
+
     if _, err := c.feedStructureEvents( ss.Events, ss.TopType ); err == nil {
         c.Fatalf( "Expected error (%T): %s", ss.Error, ss.Error ) 
     } else { c.Equal( ss.Error, err ) }
@@ -355,7 +355,7 @@ func ( c *ReactorTestCall ) addCastReactors(
 
 func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     rcts := []interface{}{}
-    rcts = append( rcts, NewDebugReactor( c ) )
+//    rcts = append( rcts, NewDebugReactor( c ) )
     rcts = c.addCastReactors( ct, rcts )
     vb := NewValueBuilder()
     rcts = append( rcts, vb )
@@ -559,7 +559,6 @@ func TestReactors( t *testing.T ) {
     for _, rt := range StdReactorTests {
         ta := la
         if nt, ok := rt.( NamedTest ); ok { ta = a.Descend( nt.TestName() ) }
-        a.Logf( "calling instance of of %T", rt )
         ( &ReactorTestCall{ PathAsserter: ta, Test: rt } ).call()
         la = la.Next()
     }

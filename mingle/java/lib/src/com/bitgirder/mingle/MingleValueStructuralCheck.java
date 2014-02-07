@@ -129,8 +129,6 @@ implements MingleValueReactor
     static
     class MapContext
     {
-        private QualifiedTypeName structType; // null if we're building a MAP
-
         private final Set< MingleIdentifier > seen = Lang.newSet();
 
         private
@@ -228,14 +226,6 @@ implements MingleValueReactor
 
     private
     void
-    checkStartMap( MingleValueReactorEvent ev )
-        throws Exception
-    {
-        execValueCheck( ev, new MapContext() );
-    }
-
-    private
-    void
     checkStartList( MingleValueReactorEvent ev )
         throws Exception
     {
@@ -244,13 +234,10 @@ implements MingleValueReactor
 
     private
     void
-    checkStartStruct( MingleValueReactorEvent ev )
+    checkStartStructure( MingleValueReactorEvent ev )
         throws Exception
     {
-        MapContext mc = new MapContext();
-        mc.structType = ev.structType();
-
-        execValueCheck( ev, mc );
+        execValueCheck( ev, new MapContext() );
     }
 
     private
@@ -300,9 +287,9 @@ implements MingleValueReactor
 
         switch ( ev.type() ) {
         case VALUE: checkValue( ev ); break;
-        case START_MAP: checkStartMap( ev ); break;
+        case START_MAP: checkStartStructure( ev ); break;
         case START_LIST: checkStartList( ev ); break;
-        case START_STRUCT: checkStartStruct( ev ); break;
+        case START_STRUCT: checkStartStructure( ev ); break;
         case START_FIELD: checkStartField( ev ); break;
         case END: checkEnd( ev ); break;
         default: state.failf( "unhandled event: %s", ev.type() );
