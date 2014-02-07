@@ -4,7 +4,7 @@ import (
     "testing"
     "bitgirder/assert"
     "bitgirder/objpath"
-    "container/list"
+    "bitgirder/stack"
     "fmt"
 )
 
@@ -161,7 +161,7 @@ func ( fog fogImpl ) FieldOrderFor( qn *QualifiedTypeName ) FieldOrder {
 type orderCheckReactor struct {
     *assert.PathAsserter
     fo *FieldOrderReactorTest
-    stack *list.List
+    stack *stack.Stack
 }
 
 func ( ocr *orderCheckReactor ) Init( rpi *ReactorPipelineInit ) {}
@@ -171,7 +171,7 @@ func ( ocr *orderCheckReactor ) Key() ReactorKey {
 }
 
 func ( ocr *orderCheckReactor ) push( val interface{} ) {
-    ocr.stack.PushFront( val )
+    ocr.stack.Push( val )
 }
 
 type orderTracker struct {
@@ -208,7 +208,7 @@ func ( ocr *orderCheckReactor ) startStruct( qn *QualifiedTypeName ) {
 }
 
 func ( ocr *orderCheckReactor ) startField( fld *Identifier ) {
-    if ot, ok := ocr.stack.Front().Value.( *orderTracker ); ok {
+    if ot, ok := ocr.stack.Peek().( *orderTracker ); ok {
         ot.checkField( fld )
     }
 }
@@ -220,7 +220,7 @@ func ( ocr *orderCheckReactor ) ProcessEvent(
     case ListStartEvent: ocr.push( "list" )
     case MapStartEvent: ocr.push( "map" )
     case FieldStartEvent: ocr.startField( v.Field )
-    case EndEvent: ocr.stack.Remove( ocr.stack.Front() )
+    case EndEvent: ocr.stack.Pop()
     }
     return rep.ProcessEvent( ev )
 }
@@ -230,7 +230,7 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
     chk := &orderCheckReactor{ 
         PathAsserter: c.PathAsserter,
         fo: fo,
-        stack: &list.List{},
+        stack: stack.NewStack(),
     }
     ordRct := NewFieldOrderReactor( fogImpl( fo.Orders ) )
     pip := InitReactorPipeline( ordRct, chk, vb )
@@ -241,19 +241,10 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
 func ( c *ReactorTestCall ) callFieldOrderPathTest( fo *FieldOrderPathTest ) {
     ord := NewFieldOrderReactor( fogImpl( fo.Orders ) )
     chk := newEventPathCheckReactor( fo.Expect, c.PathAsserter )
-    dbgPre := NewDebugReactor( c )
-    dbgPre.Label = "PRE"
-    dbgPost := NewDebugReactor( c )
-    dbgPost.Label = "POST"
-    pip := InitReactorPipeline( dbgPre, ord, dbgPost, chk )
+    pip := InitReactorPipeline( ord, chk )
     src := eventSliceSource( fo.Source )
     AssertFeedEventSource( src, pip, c )
     chk.complete()
-//    c.assertEventExpectations(
-//        eventSliceSource( fo.Source ),
-//        fo.Expect,
-//        []interface{}{ NewFieldOrderReactor( fogImpl( fo.Orders ) ) },
-//    )
 }
 
 func ( c *ReactorTestCall ) assertMissingFieldsError(
