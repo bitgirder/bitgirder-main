@@ -649,26 +649,26 @@ func ( la *listAcc ) valueReady( mv Value ) {
 // Can make this public if needed
 type valueAccumulator struct {
     val Value
-    accs *list.List
+    accs *stack.Stack
 }
 
 func newValueAccumulator() *valueAccumulator {
-    return &valueAccumulator{ accs: &list.List{} }
+    return &valueAccumulator{ accs: stack.NewStack() }
 }
 
 func ( va *valueAccumulator ) pushAcc( acc accImpl ) {
-    va.accs.PushFront( acc )
+    va.accs.Push( acc )
 }
 
 func ( va *valueAccumulator ) peekAcc() ( accImpl, bool ) {
-    if va.accs.Len() == 0 { return nil, false }
-    return va.accs.Front().Value.( accImpl ), true
+    if va.accs.IsEmpty() { return nil, false }
+    return va.accs.Peek().( accImpl ), true
 }
 
 func ( va *valueAccumulator ) popAcc() accImpl {
     res, ok := va.peekAcc()
     if ! ok { panic( libErrorf( "popAcc() called on empty stack" ) ) }
-    va.accs.Remove( va.accs.Front() )
+    va.accs.Pop()
     return res
 }
 
