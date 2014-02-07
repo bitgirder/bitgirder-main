@@ -8,120 +8,15 @@ import (
     "fmt"
 )
 
-type noOpProcessor struct {
-    initCalled bool
-}
-
-func ( p *noOpProcessor ) ProcessEvent( ev ReactorEvent ) error { return nil }
-
-func ( p *noOpProcessor ) Init( rpi *ReactorPipelineInit ) {
-    p.initCalled = true
-}
-
-type keyedNoOpProcessor struct {
-    *noOpProcessor
-    k ReactorKey
-}
-
-func ( kp *keyedNoOpProcessor ) Key() ReactorKey { return kp.k }
-
-type initProcessor struct {
-    find ReactorKey
-    add interface{} 
-    elt interface{}
-}
-
-func ( ip *initProcessor ) ProcessEvent( 
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
-    return rep.ProcessEvent( ev )
-}
-
-func ( ip *initProcessor ) Init( rpi *ReactorPipelineInit ) {
-    switch v := ip.add.( type ) {
-    case ReactorEventProcessor: rpi.AddEventProcessor( v )
-    case PipelineProcessor: rpi.AddPipelineProcessor( v )
-    default: panic( libErrorf( "Bad add: %T", ip.add ) )
-    }
-    if elt, ok := rpi.FindByKey( ip.find ); ok { ip.elt = elt }
-}
-
-func TestReactorPipelineImpl( t *testing.T ) {
-    a := assert.NewPathAsserter( t )
-    p1 := &noOpProcessor{}
-    p2 := &keyedNoOpProcessor{ 
-        noOpProcessor: &noOpProcessor{}, 
-        k: ReactorKey( "p2" ),
-    }
-    p3 := &noOpProcessor{}
-    p4 := &initProcessor{ find: ReactorKey( "p2" ), add: p3 }
-    p5 := &initProcessor{ find: ReactorKey( "p2" ), add: p4 }
-    pip := InitReactorPipeline( p1, p2, p5 )
-    a.Descend( "p1" ).True( p1.initCalled )
-    a.Descend( "p2" ).True( p2.initCalled )
-    a.Equal( p2, pip.MustFindByKey( ReactorKey( "p2" ) ) )
-    a.Equal( p3, pip.elts[ 2 ] )
-    a.Descend( "p3" ).True( p3.initCalled )
-    a.Equal( p4, pip.elts[ 3 ] )
-    a.Equal( p2, p4.elt )
-    a.Equal( p2, p5.elt )
-}
-
-func ( c *ReactorTestCall ) feedStructureEvents( 
-    evs []ReactorEvent, tt ReactorTopType ) ( *StructuralReactor, error ) {
-
-    rct := NewStructuralReactor( tt )
-    pip := InitReactorPipeline( rct )
-    src := eventSliceSource( evs )
-    if err := FeedEventSource( src, pip ); err != nil { return nil, err }
-    return rct, nil
-}
-
 func ( c *ReactorTestCall ) callStructuralError(
     ss *StructuralReactorErrorTest ) {
 
-    if _, err := c.feedStructureEvents( ss.Events, ss.TopType ); err == nil {
+    rct := NewStructuralReactor( ss.TopType )
+    pip := InitReactorPipeline( rct )
+    src := eventSliceSource( ss.Events )
+    if err := FeedEventSource( src, pip ); err == nil {
         c.Fatalf( "Expected error (%T): %s", ss.Error, ss.Error ) 
     } else { c.Equal( ss.Error, err ) }
-}
-
-func ( c *ReactorTestCall ) assertEventExpectations( 
-    src reactorEventSource, 
-    expct []EventExpectation,
-    rcts []interface{} ) *ReactorPipeline {
-    return assertEventExpectations( src, expct, rcts, c.PathAsserter )
-}
-
-type pathCheckReactor struct {
-    expct []EventExpectation
-    pg PathGetter
-    *assert.PathAsserter
-    idx int
-}
-
-func ( r *pathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
-    ee := r.expct[ r.idx ]
-    r.Equal( ee.Event, ev )
-    r.Equal( ee.Path, r.pg.GetPath() )
-    r.idx++
-    return nil
-}
-
-// Used as to verify that an EventPathReactor would, when used as a PathGetter
-// for its wrapped processor, present the expected event paths. We use this
-// separate method both to check that EventPathReactor behaves consistently with
-// other path getters on the same input stream and also to have explicit
-// coverage of EventPathReactor (testing FieldOrderReactor and others gives
-// implicit coverage)
-func assertEventPathReactorOn( 
-    src reactorEventSource, expct []EventExpectation, a *assert.PathAsserter ) {
-    a.Equal( src.Len(), len( expct ) )
-    pcr := &pathCheckReactor{ expct: expct, PathAsserter: a }
-    epr := NewEventPathReactor( pcr )
-    pcr.pg = epr
-    for i, e := 0, src.Len(); i < e; i++ {
-        ev := src.EventAt( i )
-        if err := epr.ProcessEvent( ev ); err != nil { a.Fatal( err ) }
-    }
 }
 
 func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
@@ -130,8 +25,6 @@ func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
     if pt.StartPath != nil { rct.SetStartPath( pt.StartPath ) }
 
     chk := newEventPathCheckReactor( pt.Events, c.PathAsserter )
-
-//    pip := InitReactorPipeline( NewDebugReactor( c ), rct, chk )
     pip := InitReactorPipeline( rct, chk )
     
     src := eventExpectSource( pt.Events )
@@ -165,10 +58,6 @@ type orderCheckReactor struct {
 }
 
 func ( ocr *orderCheckReactor ) Init( rpi *ReactorPipelineInit ) {}
-
-func ( ocr *orderCheckReactor ) Key() ReactorKey {
-    return ReactorKey( "mingle.orderCheckReactor" )
-}
 
 func ( ocr *orderCheckReactor ) push( val interface{} ) {
     ocr.stack.Push( val )
@@ -562,29 +451,6 @@ func TestReactors( t *testing.T ) {
         ( &ReactorTestCall{ PathAsserter: ta, Test: rt } ).call()
         la = la.Next()
     }
-}
-
-func TestEventStackGetAndAppendPath( t *testing.T ) {
-    get := func( s *eventStack, expct idPath ) {
-        assert.Equal( expct, s.GetPath() )
-    }
-    apnd := func( s *eventStack, start, expct idPath ) {
-        assert.Equal( expct, s.AppendPath( start ) )
-    }
-    s := newEventStack()
-    p1 := objpath.RootedAt( id( "f1" ) )
-    lp1 := objpath.RootedAtList()
-    chkRoot := func() {
-        get( s, nil )
-        apnd( s, nil, nil )
-        apnd( s, p1, p1 )
-    }
-    chkRoot()
-    s.pushMap( "" )
-    chkRoot()
-    s.pushList( listIndex( 1 ) )
-    get( s, lp1.Next() )
-    apnd( s, p1, p1.StartList().Next() )
 }
 
 type reactorImplTest struct {
