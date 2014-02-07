@@ -207,11 +207,11 @@ func checkRangeValueCast(
 // bound is which bound to report in the error: "min" or "max"
 func castRangeValue( 
     sx interface{},
-    typ TypeReference, 
+    at *AtomicTypeReference, 
     bound string ) ( val Value, err error ) {
-    if err = checkRangeValueCast( sx, typ, bound ); err != nil { return }
+    if err = checkRangeValueCast( sx, at, bound ); err != nil { return }
     ms := String( sx.( syntax.LiteralStringer ).LiteralString() )
-    if val, err = CastValue( ms, typ, idPathRootVal ); err != nil {
+    if val, err = castAtomic( ms, at, idPathRootVal ); err != nil {
         msg := "Invalid %s value in range restriction: %s" 
         err = &RestrictionTypeError{ fmt.Sprintf( msg, bound, err.Error() ) }
     }
@@ -244,14 +244,14 @@ func checkRangeBounds( rr *RangeRestriction ) error {
 func setRangeValues(
     rr *RangeRestriction, 
     rx *syntax.RangeRestrictionSyntax, 
-    typ TypeReference ) ( err error ) {
+    at *AtomicTypeReference ) ( err error ) {
     if rx.Left != nil {
-        if rr.Min, err = castRangeValue( rx.Left, typ, "min" ); err != nil { 
+        if rr.Min, err = castRangeValue( rx.Left, at, "min" ); err != nil { 
             return 
         }
     }
     if rx.Right != nil {
-        if rr.Max, err = castRangeValue( rx.Right, typ, "max" ); err != nil {
+        if rr.Max, err = castRangeValue( rx.Right, at, "max" ); err != nil {
             return
         }
     }

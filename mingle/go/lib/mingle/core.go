@@ -537,6 +537,46 @@ func ( e *ValueTypeError ) Error() string {
     return locStr + ": " + e.msg 
 }
 
+type ValueCastError struct {
+    ve ValueErrorImpl
+    msg string
+}
+
+func ( e *ValueCastError ) Message() string { return e.msg }
+
+func ( e *ValueCastError ) Error() string { 
+    return e.ve.MakeError( e.Message() ) 
+}
+
+func ( e *ValueCastError ) Location() objpath.PathNode { 
+    return e.ve.Location() 
+}
+
+func NewValueCastError( path idPath, msg string ) *ValueCastError {
+    res := &ValueCastError{ msg: msg, ve: ValueErrorImpl{} }
+    res.ve.Path = path
+    return res
+}
+
+func NewValueCastErrorf(
+    path idPath, tmpl string, args ...interface{} ) *ValueCastError {
+    return NewValueCastError( path, fmt.Sprintf( tmpl, args... ) )
+}
+
+func NewTypeCastError( 
+    expct, act TypeReference, path objpath.PathNode ) *ValueCastError {
+    return NewValueCastErrorf( 
+        path,
+        "Expected value of type %s but found %s",
+        expct.ExternalForm(), act.ExternalForm(),
+    )
+}
+
+func NewTypeCastErrorValue( 
+    t TypeReference, val Value, path objpath.PathNode ) *ValueCastError {
+    return NewTypeCastError( t, TypeOf( val ), path )
+}
+
 type Comparer interface {
 
     // Should panic (such as with type assertion panic) if val is not same type

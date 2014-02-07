@@ -365,11 +365,8 @@ class MingleReactorTests
         MingleValueReactorPipeline
         createPipeline()
         {
-            ObjectPath< MingleIdentifier > rtPath = 
-                ObjectPath.getRoot( MingleIdentifier.create( "in-val" ) );
- 
             return new MingleValueReactorPipeline.Builder().
-                addProcessor( MinglePathSettingProcessor.create( rtPath ) ).
+                addProcessor( MinglePathSettingProcessor.create( path ) ).
                 addProcessor( createCastReactor() ).
                 addReactor( MingleValueBuilder.create() ).
                 build();

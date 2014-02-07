@@ -281,11 +281,10 @@ type castInterfaceImpl struct {
 
 type castInterfaceTyper struct { *IdentifierMap }
 
-func ( t castInterfaceTyper ) FieldTypeOf( 
-    fld *Identifier, pg PathGetter ) ( TypeReference, error ) {
+func ( t castInterfaceTyper ) FieldTypeFor( 
+    fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
     if t.HasKey( fld ) { return t.Get( fld ).( TypeReference ), nil }
-    errPath := pg.GetPath().Parent()
-    return nil, NewValueCastErrorf( errPath, "unrecognized field: %s", fld )
+    return nil, NewValueCastErrorf( path, "unrecognized field: %s", fld )
 }
 
 func newCastInterfaceImpl( c *ReactorTestCall ) *castInterfaceImpl {
@@ -302,10 +301,10 @@ func newCastInterfaceImpl( c *ReactorTestCall ) *castInterfaceImpl {
 }
 
 func ( ci *castInterfaceImpl ) FieldTyperFor( 
-    qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error ) {
+    qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
     if ci.typers.HasKey( qn ) { return ci.typers.Get( qn ).( FieldTyper ), nil }
     if qn.ExternalForm() == "ns1@v1/FailType" {
-        return nil, NewValueCastErrorf( pg.GetPath(), "test-message-fail-type" )
+        return nil, NewValueCastErrorf( path, "test-message-fail-type" )
     }
     return nil, nil
 }
@@ -317,7 +316,8 @@ func ( ci *castInterfaceImpl ) InferStructFor( qn *QualifiedTypeName ) bool {
 func ( ci *castInterfaceImpl ) CastAtomic(
     v Value,
     at *AtomicTypeReference,
-    pg PathGetter ) ( Value, error, bool ) {
+    path objpath.PathNode ) ( Value, error, bool ) {
+
     if _, ok := v.( *Null ); ok {
         return nil, fmt.Errorf( "Unexpected null val in cast impl" ), true
     }
@@ -329,39 +329,42 @@ func ( ci *castInterfaceImpl ) CastAtomic(
         case "cast1": return Int32( 1 ), nil, true
         case "cast2": return Int32( -1 ), nil, true
         case "cast3":
-            p := pg.GetPath()
-            return nil, NewValueCastErrorf( p, "test-message-cast3" ), true
+            return nil, NewValueCastErrorf( path, "test-message-cast3" ), true
         }
-        p := pg.GetPath()
-        return nil, NewValueCastErrorf( p, "Unexpected val: %s", s ), true
+        return nil, NewValueCastErrorf( path, "Unexpected val: %s", s ), true
     }
-    return nil, NewTypeCastErrorValue( at, v, pg.GetPath() ), true
+    return nil, NewTypeCastErrorValue( at, v, path ), true
 }
 
-func ( c *ReactorTestCall ) createCastReactor( 
-    ct *CastReactorTest ) *CastReactor {
-    pg := ImmediatePathGetter{ ct.Path }
+func ( c *ReactorTestCall ) addCastReactors( 
+    ct *CastReactorTest, rcts []interface{} ) []interface{} {
+
+    ps := NewPathSettingProcessor()
+    ps.SetStartPath( ct.Path )
+
     switch ct.Profile {
-    case "": return NewDefaultCastReactor( ct.Type, pg )
+    case "": rcts = append( rcts, ps, NewDefaultCastReactor( ct.Type ) )
     case "interface-impl": 
-        return NewCastReactor( ct.Type, newCastInterfaceImpl( c ), pg )
+        cr := NewCastReactor( ct.Type, newCastInterfaceImpl( c ) )
+        rcts = append( rcts, ps, cr )
+    default: panic( libErrorf( "Unhandled profile: %s", ct.Profile ) )
     }
-    panic( libErrorf( "Unhandled profile: %s", ct.Profile ) )
+    return rcts
 }
 
 func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
-    rct := NewValueBuilder()
-    pip := InitReactorPipeline( 
-//        NewDebugReactor( c ),
-        c.createCastReactor( ct ), 
-        rct,
-    )
+    rcts := []interface{}{}
+    rcts = append( rcts, NewDebugReactor( c ) )
+    rcts = c.addCastReactors( ct, rcts )
+    vb := NewValueBuilder()
+    rcts = append( rcts, vb )
+    pip := InitReactorPipeline( rcts... )
 //    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
     if err := VisitValue( ct.In, pip ); err == nil { 
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
         }
-        c.Equal( ct.Expect, rct.GetValue() )
+        c.Equal( ct.Expect, vb.GetValue() )
     } else { AssertCastError( ct.Err, err, c.PathAsserter ) }
 }
 

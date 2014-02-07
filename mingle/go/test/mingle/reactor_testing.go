@@ -1174,8 +1174,8 @@ func initServiceTests() {
 type CastReactorTest struct {
     In Value
     Expect Value
-    Path objpath.PathNode
     Type TypeReference
+    Path objpath.PathNode
     Err error
     Profile string
 }
@@ -1294,6 +1294,12 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( t.en1, "ns1@v1/Bad", t.en1.Type )
     t.addTcError( t.struct1, "ns1@v1/Bad", t.struct1.Type )
     t.addTcError( "s", TypeNull, TypeString )
+    t.addTcError( int32( 1 ), "Buffer", "Int32" )
+    t.addTcError( int32( 1 ), "Buffer?", "Int32" )
+    t.addTcError( true, "Float32", "Boolean" )
+    t.addTcError( true, "Float32?", "Boolean" )
+    t.addTcError( true, "Int32", "Boolean" )
+    t.addTcError( true, "Int32?", "Boolean" )
     t.addTcError( MustList( 1, 2 ), TypeString, "Value*" )
     t.addTcError( MustList(), "String?", "Value*" )
     t.addTcError( "s", "String*", "String" )

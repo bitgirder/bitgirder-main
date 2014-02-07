@@ -12,7 +12,7 @@ func ( acc *SymbolMapAccessor ) GetBooleanById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeBoolean, acc.descend( id ) )
+        val, err = castAtomic( val, TypeBoolean, acc.descend( id ) )
         if err == nil { res = val.( Boolean ) }
     }
     return 
@@ -65,7 +65,7 @@ func ( acc *SymbolMapAccessor ) GetBufferById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeBuffer, acc.descend( id ) )
+        val, err = castAtomic( val, TypeBuffer, acc.descend( id ) )
         if err == nil { res = val.( Buffer ) }
     }
     return 
@@ -118,7 +118,7 @@ func ( acc *SymbolMapAccessor ) GetStringById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeString, acc.descend( id ) )
+        val, err = castAtomic( val, TypeString, acc.descend( id ) )
         if err == nil { res = val.( String ) }
     }
     return 
@@ -171,7 +171,7 @@ func ( acc *SymbolMapAccessor ) GetInt32ById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeInt32, acc.descend( id ) )
+        val, err = castAtomic( val, TypeInt32, acc.descend( id ) )
         if err == nil { res = val.( Int32 ) }
     }
     return 
@@ -224,7 +224,7 @@ func ( acc *SymbolMapAccessor ) GetInt64ById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeInt64, acc.descend( id ) )
+        val, err = castAtomic( val, TypeInt64, acc.descend( id ) )
         if err == nil { res = val.( Int64 ) }
     }
     return 
@@ -277,7 +277,7 @@ func ( acc *SymbolMapAccessor ) GetUint32ById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeUint32, acc.descend( id ) )
+        val, err = castAtomic( val, TypeUint32, acc.descend( id ) )
         if err == nil { res = val.( Uint32 ) }
     }
     return 
@@ -330,7 +330,7 @@ func ( acc *SymbolMapAccessor ) GetUint64ById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeUint64, acc.descend( id ) )
+        val, err = castAtomic( val, TypeUint64, acc.descend( id ) )
         if err == nil { res = val.( Uint64 ) }
     }
     return 
@@ -383,7 +383,7 @@ func ( acc *SymbolMapAccessor ) GetFloat32ById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeFloat32, acc.descend( id ) )
+        val, err = castAtomic( val, TypeFloat32, acc.descend( id ) )
         if err == nil { res = val.( Float32 ) }
     }
     return 
@@ -436,7 +436,7 @@ func ( acc *SymbolMapAccessor ) GetFloat64ById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeFloat64, acc.descend( id ) )
+        val, err = castAtomic( val, TypeFloat64, acc.descend( id ) )
         if err == nil { res = val.( Float64 ) }
     }
     return 
@@ -489,7 +489,7 @@ func ( acc *SymbolMapAccessor ) GetTimestampById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeTimestamp, acc.descend( id ) )
+        val, err = castAtomic( val, TypeTimestamp, acc.descend( id ) )
         if err == nil { res = val.( Timestamp ) }
     }
     return 
@@ -551,7 +551,7 @@ func ( acc *SymbolMapAccessor ) GetSymbolMapById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeSymbolMap, acc.descend( id ) )
+        val, err = castAtomic( val, TypeSymbolMap, acc.descend( id ) )
         if err == nil { res = val.( *SymbolMap ) }
     }
     return 
@@ -613,8 +613,11 @@ func ( acc *SymbolMapAccessor ) GetListById(
     var val Value
     val, err = acc.GetValueById( id )
     if err == nil {
-        val, err = CastValue( val, TypeOpaqueList, acc.descend( id ) )
-        if err == nil { res = val.( *List ) }
+        var ok bool
+        if res, ok = val.( *List ); ! ok {
+            path := acc.descend( id )
+            err = NewTypeCastErrorValue( TypeOpaqueList, val, path )
+        }
     }
     return 
 }
@@ -726,7 +729,7 @@ func ( acc *SymbolMapAccessor ) MustListByString(
 //         ]
 //     else
 //         cast_type = ( spec[ :cast_type ] || "Type#{typ_nm}" )
-//         [ "val, err = CastValue( val, #{cast_type}, acc.descend( id ) )" ]
+//         [ "val, err = castAtomic( val, #{cast_type}, acc.descend( id ) )" ]
 //     end
 // 
 //     <<-FUNCS

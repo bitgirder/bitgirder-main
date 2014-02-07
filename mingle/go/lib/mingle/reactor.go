@@ -6,7 +6,7 @@ import (
     "bitgirder/objpath"
     "bytes"
     "strings"
-//    "log"
+    "log"
     "bitgirder/stack"
 )
 
@@ -922,25 +922,12 @@ func ( vb *ValueBuilder ) ProcessEvent( ev ReactorEvent ) error {
     return nil
 }
 
-type castContext struct {
-    elt interface{}
-    expct TypeReference
-}
-
 type FieldTyper interface {
-    FieldTypeOf( fld *Identifier, pg PathGetter ) ( TypeReference, error )
-}
 
-type mapCast struct {
-    fldType TypeReference
-    typer FieldTyper
-}
-
-func newMapCast( typer FieldTyper ) *mapCast { return &mapCast{ typer: typer } }
-
-type listCast struct {
-    lt *ListTypeReference
-    sawVals bool
+    // path will be positioned to the map/struct containing fld, but will not
+    // itself include fld
+    FieldTypeFor( 
+        fld *Identifier, path objpath.PathNode ) ( TypeReference, error )
 }
 
 type CastInterface interface {
@@ -957,25 +944,26 @@ type CastInterface interface {
     // struct were explicitly signalled in the input
     InferStructFor( qn *QualifiedTypeName ) bool
 
-    FieldTyperFor( qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error )
+    FieldTyperFor( 
+        qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error )
 
     CastAtomic( 
         in Value, 
         at *AtomicTypeReference, 
-        pg PathGetter ) ( Value, error, bool )
+        path objpath.PathNode ) ( Value, error, bool )
 }
-
-type castInterfaceDefault struct {}
 
 type valueFieldTyper int
 
-func ( vt valueFieldTyper ) FieldTypeOf( 
-    fld *Identifier, pg PathGetter ) ( TypeReference, error ) {
+func ( vt valueFieldTyper ) FieldTypeFor( 
+    fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
     return TypeNullableValue, nil
 }
 
+type castInterfaceDefault int
+
 func ( i castInterfaceDefault ) FieldTyperFor( 
-    qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error ) {
+    qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
     return valueFieldTyper( 1 ), nil
 }
 
@@ -984,269 +972,317 @@ func ( i castInterfaceDefault ) InferStructFor( at *QualifiedTypeName ) bool {
 }
 
 func ( i castInterfaceDefault ) CastAtomic( 
-    v Value, at *AtomicTypeReference, pg PathGetter ) ( Value, error, bool ) {
+    v Value, 
+    at *AtomicTypeReference, 
+    path objpath.PathNode ) ( Value, error, bool ) {
+
     return nil, nil, false
 }
 
 type CastReactor struct {
-    pg PathGetter
     iface CastInterface
-    stack *list.List // stack of castContext
-    sr *StructuralReactor
+    stack *stack.Stack
 }
 
-func NewCastReactor( 
-    expct TypeReference, iface CastInterface, pg PathGetter ) *CastReactor {
-    res := &CastReactor{ pg: pg, stack: &list.List{}, iface: iface }
-    res.stack.PushFront( castContext{ elt: expct, expct: expct } )
+func NewCastReactor( expct TypeReference, iface CastInterface ) *CastReactor {
+    res := &CastReactor{ stack: stack.NewStack(), iface: iface }
+    res.stack.Push( expct )
     return res
 }
 
-func NewDefaultCastReactor( expct TypeReference, pg PathGetter ) *CastReactor {
-    return NewCastReactor( expct, castInterfaceDefault{}, pg )
+func NewDefaultCastReactor( expct TypeReference ) *CastReactor {
+    return NewCastReactor( expct, castInterfaceDefault( 1 ) )
 }
 
 func ( cr *CastReactor ) Init( rpi *ReactorPipelineInit ) {
-    cr.sr = EnsureStructuralReactor( rpi )
+    EnsureStructuralReactor( rpi )
+    EnsurePathSettingProcessor( rpi )
 }
 
-func ( cr *CastReactor ) checkStackNonEmpty() {
-    if cr.stack.Len() == 0 { panic( libErrorf( "Empty cast reactor stack" ) ) }
+type listCast struct {
+    sawValues bool
+    lt *ListTypeReference
+    startPath objpath.PathNode
 }
 
-func ( cr *CastReactor ) peek() castContext {
-    cr.checkStackNonEmpty()
-    return cr.stack.Front().Value.( castContext )
+func ( cr *CastReactor ) errStackUnrecognized() error {
+    return libErrorf( "unrecognized stack element: %T", cr.stack.Peek() )
 }
 
-func ( cr *CastReactor ) pop() castContext {
-    cc := cr.peek()
-    cr.stack.Remove( cr.stack.Front() )
-    return cc
-}
+func ( cr *CastReactor ) processAtomicValue(
+    ve ValueEvent,
+    at *AtomicTypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
 
-func ( cr *CastReactor ) push( cc castContext ) { cr.stack.PushFront( cc ) }
+    mv, err, ok := cr.iface.CastAtomic( ve.Val, at, ve.GetPath() )
 
-func ( cr *CastReactor ) GetPath() objpath.PathNode { 
-    var p idPath
-    if cr.pg != nil { p = cr.pg.GetPath() }
-    return cr.sr.AppendPath( p )
-}
-
-func ( cr *CastReactor ) expectedType() TypeReference {
-    cc := cr.peek()
-    if mc, ok := cc.elt.( *mapCast ); ok { return mc.fldType }
-    return cc.expct
-}
-
-func ( cr *CastReactor ) newTypeCastErrorPath( 
-    act TypeReference, p idPath ) *ValueCastError {
-    return NewTypeCastError( cr.expectedType(), act, p )
-}
-
-func ( cr *CastReactor ) newTypeCastError( act TypeReference ) *ValueCastError {
-    return cr.newTypeCastErrorPath( act, cr.GetPath() )
-}
-
-func ( cr *CastReactor ) castContextPanic( 
-    cc castContext, desc string ) error {
-    return libErrorf( "Unhandled stack element for %s: %T", desc, cc.elt )
-}
-
-func ( cr *CastReactor ) stackTypePanic( desc string ) error {
-    return cr.castContextPanic( cr.peek(), desc )
-}
-
-func ( cr *CastReactor ) castAtomic(
-    v Value, at *AtomicTypeReference ) ( Value, error ) {
-    if val, err, done := cr.iface.CastAtomic( v, at, cr ); done {
-        return val, err
+    if ! ok { 
+        mv, err = castAtomicWithCallType( ve.Val, at, callTyp, ve.GetPath() ) 
     }
-    return castAtomic( v, at, cr.GetPath() )
+
+    if err != nil { return err }
+
+    ve.Val = mv
+    return next.ProcessEvent( ve )
 }
 
-func ( cr *CastReactor ) completeValue( 
-    ve ValueEvent, t TypeReference, rep ReactorEventProcessor ) error {
-    switch typVal := t.( type ) {
+func ( cr *CastReactor ) processNullableValue(
+    ve ValueEvent,
+    nt *NullableTypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    if _, ok := ve.Val.( *Null ); ok { return next.ProcessEvent( ve ) }
+    return cr.processValueWithType( ve, nt.Type, callTyp, next )
+}
+
+func ( cr *CastReactor ) processValueWithType(
+    ve ValueEvent,
+    typ TypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    switch v := typ.( type ) {
     case *AtomicTypeReference: 
-        v2, err := cr.castAtomic( ve.Val, typVal )
-        if err == nil { return rep.ProcessEvent( NewValueEvent( v2 ) ) }
-        return err
-    case *NullableTypeReference: 
-        if _, ok := ve.Val.( *Null ); ok { return rep.ProcessEvent( ve ) }
-        return cr.completeValue( ve, typVal.Type, rep )
-    case *ListTypeReference: return cr.newTypeCastError( TypeOf( ve.Val ) )
-    }
-    panic( libErrorf( "Unhandled type: %T", t ) )
-}
-
-func ( cr *CastReactor ) value(
-    ve ValueEvent, rep ReactorEventProcessor ) error {
-    switch elt := cr.peek().elt.( type ) {
-    case TypeReference: return cr.completeValue( ve, elt, rep )
-    case *listCast: 
-        elt.sawVals = true
-        return cr.completeValue( ve, elt.lt.ElementType, rep )
-    case *mapCast: return cr.completeValue( ve, elt.fldType, rep )
-    }
-    panic( cr.stackTypePanic( "value" ) )
-}
-
-func ( cr *CastReactor ) completeStartList( 
-    typ TypeReference, le ListStartEvent, rep ReactorEventProcessor ) error {
-    switch t := typ.( type ) {
+        return cr.processAtomicValue( ve, v, callTyp, next )
+    case *NullableTypeReference:
+        return cr.processNullableValue( ve, v, callTyp, next )
     case *ListTypeReference:
-        cc := castContext{ expct: t.ElementType, elt: &listCast{ lt: t } }
-        cr.push( cc )
-        return rep.ProcessEvent( le )
-    case *NullableTypeReference: return cr.completeStartList( t.Type, le, rep )
-    case *AtomicTypeReference:
-        if t.Equals( TypeValue ) { 
-            return cr.completeStartList( TypeOpaqueList, le, rep )
-        }
-        return cr.newTypeCastErrorPath( TypeOpaqueList, cr.GetPath() )
+        return NewTypeCastErrorValue( callTyp, ve.Val, ve.GetPath() )
     }
-    panic( libErrorf( "Unhandled type: %T", typ ) )
+    panic( libErrorf( "unhandled type: %T", typ ) )
 }
 
-func ( cr *CastReactor ) startList( 
-    le ListStartEvent, rep ReactorEventProcessor ) error {
-    switch elt := cr.peek().elt.( type ) {
-    case TypeReference: return cr.completeStartList( elt, le, rep )
-    case *listCast: return cr.completeStartList( elt.lt.ElementType, le, rep )
-    case *mapCast: return cr.completeStartList( elt.fldType, le, rep )
-    }
-    panic( cr.stackTypePanic( "list start" ) )
-}
+func ( cr *CastReactor ) processValue( 
+    ve ValueEvent, next ReactorEventProcessor ) error {
 
-func ( cr *CastReactor ) inferredStructTypeOf( 
-    typ TypeReference ) *QualifiedTypeName {
-    switch t := typ.( type ) {
-    case *AtomicTypeReference: 
-        qn := t.Name.( *QualifiedTypeName )
-        if cr.iface.InferStructFor( qn ) { return qn }
-    case *NullableTypeReference: return cr.inferredStructTypeOf( t.Type )
-    }
-    return nil
-}
-
-func ( cr *CastReactor ) completeStartMap(
-    typ TypeReference, sm MapStartEvent, rep ReactorEventProcessor ) error {
-    switch t2 := typ.( type ) {
-    case *ListTypeReference: 
-        return cr.completeStartMap( t2.ElementType, sm, rep )
-    case *NullableTypeReference: return cr.completeStartMap( t2.Type, sm, rep )
-    case *AtomicTypeReference: {} // rest of method below
-    default: panic( libErrorf( "Unhandled type reference: %T", typ ) )
-    }
-    if typ.Equals( TypeSymbolMap ) || typ.Equals( TypeValue ) {
-        mc := newMapCast( valueFieldTyper( 1 ) )
-        cr.push( castContext{ elt: mc, expct: TypeSymbolMap } )
-        return rep.ProcessEvent( sm )
-    }
-    if qn := cr.inferredStructTypeOf( typ ); qn != nil {
-        at := &AtomicTypeReference{ Name: qn }
-        return cr.completeStartStruct( NewStructStartEvent( qn ), at, rep )
-    }
-    return cr.newTypeCastError( TypeSymbolMap )
-}
-
-func ( cr *CastReactor ) startMap( 
-    sm MapStartEvent, rep ReactorEventProcessor ) error {
-    switch elt := cr.peek().elt.( type ) {
-    case *AtomicTypeReference, *NullableTypeReference: 
-        return cr.completeStartMap( elt.( TypeReference ), sm, rep )
-    case *listCast: return cr.completeStartMap( elt.lt.ElementType, sm, rep )
-    case *mapCast: return cr.completeStartMap( elt.fldType, sm, rep )
-    }
-    panic( cr.stackTypePanic( "start map" ) )
-}
-
-func ( cr *CastReactor ) completeStartStruct( 
-    ss StructStartEvent, t TypeReference, rep ReactorEventProcessor ) error {
-    if nt, ok := t.( *NullableTypeReference ); ok {
-        return cr.completeStartStruct( ss, nt.Type, rep )
-    }
-    var expctTyp TypeReference
-    var ev ReactorEvent
-    at := &AtomicTypeReference{ Name: ss.Type }
-    switch {
-    case t.Equals( at ) || t.Equals( TypeValue ): expctTyp, ev = at, ss
-    case t.Equals( TypeSymbolMap ): expctTyp, ev = TypeSymbolMap, NewMapStartEvent()
-    default: return cr.newTypeCastError( at )
-    }
-    ft, err := cr.iface.FieldTyperFor( ss.Type, cr )
-    if err != nil { return err }
-    if ft == nil { ft = valueFieldTyper( 1 ) }
-    cr.push( castContext{ elt: newMapCast( ft ), expct: expctTyp } )
-    return rep.ProcessEvent( ev )
-}
-
-func ( cr *CastReactor ) startStruct( 
-    ss StructStartEvent, rep ReactorEventProcessor ) error {
-    switch elt := cr.peek().elt.( type ) {
-    case *AtomicTypeReference, *NullableTypeReference: 
-        return cr.completeStartStruct( ss, elt.( TypeReference ), rep )
-    case *ListTypeReference: 
-        return cr.newTypeCastError( &AtomicTypeReference{ Name: ss.Type } )
-    case *listCast: return cr.completeStartStruct( ss, elt.lt.ElementType, rep )
-    case *mapCast: return cr.completeStartStruct( ss, elt.fldType, rep )
-    }
-    panic( cr.stackTypePanic( "start struct" ) )
-}
-
-func ( cr *CastReactor ) startField( 
-    fse FieldStartEvent, rep ReactorEventProcessor ) error {
-    mc := cr.peek().elt.( *mapCast ) // okay since structure check precedes
-    var err error
-    mc.fldType, err = mc.typer.FieldTypeOf( fse.Field, cr )
-    if err != nil { return err }
-    return rep.ProcessEvent( fse )
-}
-
-func ( cr *CastReactor ) noteEndAsValIfList() {
-    if cr.stack.Len() == 0 { return }
-    if lc, ok := cr.peek().elt.( *listCast ); ok { lc.sawVals = true }
-}
-
-func ( cr *CastReactor ) end( ee EndEvent, rep ReactorEventProcessor ) error {
-    cc := cr.pop()
-    cr.noteEndAsValIfList()
-    switch v := cc.elt.( type ) {
-    case *mapCast: return rep.ProcessEvent( ee )
+    switch v := cr.stack.Peek().( type ) {
+    case TypeReference: 
+        cr.stack.Pop()
+        return cr.processValueWithType( ve, v, v, next )
     case *listCast:
-        if ! ( v.sawVals || v.lt.AllowsEmpty ) {
-            return NewValueCastErrorf( cr.GetPath(), "List is empty" )
+        v.sawValues = true
+        typ := v.lt.ElementType
+        return cr.processValueWithType( ve, typ, typ, next )
+    }
+    panic( cr.errStackUnrecognized() )
+}
+
+func ( cr *CastReactor ) implStartMap(
+    ev ReactorEvent, ft FieldTyper, next ReactorEventProcessor ) error {
+
+    cr.stack.Push( ft )
+    log.Printf( "pushed field typer: %v", ft )
+    return next.ProcessEvent( ev )
+}
+
+func ( cr *CastReactor ) completeStartStruct(
+    ss StructStartEvent, next ReactorEventProcessor ) error {
+
+    ft, err := cr.iface.FieldTyperFor( ss.Type, ss.GetPath() )
+    if err != nil { return err }
+
+    if ft == nil { ft = valueFieldTyper( 1 ) }
+    return cr.implStartMap( ss, ft, next )
+}
+
+func ( cr *CastReactor ) inferStructForMap(
+    me MapStartEvent,
+    at *AtomicTypeReference,
+    next ReactorEventProcessor ) ( error, bool ) {
+
+    qn, ok := at.Name.( *QualifiedTypeName )
+    if ! ok { return nil, false }
+
+    if ! cr.iface.InferStructFor( qn ) { return nil, false }
+
+    ev := NewStructStartEvent( qn )
+    ev.SetPath( me.GetPath() )
+
+    return cr.completeStartStruct( ev, next ), true
+}
+
+func ( cr *CastReactor ) processStartMapWithAtomicType(
+    me MapStartEvent,
+    at *AtomicTypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    if at.Equals( TypeSymbolMap ) || at.Equals( TypeValue ) {
+        return cr.implStartMap( me, valueFieldTyper( 1 ), next )
+    }
+
+    if err, ok := cr.inferStructForMap( me, at, next ); ok { return err }
+
+    return NewTypeCastError( callTyp, at, me.GetPath() )
+}
+
+func ( cr *CastReactor ) processStartMapWithType(
+    me MapStartEvent, 
+    typ TypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    switch v := typ.( type ) {
+    case *AtomicTypeReference:
+        return cr.processStartMapWithAtomicType( me, v, callTyp, next )
+    case *NullableTypeReference:
+        return cr.processStartMapWithType( me, v.Type, callTyp, next )
+    }
+    return NewTypeCastError( callTyp, typ, me.GetPath() )
+}
+
+func ( cr *CastReactor ) processStartMap(
+    me MapStartEvent, next ReactorEventProcessor ) error {
+    
+    switch v := cr.stack.Peek().( type ) {
+    case TypeReference: 
+        cr.stack.Pop()
+        return cr.processStartMapWithType( me, v, v, next )
+    case *listCast:
+        v.sawValues = true
+        typ := v.lt.ElementType
+        return cr.processStartMapWithType( me, typ, typ, next )
+    }
+    panic( cr.errStackUnrecognized() )
+}
+
+func ( cr *CastReactor ) processFieldStart(
+    fs FieldStartEvent, next ReactorEventProcessor ) error {
+
+    ft := cr.stack.Peek().( FieldTyper )
+    
+    typ, err := ft.FieldTypeFor( fs.Field, fs.GetPath().Parent() )
+    if err != nil { return err }
+
+    cr.stack.Push( typ )
+    return next.ProcessEvent( fs )
+}
+
+func ( cr *CastReactor ) processEnd(
+    ee EndEvent, next ReactorEventProcessor ) error {
+
+    switch v := cr.stack.Peek().( type ) {
+    case *listCast:
+        cr.stack.Pop()
+        if ! ( v.sawValues || v.lt.AllowsEmpty ) {
+            return NewValueCastError( v.startPath, "List is empty" )
         }
-        return rep.ProcessEvent( ee )
+    case FieldTyper: cr.stack.Pop()
     }
-    panic( cr.castContextPanic( cc, "end" ) )
+
+    return next.ProcessEvent( ee )
 }
 
-func ( cr *CastReactor ) ProcessEvent( 
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
+func ( cr *CastReactor ) processStructStartWithAtomicType(
+    ss StructStartEvent,
+    at *AtomicTypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    if at.Equals( TypeSymbolMap ) {
+        me := NewMapStartEvent()
+        me.SetPath( ss.GetPath() )
+        return cr.processStartMapWithAtomicType( me, at, callTyp, next )
+    }
+
+    if at.Name.Equals( ss.Type ) || at.Equals( TypeValue ) {
+        return cr.completeStartStruct( ss, next )
+    }
+
+    failTyp := &AtomicTypeReference{ Name: ss.Type }
+    return NewTypeCastError( callTyp, failTyp, ss.GetPath() )
+}
+
+func ( cr *CastReactor ) processStructStartWithType(
+    ss StructStartEvent,
+    typ TypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    switch v := typ.( type ) {
+    case *AtomicTypeReference:
+        return cr.processStructStartWithAtomicType( ss, v, callTyp, next )
+    case *NullableTypeReference:
+        return cr.processStructStartWithType( ss, v.Type, callTyp, next )
+    }
+    return NewTypeCastError( typ, callTyp, ss.GetPath() )
+}
+
+func ( cr *CastReactor ) processStructStart(
+    ss StructStartEvent, next ReactorEventProcessor ) error {
+
+    switch v := cr.stack.Peek().( type ) {
+    case TypeReference:
+        cr.stack.Pop()
+        return cr.processStructStartWithType( ss, v, v, next )
+    case *listCast:
+        v.sawValues = true
+        typ := v.lt.ElementType
+        return cr.processStructStartWithType( ss, typ, typ, next )
+    }
+    panic( cr.errStackUnrecognized() )
+}
+
+func ( cr *CastReactor ) processListStartWithAtomicType(
+    le ListStartEvent,
+    at *AtomicTypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    if at.Equals( TypeValue ) {
+        return cr.processListStartWithType( le, TypeOpaqueList, callTyp, next )
+    }
+
+    return NewTypeCastError( callTyp, TypeOpaqueList, le.GetPath() )
+}
+
+func ( cr *CastReactor ) processListStartWithType(
+    le ListStartEvent,
+    typ TypeReference,
+    callTyp TypeReference,
+    next ReactorEventProcessor ) error {
+
+    switch v := typ.( type ) {
+    case *AtomicTypeReference:
+        return cr.processListStartWithAtomicType( le, v, callTyp, next )
+    case *ListTypeReference:
+        sp := objpath.CopyOf( le.GetPath() )
+        cr.stack.Push( &listCast{ lt: v, startPath: sp } )
+        return next.ProcessEvent( le )
+    case *NullableTypeReference:
+        return cr.processListStartWithType( le, v.Type, callTyp, next )
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
+func ( cr *CastReactor ) processListStart( 
+    le ListStartEvent, next ReactorEventProcessor ) error {
+
+    switch v := cr.stack.Peek().( type ) {
+    case TypeReference:
+        cr.stack.Pop()
+        return cr.processListStartWithType( le, v, v, next )
+    case *listCast:
+        v.sawValues = true
+        return cr.processListStartWithType( le, v.lt.ElementType, v.lt, next )
+    }
+    panic( cr.errStackUnrecognized() )
+}
+
+func ( cr *CastReactor ) ProcessEvent(
+    ev ReactorEvent, next ReactorEventProcessor ) error {
+
     switch v := ev.( type ) {
-    case ValueEvent: return cr.value( v, rep )
-    case ListStartEvent: return cr.startList( v, rep )
-    case MapStartEvent: return cr.startMap( v, rep )
-    case StructStartEvent: return cr.startStruct( v, rep )
-    case FieldStartEvent: return cr.startField( v, rep )
-    case EndEvent: return cr.end( v, rep )
+    case ValueEvent: return cr.processValue( v, next )
+    case MapStartEvent: return cr.processStartMap( v, next )
+    case FieldStartEvent: return cr.processFieldStart( v, next )
+    case StructStartEvent: return cr.processStructStart( v, next )
+    case ListStartEvent: return cr.processListStart( v, next )
+    case EndEvent: return cr.processEnd( v, next )
     }
-    panic( libErrorf( "Unhandled event: %T", ev ) )
-}
-
-func castValue( mgVal Value, cr *CastReactor ) ( Value, error ) {
-    vb := NewValueBuilder()
-    pip := InitReactorPipeline( cr, vb )
-    if err := VisitValue( mgVal, pip ); err != nil { return nil, err }
-    return vb.GetValue(), nil
-}
-
-func CastValue( 
-    mgVal Value, typ TypeReference, path objpath.PathNode ) ( Value, error ) {
-    pg := ImmediatePathGetter{ path }
-    return castValue( mgVal, NewDefaultCastReactor( typ, pg ) )
+    panic( libErrorf( "unhandled event: %T", ev ) )
 }
 
 type FieldOrderSpecification struct {
@@ -1591,20 +1627,25 @@ func ( c svcReqCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
 
 type svcReqFieldTyper int
 
-func ( t svcReqFieldTyper ) FieldTypeOf( 
-    fld *Identifier, pg PathGetter ) ( TypeReference, error ) {
+func ( t svcReqFieldTyper ) FieldTypeFor( 
+    fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
+
     if fld.Equals( IdParameters ) { return TypeSymbolMap, nil }
     return TypeValue, nil
 }
 
 func ( c svcReqCastIface ) FieldTyperFor( 
-    qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error ) {
+    qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
+    
     if qn.Equals( QnameServiceRequest ) { return svcReqFieldTyper( 1 ), nil }
     return nil, nil
 }
 
 func ( c svcReqCastIface ) CastAtomic( 
-    in Value, at *AtomicTypeReference, pg PathGetter ) ( Value, error, bool ) {
+    in Value, 
+    at *AtomicTypeReference, 
+    path objpath.PathNode ) ( Value, error, bool ) {
+
     return nil, nil, false
 }
 
@@ -1618,7 +1659,7 @@ func ( g svcReqFieldOrderGetter ) FieldOrderFor(
 
 func ( sr *ServiceRequestReactor ) Init( rpi *ReactorPipelineInit ) {
     EnsureStructuralReactor( rpi ) 
-    cr := NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ), nil )
+    cr := NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ) )
     rpi.AddPipelineProcessor( cr )
     fo := NewFieldOrderReactor( svcReqFieldOrderGetter( 1 ) )
     rpi.AddPipelineProcessor( fo )
@@ -1788,18 +1829,22 @@ func ( i svcRespCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
 }
 
 func ( i svcRespCastIface ) FieldTyperFor( 
-    qn *QualifiedTypeName, pg PathGetter ) ( FieldTyper, error ) {
+    qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
+
     return valueFieldTyper( 1 ), nil
 }
 
 func ( i svcRespCastIface ) CastAtomic(
-    in Value, at *AtomicTypeReference, pg PathGetter ) ( Value, error, bool ) {
+    in Value, 
+    at *AtomicTypeReference, 
+    path objpath.PathNode ) ( Value, error, bool ) {
+
     return nil, nil, false
 }
 
 func ( sr *ServiceResponseReactor ) Init( rpi *ReactorPipelineInit ) {
     EnsureStructuralReactor( rpi )
-    cr := NewCastReactor( TypeServiceResponse, svcRespCastIface( 1 ), nil )
+    cr := NewCastReactor( TypeServiceResponse, svcRespCastIface( 1 ) )
     rpi.AddPipelineProcessor( cr )
     sr.pg = LastPathGetter( rpi )
 }
