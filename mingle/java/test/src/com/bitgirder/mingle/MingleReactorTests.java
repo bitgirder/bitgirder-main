@@ -590,11 +590,8 @@ class MingleReactorTests
         {
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
-//                    addReactor( 
-//                        MingleValueReactors.createDebugReactor( "PRE" ) ).
+                    addProcessor( MinglePathSettingProcessor.create() ).
                     addProcessor( createFieldOrderProcessor() ).
-                    addReactor(
-                        MingleValueReactors.createDebugReactor( "POST" ) ).
                     addReactor( this ).
                     build();
 

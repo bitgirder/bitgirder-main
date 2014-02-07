@@ -38,7 +38,7 @@ implements MingleValueReactorPipeline.Processor,
     void
     initialize( PipelineInitializerContext< Object > ctx )
     {
-        MingleValueReactors.ensurePathSetter( ctx );
+        MingleValueReactors.ensureStructuralCheck( ctx );
     }
 
     public

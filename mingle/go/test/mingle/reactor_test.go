@@ -239,9 +239,10 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
 }
 
 func ( c *ReactorTestCall ) callFieldOrderPathTest( fo *FieldOrderPathTest ) {
+    ps := NewPathSettingProcessor()
     ord := NewFieldOrderReactor( fogImpl( fo.Orders ) )
     chk := newEventPathCheckReactor( fo.Expect, c.PathAsserter )
-    pip := InitReactorPipeline( ord, chk )
+    pip := InitReactorPipeline( ps, ord, chk )
     src := eventSliceSource( fo.Source )
     AssertFeedEventSource( src, pip, c )
     chk.complete()

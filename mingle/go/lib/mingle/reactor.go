@@ -1316,7 +1316,6 @@ func NewFieldOrderReactor( fog FieldOrderGetter ) *FieldOrderReactor {
 
 func ( fo *FieldOrderReactor ) Init( rpi *ReactorPipelineInit ) {
     EnsureStructuralReactor( rpi )
-    EnsurePathSettingProcessor( rpi )
 }
 
 type structOrderFieldState struct {
