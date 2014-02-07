@@ -43,8 +43,8 @@ type ValueEvent struct {
     Val Value 
 }
 
-func NewValueEvent( val Value ) ValueEvent { 
-    return ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
+func NewValueEvent( val Value ) *ValueEvent { 
+    return &ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
 }
 
 type StructStartEvent struct { 
@@ -52,12 +52,12 @@ type StructStartEvent struct {
     Type *QualifiedTypeName 
 }
 
-func NewStructStartEvent( typ *QualifiedTypeName ) StructStartEvent {
-    return StructStartEvent{ Type: typ, reactorEventImpl: &reactorEventImpl{} }
+func NewStructStartEvent( typ *QualifiedTypeName ) *StructStartEvent {
+    return &StructStartEvent{ Type: typ, reactorEventImpl: &reactorEventImpl{} }
 }
 
 func isStructStart( ev ReactorEvent ) bool {
-    _, ok := ev.( StructStartEvent )
+    _, ok := ev.( *StructStartEvent )
     return ok
 }
 
@@ -65,8 +65,8 @@ type MapStartEvent struct {
     *reactorEventImpl
 }
 
-func NewMapStartEvent() MapStartEvent {
-    return MapStartEvent{ reactorEventImpl: &reactorEventImpl{} }
+func NewMapStartEvent() *MapStartEvent {
+    return &MapStartEvent{ reactorEventImpl: &reactorEventImpl{} }
 }
 
 type FieldStartEvent struct { 
@@ -74,34 +74,34 @@ type FieldStartEvent struct {
     Field *Identifier 
 }
 
-func NewFieldStartEvent( fld *Identifier ) FieldStartEvent {
-    return FieldStartEvent{ Field: fld, reactorEventImpl: &reactorEventImpl{} }
+func NewFieldStartEvent( fld *Identifier ) *FieldStartEvent {
+    return &FieldStartEvent{ Field: fld, reactorEventImpl: &reactorEventImpl{} }
 }
 
 type ListStartEvent struct {
     *reactorEventImpl
 }
 
-func NewListStartEvent() ListStartEvent {
-    return ListStartEvent{ reactorEventImpl: &reactorEventImpl{} }
+func NewListStartEvent() *ListStartEvent {
+    return &ListStartEvent{ reactorEventImpl: &reactorEventImpl{} }
 }
 
 type EndEvent struct {
     *reactorEventImpl
 }
 
-func NewEndEvent() EndEvent {
-    return EndEvent{ reactorEventImpl: &reactorEventImpl{} }
+func NewEndEvent() *EndEvent {
+    return &EndEvent{ reactorEventImpl: &reactorEventImpl{} }
 }
 
 func EventToString( ev ReactorEvent ) string {
     pairs := [][]string{ { "type", fmt.Sprintf( "%T", ev ) } }
     switch v := ev.( type ) {
-    case ValueEvent: 
+    case *ValueEvent: 
         pairs = append( pairs, []string{ "value", QuoteValue( v.Val ) } )
-    case StructStartEvent:
+    case *StructStartEvent:
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
-    case FieldStartEvent:
+    case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
     }
     if p := ev.GetPath(); p != nil {
@@ -115,12 +115,12 @@ func EventToString( ev ReactorEvent ) string {
 func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     var res ReactorEvent
     switch v := ev.( type ) {
-    case ValueEvent: res = NewValueEvent( v.Val )
-    case ListStartEvent: res = NewListStartEvent()
-    case MapStartEvent: res = NewMapStartEvent()
-    case StructStartEvent: res = NewStructStartEvent( v.Type )
-    case FieldStartEvent: res = NewFieldStartEvent( v.Field )
-    case EndEvent: res = NewEndEvent()
+    case *ValueEvent: res = NewValueEvent( v.Val )
+    case *ListStartEvent: res = NewListStartEvent()
+    case *MapStartEvent: res = NewMapStartEvent()
+    case *StructStartEvent: res = NewStructStartEvent( v.Type )
+    case *FieldStartEvent: res = NewFieldStartEvent( v.Field )
+    case *EndEvent: res = NewEndEvent()
     default: panic( libErrorf( "unhandled copy target: %T", ev ) )
     }
     if withPath { res.SetPath( ev.GetPath() ) }
@@ -399,15 +399,15 @@ func ( epr *EventPathReactor ) preProcessValue() {
 
 func ( epr *EventPathReactor ) preProcess( ev ReactorEvent ) {
     switch v := ev.( type ) {
-    case FieldStartEvent: epr.stack.pushField( v.Field )
-    case MapStartEvent, StructStartEvent: 
+    case *FieldStartEvent: epr.stack.pushField( v.Field )
+    case *MapStartEvent, *StructStartEvent: 
         epr.preProcessValue()
         epr.stack.pushMap( "map" )
-    case ListStartEvent: 
+    case *ListStartEvent: 
         epr.preProcessValue()
         epr.stack.pushList( listIndex( -1 ) )
-    case EndEvent: epr.stack.pop()
-    case ValueEvent: epr.preProcessValue()
+    case *EndEvent: epr.stack.pop()
+    case *ValueEvent: epr.preProcessValue()
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
 }
@@ -423,7 +423,7 @@ func ( epr *EventPathReactor ) completeValue() {
 
 func ( epr *EventPathReactor ) postProcess( ev ReactorEvent ) error {
     switch ev.( type ) {
-    case ValueEvent, EndEvent: epr.completeValue()
+    case *ValueEvent, *EndEvent: epr.completeValue()
     }
     return nil
 }
@@ -606,12 +606,12 @@ func ( sr *StructuralReactor ) end() error {
 
 func ( sr *StructuralReactor ) update( ev ReactorEvent ) ( bool, error ) {
     switch v := ev.( type ) {
-    case StructStartEvent: return false, sr.startStruct( v.Type )
-    case MapStartEvent: return false, sr.startMap()
-    case ListStartEvent: return false, sr.startList()
-    case FieldStartEvent: return false, sr.startField( v.Field )
-    case ValueEvent: return true, sr.value( true )
-    case EndEvent: return true, sr.end()
+    case *StructStartEvent: return false, sr.startStruct( v.Type )
+    case *MapStartEvent: return false, sr.startMap()
+    case *ListStartEvent: return false, sr.startList()
+    case *FieldStartEvent: return false, sr.startField( v.Field )
+    case *ValueEvent: return true, sr.value( true )
+    case *EndEvent: return true, sr.end()
     }
     panic( libErrorf( "Unhandled event: %T", ev ) )
 }
@@ -733,12 +733,12 @@ func ( proc *PathSettingProcessor ) prepareEnd() {
 
 func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
     switch v := ev.( type ) {
-    case ValueEvent: proc.prepareValue()
-    case ListStartEvent: proc.prepareListStart()
-    case MapStartEvent: proc.prepareStructure( endTypeMap )
-    case StructStartEvent: proc.prepareStructure( endTypeStruct )
-    case FieldStartEvent: proc.prepareStartField( v.Field )
-    case EndEvent: proc.prepareEnd()
+    case *ValueEvent: proc.prepareValue()
+    case *ListStartEvent: proc.prepareListStart()
+    case *MapStartEvent: proc.prepareStructure( endTypeMap )
+    case *StructStartEvent: proc.prepareStructure( endTypeStruct )
+    case *FieldStartEvent: proc.prepareStartField( v.Field )
+    case *EndEvent: proc.prepareEnd()
     }
     if proc.path != nil { ev.SetPath( proc.path ) }
 }
@@ -762,8 +762,8 @@ func ( proc *PathSettingProcessor ) processedEnd() {
 
 func ( proc *PathSettingProcessor ) eventProcessed( ev ReactorEvent ) {
     switch ev.( type ) {
-    case ValueEvent: proc.processedValue()
-    case EndEvent: proc.processedEnd()
+    case *ValueEvent: proc.processedValue()
+    case *EndEvent: proc.processedEnd()
     }
 }
 
@@ -896,12 +896,12 @@ func ( va *valueAccumulator ) end() error {
 
 func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
-    case ValueEvent: va.valueReady( v.Val )
-    case ListStartEvent: va.pushAcc( newListAcc() )
-    case MapStartEvent: va.pushAcc( newMapAcc() )
-    case StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
-    case FieldStartEvent: va.startField( v.Field )
-    case EndEvent: if err := va.end(); err != nil { return err }
+    case *ValueEvent: va.valueReady( v.Val )
+    case *ListStartEvent: va.pushAcc( newListAcc() )
+    case *MapStartEvent: va.pushAcc( newMapAcc() )
+    case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
+    case *FieldStartEvent: va.startField( v.Field )
+    case *EndEvent: if err := va.end(); err != nil { return err }
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return nil
@@ -1010,7 +1010,7 @@ func ( cr *CastReactor ) errStackUnrecognized() error {
 }
 
 func ( cr *CastReactor ) processAtomicValue(
-    ve ValueEvent,
+    ve *ValueEvent,
     at *AtomicTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1028,7 +1028,7 @@ func ( cr *CastReactor ) processAtomicValue(
 }
 
 func ( cr *CastReactor ) processNullableValue(
-    ve ValueEvent,
+    ve *ValueEvent,
     nt *NullableTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1038,7 +1038,7 @@ func ( cr *CastReactor ) processNullableValue(
 }
 
 func ( cr *CastReactor ) processValueWithType(
-    ve ValueEvent,
+    ve *ValueEvent,
     typ TypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1055,7 +1055,7 @@ func ( cr *CastReactor ) processValueWithType(
 }
 
 func ( cr *CastReactor ) processValue( 
-    ve ValueEvent, next ReactorEventProcessor ) error {
+    ve *ValueEvent, next ReactorEventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case TypeReference: 
@@ -1078,7 +1078,7 @@ func ( cr *CastReactor ) implStartMap(
 }
 
 func ( cr *CastReactor ) completeStartStruct(
-    ss StructStartEvent, next ReactorEventProcessor ) error {
+    ss *StructStartEvent, next ReactorEventProcessor ) error {
 
     ft, err := cr.iface.FieldTyperFor( ss.Type, ss.GetPath() )
     if err != nil { return err }
@@ -1088,7 +1088,7 @@ func ( cr *CastReactor ) completeStartStruct(
 }
 
 func ( cr *CastReactor ) inferStructForMap(
-    me MapStartEvent,
+    me *MapStartEvent,
     at *AtomicTypeReference,
     next ReactorEventProcessor ) ( error, bool ) {
 
@@ -1104,7 +1104,7 @@ func ( cr *CastReactor ) inferStructForMap(
 }
 
 func ( cr *CastReactor ) processStartMapWithAtomicType(
-    me MapStartEvent,
+    me *MapStartEvent,
     at *AtomicTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1119,7 +1119,7 @@ func ( cr *CastReactor ) processStartMapWithAtomicType(
 }
 
 func ( cr *CastReactor ) processStartMapWithType(
-    me MapStartEvent, 
+    me *MapStartEvent, 
     typ TypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1134,7 +1134,7 @@ func ( cr *CastReactor ) processStartMapWithType(
 }
 
 func ( cr *CastReactor ) processStartMap(
-    me MapStartEvent, next ReactorEventProcessor ) error {
+    me *MapStartEvent, next ReactorEventProcessor ) error {
     
     switch v := cr.stack.Peek().( type ) {
     case TypeReference: 
@@ -1149,7 +1149,7 @@ func ( cr *CastReactor ) processStartMap(
 }
 
 func ( cr *CastReactor ) processFieldStart(
-    fs FieldStartEvent, next ReactorEventProcessor ) error {
+    fs *FieldStartEvent, next ReactorEventProcessor ) error {
 
     ft := cr.stack.Peek().( FieldTyper )
     
@@ -1161,7 +1161,7 @@ func ( cr *CastReactor ) processFieldStart(
 }
 
 func ( cr *CastReactor ) processEnd(
-    ee EndEvent, next ReactorEventProcessor ) error {
+    ee *EndEvent, next ReactorEventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case *listCast:
@@ -1176,7 +1176,7 @@ func ( cr *CastReactor ) processEnd(
 }
 
 func ( cr *CastReactor ) processStructStartWithAtomicType(
-    ss StructStartEvent,
+    ss *StructStartEvent,
     at *AtomicTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1196,7 +1196,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
 }
 
 func ( cr *CastReactor ) processStructStartWithType(
-    ss StructStartEvent,
+    ss *StructStartEvent,
     typ TypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1211,7 +1211,7 @@ func ( cr *CastReactor ) processStructStartWithType(
 }
 
 func ( cr *CastReactor ) processStructStart(
-    ss StructStartEvent, next ReactorEventProcessor ) error {
+    ss *StructStartEvent, next ReactorEventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case TypeReference:
@@ -1226,7 +1226,7 @@ func ( cr *CastReactor ) processStructStart(
 }
 
 func ( cr *CastReactor ) processListStartWithAtomicType(
-    le ListStartEvent,
+    le *ListStartEvent,
     at *AtomicTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1239,7 +1239,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
 }
 
 func ( cr *CastReactor ) processListStartWithType(
-    le ListStartEvent,
+    le *ListStartEvent,
     typ TypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
@@ -1258,7 +1258,7 @@ func ( cr *CastReactor ) processListStartWithType(
 }
 
 func ( cr *CastReactor ) processListStart( 
-    le ListStartEvent, next ReactorEventProcessor ) error {
+    le *ListStartEvent, next ReactorEventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case TypeReference:
@@ -1275,12 +1275,12 @@ func ( cr *CastReactor ) ProcessEvent(
     ev ReactorEvent, next ReactorEventProcessor ) error {
 
     switch v := ev.( type ) {
-    case ValueEvent: return cr.processValue( v, next )
-    case MapStartEvent: return cr.processStartMap( v, next )
-    case FieldStartEvent: return cr.processFieldStart( v, next )
-    case StructStartEvent: return cr.processStructStart( v, next )
-    case ListStartEvent: return cr.processListStart( v, next )
-    case EndEvent: return cr.processEnd( v, next )
+    case *ValueEvent: return cr.processValue( v, next )
+    case *MapStartEvent: return cr.processStartMap( v, next )
+    case *FieldStartEvent: return cr.processFieldStart( v, next )
+    case *StructStartEvent: return cr.processStructStart( v, next )
+    case *ListStartEvent: return cr.processListStart( v, next )
+    case *EndEvent: return cr.processEnd( v, next )
     }
     panic( libErrorf( "unhandled event: %T", ev ) )
 }
@@ -1371,7 +1371,7 @@ func ( sp *structOrderProcessor ) shouldAccumulate(
 }
 
 func ( sp *structOrderProcessor ) processFieldStart( 
-    ev FieldStartEvent ) error {
+    ev *FieldStartEvent ) error {
 
     if sp.cur != nil { 
         panic( libErrorf( "saw field '%s' while processing '%s'", 
@@ -1390,8 +1390,8 @@ func ( sp *structOrderProcessor ) processFieldStart(
 
 func ( sp *structOrderProcessor ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
-    case StructStartEvent: return sp.processStructStart( v )
-    case FieldStartEvent: return sp.processFieldStart( v )
+    case *StructStartEvent: return sp.processStructStart( v )
+    case *FieldStartEvent: return sp.processFieldStart( v )
     }
     panic( libErrorf( "unexpected event: %T", ev ) )
 }
@@ -1441,7 +1441,7 @@ func ( sp *structOrderProcessor ) completeField() error {
     return sp.sendReadyFields( false )
 }
 
-func ( sp *structOrderProcessor ) processValue( v ValueEvent ) error {
+func ( sp *structOrderProcessor ) processValue( v *ValueEvent ) error {
     if sp.cur == nil || sp.cur.acc == nil {
         if err := sp.next.ProcessEvent( v ); err != nil { return err }
     } else {
@@ -1510,7 +1510,7 @@ func ( fo *FieldOrderReactor ) structOrderGetNextProc(
 }
 
 func ( fo *FieldOrderReactor ) processStructStart(
-    ev StructStartEvent, next ReactorEventProcessor,
+    ev *StructStartEvent, next ReactorEventProcessor,
 ) error {
     ord := fo.fog.FieldOrderFor( ev.Type )
     if ord == nil { return fo.processContainerStart( ev, next ) }
@@ -1520,7 +1520,7 @@ func ( fo *FieldOrderReactor ) processStructStart(
 }
 
 func ( fo *FieldOrderReactor ) processValue( 
-    v ValueEvent, next ReactorEventProcessor ) error {
+    v *ValueEvent, next ReactorEventProcessor ) error {
 
     if sp := fo.peekStructProc(); sp != nil { return sp.processValue( v ) }
     return fo.peekProc().ProcessEvent( v )
@@ -1542,12 +1542,12 @@ func ( fo *FieldOrderReactor ) processEventWithStack(
     ev ReactorEvent, next ReactorEventProcessor ) error {
 
     switch v := ev.( type ) {
-    case ListStartEvent, MapStartEvent: 
+    case *ListStartEvent, *MapStartEvent: 
         return fo.processContainerStart( v, next )
-    case StructStartEvent: return fo.processStructStart( v, next )
-    case FieldStartEvent: return fo.peekProc().ProcessEvent( v )
-    case ValueEvent: return fo.processValue( v, next )
-    case EndEvent: return fo.processEnd( v, next )
+    case *StructStartEvent: return fo.processStructStart( v, next )
+    case *FieldStartEvent: return fo.peekProc().ProcessEvent( v )
+    case *ValueEvent: return fo.processValue( v, next )
+    case *EndEvent: return fo.processEnd( v, next )
     }
     panic( libErrorf( "unhandled event: %T", ev ) )
 }
@@ -1586,7 +1586,7 @@ type ServiceRequestReactor struct {
 
     evProc ReactorEventProcessor
 
-    // 0: before StartStruct{ QnameServiceRequest } and after final EndEvent
+    // 0: before StartStruct{ QnameServiceRequest } and after final *EndEvent
     // 1: when reading a service request field (namespace, service, etc)
     // > 1: accumulating some nested value for 'parameters' or 'authentication' 
     depth int 
@@ -1611,10 +1611,10 @@ func ( sr *ServiceRequestReactor ) GetPath() objpath.PathNode {
 }
 
 func ( sr *ServiceRequestReactor ) updateEvProc( ev ReactorEvent ) {
-    if _, ok := ev.( FieldStartEvent ); ok { return }
+    if _, ok := ev.( *FieldStartEvent ); ok { return }
     switch ev.( type ) {
-    case StructStartEvent, ListStartEvent, MapStartEvent: sr.depth++
-    case EndEvent: sr.depth--
+    case *StructStartEvent, *ListStartEvent, *MapStartEvent: sr.depth++
+    case *EndEvent: sr.depth--
     }
     if sr.depth == 1 { sr.evProc, sr.fld = nil, reqFieldNone } 
 }
@@ -1670,7 +1670,7 @@ func ( sr *ServiceRequestReactor ) invalidValueErr( desc string ) error {
     return NewValueCastErrorf( sr.GetPath(), "invalid value: %s", desc )
 }
 
-func ( sr *ServiceRequestReactor ) startStruct( ev StructStartEvent ) error {
+func ( sr *ServiceRequestReactor ) startStruct( ev *StructStartEvent ) error {
     if sr.fld == reqFieldNone { // we're at the top of the request
         if ev.Type.Equals( QnameServiceRequest ) { return nil }
         // panic because upstream cast should have checked already
@@ -1680,7 +1680,7 @@ func ( sr *ServiceRequestReactor ) startStruct( ev StructStartEvent ) error {
 }
 
 func ( sr *ServiceRequestReactor ) startField( 
-    fs FieldStartEvent ) ( err error ) {
+    fs *FieldStartEvent ) ( err error ) {
     if sr.fld != reqFieldNone {
         panic( libErrorf( 
             "Saw field start '%s' while sr.fld is %d", fs.Field, sr.fld ) )
@@ -1784,14 +1784,14 @@ func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
     defer sr.updateEvProc( ev )
     if sr.evProc != nil { return sr.evProc.ProcessEvent( ev ) }
     switch v := ev.( type ) {
-    case FieldStartEvent: return sr.startField( v )
-    case StructStartEvent: return sr.startStruct( v )
-    case ValueEvent: return sr.value( v.Val )
-    case ListStartEvent: 
+    case *FieldStartEvent: return sr.startField( v )
+    case *StructStartEvent: return sr.startStruct( v )
+    case *ValueEvent: return sr.value( v.Val )
+    case *ListStartEvent: 
         return sr.invalidValueErr( TypeOpaqueList.ExternalForm() )
-    case MapStartEvent: 
+    case *MapStartEvent: 
         return sr.invalidValueErr( TypeSymbolMap.ExternalForm() )
-    case EndEvent: return sr.end()
+    case *EndEvent: return sr.end()
     default: panic( libErrorf( "Unhandled event: %T", v ) )
     }
     return nil
@@ -1854,10 +1854,10 @@ func ( sr *ServiceResponseReactor ) GetPath() objpath.PathNode {
 }
 
 func ( sr *ServiceResponseReactor ) updateEvProc( ev ReactorEvent ) {
-    if _, ok := ev.( FieldStartEvent ); ok { return }
+    if _, ok := ev.( *FieldStartEvent ); ok { return }
     switch ev.( type ) {
-    case StructStartEvent, MapStartEvent, ListStartEvent: sr.depth++
-    case EndEvent: sr.depth--
+    case *StructStartEvent, *MapStartEvent, *ListStartEvent: sr.depth++
+    case *EndEvent: sr.depth--
     }
     if sr.depth == 1 { 
         if sr.evProc != nil { sr.gotEvProcVal, sr.evProc = true, nil }
@@ -1870,7 +1870,7 @@ func ( sr *ServiceResponseReactor ) updateEvProc( ev ReactorEvent ) {
 func ( sr *ServiceResponseReactor ) sendEvProcEvent( ev ReactorEvent ) error {
     isErr := sr.gotEvProcVal
     if isErr {
-        if ve, ok := ev.( ValueEvent ); ok {
+        if ve, ok := ev.( *ValueEvent ); ok {
             if _, isNull := ve.Val.( *Null ); isNull { isErr = false }
         }
     }
@@ -1902,9 +1902,9 @@ func ( sr *ServiceResponseReactor ) ProcessEvent( ev ReactorEvent ) error {
     defer sr.updateEvProc( ev )
     if sr.evProc != nil { return sr.sendEvProcEvent( ev ) }
     switch v := ev.( type ) {
-    case StructStartEvent: return sr.startStruct( v.Type )
-    case FieldStartEvent: return sr.startField( v.Field )
-    case EndEvent: return nil
+    case *StructStartEvent: return sr.startStruct( v.Type )
+    case *FieldStartEvent: return sr.startField( v.Field )
+    case *EndEvent: return nil
     }
     panic( libErrorf( "Saw event %v (%T) while evProc == nil", ev, ev ) )
 }

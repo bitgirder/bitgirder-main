@@ -180,14 +180,14 @@ func asValue( val interface{} ) mg.Value {
     case mg.ValueBuildTest: return mkStruct( "ValueBuildTest", "val", v.Val )
     case mg.EventExpectation: return eeAsValue( v )
     case []mg.EventExpectation: return sliceAsValue( v )
-    case mg.ValueEvent: return mkStruct( "ValueEvent", "val", v.Val )
-    case mg.StructStartEvent:
+    case *mg.ValueEvent: return mkStruct( "ValueEvent", "val", v.Val )
+    case *mg.StructStartEvent:
         return mkStruct( "StructStartEvent", "type", asValue( v.Type ) )
-    case mg.MapStartEvent: return mkStruct( "MapStartEvent" )
-    case mg.FieldStartEvent:
+    case *mg.MapStartEvent: return mkStruct( "MapStartEvent" )
+    case *mg.FieldStartEvent:
         return mkStruct( "FieldStartEvent", "field", asValue( v.Field ) )
-    case mg.ListStartEvent: return mkStruct( "ListStartEvent" )
-    case mg.EndEvent: return mkStruct( "EndEvent" )
+    case *mg.ListStartEvent: return mkStruct( "ListStartEvent" )
+    case *mg.EndEvent: return mkStruct( "EndEvent" )
     case []mg.ReactorEvent: return sliceAsValue( v )
     case mg.ReactorTopType: return mg.String( v.String() )
     case *mg.ReactorError:

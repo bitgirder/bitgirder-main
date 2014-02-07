@@ -216,11 +216,11 @@ func ( ocr *orderCheckReactor ) startField( fld *Identifier ) {
 func ( ocr *orderCheckReactor ) ProcessEvent(
     ev ReactorEvent, rep ReactorEventProcessor ) error {
     switch v := ev.( type ) {
-    case StructStartEvent: ocr.startStruct( v.Type )
-    case ListStartEvent: ocr.push( "list" )
-    case MapStartEvent: ocr.push( "map" )
-    case FieldStartEvent: ocr.startField( v.Field )
-    case EndEvent: ocr.stack.Pop()
+    case *StructStartEvent: ocr.startStruct( v.Type )
+    case *ListStartEvent: ocr.push( "list" )
+    case *MapStartEvent: ocr.push( "map" )
+    case *FieldStartEvent: ocr.startField( v.Field )
+    case *EndEvent: ocr.stack.Pop()
     }
     return rep.ProcessEvent( ev )
 }

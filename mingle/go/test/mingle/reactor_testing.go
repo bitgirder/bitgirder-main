@@ -531,10 +531,10 @@ func initFieldOrderPathTests() {
     typ := func( i int ) *QualifiedTypeName {
         return qname( fmt.Sprintf( "ns1@v1/S%d", i ) )
     }
-    ss := func( i int ) StructStartEvent { 
+    ss := func( i int ) *StructStartEvent { 
         return NewStructStartEvent( typ( i ) ) 
     }
-    fld := func( i int ) FieldStartEvent { 
+    fld := func( i int ) *FieldStartEvent { 
         return NewFieldStartEvent( id( i ) ) 
     }
     p := makeTestIdPath

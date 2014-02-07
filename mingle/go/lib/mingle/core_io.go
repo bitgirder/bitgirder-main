@@ -214,12 +214,12 @@ func ( w writeReactor ) value( val Value ) error {
 
 func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
-    case ValueEvent: return w.value( v.Val )
-    case MapStartEvent: return w.startMap()
-    case StructStartEvent: return w.startStruct( v.Type )
-    case ListStartEvent: return w.startList()
-    case FieldStartEvent: return w.startField( v.Field )
-    case EndEvent: return w.WriteTypeCode( tcEnd )
+    case *ValueEvent: return w.value( v.Val )
+    case *MapStartEvent: return w.startMap()
+    case *StructStartEvent: return w.startStruct( v.Type )
+    case *ListStartEvent: return w.startList()
+    case *FieldStartEvent: return w.startField( v.Field )
+    case *EndEvent: return w.WriteTypeCode( tcEnd )
     }
     panic( libErrorf( "Unhandled event type: %T", ev ) )
 }
