@@ -41,6 +41,12 @@ func flattenEvs( vals ...interface{} ) []ReactorEvent {
     return res
 }
 
+func copySource( evs []ReactorEvent ) []ReactorEvent {
+    res := make( []ReactorEvent, len( evs ) )
+    for i, ev := range evs { res[ i ] = CopyEvent( ev, false ) }
+    return res
+}
+
 func startTestIdPath( elt interface{} ) objpath.PathNode {
     switch v := elt.( type ) {
     case int: return objpath.RootedAt( makeTestId( v ) )
@@ -360,7 +366,7 @@ func initFieldOrderValueTests() {
     addTest1 := func( src []ReactorEvent, expct Value ) {
         AddStdReactorTests(
             &FieldOrderReactorTest{ 
-                Source: src, 
+                Source: copySource( src ), 
                 Expect: expct, 
                 Orders: []FieldOrderReactorTestOrder{
                     testOrderWithIds( t1,
@@ -392,15 +398,17 @@ func initFieldOrderValueTests() {
     // Test nested orderings
     AddStdReactorTests(
         &FieldOrderReactorTest{
-            Source: []ReactorEvent{
-                ss1, 
-                    flds[ 0 ], val1,
-                    flds[ 1 ], ss1,
-                        flds[ 2 ], NewListStartEvent(), val1, NewEndEvent(),
-                        flds[ 1 ], val1,
+            Source: copySource( 
+                []ReactorEvent{
+                    ss1, 
+                        flds[ 0 ], val1,
+                        flds[ 1 ], ss1,
+                            flds[ 2 ], NewListStartEvent(), val1, NewEndEvent(),
+                            flds[ 1 ], val1,
+                        NewEndEvent(),
                     NewEndEvent(),
-                NewEndEvent(),
-            },
+                },
+            ),
             Orders: []FieldOrderReactorTestOrder{
                 testOrderWithIds( t1, ids[ 1 ], ids[ 0 ], ids[ 2 ] ),
             },
@@ -419,7 +427,7 @@ func initFieldOrderValueTests() {
     addTest2 := func( expct Value, src ...ReactorEvent ) {
         AddStdReactorTests(
             &FieldOrderReactorTest{
-                Source: src,
+                Source: copySource( src ),
                 Expect: expct,
                 Orders: []FieldOrderReactorTestOrder{},
             },
@@ -479,7 +487,7 @@ func initFieldOrderMissingFieldTests() {
         AddStdReactorTests(
             &FieldOrderMissingFieldsTest{
                 Orders: ords,
-                Source: mkSrc( flds ),
+                Source: copySource( mkSrc( flds ) ),
                 Expect: mkVal( flds ),
             },
         )
@@ -495,7 +503,7 @@ func initFieldOrderMissingFieldTests() {
         AddStdReactorTests(
             &FieldOrderMissingFieldsTest{
                 Orders: ords,
-                Source: mkSrc( flds ),
+                Source: copySource( mkSrc( flds ) ),
                 Error: NewMissingFieldsError( nil, miss ),
             },
         )
@@ -677,7 +685,7 @@ func initFieldOrderPathTests() {
     } {
         AddStdReactorTests(
             &FieldOrderPathTest{
-                Source: mkSrc( ord... ),
+                Source: copySource( mkSrc( ord... ) ),
                 Expect: expct1,
                 Orders: ords1,
             },
@@ -685,14 +693,16 @@ func initFieldOrderPathTests() {
     }
     AddStdReactorTests(
         &FieldOrderPathTest{
-            Source: []ReactorEvent{
-                ss( 1 ),
-                    fld( 0 ), val1,
-                    fld( 7 ), val1,
-                    fld( 2 ), val1,
-                    fld( 1 ), val1,
-                NewEndEvent(),
-            },
+            Source: copySource(
+                []ReactorEvent{
+                    ss( 1 ),
+                        fld( 0 ), val1,
+                        fld( 7 ), val1,
+                        fld( 2 ), val1,
+                        fld( 1 ), val1,
+                    NewEndEvent(),
+                },
+            ),
             Expect: []EventExpectation{
                 { ss( 1 ), nil },
                 { fld( 0 ), p( 0 ) },
@@ -713,7 +723,8 @@ func initFieldOrderPathTests() {
     // Regression for bug fixed in previous commit (f7fa84122047)
     AddStdReactorTests(
         &FieldOrderPathTest{
-            Source: []ReactorEvent{ ss( 1 ), fld( 1 ), val1, NewEndEvent() },
+            Source: copySource(
+                []ReactorEvent{ ss( 1 ), fld( 1 ), val1, NewEndEvent() } ),
             Expect: []EventExpectation{
                 { ss( 1 ), nil },
                 { fld( 1 ), p( 1 ) },
@@ -770,7 +781,7 @@ func initServiceRequestTests() {
     addSucc1 := func( evs ...interface{} ) {
         AddStdReactorTests(
             &ServiceRequestReactorTest{
-                Source: flattenEvs( evs... ),
+                Source: copySource( flattenEvs( evs... ) ),
                 Namespace: ns1,
                 Service: svc1,
                 Operation: op1,
@@ -798,13 +809,15 @@ func initServiceRequestTests() {
     )
     AddStdReactorTests(
         &ServiceRequestReactorTest{
-            Source: flattenEvs( evReqTyp,
-                evFldNs, evNs1,
-                evFldSvc, evSvc1,
-                evFldOp, evOp1,
-                evFldAuth, i32Val1,
-                evFldParams, evParams1,
-                NewEndEvent(),
+            Source: copySource(
+                flattenEvs( evReqTyp,
+                    evFldNs, evNs1,
+                    evFldSvc, evSvc1,
+                    evFldOp, evOp1,
+                    evFldAuth, i32Val1,
+                    evFldParams, evParams1,
+                    NewEndEvent(),
+                ),
             ),
             Namespace: ns1,
             Service: svc1,
@@ -1739,6 +1752,11 @@ func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
     ca.Call()
 }
 
+func EqualEvents( expct, act ReactorEvent, a *assert.PathAsserter ) {
+    a.Equalf( expct, act, "events are not equal: %s != %s",
+        EventToString( expct ), EventToString( act ) )
+}
+
 type reactorEventSource interface {
     Len() int
     EventAt( int ) ReactorEvent
@@ -1754,6 +1772,12 @@ func FeedEventSource(
         }
     }
     return nil
+}
+
+func AssertFeedEventSource(
+    src reactorEventSource, proc ReactorEventProcessor, a assert.Failer ) {
+    
+    if err := FeedEventSource( src, proc ); err != nil { a.Fatal( err ) }
 }
 
 type eventSliceSource []ReactorEvent
@@ -1779,8 +1803,9 @@ func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
     r.a.Truef( r.idx < len( r.expct ), "unexpected event: %v", ev )
     ee := r.expct[ r.idx ]
     r.idx++
-    EqualPaths( ee.Path, ev.GetPath(), r.eeAssert.Descend( "path" ) )
-    r.eeAssert.Descend( "data" ).Equal( ee.Event, ev )
+    ee.Event.SetPath( ee.Path )
+    EqualEvents( ee.Event, ev, r.eeAssert )
+//    EqualPaths( ee.Path, ev.GetPath(), r.eeAssert.Descend( "path" ) )
     r.eeAssert = r.eeAssert.Next()
     return nil
 }

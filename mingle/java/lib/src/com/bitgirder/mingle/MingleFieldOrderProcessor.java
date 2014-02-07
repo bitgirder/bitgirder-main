@@ -342,18 +342,15 @@ implements MingleValueReactorPipeline.Processor,
     }
 
     private
-    void
-    structAccSetNext( StructAcc acc,
-                      MingleValueReactor next )
+    MingleValueReactor
+    getStructAccNext( MingleValueReactor next )
     {
-        if ( stack.isEmpty() ) {
-            acc.next = next;
+        if ( stack.isEmpty() ) return next;
+
+        if ( stack.peek() instanceof StructAcc ) {
+            return ( (StructAcc) stack.peek() ).fieldReactor();
         } else {
-            if ( stack.peek() instanceof StructAcc ) {
-                acc.next = ( (StructAcc) stack.peek() ).fieldReactor();
-            } else {
-                acc.next = stack.peek();
-            }
+            return stack.peek();
         }
     }
 
@@ -372,7 +369,7 @@ implements MingleValueReactorPipeline.Processor,
  
         StructAcc acc = new StructAcc();
         acc.order = ord;
-        structAccSetNext( acc, next );
+        acc.next = getStructAccNext( next );
 
         push( acc, ev );
     }
@@ -418,8 +415,6 @@ implements MingleValueReactorPipeline.Processor,
                           MingleValueReactor next )
         throws Exception
     {
-        codef( "processing pipeline event: %s", ev.inspect() );
-
         if ( stack.isEmpty() && 
                 ev.type() != MingleValueReactorEvent.Type.START_STRUCT ) 
         {
