@@ -4,6 +4,7 @@ import (
     "container/list"
     "fmt"
     "bitgirder/objpath"
+    "bitgirder/pipeline"
     "bytes"
     "strings"
     "bitgirder/stack"
@@ -129,95 +130,48 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
 
 type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
 
-type discardEventProcessor int
+type ReactorEventProcessorFunc func( ev ReactorEvent ) error
 
-func ( d discardEventProcessor ) ProcessEvent( ev ReactorEvent ) error {
-    return nil
+func ( f ReactorEventProcessorFunc ) ProcessEvent( ev ReactorEvent ) error {
+    return f( ev )
 }
 
-var DiscardProcessor = discardEventProcessor( 1 )
-
-type PipelineInitializer interface { Init( rpi *ReactorPipelineInit ) }
+var DiscardProcessor = ReactorEventProcessorFunc( 
+    func( ev ReactorEvent ) error { return nil } )
 
 type PipelineProcessor interface {
     ProcessEvent( ev ReactorEvent, rep ReactorEventProcessor ) error
 }
 
-type ReactorPipeline struct {
-    elts []interface{}
-}
+func makePipelineReactor( 
+    elt interface{}, next ReactorEventProcessor ) ReactorEventProcessor {
 
-type ReactorPipelineInit struct { 
-    rp *ReactorPipeline 
-    elts []interface{}
-}
+    var f ReactorEventProcessorFunc
 
-// public frontends enforce that elt is of a valid type for a pipeline
-// (AddEventProcessor(), etc)
-func ( rpi *ReactorPipelineInit ) implAdd( elt interface{} ) {
-    if ri, ok := elt.( PipelineInitializer ); ok { ri.Init( rpi ) }
-    rpi.elts = append( rpi.elts, elt )
-}
+    switch v := elt.( type ) {
+    case PipelineProcessor:
+        f = func( ev ReactorEvent ) error { return v.ProcessEvent( ev, next ) }
+    case ReactorEventProcessor:
+        f = func( ev ReactorEvent ) error { 
+            if err := v.ProcessEvent( ev ); err != nil { return err }
+            return next.ProcessEvent( ev )
+        }
+    default: panic( libErrorf( "unhandled pipeline element: %T", elt ) )
+    }
 
-func ( rpi *ReactorPipelineInit ) AddEventProcessor( 
-    rep ReactorEventProcessor ) {
-    rpi.implAdd( rep )
-}
-
-func ( rpi *ReactorPipelineInit ) AddPipelineProcessor( pp PipelineProcessor ) {
-    rpi.implAdd( pp )
-}
-
-func ( rpi *ReactorPipelineInit ) VisitPredecessors( f func( interface{} ) ) {
-    for _, rct := range rpi.elts { f( rct ) }
-}
-
-// Might make this Init() if needed later
-func ( rp *ReactorPipeline ) init() {
-    rpInit := &ReactorPipelineInit{ 
-        rp: rp,
-        elts: make( []interface{}, 0, len( rp.elts ) ),
-    } 
-    for _, elt := range rp.elts { rpInit.implAdd( elt ) }
-    rp.elts = rpInit.elts
-}
-
-func LastPathGetter( rpi *ReactorPipelineInit ) PathGetter {
-    var res PathGetter
-    rpi.VisitPredecessors( func( rct interface{} ) {
-        if pg, ok := rct.( PathGetter ); ok { res = pg }
-    })
-    return res
+    return f
 }
 
 // Could break this into separate methods later if needed: NewReactorPipeline()
 // and ReactorPipeline.Init()
-func InitReactorPipeline( elts ...interface{} ) *ReactorPipeline {
-    res := &ReactorPipeline{ elts: elts }
-    res.init()
+func InitReactorPipeline( elts ...interface{} ) ReactorEventProcessor {
+    pip := pipeline.NewPipeline()
+    for _, elt := range elts { pip.Add( elt ) }
+    var res ReactorEventProcessor = DiscardProcessor
+    pip.VisitReverse( func( elt interface{} ) {
+        res = makePipelineReactor( elt, res ) 
+    })
     return res
-}
-
-type pipelineCall struct {
-    rp *ReactorPipeline
-    idx int
-}
-
-func ( pc pipelineCall ) ProcessEvent( re ReactorEvent ) error {
-    if pc.idx == len( pc.rp.elts ) { return nil }
-    nextPc := pipelineCall{ pc.rp, pc.idx + 1 }
-    elt := pc.rp.elts[ pc.idx ]
-    switch v := elt.( type ) {
-    case PipelineProcessor: return v.ProcessEvent( re, nextPc )
-    case ReactorEventProcessor:
-        if err := v.ProcessEvent( re ); err != nil { return err }
-        return nextPc.ProcessEvent( re )
-    }
-    panic( libErrorf( "Unhandled pipeline element: %T", elt ) )
-}
-
-func ( rp *ReactorPipeline ) ProcessEvent( re ReactorEvent ) error {
-    return ( pipelineCall{ rp, 0 } ).ProcessEvent( re )
 }
 
 func visitSymbolMap( 
@@ -447,24 +401,22 @@ func ( sr *StructuralReactor ) ProcessEvent( ev ReactorEvent ) error {
     return nil
 }
 
-func EnsureStructuralReactor( rpi *ReactorPipelineInit ) {
+func EnsureStructuralReactor( pip *pipeline.Pipeline ) {
     var sr *StructuralReactor
-    rpi.VisitPredecessors( func ( p interface{} ) {
+    pip.VisitReverse( func ( p interface{} ) {
         if sr != nil { return }
         sr, _ = p.( *StructuralReactor )
     })
-    if sr == nil { 
-        rpi.AddEventProcessor( NewStructuralReactor( ReactorTopTypeValue ) )
-    }
+    if sr == nil { pip.Add( NewStructuralReactor( ReactorTopTypeValue ) ) }
 }
 
-func EnsurePathSettingProcessor( rpi *ReactorPipelineInit ) {
+func EnsurePathSettingProcessor( pip *pipeline.Pipeline ) {
     var ps *PathSettingProcessor
-    rpi.VisitPredecessors( func( p interface{} ) {
+    pip.VisitReverse( func( p interface{} ) {
         if ps != nil { return }
         ps, _ = p.( *PathSettingProcessor )
     })
-    if ps == nil { rpi.AddPipelineProcessor( NewPathSettingProcessor() ) }
+    if ps == nil { pip.Add( NewPathSettingProcessor() ) }
 }
 
 type endType int
@@ -493,8 +445,10 @@ func ( proc *PathSettingProcessor ) SetStartPath( p objpath.PathNode ) {
     proc.path = objpath.CopyOf( p )
 }
 
-func ( proc *PathSettingProcessor ) Init( rpi *ReactorPipelineInit ) {
-    if ! proc.skipStructureCheck { EnsureStructuralReactor( rpi ) }
+func ( proc *PathSettingProcessor ) InitializePipeline( 
+    pip *pipeline.Pipeline ) {
+
+    if ! proc.skipStructureCheck { EnsureStructuralReactor( pip ) }
 }
 
 func ( proc *PathSettingProcessor ) pathPop() {
@@ -805,9 +759,9 @@ func NewDefaultCastReactor( expct TypeReference ) *CastReactor {
     return NewCastReactor( expct, castInterfaceDefault( 1 ) )
 }
 
-func ( cr *CastReactor ) Init( rpi *ReactorPipelineInit ) {
-    EnsureStructuralReactor( rpi )
-    EnsurePathSettingProcessor( rpi )
+func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
+    EnsureStructuralReactor( pip )
+    EnsurePathSettingProcessor( pip )
 }
 
 type listCast struct {
@@ -1124,8 +1078,8 @@ func NewFieldOrderReactor( fog FieldOrderGetter ) *FieldOrderReactor {
     return &FieldOrderReactor{ fog: fog, stack: stack.NewStack() }
 }
 
-func ( fo *FieldOrderReactor ) Init( rpi *ReactorPipelineInit ) {
-    EnsureStructuralReactor( rpi )
+func ( fo *FieldOrderReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
+    EnsureStructuralReactor( pip )
 }
 
 type structOrderFieldState struct {
@@ -1466,13 +1420,15 @@ func ( g svcReqFieldOrderGetter ) FieldOrderFor(
     return nil
 }
 
-func ( sr *ServiceRequestReactor ) Init( rpi *ReactorPipelineInit ) {
-    EnsureStructuralReactor( rpi ) 
+func ( sr *ServiceRequestReactor ) InitializePipeline( 
+    pip *pipeline.Pipeline ) {
+    
+    EnsureStructuralReactor( pip ) 
     cr := NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ) )
-    rpi.AddPipelineProcessor( cr )
+    pip.Add( cr )
     fo := NewFieldOrderReactor( svcReqFieldOrderGetter( 1 ) )
-    rpi.AddPipelineProcessor( fo )
-    sr.pg = LastPathGetter( rpi )
+    pip.Add( fo )
+//    sr.pg = LastPathGetter( rpi )
 }
 
 func ( sr *ServiceRequestReactor ) invalidValueErr( desc string ) error {
@@ -1651,11 +1607,11 @@ func ( i svcRespCastIface ) CastAtomic(
     return nil, nil, false
 }
 
-func ( sr *ServiceResponseReactor ) Init( rpi *ReactorPipelineInit ) {
-    EnsureStructuralReactor( rpi )
+func ( sr *ServiceResponseReactor ) Initialize( pip *pipeline.Pipeline ) {
+    EnsureStructuralReactor( pip )
     cr := NewCastReactor( TypeServiceResponse, svcRespCastIface( 1 ) )
-    rpi.AddPipelineProcessor( cr )
-    sr.pg = LastPathGetter( rpi )
+    pip.Add( cr )
+//    sr.pg = LastPathGetter( rpi )
 }
 
 func ( sr *ServiceResponseReactor ) GetPath() objpath.PathNode {

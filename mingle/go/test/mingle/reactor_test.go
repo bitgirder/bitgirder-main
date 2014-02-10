@@ -57,8 +57,6 @@ type orderCheckReactor struct {
     stack *stack.Stack
 }
 
-func ( ocr *orderCheckReactor ) Init( rpi *ReactorPipelineInit ) {}
-
 func ( ocr *orderCheckReactor ) push( val interface{} ) {
     ocr.stack.Push( val )
 }
@@ -375,18 +373,18 @@ func ( chk *requestCheck ) checkVal(
 //    }
 //    panic( libErrorf( "Uhandled source: %T", src ) )
 //}
-//
-//func ( c *ReactorTestCall ) callServiceRequest(
-//    st *ServiceRequestReactorTest ) {
-//    c.Logf( "Skipping %T", st )
-////    reqChk := &requestCheck{ PathAsserter: c.PathAsserter, st: st }
-////    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
-////    if err := c.feedServiceRequest( st.Source, rct ); err == nil {
-////        c.CheckNoError( st.Error )
-////        reqChk.checkRequest()
-////    } else { c.EqualErrors( st.Error, err ) }
-//}
-//
+
+func ( c *ReactorTestCall ) callServiceRequest(
+    st *ServiceRequestReactorTest ) {
+    c.Logf( "Skipping %T", st )
+//    reqChk := &requestCheck{ PathAsserter: c.PathAsserter, st: st }
+//    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
+//    if err := c.feedServiceRequest( st.Source, rct ); err == nil {
+//        c.CheckNoError( st.Error )
+//        reqChk.checkRequest()
+//    } else { c.EqualErrors( st.Error, err ) }
+}
+
 //type responseCheck struct {
 //    *assert.PathAsserter
 //    st *ServiceResponseReactorTest
