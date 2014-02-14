@@ -259,130 +259,95 @@ func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
 type requestCheck struct {
     *assert.PathAsserter
     st *ServiceRequestReactorTest
-    reqFld requestFieldType
+    reqFldMin requestFieldType
     auth *ValueBuilder
     params *ValueBuilder
 }
 
-func ( chk *requestCheck ) checkVal( 
-    expct, act interface{}, 
-    reqFldPrev, reqFldNext requestFieldType, 
-    desc string ) error {
-    chk.Descend( "reqFld" ).Equal( reqFldPrev, chk.reqFld )
-    if chk.st.Error == nil { chk.Descend( desc ).Equal( expct, act ) }
-    chk.reqFld = reqFldNext
+func ( chk *requestCheck ) checkOrder( f requestFieldType ) {
+    if min := chk.reqFldMin; f < min {
+        chk.Fatalf( "got req field %d, less than min: %d", f, min )
+    }
+    chk.reqFldMin = f
+}
+
+func ( chk *requestCheck ) checkVal(
+    expct, act interface{}, f requestFieldType, desc string ) error {
+
+    chk.checkOrder( f )
+    chk.Descend( desc ).Equal( expct, act )
     return nil
 }
 
-//func ( chk *requestCheck ) Namespace( ns *Namespace, pg PathGetter ) error {
-//    return chk.checkVal( 
-//        chk.st.Namespace, ns, reqFieldNone, reqFieldNs, "namespace" )
-//}
-//
-//func ( chk *requestCheck ) Service( svc *Identifier, pg PathGetter ) error {
-//    return chk.checkVal( 
-//        chk.st.Service, svc, reqFieldNs, reqFieldSvc, "service" )
-//}
-//
-//func ( chk *requestCheck ) Operation( op *Identifier, pg PathGetter ) error {
-//    return chk.checkVal(
-//        chk.st.Operation, op, reqFieldSvc, reqFieldOp, "operation" )
-//}
-//
-//type eventCheckReactor struct {
-//    *assert.PathAsserter
-//    ep ReactorEventProcessor
-//    evs []EventExpectation
-//    idx int
-//    pg PathGetter
-//}
-//
-//func ( r *eventCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
-//    defer func() {
-//        r.idx++
-//        r.PathAsserter = r.Next()
-//    }()
-//    if l := len( r.evs ); r.idx >= l { 
-//        r.Fatalf( "Expected only %d events", l ) 
-//    }
-//    ee := r.evs[ r.idx ]
-//    r.Descend( "event" ).Equal( ee.Event, ev )
-//    EqualPaths( ee.Path, r.pg.GetPath(), r.Descend( "path" ) )
-//    return r.ep.ProcessEvent( ev )
-//}
-//
-//func optAsEventChecker( 
-//    ep ReactorEventProcessor, 
-//    pg PathGetter,
-//    evs []EventExpectation, 
-//    a *assert.PathAsserter ) ReactorEventProcessor {
-//    if evs == nil { return ep }
-//    return &eventCheckReactor{ 
-//        ep: ep, 
-//        evs: evs, 
-//        pg: pg,
-//        PathAsserter: a.StartList(),
-//    }
-//}
-//
-//func ( chk *requestCheck ) GetAuthenticationProcessor(
-//    pg PathGetter ) ( ReactorEventProcessor, error ) {
-//    chk.Descend( "reqFld" ).Equal( reqFieldOp, chk.reqFld )
-//    chk.reqFld = reqFieldAuth
-//    chk.auth = NewValueBuilder()
-//    res := optAsEventChecker(
-//        chk.auth,
-//        pg,
-//        chk.st.AuthenticationEvents,
-//        chk.Descend( "authenticationEvents" ),
-//    )
-//    return res, nil
-//}
-//
-//func ( chk *requestCheck ) GetParametersProcessor(
-//    pg PathGetter ) ( ReactorEventProcessor, error ) {
-//    chk.Descend( "reqFld" ).True( 
-//        chk.reqFld == reqFieldOp || chk.reqFld == reqFieldAuth )
-//    chk.reqFld = reqFieldParams
-//    chk.params = NewValueBuilder()
-//    res := optAsEventChecker( 
-//        chk.params, 
-//        pg, 
-//        chk.st.ParameterEvents, 
-//        chk.Descend( "parameterEvents" ),
-//    )
-//    return res, nil
-//}
-//
-//func ( chk *requestCheck ) checkRequest() {
-//    CheckBuiltValue( 
-//        chk.st.Authentication, chk.auth, chk.Descend( "authentication" ) )
-//    CheckBuiltValue( 
-//        chk.st.Parameters, chk.params, chk.Descend( "parameters" ) )
-//}
-//
-//func ( c *ReactorTestCall ) feedServiceRequest(
-//    src interface{}, ep ReactorEventProcessor ) error {
-//    switch v := src.( type ) {
-//    case []ReactorEvent:
-//        for _, ev := range v { 
-//            if err := ep.ProcessEvent( ev ); err != nil { return err }
-//        }
-//        return nil
-//    case Value: return VisitValue( v, ep )
-//    }
-//    panic( libErrorf( "Uhandled source: %T", src ) )
-//}
+func ( chk *requestCheck ) Namespace( 
+    ns *Namespace, path objpath.PathNode ) error {
+
+    return chk.checkVal( chk.st.Namespace, ns, reqFieldNs, "namespace" )
+}
+
+func ( chk *requestCheck ) Service( 
+    svc *Identifier, path objpath.PathNode ) error {
+
+    return chk.checkVal( chk.st.Service, svc, reqFieldSvc, "service" )
+}
+
+func ( chk *requestCheck ) Operation( 
+    op *Identifier, path objpath.PathNode ) error {
+
+    return chk.checkVal( chk.st.Operation, op, reqFieldOp, "operation" )
+}
+
+func ( chk *requestCheck ) valueReactor( 
+    base ReactorEventProcessor, evs []EventExpectation ) ReactorEventProcessor {
+
+    if evs == nil { return base }
+    evChk := newEventPathCheckReactor( evs, chk.PathAsserter )
+    return InitReactorPipeline( evChk, base )
+}
+
+func ( chk *requestCheck ) getProcessor(
+    f requestFieldType,
+    vbPtr **ValueBuilder,
+    evs []EventExpectation ) ( ReactorEventProcessor, error ) {   
+    
+    chk.checkOrder( f )
+    *vbPtr = NewValueBuilder()
+    return chk.valueReactor( *vbPtr, evs ), nil
+}
+
+func ( chk *requestCheck ) GetAuthenticationProcessor(
+    path objpath.PathNode ) ( ReactorEventProcessor, error ) {
+
+    evs := chk.st.AuthenticationEvents
+    return chk.getProcessor( reqFieldAuth, &( chk.auth ), evs )
+}
+
+func ( chk *requestCheck ) GetParametersProcessor(
+    path objpath.PathNode ) ( ReactorEventProcessor, error ) {
+
+    evs := chk.st.ParameterEvents
+    return chk.getProcessor( reqFieldParams, &( chk.params ), evs )
+}
+
+func ( chk *requestCheck ) checkRequest() {
+    CheckBuiltValue( 
+        chk.st.Authentication, chk.auth, chk.Descend( "authentication" ) )
+    CheckBuiltValue( 
+        chk.st.Parameters, chk.params, chk.Descend( "parameters" ) )
+}
 
 func ( c *ReactorTestCall ) callServiceRequest(
     st *ServiceRequestReactorTest ) {
-    c.Logf( "Skipping %T", st )
-//    reqChk := &requestCheck{ PathAsserter: c.PathAsserter, st: st }
-//    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
-//    if err := c.feedServiceRequest( st.Source, rct ); err == nil {
-//        c.CheckNoError( st.Error )
-//        reqChk.checkRequest()
-//    } else { c.EqualErrors( st.Error, err ) }
+    reqChk := &requestCheck{ 
+        PathAsserter: c.PathAsserter, 
+        st: st,
+        reqFldMin: reqFieldNs,
+    }
+    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
+    if err := FeedSource( st.Source, rct ); err == nil {
+        c.CheckNoError( st.Error )
+        reqChk.checkRequest()
+    } else { c.EqualErrors( st.Error, err ) }
 }
 
 //type responseCheck struct {

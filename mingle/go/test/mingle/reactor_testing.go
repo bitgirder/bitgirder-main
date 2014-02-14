@@ -1772,9 +1772,8 @@ type reactorEventSource interface {
 }
 
 func FeedEventSource( 
-    src reactorEventSource, 
-    proc ReactorEventProcessor,
-) error {
+    src reactorEventSource, proc ReactorEventProcessor ) error {
+
     for i, e := 0, src.Len(); i < e; i++ {
         if err := proc.ProcessEvent( src.EventAt( i ) ); err != nil { 
             return err
@@ -1799,6 +1798,15 @@ func ( src eventExpectSource ) Len() int { return len( src ) }
 
 func ( src eventExpectSource ) EventAt( i int ) ReactorEvent {
     return src[ i ].Event
+}
+
+func FeedSource( src interface{}, rct ReactorEventProcessor ) error {
+    switch v := src.( type ) {
+    case reactorEventSource: return FeedEventSource( v, rct )
+    case []ReactorEvent: return FeedSource( eventSliceSource( v ), rct )
+    case Value: return VisitValue( v, rct )
+    }
+    panic( libErrorf( "unhandled source: %T", src ) )
 }
 
 type eventPathCheckReactor struct {
