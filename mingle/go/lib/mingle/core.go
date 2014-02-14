@@ -1017,22 +1017,10 @@ func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
     return false
 }
 
-// Useful in place of passing actual path objects in instances when the path may
-// be expensive to generate and is only useful in certain situations (as when
-// generating error messages or conditional debugging)
-type PathGetter interface { GetPath() objpath.PathNode }
-type PathAppender interface { AppendPath( objpath.PathNode ) objpath.PathNode }
-
-type ImmediatePathGetter struct { Path objpath.PathNode }
-func ( i ImmediatePathGetter ) GetPath() objpath.PathNode { return i.Path }
-
 type idPath objpath.PathNode // elts are *Identifier
 
 var idPathRootVal idPath
 func init() { idPathRootVal = objpath.RootedAt( MustIdentifier( "val" ) ) }
-
-type rootPathGetter int
-func ( rpg rootPathGetter ) GetPath() objpath.PathNode { return idPathRootVal }
 
 var idPathFormatter objpath.Formatter
 
