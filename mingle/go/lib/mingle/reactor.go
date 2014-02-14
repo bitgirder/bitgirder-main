@@ -5,7 +5,7 @@ import (
     "fmt"
     "bitgirder/objpath"
     "bitgirder/pipeline"
-//    "bytes"
+    "bytes"
     "strings"
     "bitgirder/stack"
 //    "log"
@@ -1343,7 +1343,7 @@ type requestFieldType int
 
 // declared in the preferred arrival order
 const (
-    reqFieldBegin = requestFieldType( iota )
+    reqFieldNone = requestFieldType( iota )
     reqFieldNs
     reqFieldSvc
     reqFieldOp
@@ -1355,16 +1355,19 @@ type ServiceRequestReactor struct {
 
     iface ServiceRequestReactorInterface
 
-//    evProc ReactorEventProcessor
-//
-//    // 0: before StartStruct{ QnameServiceRequest } and after final *EndEvent
-//    // 1: when reading a service request field (namespace, service, etc)
-//    // > 1: accumulating some nested value for 'parameters' or 'authentication' 
-//    depth int 
-//
-//    fld requestFieldType
-//
-//    hadParams bool // true if the input contained explicit params
+    evProc ReactorEventProcessor
+
+    // 0: before StartStruct{ QnameServiceRequest } and after final *EndEvent
+    //
+    // 1: when reading or expecting a service request field (namespace, service,
+    // etc)
+    //
+    // > 1: accumulating some nested value for 'parameters' or 'authentication' 
+    depth int 
+
+    fld requestFieldType
+
+    hadParams bool // true if the input contained explicit params
 //    paramsSynth bool // true when we are synthesizing empty params
 }
 
@@ -1373,215 +1376,230 @@ func NewServiceRequestReactor(
     return &ServiceRequestReactor{ iface: iface }
 }
 
-//func ( sr *ServiceRequestReactor ) updateEvProc( ev ReactorEvent ) {
-//    switch ev.( type ) {
-//    case *FieldStartEvent: return
-//    case *StructStartEvent, *ListStartEvent, *MapStartEvent: sr.depth++
-//    case *EndEvent: sr.depth--
-//    }
-//    if sr.depth == 1 { sr.evProc, sr.fld = nil, reqFieldBegin } 
-//}
-//
-//type svcReqCastIface int
-//
-//func ( c svcReqCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
-//    return qn.Equals( QnameServiceRequest )
-//}
-//
-//type svcReqFieldTyper int
-//
-//func ( t svcReqFieldTyper ) FieldTypeFor( 
-//    fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
-//
-//    if fld.Equals( IdParameters ) { return TypeSymbolMap, nil }
-//    return TypeValue, nil
-//}
-//
-//func ( c svcReqCastIface ) FieldTyperFor( 
-//    qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
-//    
-//    if qn.Equals( QnameServiceRequest ) { return svcReqFieldTyper( 1 ), nil }
-//    return nil, nil
-//}
-//
-//func ( c svcReqCastIface ) CastAtomic( 
-//    in Value, 
-//    at *AtomicTypeReference, 
-//    path objpath.PathNode ) ( Value, error, bool ) {
-//
-//    return nil, nil, false
-//}
-//
-//type svcReqFieldOrderGetter int
-//
-//func ( g svcReqFieldOrderGetter ) FieldOrderFor( 
-//    qn *QualifiedTypeName ) FieldOrder {
-//    if qn.Equals( QnameServiceRequest ) { return svcReqFieldOrder }
-//    return nil
-//}
-//
-//func ( sr *ServiceRequestReactor ) InitializePipeline( 
-//    pip *pipeline.Pipeline ) {
-//    
-//    EnsureStructuralReactor( pip ) 
-//    cr := NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ) )
-//    pip.Add( cr )
-//    fo := NewFieldOrderReactor( svcReqFieldOrderGetter( 1 ) )
-//    pip.Add( fo )
-//}
-//
-//func ( sr *ServiceRequestReactor ) invalidValueErr( desc string ) error {
-//    return NewValueCastErrorf( sr.GetPath(), "invalid value: %s", desc )
-//}
-//
-//func ( sr *ServiceRequestReactor ) startStruct( ev *StructStartEvent ) error {
-//    if sr.fld == reqFieldBegin { // we're at the top of the request
-//        if ev.Type.Equals( QnameServiceRequest ) { return nil }
-//        // panic because upstream cast should have checked already
-//        panic( libErrorf( "Unexpected service request type: %s", ev.Type ) )
-//    }
-//    return sr.invalidValueErr( ev.Type.ExternalForm() )
-//}
-//
-//func ( sr *ServiceRequestReactor ) startField( 
-//    fs *FieldStartEvent ) ( err error ) {
-//    if sr.fld != reqFieldBegin {
-//        panic( libErrorf( 
-//            "Saw field start '%s' while sr.fld is %d", fs.Field, sr.fld ) )
-//    }
-//    switch fld := fs.Field; {
-//    case fld.Equals( IdNamespace ): sr.fld = reqFieldNs
-//    case fld.Equals( IdService ): sr.fld = reqFieldSvc
-//    case fld.Equals( IdOperation ): sr.fld = reqFieldOp
-//    case fld.Equals( IdAuthentication ): 
-//        sr.fld = reqFieldAuth
-//        sr.evProc, err = sr.iface.GetAuthenticationProcessor( sr )
-//        if err != nil { return }
-//    case fld.Equals( IdParameters ): 
-//        sr.fld = reqFieldParams
-//        sr.evProc, err = sr.iface.GetParametersProcessor( sr )
-//        if err != nil { return }
-//        sr.hadParams = true
-//    }
-//    if sr.fld == reqFieldBegin {
-//        return NewUnrecognizedFieldError( sr.GetPath(), fs.Field )
-//    }
-//    return nil
-//}
-//
-//func ( sr *ServiceRequestReactor ) getFieldValueForString(
-//    s string, reqFld requestFieldType ) ( res interface{}, err error ) {
-//    switch reqFld {
-//    case reqFieldNs: res, err = ParseNamespace( s )
-//    case reqFieldSvc, reqFieldOp: res, err = ParseIdentifier( s )
-//    default:
-//        panic( libErrorf( "Unhandled req fld type for string: %d", reqFld ) )
-//    }
-//    if err != nil { err = NewValueCastError( sr.GetPath(), err.Error() ) }
-//    return
-//}
-//
-//func ( sr *ServiceRequestReactor ) getFieldValueForBuffer(
-//    buf []byte, reqFld requestFieldType ) ( res interface{}, err error ) {
-//    bin := NewReader( bytes.NewReader( buf ) )
-//    switch reqFld {
-//    case reqFieldNs: res, err = bin.ReadNamespace()
-//    case reqFieldSvc, reqFieldOp: res, err = bin.ReadIdentifier()
-//    default:
-//        panic( libErrorf( "Unhandled req fld type for buffer: %d", reqFld ) )
-//    }
-//    if err != nil { err = NewValueCastError( sr.GetPath(), err.Error() ) }
-//    return
-//}
-//
-//func ( sr *ServiceRequestReactor ) getFieldValue( 
-//    val Value, reqFld requestFieldType ) ( interface{}, error ) {
-//    switch v := val.( type ) {
-//    case String: return sr.getFieldValueForString( string( v ), reqFld )
-//    case Buffer: return sr.getFieldValueForBuffer( []byte( v ), reqFld )
-//    }
-//    return nil, sr.invalidValueErr( TypeOf( val ).ExternalForm() )
-//}
-//
-//func ( sr *ServiceRequestReactor ) namespace( val Value ) error {
-//    ns, err := sr.getFieldValue( val, reqFieldNs )
-//    if err == nil { return sr.iface.Namespace( ns.( *Namespace ), sr ) }
-//    return err
-//}
-//
-//func ( sr *ServiceRequestReactor ) readIdent( 
-//    val Value, reqFld requestFieldType ) error {
-//    v2, err := sr.getFieldValue( val, reqFld )
-//    if err == nil {
-//        id := v2.( *Identifier )
-//        switch reqFld {
-//        case reqFieldSvc: return sr.iface.Service( id, sr )
-//        case reqFieldOp: return sr.iface.Operation( id, sr )
-//        default: panic( libErrorf( "Unhandled req fld type: %d", reqFld ) )
-//        }
-//    }
-//    return err
-//}
-//
-//func ( sr *ServiceRequestReactor ) value( val Value ) error {
-//    defer func() { sr.fld = reqFieldBegin }()
-//    switch sr.fld {
-//    case reqFieldNs: return sr.namespace( val )
-//    case reqFieldSvc, reqFieldOp: return sr.readIdent( val, sr.fld )
-//    }
-//    panic( libErrorf( "Unhandled req field type: %d", sr.fld ) )
-//}
-//
-//func ( sr *ServiceRequestReactor ) end() error {
-//    if ! sr.hadParams {
-//        defer func() { sr.paramsSynth = false }()
-//        sr.paramsSynth = true
-//        ep, err := sr.iface.GetParametersProcessor( sr );
-//        if err != nil { return err }
-//        if err := ep.ProcessEvent( NewMapStartEvent() ); err != nil { 
-//            return err 
-//        }
-//        if err := ep.ProcessEvent( NewEndEvent() ); err != nil { return err }
-//    }
-//    return nil
-//}
+func ( sr *ServiceRequestReactor ) updateEvProc( ev ReactorEvent ) {
+    switch ev.( type ) {
+    case *FieldStartEvent: return
+    case *StructStartEvent, *ListStartEvent, *MapStartEvent: sr.depth++
+    case *EndEvent: sr.depth--
+    }
+    if sr.depth == 1 { sr.evProc, sr.fld = nil, reqFieldNone } 
+}
+
+type svcReqCastIface int
+
+func ( c svcReqCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
+    return qn.Equals( QnameServiceRequest )
+}
+
+type svcReqFieldTyper int
+
+func ( t svcReqFieldTyper ) FieldTypeFor( 
+    fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
+
+    if fld.Equals( IdParameters ) { return TypeSymbolMap, nil }
+    return TypeValue, nil
+}
+
+func ( c svcReqCastIface ) FieldTyperFor( 
+    qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
+    
+    if qn.Equals( QnameServiceRequest ) { return svcReqFieldTyper( 1 ), nil }
+    return nil, nil
+}
+
+func ( c svcReqCastIface ) CastAtomic( 
+    in Value, 
+    at *AtomicTypeReference, 
+    path objpath.PathNode ) ( Value, error, bool ) {
+
+    return nil, nil, false
+}
+
+type svcReqFieldOrderGetter int
+
+func ( g svcReqFieldOrderGetter ) FieldOrderFor( 
+    qn *QualifiedTypeName ) FieldOrder {
+    if qn.Equals( QnameServiceRequest ) { return svcReqFieldOrder }
+    return nil
+}
+
+func ( sr *ServiceRequestReactor ) InitializePipeline( 
+    pip *pipeline.Pipeline ) {
+    
+    EnsureStructuralReactor( pip ) 
+    EnsurePathSettingProcessor( pip )
+    pip.Add( NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ) ) )
+    pip.Add( NewFieldOrderReactor( svcReqFieldOrderGetter( 1 ) ) )
+}
+
+func ( sr *ServiceRequestReactor ) invalidValueErr( 
+    path objpath.PathNode, desc string ) error {
+
+    return NewValueCastErrorf( path, "invalid value: %s", desc )
+}
+
+func ( sr *ServiceRequestReactor ) startStruct( ev *StructStartEvent ) error {
+    if sr.fld == reqFieldNone { // we're at the top of the request
+        if ev.Type.Equals( QnameServiceRequest ) { return nil }
+        // panic because upstream cast should have checked already
+        panic( libErrorf( "Unexpected service request type: %s", ev.Type ) )
+    }
+    return sr.invalidValueErr( ev.GetPath(), ev.Type.ExternalForm() )
+}
+
+func ( sr *ServiceRequestReactor ) checkStartField( fs *FieldStartEvent ) {
+    if sr.fld == reqFieldNone { return }
+    panic( libErrorf( "Saw field start '%s' while sr.fld is %d", 
+        fs.Field, sr.fld ) )
+}
+
+func ( sr *ServiceRequestReactor ) startField( 
+    fs *FieldStartEvent ) ( err error ) {
+
+    sr.checkStartField( fs )
+    switch fld := fs.Field; {
+    case fld.Equals( IdNamespace ): sr.fld = reqFieldNs
+    case fld.Equals( IdService ): sr.fld = reqFieldSvc
+    case fld.Equals( IdOperation ): sr.fld = reqFieldOp
+    case fld.Equals( IdAuthentication ): 
+        sr.fld = reqFieldAuth
+        sr.evProc, err = sr.iface.GetAuthenticationProcessor( fs.GetPath() )
+    case fld.Equals( IdParameters ): 
+        sr.fld = reqFieldParams
+        sr.evProc, err = sr.iface.GetParametersProcessor( fs.GetPath() )
+        if err == nil { sr.hadParams = true }
+    default: err = NewUnrecognizedFieldError( fs.GetPath(), fs.Field )
+    }
+    return
+}
+
+func ( sr *ServiceRequestReactor ) getFieldValueForString(
+    s string, 
+    path objpath.PathNode, 
+    reqFld requestFieldType ) ( res interface{}, err error ) {
+
+    switch reqFld {
+    case reqFieldNs: res, err = ParseNamespace( s )
+    case reqFieldSvc, reqFieldOp: res, err = ParseIdentifier( s )
+    default:
+        panic( libErrorf( "Unhandled req fld type for string: %d", reqFld ) )
+    }
+    if err != nil { err = NewValueCastError( path, err.Error() ) }
+    return
+}
+
+func ( sr *ServiceRequestReactor ) getFieldValueForBuffer(
+    buf []byte, 
+    path objpath.PathNode,
+    reqFld requestFieldType ) ( res interface{}, err error ) {
+
+    bin := NewReader( bytes.NewReader( buf ) )
+    switch reqFld {
+    case reqFieldNs: res, err = bin.ReadNamespace()
+    case reqFieldSvc, reqFieldOp: res, err = bin.ReadIdentifier()
+    default:
+        panic( libErrorf( "Unhandled req fld type for buffer: %d", reqFld ) )
+    }
+    if err != nil { err = NewValueCastError( path, err.Error() ) }
+    return
+}
+
+func ( sr *ServiceRequestReactor ) getFieldValue( 
+    ve *ValueEvent, reqFld requestFieldType ) ( interface{}, error ) {
+    path := ve.GetPath()
+    switch v := ve.Val.( type ) {
+    case String: return sr.getFieldValueForString( string( v ), path, reqFld )
+    case Buffer: return sr.getFieldValueForBuffer( []byte( v ), path, reqFld )
+    }
+    return nil, sr.invalidValueErr( path, TypeOf( ve.Val ).ExternalForm() )
+}
+
+func ( sr *ServiceRequestReactor ) namespace( ve *ValueEvent ) error {
+    ns, err := sr.getFieldValue( ve, reqFieldNs )
+    if err == nil { 
+        return sr.iface.Namespace( ns.( *Namespace ), ve.GetPath() )
+    }
+    return err
+}
+
+func ( sr *ServiceRequestReactor ) readIdent( 
+    ve *ValueEvent, reqFld requestFieldType ) error {
+
+    v2, err := sr.getFieldValue( ve, reqFld )
+    if err != nil { return err }
+    id := v2.( *Identifier )
+    path := ve.GetPath()
+    switch reqFld {
+    case reqFieldSvc: return sr.iface.Service( id, path )
+    case reqFieldOp: return sr.iface.Operation( id, path )
+    default: panic( libErrorf( "Unhandled req fld type: %d", reqFld ) )
+    }
+    return nil
+}
+
+func ( sr *ServiceRequestReactor ) value( ve *ValueEvent ) error {
+    defer func() { sr.fld = reqFieldNone }()
+    switch sr.fld {
+    case reqFieldNs: return sr.namespace( ve )
+    case reqFieldSvc, reqFieldOp: return sr.readIdent( ve, sr.fld )
+    }
+    panic( libErrorf( "Unhandled req field type: %d", sr.fld ) )
+}
+
+func ( sr *ServiceRequestReactor ) visitSyntheticParams(
+    rct ReactorEventProcessor, startPath objpath.PathNode ) error {
+    ps := NewPathSettingProcessor()
+    ps.skipStructureCheck = true
+    var path objpath.PathNode
+    if startPath == nil { 
+        path = objpath.RootedAt( IdParameters ) 
+    } else { 
+        path = startPath.Descend( IdParameters ) 
+    }
+    ps.SetStartPath( path )
+    pip := InitReactorPipeline( ps, rct )
+    return VisitValue( EmptySymbolMap(), pip )
+}
+
+func ( sr *ServiceRequestReactor ) end( ee *EndEvent ) error {
+    if sr.hadParams { return nil }
+    ep, err := sr.iface.GetParametersProcessor( ee.GetPath() );
+    if err != nil { return err }
+    return sr.visitSyntheticParams( ep, ee.GetPath() )
+}
 
 func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
-//    defer sr.updateEvProc( ev )
-//    if sr.evProc != nil { return sr.evProc.ProcessEvent( ev ) }
-//    switch v := ev.( type ) {
-//    case *FieldStartEvent: return sr.startField( v )
-//    case *StructStartEvent: return sr.startStruct( v )
-//    case *ValueEvent: return sr.value( v.Val )
-//    case *ListStartEvent: 
-//        return sr.invalidValueErr( TypeOpaqueList.ExternalForm() )
-//    case *MapStartEvent: 
-//        return sr.invalidValueErr( TypeSymbolMap.ExternalForm() )
-//    case *EndEvent: return sr.end()
-//    default: panic( libErrorf( "Unhandled event: %T", v ) )
-//    }
-//    return nil
-    panic( libErrorf( "unimplemented" ) )
+    defer sr.updateEvProc( ev )
+    if sr.evProc != nil { return sr.evProc.ProcessEvent( ev ) }
+    switch v := ev.( type ) {
+    case *FieldStartEvent: return sr.startField( v )
+    case *StructStartEvent: return sr.startStruct( v )
+    case *ValueEvent: return sr.value( v )
+    case *ListStartEvent: 
+        return sr.invalidValueErr( v.GetPath(), TypeOpaqueList.ExternalForm() )
+    case *MapStartEvent: 
+        return sr.invalidValueErr( v.GetPath(), TypeSymbolMap.ExternalForm() )
+    case *EndEvent: return sr.end( v )
+    default: panic( libErrorf( "Unhandled event: %T", v ) )
+    }
+    return nil
 }
 
 type ServiceResponseReactorInterface interface {
-    GetResultProcessor( pg PathGetter ) ( ReactorEventProcessor, error )
-    GetErrorProcessor( pg PathGetter ) ( ReactorEventProcessor, error )
+    GetResultProcessor( path objpath.PathNode ) ( ReactorEventProcessor, error )
+    GetErrorProcessor( path objpath.PathNode ) ( ReactorEventProcessor, error )
 }
 
 type ServiceResponseReactor struct {
 
     iface ServiceResponseReactorInterface
 
-    pg PathGetter
-
     evProc ReactorEventProcessor
-    depth int
-    gotEvProcVal bool
-}
 
-func ( sr *ServiceResponseReactor ) getPath() objpath.PathNode {
-    return sr.pg.GetPath()
+    // depth is similar to in ServiceRequestReactor
+    depth int
+    
+    hadProc bool
 }
 
 func NewServiceResponseReactor( 
@@ -1609,41 +1627,37 @@ func ( i svcRespCastIface ) CastAtomic(
     return nil, nil, false
 }
 
-func ( sr *ServiceResponseReactor ) Initialize( pip *pipeline.Pipeline ) {
-    EnsureStructuralReactor( pip )
-    cr := NewCastReactor( TypeServiceResponse, svcRespCastIface( 1 ) )
-    pip.Add( cr )
-//    sr.pg = LastPathGetter( rpi )
-}
+func ( sr *ServiceResponseReactor ) InitializePipeline( 
+    pip *pipeline.Pipeline ) {
 
-func ( sr *ServiceResponseReactor ) GetPath() objpath.PathNode {
-    return sr.pg.GetPath()
+    EnsureStructuralReactor( pip )
+    pip.Add( NewCastReactor( TypeServiceResponse, svcRespCastIface( 1 ) ) )
 }
 
 func ( sr *ServiceResponseReactor ) updateEvProc( ev ReactorEvent ) {
-    if _, ok := ev.( *FieldStartEvent ); ok { return }
     switch ev.( type ) {
+    case *FieldStartEvent: return
     case *StructStartEvent, *MapStartEvent, *ListStartEvent: sr.depth++
     case *EndEvent: sr.depth--
     }
     if sr.depth == 1 { 
-        if sr.evProc != nil { sr.gotEvProcVal, sr.evProc = true, nil }
+        if sr.evProc != nil { sr.hadProc, sr.evProc = true, nil }
     }
 }
 
 // Note that the error path uses Parent() since we'll be positioned on the field
-// (result/error) that is the second value, but the error is really at the
-// response level itself
+// (result/error) that is the second value, but the error, if we have one, is
+// really at the response level itself
 func ( sr *ServiceResponseReactor ) sendEvProcEvent( ev ReactorEvent ) error {
-    isErr := sr.gotEvProcVal
-    if isErr {
+    shouldFail := sr.hadProc
+    if shouldFail {
         if ve, ok := ev.( *ValueEvent ); ok {
-            if _, isNull := ve.Val.( *Null ); isNull { isErr = false }
+            if _, isNull := ve.Val.( *Null ); isNull { shouldFail = false }
         }
     }
-    if isErr {
+    if shouldFail {
         msg := "response has both a result and an error value"
-        return NewValueCastError( sr.getPath().Parent(), msg )
+        return NewValueCastError( ev.GetPath().Parent(), msg )
     }
     return sr.evProc.ProcessEvent( ev )
 }
@@ -1653,14 +1667,15 @@ func ( sr *ServiceResponseReactor ) startStruct( t *QualifiedTypeName ) error {
     panic( libErrorf( "Got unexpected (toplevel) struct type: %s", t ) )
 }
 
-func ( sr *ServiceResponseReactor ) startField( fld *Identifier ) error {
+func ( sr *ServiceResponseReactor ) startField( fs *FieldStartEvent ) error {
     var err error
+    fld, path := fs.Field, fs.GetPath()
     switch {
     case fld.Equals( IdResult ): 
-        sr.evProc, err = sr.iface.GetResultProcessor( sr )
+        sr.evProc, err = sr.iface.GetResultProcessor( path )
     case fld.Equals( IdError ): 
-        sr.evProc, err = sr.iface.GetErrorProcessor( sr )
-    default: return NewUnrecognizedFieldError( sr.getPath().Parent(), fld )
+        sr.evProc, err = sr.iface.GetErrorProcessor( path )
+    default: return NewUnrecognizedFieldError( path.Parent(), fld )
     }
     return err
 }
@@ -1670,10 +1685,11 @@ func ( sr *ServiceResponseReactor ) ProcessEvent( ev ReactorEvent ) error {
     if sr.evProc != nil { return sr.sendEvProcEvent( ev ) }
     switch v := ev.( type ) {
     case *StructStartEvent: return sr.startStruct( v.Type )
-    case *FieldStartEvent: return sr.startField( v.Field )
+    case *FieldStartEvent: return sr.startField( v )
     case *EndEvent: return nil
     }
-    panic( libErrorf( "Saw event %v (%T) while evProc == nil", ev, ev ) )
+    evStr := EventToString( ev )
+    panic( libErrorf( "Saw event %s while evProc == nil", evStr ) )
 }
 
 type DebugLogger interface {

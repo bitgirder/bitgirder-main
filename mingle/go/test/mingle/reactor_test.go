@@ -256,6 +256,16 @@ func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     } else { AssertCastError( ct.Err, err, c.PathAsserter ) }
 }
 
+func valueCheckReactor( 
+    base ReactorEventProcessor, 
+    evs []EventExpectation,
+    a *assert.PathAsserter ) ReactorEventProcessor {
+
+    if evs == nil { return base }
+    evChk := newEventPathCheckReactor( evs, a )
+    return InitReactorPipeline( evChk, base )
+}
+
 type requestCheck struct {
     *assert.PathAsserter
     st *ServiceRequestReactorTest
@@ -297,14 +307,6 @@ func ( chk *requestCheck ) Operation(
     return chk.checkVal( chk.st.Operation, op, reqFieldOp, "operation" )
 }
 
-func ( chk *requestCheck ) valueReactor( 
-    base ReactorEventProcessor, evs []EventExpectation ) ReactorEventProcessor {
-
-    if evs == nil { return base }
-    evChk := newEventPathCheckReactor( evs, chk.PathAsserter )
-    return InitReactorPipeline( evChk, base )
-}
-
 func ( chk *requestCheck ) getProcessor(
     f requestFieldType,
     vbPtr **ValueBuilder,
@@ -312,7 +314,7 @@ func ( chk *requestCheck ) getProcessor(
     
     chk.checkOrder( f )
     *vbPtr = NewValueBuilder()
-    return chk.valueReactor( *vbPtr, evs ), nil
+    return valueCheckReactor( *vbPtr, evs, chk.PathAsserter ), nil
 }
 
 func ( chk *requestCheck ) GetAuthenticationProcessor(
@@ -338,6 +340,7 @@ func ( chk *requestCheck ) checkRequest() {
 
 func ( c *ReactorTestCall ) callServiceRequest(
     st *ServiceRequestReactorTest ) {
+
     reqChk := &requestCheck{ 
         PathAsserter: c.PathAsserter, 
         st: st,
@@ -350,43 +353,43 @@ func ( c *ReactorTestCall ) callServiceRequest(
     } else { c.EqualErrors( st.Error, err ) }
 }
 
-//type responseCheck struct {
-//    *assert.PathAsserter
-//    st *ServiceResponseReactorTest
-//    err *ValueBuilder
-//    res *ValueBuilder
-//}
-//
-//func ( rc *responseCheck ) GetResultProcessor( 
-//    pg PathGetter ) ( ReactorEventProcessor, error ) {
-//    rc.res = NewValueBuilder()
-//    res := optAsEventChecker(
-//        rc.res, pg, rc.st.ResEvents, rc.Descend( "result" ) )
-//    return res, nil
-//}
-//
-//func ( rc *responseCheck ) GetErrorProcessor(
-//    pg PathGetter ) ( ReactorEventProcessor, error ) {
-//    rc.err = NewValueBuilder()
-//    res := optAsEventChecker(
-//        rc.err, pg, rc.st.ErrEvents, rc.Descend( "error" ) )
-//    return res, nil
-//}
-//
-//func ( rc *responseCheck ) check() {
-//    CheckBuiltValue( rc.st.ResVal, rc.res, rc.Descend( "Result" ) )
-//    CheckBuiltValue( rc.st.ErrVal, rc.err, rc.Descend( "Error" ) )
-//}
+type responseCheck struct {
+    *assert.PathAsserter
+    st *ServiceResponseReactorTest
+    err *ValueBuilder
+    res *ValueBuilder
+}
+
+func ( rc *responseCheck ) GetResultProcessor( 
+    path objpath.PathNode ) ( ReactorEventProcessor, error ) {
+
+    rc.res = NewValueBuilder()
+    res := valueCheckReactor( rc.res, rc.st.ResEvents, rc.Descend( "result" ) )
+    return res, nil
+}
+
+func ( rc *responseCheck ) GetErrorProcessor(
+    path objpath.PathNode ) ( ReactorEventProcessor, error ) {
+
+    rc.err = NewValueBuilder()
+    res := valueCheckReactor( rc.err, rc.st.ErrEvents, rc.Descend( "error" ) )
+    return res, nil
+}
+
+func ( rc *responseCheck ) check() {
+    CheckBuiltValue( rc.st.ResVal, rc.res, rc.Descend( "Result" ) )
+    CheckBuiltValue( rc.st.ErrVal, rc.err, rc.Descend( "Error" ) )
+}
 
 func ( c *ReactorTestCall ) callServiceResponse( 
     st *ServiceResponseReactorTest ) {
-    c.Logf( "Skipping %T", st )
-//    chk := &responseCheck{ PathAsserter: c.PathAsserter, st: st }
-//    rct := InitReactorPipeline( NewServiceResponseReactor( chk ) )
-//    if err := VisitValue( st.In, rct ); err == nil {
-//        c.CheckNoError( st.Error )
-//        chk.check()
-//    } else { c.EqualErrors( st.Error, err ) }
+
+    chk := &responseCheck{ PathAsserter: c.PathAsserter, st: st }
+    rct := InitReactorPipeline( NewServiceResponseReactor( chk ) )
+    if err := VisitValue( st.In, rct ); err == nil {
+        c.CheckNoError( st.Error )
+        chk.check()
+    } else { c.EqualErrors( st.Error, err ) }
 }
 
 func ( c *ReactorTestCall ) call() {

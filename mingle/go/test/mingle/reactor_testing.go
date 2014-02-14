@@ -953,13 +953,16 @@ func initServiceRequestTests() {
             ),
         },
     )
+    createReqVcErr := func( 
+        val interface{}, path idPath, msg string ) *ServiceRequestReactorTest {
+
+        return &ServiceRequestReactorTest{
+            Source: MustValue( val ),
+            Error: NewValueCastError( path, msg ),
+        }
+    }
     addReqVcErr := func( val interface{}, path idPath, msg string ) {
-        AddStdReactorTests(
-            &ServiceRequestReactorTest{
-                Source: MustValue( val ),
-                Error: NewValueCastError( path, msg ),
-            },
-        )
+        AddStdReactorTests( createReqVcErr( val, path, msg ) )
     }
     addReqVcErr(
         MustSymbolMap( IdNamespace, true ), 
@@ -981,20 +984,28 @@ func initServiceRequestTests() {
         objpath.RootedAt( IdNamespace ),
         "invalid value: mingle:core@v1/Value*",
     )
-    addReqVcErr(
-        MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, true ),
-        objpath.RootedAt( IdService ),
-        "invalid value: mingle:core@v1/Boolean",
-    )
-    addReqVcErr(
-        MustSymbolMap( 
-            IdNamespace, ns1.ExternalForm(),
-            IdService, svc1.ExternalForm(),
-            IdOperation, true,
-        ),
-        objpath.RootedAt( IdOperation ),
-        "invalid value: mingle:core@v1/Boolean",
-    )
+    func() {
+        test := createReqVcErr(
+            MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, true ),
+            objpath.RootedAt( IdService ),
+            "invalid value: mingle:core@v1/Boolean",
+        )
+        test.Namespace = ns1
+        AddStdReactorTests( test )
+    }()
+    func() {
+        test := createReqVcErr(
+            MustSymbolMap( 
+                IdNamespace, ns1.ExternalForm(),
+                IdService, svc1.ExternalForm(),
+                IdOperation, true,
+            ),
+            objpath.RootedAt( IdOperation ),
+            "invalid value: mingle:core@v1/Boolean",
+        )
+        test.Namespace, test.Service = ns1, svc1
+        AddStdReactorTests( test )
+    }()
     AddStdReactorTests(
         &ServiceRequestReactorTest{
             Source: MustSymbolMap(
@@ -1003,6 +1014,9 @@ func initServiceRequestTests() {
                 IdOperation, op1.ExternalForm(),
                 IdParameters, true,
             ),
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
             Error: NewTypeCastError(
                 TypeSymbolMap,
                 TypeBoolean,
@@ -1013,53 +1027,71 @@ func initServiceRequestTests() {
     // Check that errors are bubbled up from
     // *BinWriter.Read(Identfier|Namespace) when parsing invalid
     // namespace/service/operation Buffers
+    createBinRdErr := func( path *Identifier, msg string, 
+        pairs ...interface{} ) *ServiceRequestReactorTest {
+
+        return createReqVcErr(
+            MustSymbolMap( pairs... ), objpath.RootedAt( path ), msg )
+    }
     addBinRdErr := func( path *Identifier, msg string, pairs ...interface{} ) {
-        addReqVcErr(
-            MustSymbolMap( pairs... ),
-            objpath.RootedAt( path ),
-            msg,
-        )
+        AddStdReactorTests( createBinRdErr( path, msg, pairs... ) )
     }
     badBuf := []byte{ 0x0f }
     addBinRdErr( 
         IdNamespace, 
         "Expected type code 0x02 but got 0x0f",
         IdNamespace, badBuf )
-    addBinRdErr( 
-        IdService, 
-        "Expected type code 0x01 but got 0x0f",
-        IdNamespace, ns1.ExternalForm(), 
-        IdService, badBuf,
-    )
-    addBinRdErr( 
-        IdOperation, 
-        "Expected type code 0x01 but got 0x0f",
-        IdNamespace, ns1.ExternalForm(),
-        IdService, svc1.ExternalForm(),
-        IdOperation, badBuf,
-    )
+    func() {
+        test := createBinRdErr(
+            IdService, 
+            "Expected type code 0x01 but got 0x0f",
+            IdNamespace, ns1.ExternalForm(), 
+            IdService, badBuf,
+        )
+        test.Namespace = ns1
+        AddStdReactorTests( test )
+    }()
+    func() {
+        test := createBinRdErr(
+            IdOperation, 
+            "Expected type code 0x01 but got 0x0f",
+            IdNamespace, ns1.ExternalForm(),
+            IdService, svc1.ExternalForm(),
+            IdOperation, badBuf,
+        )
+        test.Namespace, test.Service = ns1, svc1
+        AddStdReactorTests( test )
+    }()
     addReqVcErr(
         MustSymbolMap( IdNamespace, "ns1::ns2" ),
         objpath.RootedAt( IdNamespace ),
         "[<input>, line 1, col 5]: Illegal start of identifier part: \":\" " +
         "(U+003A)",
     )
-    addReqVcErr(
-        MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, "2bad" ),
-        objpath.RootedAt( IdService ),
-        "[<input>, line 1, col 1]: Illegal start of identifier part: \"2\" " +
-        "(U+0032)",
-    )
-    addReqVcErr(
-        MustSymbolMap(
-            IdNamespace, ns1.ExternalForm(),
-            IdService, svc1.ExternalForm(),
-            IdOperation, "2bad",
-        ),
-        objpath.RootedAt( IdOperation ),
-        "[<input>, line 1, col 1]: Illegal start of identifier part: \"2\" " +
-        "(U+0032)",
-    )
+    func() {
+        test := createReqVcErr(
+            MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, "2bad" ),
+            objpath.RootedAt( IdService ),
+            "[<input>, line 1, col 1]: Illegal start of identifier part: " +
+            "\"2\" (U+0032)",
+        )
+        test.Namespace = ns1
+        AddStdReactorTests( test )
+    }()
+    func() {
+        test := createReqVcErr(
+            MustSymbolMap(
+                IdNamespace, ns1.ExternalForm(),
+                IdService, svc1.ExternalForm(),
+                IdOperation, "2bad",
+            ),
+            objpath.RootedAt( IdOperation ),
+            "[<input>, line 1, col 1]: Illegal start of identifier part: " +
+            "\"2\" (U+0032)",
+        )
+        test.Namespace, test.Service = ns1, svc1
+        AddStdReactorTests( test )
+    }()
     t1Bad := qname( "foo@v1/Request" )
     AddStdReactorTests(
         &ServiceRequestReactorTest{
@@ -1079,6 +1111,7 @@ func initServiceRequestTests() {
                 IdNamespace, ns1.ExternalForm(),
                 IdOperation, op1.ExternalForm(),
             ),
+            Namespace: ns1,
             Error: NewMissingFieldsError( nil, []*Identifier{ IdService } ),
         },
     )
