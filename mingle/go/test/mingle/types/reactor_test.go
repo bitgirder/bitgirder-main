@@ -1,41 +1,42 @@
 package types
-//
-//import ( 
-//    "testing"
-//    "bitgirder/assert"
-//    mg "mingle"
-//)
-//
-//type ReactorTestCall struct {
-//    *mg.ReactorTestCall
-//}
-//
-//func ( tc *ReactorTestCall ) assertCastError( ct *CastReactorTest, err error ) {
-//    cae := mg.CastErrorAssert{ 
-//        ErrExpect: ct.Err, ErrAct: err, PathAsserter: tc.PathAsserter }
-//    switch ct.Err.( type ) {
-//    case *mg.UnrecognizedFieldError:
-//        if ufe, ok := err.( *mg.UnrecognizedFieldError ); ok {
-//            tc.Equal( ct.Err, ufe )
-//        } else { cae.FailActErrType() }
-//    case *mg.MissingFieldsError:
-//        if mfe, ok := err.( *mg.MissingFieldsError ); ok {
-//            tc.Equal( ct.Err, mfe )
-//        } else { cae.FailActErrType() }
-//    default: cae.Call()
-//    }
-//}
-//
-//func ( tc *ReactorTestCall ) callCast( ct *CastReactorTest ) {
-//    rct := NewCastReactor( ct.Type, ct.Map )
-//    vb := mg.NewValueBuilder()
-//    pip := mg.InitReactorPipeline( rct, vb )
-//    if err := mg.VisitValue( ct.In, pip ); err == nil {
-//        tc.CheckNoError( ct.Err )
-//        mg.EqualValues( ct.Expect, vb.GetValue(), tc )
-//    } else { tc.assertCastError( ct, err ) }
-//}
-//
+
+import ( 
+    "testing"
+    "bitgirder/assert"
+    mg "mingle"
+)
+
+type ReactorTestCall struct {
+    *mg.ReactorTestCall
+}
+
+func ( tc *ReactorTestCall ) assertCastError( ct *CastReactorTest, err error ) {
+    cae := mg.CastErrorAssert{ 
+        ErrExpect: ct.Err, ErrAct: err, PathAsserter: tc.PathAsserter }
+    switch ct.Err.( type ) {
+    case *mg.UnrecognizedFieldError:
+        if ufe, ok := err.( *mg.UnrecognizedFieldError ); ok {
+            tc.Equal( ct.Err, ufe )
+        } else { cae.FailActErrType() }
+    case *mg.MissingFieldsError:
+        if mfe, ok := err.( *mg.MissingFieldsError ); ok {
+            tc.Equal( ct.Err, mfe )
+        } else { cae.FailActErrType() }
+    default: cae.Call()
+    }
+}
+
+func ( tc *ReactorTestCall ) callCast( ct *CastReactorTest ) {
+    rct := NewCastReactorDefinitionMap( ct.Type, ct.Map )
+    vb := mg.NewValueBuilder()
+    dbg := mg.NewDebugReactor( tc )
+    pip := mg.InitReactorPipeline( dbg, rct, vb )
+    if err := mg.VisitValue( ct.In, pip ); err == nil {
+        tc.CheckNoError( ct.Err )
+        mg.EqualValues( ct.Expect, vb.GetValue(), tc )
+    } else { tc.assertCastError( ct, err ) }
+}
+
 //func ( tc *ReactorTestCall ) callEventPath( t *EventPathTest ) {
 //    mg.AssertEventPaths( 
 //        t.Source,
@@ -125,28 +126,28 @@ package types
 //    pip := mg.InitReactorPipeline( rct )
 //    tc.visitAndCheck( st.In, pip, chk, st.Error )
 //}
-//
-//func ( tc *ReactorTestCall ) call() {
-////    tc.Logf( "Calling test of type %T", tc.Test )
-//    switch v := tc.Test.( type ) {
-//    case *CastReactorTest: tc.callCast( v )
+
+func ( tc *ReactorTestCall ) call() {
+//    tc.Logf( "Calling test of type %T", tc.Test )
+    switch v := tc.Test.( type ) {
+    case *CastReactorTest: tc.callCast( v )
 //    case *EventPathTest: tc.callEventPath( v )
 //    case *ServiceRequestTest: tc.callServiceRequest( v )
 //    case *ServiceResponseTest: tc.callServiceResponse( v )
-//    default: panic( libErrorf( "Unhandled test type: %T", tc.Test ) )
-//    }
-//}
-//
-//func TestReactors( t *testing.T ) {
-//    a := assert.NewListPathAsserter( t )
-//    for _, rt := range GetStdReactorTests() {
-//        tc := &ReactorTestCall{ 
-//            ReactorTestCall: &mg.ReactorTestCall{
-//                PathAsserter: a, 
-//                Test: rt,
-//            },
-//        }
-//        tc.call()
-//        a = a.Next()
-//    }
-//}
+    default: panic( libErrorf( "Unhandled test type: %T", tc.Test ) )
+    }
+}
+
+func TestReactors( t *testing.T ) {
+    a := assert.NewListPathAsserter( t )
+    for _, rt := range GetStdReactorTests() {
+        tc := &ReactorTestCall{ 
+            ReactorTestCall: &mg.ReactorTestCall{
+                PathAsserter: a, 
+                Test: rt,
+            },
+        }
+        tc.call()
+        a = a.Next()
+    }
+}

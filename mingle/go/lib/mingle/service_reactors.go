@@ -232,7 +232,7 @@ func ( sr *ServiceRequestReactor ) value( ve *ValueEvent ) error {
 func ( sr *ServiceRequestReactor ) visitSyntheticParams(
     rct ReactorEventProcessor, startPath objpath.PathNode ) error {
     ps := NewPathSettingProcessor()
-    ps.skipStructureCheck = true
+    ps.SkipStructureCheck = true
     var path objpath.PathNode
     if startPath == nil { 
         path = objpath.RootedAt( IdParameters ) 

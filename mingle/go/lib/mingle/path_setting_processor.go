@@ -25,12 +25,11 @@ const (
     endTypeField
 )
 
-
 type PathSettingProcessor struct {
     endTypes *stack.Stack
     awaitingList0 bool
     path objpath.PathNode
-    skipStructureCheck bool
+    SkipStructureCheck bool
 }
 
 func NewPathSettingProcessor() *PathSettingProcessor {
@@ -42,10 +41,16 @@ func ( proc *PathSettingProcessor ) SetStartPath( p objpath.PathNode ) {
     proc.path = objpath.CopyOf( p )
 }
 
+func NewPathSettingProcessorPath( p objpath.PathNode ) *PathSettingProcessor {
+    res := NewPathSettingProcessor()
+    res.SetStartPath( p )
+    return res
+}
+
 func ( proc *PathSettingProcessor ) InitializePipeline( 
     pip *pipeline.Pipeline ) {
 
-    if ! proc.skipStructureCheck { EnsureStructuralReactor( pip ) }
+    if ! proc.SkipStructureCheck { EnsureStructuralReactor( pip ) }
 }
 
 func ( proc *PathSettingProcessor ) pathPop() {

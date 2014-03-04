@@ -122,7 +122,7 @@ func ( sp *structOrderProcessor ) getFieldSender() ReactorEventProcessor {
 
     ps := NewPathSettingProcessor()
     if p := sp.startPath; p != nil { ps.SetStartPath( objpath.CopyOf( p ) ) }
-    ps.skipStructureCheck = true
+    ps.SkipStructureCheck = true
     return InitReactorPipeline( ps, sp.next )
 }
 

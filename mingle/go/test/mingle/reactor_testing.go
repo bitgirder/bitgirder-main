@@ -18,7 +18,7 @@ func AddStdReactorTests( t ...interface{} ) {
 
 type NamedTest interface { TestName() string }
 
-func makeTestId( i int ) *Identifier {
+func MakeTestId( i int ) *Identifier {
     return MustIdentifier( fmt.Sprintf( "f%d", i ) )
 }
 
@@ -52,18 +52,18 @@ func copySource( evs []ReactorEvent ) []ReactorEvent {
 
 func startTestIdPath( elt interface{} ) objpath.PathNode {
     switch v := elt.( type ) {
-    case int: return objpath.RootedAt( makeTestId( v ) )
+    case int: return objpath.RootedAt( MakeTestId( v ) )
     case string: return objpath.RootedAtList().SetIndex( mustInt( v ) )
     }
     panic( libErrorf( "unhandled elt: %T", elt ) )
 }
 
-func makeTestIdPath( elts ...interface{} ) objpath.PathNode { 
+func MakeTestIdPath( elts ...interface{} ) objpath.PathNode { 
     if len( elts ) == 0 { return nil }
     res := startTestIdPath( elts[ 0 ] )
     for i, e := 1, len( elts ); i < e; i++ {
         switch v := elts[ i ].( type ) {
-        case int: res = res.Descend( makeTestId( v ) ) 
+        case int: res = res.Descend( MakeTestId( v ) ) 
         case string: res = res.StartList().SetIndex( mustInt( v ) )
         default: panic( libErrorf( "unhandled elt: %T", v ) )
         }
@@ -114,7 +114,7 @@ func ( ept EventPathTest ) TestName() string { return ept.Name }
 
 func initStructuralReactorTests() {
     evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
-    id := makeTestId
+    id := MakeTestId
     evStartField1 := NewFieldStartEvent( id( 1 ) )
     evStartField2 := NewFieldStartEvent( id( 2 ) )
     evValue1 := NewValueEvent( Int64( int64( 1 ) ) )
@@ -186,7 +186,7 @@ func initStructuralReactorTests() {
 
 func initEventPathTests() {
     evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
-    id := makeTestId
+    id := MakeTestId
     evStartField1 := NewFieldStartEvent( id( 1 ) )
     evStartField2 := NewFieldStartEvent( id( 2 ) )
     evValue1 := NewValueEvent( Int64( int64( 1 ) ) )
@@ -194,7 +194,7 @@ func initEventPathTests() {
     mk := func( name string, evs ...EventExpectation ) *EventPathTest {
         return &EventPathTest{ Name: name, Events: evs }
     }
-    p := makeTestIdPath
+    p := MakeTestIdPath
     ee := func( ev ReactorEvent, p objpath.PathNode ) EventExpectation {
         return EventExpectation{ Event: ev, Path: p }
     }
@@ -530,7 +530,7 @@ type FieldOrderPathTest struct {
 func initFieldOrderPathTests() {
     i1 := Int32( int32( 1 ) )
     val1 := NewValueEvent( i1 )
-    id := makeTestId
+    id := MakeTestId
     typ := func( i int ) *QualifiedTypeName {
         return qname( fmt.Sprintf( "ns1@v1/S%d", i ) )
     }
@@ -540,7 +540,7 @@ func initFieldOrderPathTests() {
     fld := func( i int ) *FieldStartEvent { 
         return NewFieldStartEvent( id( i ) ) 
     }
-    p := makeTestIdPath
+    p := MakeTestIdPath
     expct1 := []EventExpectation{
         { ss( 1 ), nil },
             { fld( 0 ), p( 0 ) },

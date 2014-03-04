@@ -1,115 +1,113 @@
 package types
-//
-//import (
-//    mg "mingle"
-//    "bitgirder/objpath"
-//)
-//
-//var newVcErr = mg.NewValueCastError
-//
-//func asType( val interface{} ) mg.TypeReference {
-//    switch v := val.( type ) {
-//    case mg.TypeReference: return v
-//    case string: return mg.MustTypeReference( v )
-//    }
-//    panic( libErrorf( "Unhandled type reference: %T", val ) )
-//}
-//
-//func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
-//    return mg.NewTypeCastError( asType( expct ), asType( act ), p )
-//}
-//
+
+import (
+    mg "mingle"
+    "bitgirder/objpath"
+)
+
+var newVcErr = mg.NewValueCastError
+
+func asType( val interface{} ) mg.TypeReference {
+    switch v := val.( type ) {
+    case mg.TypeReference: return v
+    case string: return mg.MustTypeReference( v )
+    }
+    panic( libErrorf( "Unhandled type reference: %T", val ) )
+}
+
+func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
+    return mg.NewTypeCastError( asType( expct ), asType( act ), p )
+}
+
 //func makeIdList( strs ...string ) []*mg.Identifier {
 //    res := make( []*mg.Identifier, len( strs ) )
 //    for i, str := range strs { res[ i ] = mg.MustIdentifier( str ) }
 //    return res
 //}
-//
-//type CastReactorTest struct {
-//    Map *DefinitionMap
-//    Type mg.TypeReference
-//    In mg.Value
-//    Expect mg.Value
-//    Err error
-//}
-//
-//type rtInit struct {
-//    tests []interface{}
-//}
-//
-//func ( rti *rtInit ) addTests( t ...interface{} ) {
-//    rti.tests = append( rti.tests, t... )
-//}
-//
-//func ( rti *rtInit ) addBaseFieldCastTests() {
-//    p := func( fld string ) objpath.PathNode {
-//        return objpath.RootedAt( mg.MustIdentifier( fld ) )
-//    }
-//    qn1Str := "ns1@v1/S1"
-//    qn1 := mg.MustQualifiedTypeName( qn1Str )
-//    s1F1 := func( val interface{} ) *mg.Struct {
-//        return mg.MustStruct( qn1, "f1", val )
-//    }
-//    s1DefMap := func( typ string ) *DefinitionMap {
-//        fld := MakeFieldDef( "f1", typ, nil )
-//        return MakeV1DefMap( 
-//            MakeStructDef( qn1Str, "", []*FieldDefinition{ fld } ) )
-//    }
-//    s1F1Add := func( in, expct interface{}, typ string, err error ) {
-//        t := &CastReactorTest{ 
-//            Type: qn1.AsAtomicType(),
-//            In: s1F1( in ), 
-//            Map: s1DefMap( typ ),
-//        }
-//        if expct != nil { t.Expect = s1F1( expct ) }
-//        if err != nil { t.Err = err }
-//        rti.addTests( t )
-//    }
-//    s1F1Succ := func( in, expct interface{}, typ string ) {
-//        s1F1Add( in, expct, typ, nil )
-//    }
-//    s1F1Fail := func( in interface{}, typ string, err error ) {
-//        s1F1Add( in, nil, typ, err )
-//    }
-//    tcErr1 := func( expct, act interface{} ) *mg.ValueCastError {
-//        return newTcErr( expct, act, p( "f1" ) )
-//    }
-//    s1F1Succ( int32( 1 ), int32( 1 ), "Int32" )
-//    s1F1Succ( "1", int32( 1 ), "Int32" )
-//    s1F1Succ( int32( 1 ), int32( 1 ), "Value" )
-//    i32L1 := mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
-//    s1F1Succ( i32L1, i32L1, "Int32+" )
-//    s1F1Succ( i32L1, i32L1, "Value" )
-//    s1F1Succ( i32L1, i32L1, "Value*" )
-//    s1F1Succ( mg.MustList( "1", int64( 2 ), int32( 3 ) ), i32L1, "Int32*" )
-//    sm1 := mg.MustSymbolMap( "f1", int32( 1 ) )
-//    s1F1Succ( sm1, sm1, "SymbolMap" )
-//    s1F1Succ( sm1, sm1, "Value" )
-//    s1F1Succ( int32( 1 ), int32( 1 ), "Int32?" )
-//    s1F1Succ( nil, mg.NullVal, "Int32?" )
-//    s1F1Succ(
-//        mg.MustList( "1", nil, int64( 1 ) ),
-//        mg.MustList( int32( 1 ), nil, int32( 1 ) ),
-//        "Int32?*",
-//    )
-//    s1F1Fail( []byte{}, "Int32", tcErr1( mg.TypeInt32, mg.TypeBuffer ) )
-//    s1F1Fail( 
-//        mg.MustList( 1, 2 ), 
-//        "Int32", 
-//        tcErr1( mg.TypeInt32, mg.TypeOpaqueList ),
-//    )
-//    s1F1Fail( nil, "Int32", newVcErr( p( "f1" ), "Value is null" ) )
-//    s1F1Fail( int32( 1 ), "Int32+", tcErr1( "Int32+", "Int32" ) )
-//    s1F1Fail( mg.MustList(), "Int32+", newVcErr( p( "f1" ), "List is empty" ) )
-//    s1F1Fail( 
-//        mg.MustList( []byte{} ), 
-//        "Int32*", 
-//        newTcErr( "Int32", "Buffer", p( "f1" ).StartList().SetIndex( 0 ) ),
-//    )
-//    s1F1Fail( int32( 1 ), "SymbolMap", tcErr1( "SymbolMap", "Int32" ) )
-//    s1F1Fail( i32L1, "SymbolMap", tcErr1( "SymbolMap", mg.TypeOpaqueList ) )
-//}
-//
+
+type CastReactorTest struct {
+    Map *DefinitionMap
+    Type mg.TypeReference
+    In mg.Value
+    Expect mg.Value
+    Err error
+}
+
+type rtInit struct {
+    tests []interface{}
+}
+
+func ( rti *rtInit ) addTests( t ...interface{} ) {
+    rti.tests = append( rti.tests, t... )
+}
+
+func ( rti *rtInit ) addBaseFieldCastTests() {
+    p := mg.MakeTestIdPath
+    qn1Str := "ns1@v1/S1"
+    qn1 := mg.MustQualifiedTypeName( qn1Str )
+    s1F1 := func( val interface{} ) *mg.Struct {
+        return mg.MustStruct( qn1, "f1", val )
+    }
+    s1DefMap := func( typ string ) *DefinitionMap {
+        fld := MakeFieldDef( "f1", typ, nil )
+        return MakeV1DefMap( 
+            MakeStructDef( qn1Str, "", []*FieldDefinition{ fld } ) )
+    }
+    s1F1Add := func( in, expct interface{}, typ string, err error ) {
+        t := &CastReactorTest{ 
+            Type: qn1.AsAtomicType(),
+            In: s1F1( in ), 
+            Map: s1DefMap( typ ),
+        }
+        if expct != nil { t.Expect = s1F1( expct ) }
+        if err != nil { t.Err = err }
+        rti.addTests( t )
+    }
+    s1F1Succ := func( in, expct interface{}, typ string ) {
+        s1F1Add( in, expct, typ, nil )
+    }
+    s1F1Fail := func( in interface{}, typ string, err error ) {
+        s1F1Add( in, nil, typ, err )
+    }
+    tcErr1 := func( expct, act interface{} ) *mg.ValueCastError {
+        return newTcErr( expct, act, p( 1 ) )
+    }
+    s1F1Succ( int32( 1 ), int32( 1 ), "Int32" )
+    s1F1Succ( "1", int32( 1 ), "Int32" )
+    s1F1Succ( int32( 1 ), int32( 1 ), "Value" )
+    i32L1 := mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
+    s1F1Succ( i32L1, i32L1, "Int32+" )
+    s1F1Succ( i32L1, i32L1, "Value" )
+    s1F1Succ( i32L1, i32L1, "Value*" )
+    s1F1Succ( mg.MustList( "1", int64( 2 ), int32( 3 ) ), i32L1, "Int32*" )
+    sm1 := mg.MustSymbolMap( "f1", int32( 1 ) )
+    s1F1Succ( sm1, sm1, "SymbolMap" )
+    s1F1Succ( sm1, sm1, "Value" )
+    s1F1Succ( int32( 1 ), int32( 1 ), "Int32?" )
+    s1F1Succ( nil, mg.NullVal, "Int32?" )
+    s1F1Succ(
+        mg.MustList( "1", nil, int64( 1 ) ),
+        mg.MustList( int32( 1 ), nil, int32( 1 ) ),
+        "Int32?*",
+    )
+    s1F1Fail( []byte{}, "Int32", tcErr1( mg.TypeInt32, mg.TypeBuffer ) )
+    s1F1Fail( 
+        mg.MustList( 1, 2 ), 
+        "Int32", 
+        tcErr1( mg.TypeInt32, mg.TypeOpaqueList ),
+    )
+    s1F1Fail( nil, "Int32", newVcErr( p( 1 ), "Value is null" ) )
+    s1F1Fail( int32( 1 ), "Int32+", tcErr1( "Int32+", "Int32" ) )
+    s1F1Fail( mg.MustList(), "Int32+", newVcErr( p( 1 ), "List is empty" ) )
+    s1F1Fail( 
+        mg.MustList( []byte{} ), 
+        "Int32*", 
+        newTcErr( "Int32", "Buffer", p( 1, "0" ) ),
+    )
+    s1F1Fail( int32( 1 ), "SymbolMap", tcErr1( "SymbolMap", "Int32" ) )
+    s1F1Fail( i32L1, "SymbolMap", tcErr1( "SymbolMap", mg.TypeOpaqueList ) )
+}
+
 //func ( rti *rtInit ) addFieldSetCastTests() {
 //    id := mg.MustIdentifier
 //    idPath := func( str string ) objpath.PathNode { 
@@ -1015,9 +1013,9 @@ package types
 //        errorForUnexpectedErrorType( pathErr, mg.TypeSymbolMap ),
 //    )
 //}
-//
-//func ( rti *rtInit ) init() {
-//    rti.addBaseFieldCastTests()
+
+func ( rti *rtInit ) init() {
+    rti.addBaseFieldCastTests()
 //    rti.addFieldSetCastTests()
 //    rti.addStructValCastTests() 
 //    rti.addInferredStructCastTests()
@@ -1027,17 +1025,17 @@ package types
 //    rti.addDefaultPathTests()
 //    rti.addServiceRequestTests()
 //    rti.addServiceResponseTests()
-//}
-//
-//// The tests returned might normally be created during an init() block, but
-//// creating them benefits from using methods, like NewV1DefinitionMap(), which
-//// themselves are not safe to call until after package init.
-//func GetStdReactorTests() []interface{} {
-//    rti := &rtInit{ tests: []interface{}{} }
-//    rti.init()
-//    return rti.tests
-//}
-//
-//// To add:
-////  - req/resp for inherited service ops
-////  - resp errors can also be declared in @security prototype
+}
+
+// The tests returned might normally be created during an init() block, but
+// creating them benefits from using methods, like NewV1DefinitionMap(), which
+// themselves are not safe to call until after package init.
+func GetStdReactorTests() []interface{} {
+    rti := &rtInit{ tests: []interface{}{} }
+    rti.init()
+    return rti.tests
+}
+
+// To add:
+//  - req/resp for inherited service ops
+//  - resp errors can also be declared in @security prototype
