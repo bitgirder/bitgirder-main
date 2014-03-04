@@ -44,7 +44,7 @@ func flattenEvs( vals ...interface{} ) []ReactorEvent {
 // to simplify test creation, we reuse event instances when constructing input
 // event sequences, and send them to this method only at the end to ensure that
 // we get a distinct sequence of event values for each test
-func copySource( evs []ReactorEvent ) []ReactorEvent {
+func CopySource( evs []ReactorEvent ) []ReactorEvent {
     res := make( []ReactorEvent, len( evs ) )
     for i, ev := range evs { res[ i ] = CopyEvent( ev, false ) }
     return res
@@ -369,7 +369,7 @@ func initFieldOrderValueTests() {
     addTest1 := func( src []ReactorEvent, expct Value ) {
         AddStdReactorTests(
             &FieldOrderReactorTest{ 
-                Source: copySource( src ), 
+                Source: CopySource( src ), 
                 Expect: expct, 
                 Orders: []FieldOrderReactorTestOrder{
                     testOrderWithIds( t1,
@@ -401,7 +401,7 @@ func initFieldOrderValueTests() {
     // Test nested orderings
     AddStdReactorTests(
         &FieldOrderReactorTest{
-            Source: copySource( 
+            Source: CopySource( 
                 []ReactorEvent{
                     ss1, 
                         flds[ 0 ], val1,
@@ -430,7 +430,7 @@ func initFieldOrderValueTests() {
     addTest2 := func( expct Value, src ...ReactorEvent ) {
         AddStdReactorTests(
             &FieldOrderReactorTest{
-                Source: copySource( src ),
+                Source: CopySource( src ),
                 Expect: expct,
                 Orders: []FieldOrderReactorTestOrder{},
             },
@@ -490,7 +490,7 @@ func initFieldOrderMissingFieldTests() {
         AddStdReactorTests(
             &FieldOrderMissingFieldsTest{
                 Orders: ords,
-                Source: copySource( mkSrc( flds ) ),
+                Source: CopySource( mkSrc( flds ) ),
                 Expect: mkVal( flds ),
             },
         )
@@ -506,7 +506,7 @@ func initFieldOrderMissingFieldTests() {
         AddStdReactorTests(
             &FieldOrderMissingFieldsTest{
                 Orders: ords,
-                Source: copySource( mkSrc( flds ) ),
+                Source: CopySource( mkSrc( flds ) ),
                 Error: NewMissingFieldsError( nil, miss ),
             },
         )
@@ -688,7 +688,7 @@ func initFieldOrderPathTests() {
     } {
         AddStdReactorTests(
             &FieldOrderPathTest{
-                Source: copySource( mkSrc( ord... ) ),
+                Source: CopySource( mkSrc( ord... ) ),
                 Expect: expct1,
                 Orders: ords1,
             },
@@ -696,7 +696,7 @@ func initFieldOrderPathTests() {
     }
     AddStdReactorTests(
         &FieldOrderPathTest{
-            Source: copySource(
+            Source: CopySource(
                 []ReactorEvent{
                     ss( 1 ),
                         fld( 0 ), val1,
@@ -726,7 +726,7 @@ func initFieldOrderPathTests() {
     // Regression for bug fixed in previous commit (f7fa84122047)
     AddStdReactorTests(
         &FieldOrderPathTest{
-            Source: copySource(
+            Source: CopySource(
                 []ReactorEvent{ ss( 1 ), fld( 1 ), val1, NewEndEvent() } ),
             Expect: []EventExpectation{
                 { ss( 1 ), nil },
@@ -784,7 +784,7 @@ func initServiceRequestTests() {
     addSucc1 := func( evs ...interface{} ) {
         AddStdReactorTests(
             &ServiceRequestReactorTest{
-                Source: copySource( flattenEvs( evs... ) ),
+                Source: CopySource( flattenEvs( evs... ) ),
                 Namespace: ns1,
                 Service: svc1,
                 Operation: op1,
@@ -812,7 +812,7 @@ func initServiceRequestTests() {
     )
     AddStdReactorTests(
         &ServiceRequestReactorTest{
-            Source: copySource(
+            Source: CopySource(
                 flattenEvs( evReqTyp,
                     evFldNs, evNs1,
                     evFldSvc, evSvc1,
@@ -1296,15 +1296,15 @@ func ( t *crtInit ) createTcError0(
     in interface{}, 
     typExpct, typAct, callTyp TypeReferenceInitializer, 
     p idPath ) *CastReactorTest {
-    err := NewTypeCastError( 
-        asTypeReference( typExpct ),
-        asTypeReference( typAct ),
-        p,
-    )
+
     return &CastReactorTest{
         In: MustValue( in ),
         Type: asTypeReference( callTyp ),
-        Err: err,
+        Err: NewTypeCastError( 
+            asTypeReference( typExpct ),
+            asTypeReference( typAct ),
+            p,
+        ),
     }
 }
 
@@ -1312,6 +1312,7 @@ func ( t *crtInit ) addTcError0(
     in interface{}, 
     typExpct, typAct, callTyp TypeReferenceInitializer, 
     p idPath ) {
+
     t.addCrtDefault( t.createTcError0( in, typExpct, typAct, callTyp, p ) )
 }
 
@@ -1434,6 +1435,8 @@ func ( t *crtInit ) addStringTests() {
         crtPathDefault.StartList().Next(),
         "Value \"b\" does not satisfy restriction \"^a+$\"",
     )
+    t.addTcError( EmptySymbolMap(), TypeString, TypeSymbolMap )
+    t.addTcError( EmptyList(), TypeString, TypeOpaqueList )
 }
 
 func ( t *crtInit ) addIdentityNumTests() {
@@ -1454,9 +1457,13 @@ func ( t *crtInit ) addIdentityNumTests() {
         { val: Float32( 1.0 ), str: "1", typ: TypeFloat32 },
         { val: Float64( 1.0 ), str: "1", typ: TypeFloat64 },
     }
+    s1 := MustStruct( "ns1@v1/S1" )
     for _, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
+        t.addTcError( EmptySymbolMap(), numCtx.typ, TypeSymbolMap )
+        t.addTcError( EmptyList(), numCtx.typ, TypeOpaqueList )
+        t.addTcError( s1, numCtx.typ, s1.Type )
         for _, valCtx := range numTests {
             t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
         }
@@ -1527,6 +1534,7 @@ func ( t *crtInit ) addTimeTests() {
 
 func ( t *crtInit ) addEnumTests() {
     t.addSucc( t.en1, "en-val1", TypeString  )
+    t.addTcError( EmptySymbolMap(), t.en1.Type, TypeSymbolMap )
 }
 
 func ( t *crtInit ) addNullableTests() {
@@ -1781,10 +1789,24 @@ func ( cea CastErrorAssert ) assertVcError() {
     } else { cea.FailActErrType() }
 }
 
+func ( cea CastErrorAssert ) assertMissingFieldsError() {
+    if act, ok := cea.ErrAct.( *MissingFieldsError ); ok {
+        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
+    } else { cea.FailActErrType() }
+}
+
+func ( cea CastErrorAssert ) assertUnrecognizedFieldError() {
+    if act, ok := cea.ErrAct.( *UnrecognizedFieldError ); ok {
+        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
+    } else { cea.FailActErrType() }
+}
+
 func ( cea CastErrorAssert ) Call() {
     switch cea.ErrExpect.( type ) {
     case nil: cea.Fatal( cea.ErrAct )
     case *ValueCastError: cea.assertVcError()
+    case *MissingFieldsError: cea.assertMissingFieldsError()
+    case *UnrecognizedFieldError: cea.assertUnrecognizedFieldError()
     default: cea.Fatalf( "Unhandled Err type: %T", cea.ErrExpect )
     }
 }
@@ -1842,6 +1864,12 @@ func FeedSource( src interface{}, rct ReactorEventProcessor ) error {
     panic( libErrorf( "unhandled source: %T", src ) )
 }
 
+func AssertFeedSource( 
+    src interface{}, rct ReactorEventProcessor, a assert.Failer ) {
+
+    if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
+}
+
 type eventPathCheckReactor struct {
     a *assert.PathAsserter
     eeAssert *assert.PathAsserter
@@ -1859,11 +1887,11 @@ func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
     return nil
 }
 
-func ( r *eventPathCheckReactor ) complete() {
+func ( r *eventPathCheckReactor ) Complete() {
     r.a.Equalf( r.idx, len( r.expct ), "not all events were seen" )
 }
 
-func newEventPathCheckReactor( 
+func NewEventPathCheckReactor( 
     expct []EventExpectation, a *assert.PathAsserter ) *eventPathCheckReactor {
 
     return &eventPathCheckReactor{ 

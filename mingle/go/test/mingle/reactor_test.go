@@ -24,13 +24,13 @@ func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
     rct := NewPathSettingProcessor();
     if pt.StartPath != nil { rct.SetStartPath( pt.StartPath ) }
 
-    chk := newEventPathCheckReactor( pt.Events, c.PathAsserter )
+    chk := NewEventPathCheckReactor( pt.Events, c.PathAsserter )
     pip := InitReactorPipeline( rct, chk )
     
     src := eventExpectSource( pt.Events )
     if err := FeedEventSource( src, pip ); err != nil { c.Fatal( err ) }
 
-    chk.complete()
+    chk.Complete()
 }
 
 func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
@@ -128,11 +128,11 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
 func ( c *ReactorTestCall ) callFieldOrderPathTest( fo *FieldOrderPathTest ) {
     ps := NewPathSettingProcessor()
     ord := NewFieldOrderReactor( fogImpl( fo.Orders ) )
-    chk := newEventPathCheckReactor( fo.Expect, c.PathAsserter )
+    chk := NewEventPathCheckReactor( fo.Expect, c.PathAsserter )
     pip := InitReactorPipeline( ps, ord, chk )
     src := eventSliceSource( fo.Source )
     AssertFeedEventSource( src, pip, c )
-    chk.complete()
+    chk.Complete()
 }
 
 func ( c *ReactorTestCall ) assertMissingFieldsError(
@@ -262,7 +262,7 @@ func valueCheckReactor(
     a *assert.PathAsserter ) ReactorEventProcessor {
 
     if evs == nil { return base }
-    evChk := newEventPathCheckReactor( evs, a )
+    evChk := NewEventPathCheckReactor( evs, a )
     return InitReactorPipeline( evChk, base )
 }
 

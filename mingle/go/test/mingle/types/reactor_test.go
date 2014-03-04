@@ -6,49 +6,30 @@ import (
     mg "mingle"
 )
 
-type ReactorTestCall struct {
-    *mg.ReactorTestCall
-}
-
-func ( tc *ReactorTestCall ) assertCastError( ct *CastReactorTest, err error ) {
-    cae := mg.CastErrorAssert{ 
-        ErrExpect: ct.Err, ErrAct: err, PathAsserter: tc.PathAsserter }
-    switch ct.Err.( type ) {
-    case *mg.UnrecognizedFieldError:
-        if ufe, ok := err.( *mg.UnrecognizedFieldError ); ok {
-            tc.Equalf( ct.Err, ufe, "%s != %s", ct.Err, ufe )
-        } else { cae.FailActErrType() }
-    case *mg.MissingFieldsError:
-        if mfe, ok := err.( *mg.MissingFieldsError ); ok {
-            tc.Equal( ct.Err, mfe )
-        } else { cae.FailActErrType() }
-    default: cae.Call()
-    }
-}
+type ReactorTestCall struct { *mg.ReactorTestCall }
 
 func ( tc *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     rct := NewCastReactorDefinitionMap( ct.Type, ct.Map )
     vb := mg.NewValueBuilder()
-    dbg := mg.NewDebugReactor( tc )
-    pip := mg.InitReactorPipeline( dbg, rct, vb )
+    pip := mg.InitReactorPipeline( rct, vb )
     if err := mg.VisitValue( ct.In, pip ); err == nil {
         tc.CheckNoError( ct.Err )
         mg.EqualValues( ct.Expect, vb.GetValue(), tc )
-    } else { tc.assertCastError( ct, err ) }
+    } else { 
+        cae := mg.CastErrorAssert{ 
+            ErrExpect: ct.Err, ErrAct: err, PathAsserter: tc.PathAsserter }
+        cae.Call()
+    }
 }
 
-//func ( tc *ReactorTestCall ) callEventPath( t *EventPathTest ) {
-//    mg.AssertEventPaths( 
-//        t.Source,
-//        t.Expect, 
-//        []interface{}{ 
-//            NewCastReactor( t.Type, t.Map ),
-////            mg.NewDebugReactor( tc ),
-//        },
-//        tc.PathAsserter,
-//    )
-//}
-//
+func ( tc *ReactorTestCall ) callEventPath( t *EventPathTest ) {
+    chk := mg.NewEventPathCheckReactor( t.Expect, tc.PathAsserter )
+    rct := NewCastReactorDefinitionMap( t.Type, t.Map )
+    pip := mg.InitReactorPipeline( rct, chk )
+    mg.AssertFeedSource( t.Source, pip, tc )
+    chk.Complete()
+}
+
 //type checker interface { check() }
 //
 //func ( tc *ReactorTestCall ) visitAndCheck(
@@ -131,7 +112,7 @@ func ( tc *ReactorTestCall ) call() {
 //    tc.Logf( "Calling test of type %T", tc.Test )
     switch v := tc.Test.( type ) {
     case *CastReactorTest: tc.callCast( v )
-//    case *EventPathTest: tc.callEventPath( v )
+    case *EventPathTest: tc.callEventPath( v )
 //    case *ServiceRequestTest: tc.callServiceRequest( v )
 //    case *ServiceResponseTest: tc.callServiceResponse( v )
     default: panic( libErrorf( "Unhandled test type: %T", tc.Test ) )

@@ -248,7 +248,11 @@ func feedDefault(
     p objpath.PathNode,
     next mg.ReactorEventProcessor ) error {
 
-    ps := mg.NewPathSettingProcessorPath( p.Descend( fld ) )
+    fldPath := objpath.Descend( p, fld )
+    fs := mg.NewFieldStartEvent( fld )
+    fs.SetPath( fldPath )
+    if err := next.ProcessEvent( fs ); err != nil { return err }
+    ps := mg.NewPathSettingProcessorPath( fldPath )
     ps.SkipStructureCheck = true
     pip := mg.InitReactorPipeline( ps, next )
     return mg.VisitValue( defl, pip )

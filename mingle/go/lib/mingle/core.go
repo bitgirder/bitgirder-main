@@ -4,7 +4,7 @@ import (
     "bitgirder/objpath"
     "fmt"
     "regexp"
-//    "log"
+    "log"
     "time"
     "sort"
     "bytes"
@@ -890,6 +890,7 @@ func makeSymbolMap( flds []fieldEntry ) ( *SymbolMap, error ) {
 
 func CreateSymbolMap( pairs ...interface{} ) ( m *SymbolMap, err error ) {
     if pLen := len( pairs ); pLen % 2 == 1 { 
+        log.Printf( "bad pairs: %v", pairs )
         return nil, mapLiteralError( "Invalid pairs len: %d", pLen )
     } else { 
         flds := make( []fieldEntry, 0, pLen / 2 )

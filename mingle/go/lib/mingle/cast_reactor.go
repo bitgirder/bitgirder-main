@@ -154,7 +154,7 @@ func ( cr *CastReactor ) processValue(
     panic( cr.errStackUnrecognized() )
 }
 
-func ( cr *CastReactor ) implStartMap(
+func ( cr *CastReactor ) implMapStart(
     ev ReactorEvent, ft FieldTyper, next ReactorEventProcessor ) error {
 
     cr.stack.Push( ft )
@@ -168,7 +168,7 @@ func ( cr *CastReactor ) completeStartStruct(
     if err != nil { return err }
 
     if ft == nil { ft = valueFieldTyper( 1 ) }
-    return cr.implStartMap( ss, ft, next )
+    return cr.implMapStart( ss, ft, next )
 }
 
 func ( cr *CastReactor ) inferStructForMap(
@@ -187,22 +187,22 @@ func ( cr *CastReactor ) inferStructForMap(
     return cr.completeStartStruct( ev, next ), true
 }
 
-func ( cr *CastReactor ) processStartMapWithAtomicType(
+func ( cr *CastReactor ) processMapStartWithAtomicType(
     me *MapStartEvent,
     at *AtomicTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
     if at.Equals( TypeSymbolMap ) || at.Equals( TypeValue ) {
-        return cr.implStartMap( me, valueFieldTyper( 1 ), next )
+        return cr.implMapStart( me, valueFieldTyper( 1 ), next )
     }
 
     if err, ok := cr.inferStructForMap( me, at, next ); ok { return err }
 
-    return NewTypeCastError( callTyp, at, me.GetPath() )
+    return NewTypeCastError( callTyp, TypeSymbolMap, me.GetPath() )
 }
 
-func ( cr *CastReactor ) processStartMapWithType(
+func ( cr *CastReactor ) processMapStartWithType(
     me *MapStartEvent, 
     typ TypeReference,
     callTyp TypeReference,
@@ -210,24 +210,24 @@ func ( cr *CastReactor ) processStartMapWithType(
 
     switch v := typ.( type ) {
     case *AtomicTypeReference:
-        return cr.processStartMapWithAtomicType( me, v, callTyp, next )
+        return cr.processMapStartWithAtomicType( me, v, callTyp, next )
     case *NullableTypeReference:
-        return cr.processStartMapWithType( me, v.Type, callTyp, next )
+        return cr.processMapStartWithType( me, v.Type, callTyp, next )
     }
     return NewTypeCastError( callTyp, typ, me.GetPath() )
 }
 
-func ( cr *CastReactor ) processStartMap(
+func ( cr *CastReactor ) processMapStart(
     me *MapStartEvent, next ReactorEventProcessor ) error {
     
     switch v := cr.stack.Peek().( type ) {
     case TypeReference: 
         cr.stack.Pop()
-        return cr.processStartMapWithType( me, v, v, next )
+        return cr.processMapStartWithType( me, v, v, next )
     case *listCast:
         v.sawValues = true
         typ := v.lt.ElementType
-        return cr.processStartMapWithType( me, typ, typ, next )
+        return cr.processMapStartWithType( me, typ, typ, next )
     }
     panic( cr.errStackUnrecognized() )
 }
@@ -268,7 +268,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     if at.Equals( TypeSymbolMap ) {
         me := NewMapStartEvent()
         me.SetPath( ss.GetPath() )
-        return cr.processStartMapWithAtomicType( me, at, callTyp, next )
+        return cr.processMapStartWithAtomicType( me, at, callTyp, next )
     }
 
     if at.Name.Equals( ss.Type ) || at.Equals( TypeValue ) {
@@ -360,7 +360,7 @@ func ( cr *CastReactor ) ProcessEvent(
 
     switch v := ev.( type ) {
     case *ValueEvent: return cr.processValue( v, next )
-    case *MapStartEvent: return cr.processStartMap( v, next )
+    case *MapStartEvent: return cr.processMapStart( v, next )
     case *FieldStartEvent: return cr.processFieldStart( v, next )
     case *StructStartEvent: return cr.processStructStart( v, next )
     case *ListStartEvent: return cr.processListStart( v, next )
