@@ -94,9 +94,7 @@ func ( ft fieldTyper ) FieldTypeFor(
     for _, flds := range ft.flds {
         if fd := flds.Get( fld ); fd != nil { return fd.Type, nil }
     }
-    // use parent path since we're positioned on the failed field itself
-    par := objpath.ParentOf( path )
-    return nil, mg.NewUnrecognizedFieldError( par, fld )
+    return nil, mg.NewUnrecognizedFieldError( path, fld )
 }
 
 func ( ci defMapCastIface ) FieldTyperFor(
@@ -197,37 +195,11 @@ type castReactor struct {
     dm *DefinitionMap
     fsg fieldSetGetter
     stack *stack.Stack
-//    deflFeed *mg.EventPathReactor
 }
 
 func ( cr *castReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     pip.Add( mg.NewCastReactor( cr.typ, cr.iface ) )
 }
-
-//
-//func ( cr *castReactor ) Init( rpi *mg.ReactorPipelineInit ) {
-//    rpi.AddPipelineProcessor( cr.castBase )
-//}
-//
-//func ( cr *castReactor ) GetPath() objpath.PathNode {
-//    res := cr.castBase.GetPath()
-//    if cr.deflFeed != nil { res = cr.deflFeed.AppendPath( res ) }
-//    return res
-//}
-//
-//func ( cr *castReactor ) newValueCastErrorf( 
-//    tmpl string, args ...interface{} ) error {
-//    return mg.NewValueCastErrorf( cr.GetPath(), tmpl, args... )
-//}
-//
-//func ( cr *castReactor ) newUnrecognizedTypeError( 
-//    qn *mg.QualifiedTypeName ) error {
-//    return newUnrecognizedTypeError( qn, cr.GetPath() )
-//}
-//
-//func ( cr *castReactor ) notAStructError( qn *mg.QualifiedTypeName ) error {
-//    return notAStructError( qn, cr.GetPath() )
-//}
 
 type fieldCtx struct {
     depth int

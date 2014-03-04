@@ -19,11 +19,11 @@ func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
     return mg.NewTypeCastError( asType( expct ), asType( act ), p )
 }
 
-//func makeIdList( strs ...string ) []*mg.Identifier {
-//    res := make( []*mg.Identifier, len( strs ) )
-//    for i, str := range strs { res[ i ] = mg.MustIdentifier( str ) }
-//    return res
-//}
+func makeIdList( strs ...string ) []*mg.Identifier {
+    res := make( []*mg.Identifier, len( strs ) )
+    for i, str := range strs { res[ i ] = mg.MustIdentifier( str ) }
+    return res
+}
 
 type CastReactorTest struct {
     Map *DefinitionMap
@@ -108,74 +108,73 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     s1F1Fail( i32L1, "SymbolMap", tcErr1( "SymbolMap", mg.TypeOpaqueList ) )
 }
 
-//func ( rti *rtInit ) addFieldSetCastTests() {
-//    id := mg.MustIdentifier
-//    idPath := func( str string ) objpath.PathNode { 
-//        return objpath.RootedAt( id( str ) ) 
-//    }
-//    dm := MakeV1DefMap(
-//        MakeStructDef(
-//            "ns1@v1/S1",
-//            "",
-//            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
-//        ),
-//        MakeStructDef(
-//            "ns1@v1/S2",
-//            "ns1@v1/S1",
-//            []*FieldDefinition{ MakeFieldDef( "f2", "Int32", nil ) },
-//        ),
-//        MakeStructDef(
-//            "ns1@v1/S3",
-//            "",
-//            []*FieldDefinition{ MakeFieldDef( "f1", "Int32?", nil ) },
-//        ),
-//        MakeStructDef(
-//            "ns1@v1/S4",
-//            "",
-//            []*FieldDefinition{ MakeFieldDef( "f1", "ns1@v1/S1?", nil ) },
-//        ),
-//    )
-//    addTest := func( in, expct *mg.Struct, err error ) {
-//        t := &CastReactorTest{ Map: dm, In: in, Type: in.Type.AsAtomicType() }
-//        if expct != nil { t.Expect = expct }
-//        if err != nil { t.Err = err }
-//        rti.addTests( t )
-//    }
-//    addSucc := func( in *mg.Struct ) { addTest( in, in, nil ) }
-//    addFail := func( in *mg.Struct, err error ) { addTest( in, nil, err ) }
-//    addSucc( mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
-//    addSucc( mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
-//    addSucc( mg.MustStruct( "ns1@v1/S3" ) )
-//    addSucc( mg.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
-//    addFail(
-//        mg.MustStruct( "ns1@v1/S1" ),
-//        mg.NewMissingFieldsError( nil, makeIdList( "f1" ) ),
-//    )
-//    addFail(
-//        mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ),
-//        mg.NewMissingFieldsError( nil, makeIdList( "f2" ) ),
-//    )
-//    addFail(
-//        mg.MustStruct( "ns1@v1/S2" ),
-//        mg.NewMissingFieldsError( nil, makeIdList( "f1", "f2" ) ),
-//    )
-//    addFail(
-//        mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 2 ) ),
-//        mg.NewUnrecognizedFieldError( nil, id( "f2" ) ),
-//    )
-//    addFail(
-//        mg.MustStruct( "ns1@v1/S4",
-//            "f1", mg.MustStruct( "ns1@v1/S1", "not-a-field", int32( 1 ) ) ),
-//        mg.NewUnrecognizedFieldError( idPath( "f1" ), id( "not-a-field" ) ),
-//    )
-//    for _, i := range []string{ "1", "2" } {
-//        addFail(
-//            mg.MustStruct( "ns1@v1/S" + i, "f3", int32( 3 ) ),
-//            mg.NewUnrecognizedFieldError( nil, mg.MustIdentifier( "f3" ) ),
-//        )
-//    }
-//}
-//
+func ( rti *rtInit ) addFieldSetCastTests() {
+    id := mg.MustIdentifier
+    mkId := mg.MakeTestId
+    p := mg.MakeTestIdPath
+    dm := MakeV1DefMap(
+        MakeStructDef(
+            "ns1@v1/S1",
+            "",
+            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
+        ),
+        MakeStructDef(
+            "ns1@v1/S2",
+            "ns1@v1/S1",
+            []*FieldDefinition{ MakeFieldDef( "f2", "Int32", nil ) },
+        ),
+        MakeStructDef(
+            "ns1@v1/S3",
+            "",
+            []*FieldDefinition{ MakeFieldDef( "f1", "Int32?", nil ) },
+        ),
+        MakeStructDef(
+            "ns1@v1/S4",
+            "",
+            []*FieldDefinition{ MakeFieldDef( "f1", "ns1@v1/S1?", nil ) },
+        ),
+    )
+    addTest := func( in, expct *mg.Struct, err error ) {
+        t := &CastReactorTest{ Map: dm, In: in, Type: in.Type.AsAtomicType() }
+        if expct != nil { t.Expect = expct }
+        if err != nil { t.Err = err }
+        rti.addTests( t )
+    }
+    addSucc := func( in *mg.Struct ) { addTest( in, in, nil ) }
+    addFail := func( in *mg.Struct, err error ) { addTest( in, nil, err ) }
+    addSucc( mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
+    addSucc( mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
+    addSucc( mg.MustStruct( "ns1@v1/S3" ) )
+    addSucc( mg.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
+    addFail(
+        mg.MustStruct( "ns1@v1/S1" ),
+        mg.NewMissingFieldsError( nil, makeIdList( "f1" ) ),
+    )
+    addFail(
+        mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ),
+        mg.NewMissingFieldsError( nil, makeIdList( "f2" ) ),
+    )
+    addFail(
+        mg.MustStruct( "ns1@v1/S2" ),
+        mg.NewMissingFieldsError( nil, makeIdList( "f1", "f2" ) ),
+    )
+    addFail(
+        mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 2 ) ),
+        mg.NewUnrecognizedFieldError( nil, mkId( 2 ) ),
+    )
+    addFail(
+        mg.MustStruct( "ns1@v1/S4",
+            "f1", mg.MustStruct( "ns1@v1/S1", "not-a-field", int32( 1 ) ) ),
+        mg.NewUnrecognizedFieldError( p( 1 ), id( "not-a-field" ) ),
+    )
+    for _, i := range []string{ "1", "2" } {
+        addFail(
+            mg.MustStruct( "ns1@v1/S" + i, "f3", int32( 3 ) ),
+            mg.NewUnrecognizedFieldError( nil, mkId( 3 ) ),
+        )
+    }
+}
+
 //func ( rti *rtInit ) addStructValCastTests() {
 //    dm := MakeV1DefMap(
 //        MakeStructDef( "ns1@v1/S1", "",
@@ -1016,7 +1015,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
 
 func ( rti *rtInit ) init() {
     rti.addBaseFieldCastTests()
-//    rti.addFieldSetCastTests()
+    rti.addFieldSetCastTests()
 //    rti.addStructValCastTests() 
 //    rti.addInferredStructCastTests()
 //    rti.addEnumValCastTests()
