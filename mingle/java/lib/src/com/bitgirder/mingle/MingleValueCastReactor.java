@@ -362,7 +362,7 @@ implements MingleValueReactorPipeline.Processor,
 
         if ( inferredStructForMap( ev, at, next ) ) return;
         
-        failCastType( ev, callTyp, at );
+        failCastType( ev, callTyp, Mingle.TYPE_SYMBOL_MAP );
     }
 
     private
