@@ -146,6 +146,10 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     addSucc( mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
     addSucc( mg.MustStruct( "ns1@v1/S3" ) )
     addSucc( mg.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
+    s1Inst1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
+    addSucc( mg.MustStruct( "ns1@v1/S4", "f1", s1Inst1 ) )
+    s2Inst1 := mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) )
+    addSucc( mg.MustStruct( "ns1@v1/S4", "f1", s2Inst1 ) )
     addFail(
         mg.MustStruct( "ns1@v1/S1" ),
         mg.NewMissingFieldsError( nil, makeIdList( "f1" ) ),
@@ -601,6 +605,8 @@ func ( rti *rtInit ) addServiceRequestTests() {
     dm := MakeV1DefMap(
         MakeStructDef( "ns1@v1/S1", "",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
+        MakeStructDef( "ns1@v1/S2", "ns1@v1/S1",
+            []*FieldDefinition{ MakeFieldDef( "f2", "Int32", nil ) } ),
         MakeStructDef( "ns1@v1/Auth1", "",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
         MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
@@ -639,6 +645,15 @@ func ( rti *rtInit ) addServiceRequestTests() {
                     []string{},
                 ),
             ),
+            MakeOpDef( "op4",
+                MakeCallSig(
+                    []*FieldDefinition{
+                        MakeFieldDef( "p1", "ns1@v1/S1", nil ),
+                    },
+                    "Null",
+                    []string{},
+                ),
+            ),
         ),
         MakeServiceDef(
             "ns1@v1/Service2", "", "ns1@v1/Sec1",
@@ -669,6 +684,8 @@ func ( rti *rtInit ) addServiceRequestTests() {
     svcIds.Put( id( "svc1" ), mg.MustQualifiedTypeName( "ns1@v1/Service1" ) )
     svcIds.Put( id( "svc2" ), mg.MustQualifiedTypeName( "ns1@v1/Service2" ) )
     maps := &ServiceMaps{ Definitions: dm, ServiceIds: svcIds }
+    s1Inst1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
+    s2Inst1 := mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 1 ) )
     addSucc := func( in mg.Value, params *mg.SymbolMap, auth mg.Value ) {
         rti.addTests(
             &ServiceRequestTest{
@@ -768,6 +785,18 @@ func ( rti *rtInit ) addServiceRequestTests() {
         mg.MustSymbolMap(),
         nil,
     )
+    mkOp4Succ := func( p1Val interface{} ) {
+        addSucc(
+            mkReq( "ns1@v1", "svc1", "op4", 
+                mg.MustSymbolMap( "p1", p1Val ), 
+                nil,
+            ),
+            mg.MustSymbolMap( "p1", p1Val ),
+            nil,
+        )
+    }
+    mkOp4Succ( s1Inst1 )
+    mkOp4Succ( s2Inst1 )
     addErr(
         mkReq( "ns1@v1", "svc2", "op1", mg.MustSymbolMap(), nil ),
         mg.NewMissingFieldsError( 
@@ -856,6 +885,11 @@ func ( rti *rtInit ) addServiceResponseTests() {
                 },
             ),
             MakeStructDef(
+                "ns1@v1/S2",
+                "ns1@v1/S1",
+                []*FieldDefinition{ MakeFieldDef( "f3", "Int32?", nil ) },
+            ),
+            MakeStructDef(
                 "ns1@v1/Err1",
                 "",
                 []*FieldDefinition{
@@ -864,9 +898,19 @@ func ( rti *rtInit ) addServiceResponseTests() {
                 },
             ),
             MakeStructDef(
+                "ns1@v1/Err2",
+                "ns1@v1/Err1",
+                []*FieldDefinition{ MakeFieldDef( "f3", "Int32?", nil ) },
+            ),
+            MakeStructDef(
                 "ns1@v1/SecErr1",
                 "",
                 []*FieldDefinition{ MakeFieldDef( "f1", "Int32?", nil ) },
+            ),
+            MakeStructDef(
+                "ns1@v1/SecErr2",
+                "ns1@v1/SecErr1",
+                []*FieldDefinition{ MakeFieldDef( "f2", "Int32?", nil ) },
             ),
             MakeEnumDef( "ns1@v1/E1", "e1" ),
             &PrototypeDefinition{
@@ -921,12 +965,19 @@ func ( rti *rtInit ) addServiceResponseTests() {
     addResSucc( "e1", en1, "ns1@v1/E1" )
     s1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     addResSucc( s1, s1, "ns1@v1/S1" )
+    s2 := mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f3", int32( 1 ) )
+    addResSucc( s2, s2, "ns1@v1/S1" )
     err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
     addErrSucc( err1, err1, "ns1@v1/Err1" )
-    addErrSucc( err1, err1, "ns1@v1/Err1", "ns1@v1/Err2" )
+    addErrSucc( err1, err1, "ns1@v1/Err1", "ns1@v1/SomeOtherErr" )
+    err2 := mg.MustStruct( "ns1@v1/Err2", "f3", int32( 1 ) )
+    addErrSucc( err2, err2, "ns1@v1/Err1" )
     secErr1 := mg.MustStruct( "ns1@v1/SecErr1", "f1", int32( 1 ) )
     addErrSucc( secErr1, secErr1 )
     addErrSucc( secErr1, secErr1, "ns1@v1/Err1" )
+    secErr2 := mg.MustStruct( "ns1@v1/SecErr2", "f2", int32( 1 ) )
+    addErrSucc( secErr2, secErr2 )
+    addErrSucc( secErr2, secErr2, "ns1@v1/Err1" )
     // We're not really checking here that the error values are correct as
     // mingle struct values (most should have at least a 'message' field), only
     // that the types are allowed by the response cast even when not explicitly
@@ -964,9 +1015,9 @@ func ( rti *rtInit ) addServiceResponseTests() {
         newTcErr( mg.TypeNull, mg.TypeInt32, pathRes ),
     )
     addResFail( 
-        mg.MustStruct( "ns1@v1/S2" ),
+        mg.MustStruct( "ns1@v1/S3" ),
         "ns1@v1/S1", 
-        newTcErr( "ns1@v1/S1", "ns1@v1/S2", pathRes ),
+        newTcErr( "ns1@v1/S1", "ns1@v1/S3", pathRes ),
     )
     addResFail(
         mg.MustEnum( "ns1@v1/E1", "bad" ),

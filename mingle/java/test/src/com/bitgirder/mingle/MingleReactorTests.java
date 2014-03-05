@@ -299,6 +299,15 @@ class MingleReactorTests
             throw Mingle.failCastType( at, mv, path );
         }
 
+        public
+        boolean
+        allowAssign( QualifiedTypeName targ,
+                     QualifiedTypeName act )
+        {
+            return targ.equals( qname( "ns1@v1/T1" ) ) &&
+                act.equals( qname( "ns1@v1/T1Sub1" ) );
+        }
+
         static
         {
             FIELD_TYPERS.put( 

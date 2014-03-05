@@ -1664,6 +1664,8 @@ func ( t *crtInit ) addInterfaceImplTests() {
     addSucc( MustSymbolMap( "f1", "1" ), s1, t1 )
     addSucc( "cast1", int32( 1 ), "ns1@v1/S3" )
     addSucc( "cast2", int32( -1 ), "ns1@v1/S3" )
+    s1Sub1 := MustStruct( "ns1@v1/T1Sub1" )
+    addSucc( s1Sub1, s1Sub1, "ns1@v1/T1" )
     addSucc( 
         MustList( "cast1", "cast2" ), 
         MustList( int32( 1 ), int32( -1 ) ),
@@ -1673,6 +1675,7 @@ func ( t *crtInit ) addInterfaceImplTests() {
     arb := MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
     addSucc( arb, arb, arb.Type )
     add( t.createTcError( int32( 1 ), "ns1@v1/S3", TypeInt32 ) )
+    add( t.createTcError( arb, "ns1@v1/S1", arb.Type ) )
     add( 
         t.createTcError0( 
             int32( 1 ), 

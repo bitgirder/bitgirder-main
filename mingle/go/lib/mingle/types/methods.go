@@ -28,11 +28,9 @@ func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
 func expectProtoDef( 
     qn *mg.QualifiedTypeName, dm *DefinitionMap ) *PrototypeDefinition {
  
-    if def, ok := dm.GetOk( qn ); ok {
-        if protDef, ok := def.( *PrototypeDefinition ); ok { return protDef }
-        panic( libErrorf( "not a prototype: %s", qn ) )
-    }
-    panic( libErrorf( "no def for qname: %s", qn ) )
+    def := dm.MustGet( qn )
+    if protDef, ok := def.( *PrototypeDefinition ); ok { return protDef }
+    panic( libErrorf( "not a prototype: %s", qn ) )
 }
 
 func expectAuthTypeOf( 
@@ -44,11 +42,35 @@ func expectAuthTypeOf(
     panic( libErrorf( "no auth for security: %s", secQn ) )
 }
 
+func canAssignToStruct( 
+    targ *StructDefinition, def Definition, dm *DefinitionMap ) bool {
+
+    sd, ok := def.( *StructDefinition )
+    if ! ok { return false }
+    if targ.GetName().Equals( sd.GetName() ) { return true }
+    if spr := sd.SuperType; spr != nil {
+        return canAssignToStruct( targ, dm.MustGet( spr ), dm )
+    }
+    return false
+}
+
+func canAssignType( t1, t2 *mg.QualifiedTypeName, dm *DefinitionMap ) bool {
+    d1, d2 := dm.MustGet( t1 ), dm.MustGet( t2 )
+    switch v1 := d1.( type ) {
+    case *StructDefinition: return canAssignToStruct( v1, d2, dm )
+    }
+    return false
+}
+
 func canThrowErrorOfType( 
-    qn *mg.QualifiedTypeName, sig *CallSignature ) ( mg.TypeReference, bool ) {
+    qn *mg.QualifiedTypeName, 
+    sig *CallSignature,
+    dm *DefinitionMap ) ( mg.TypeReference, bool ) {
 
     for _, typ := range sig.Throws {
-        if mg.TypeNameIn( typ ).Equals( qn ) { return typ, true }
+        if thrownQn, ok := mg.TypeNameIn( typ ).( *mg.QualifiedTypeName ); ok {
+            if canAssignType( thrownQn, qn, dm ) { return typ, true }
+        }
     }
     return nil, false
 }

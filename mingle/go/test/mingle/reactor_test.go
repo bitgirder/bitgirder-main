@@ -224,6 +224,13 @@ func ( ci *castInterfaceImpl ) CastAtomic(
     return nil, NewTypeCastErrorValue( at, v, path ), true
 }
 
+func ( ci *castInterfaceImpl ) AllowAssignment(
+    expct, act *QualifiedTypeName ) bool {
+
+    return expct.Equals( qname( "ns1@v1/T1" ) ) &&
+       act.Equals( qname( "ns1@v1/T1Sub1" ) )
+}
+
 func ( c *ReactorTestCall ) addCastReactors( 
     ct *CastReactorTest, rcts []interface{} ) []interface{} {
 

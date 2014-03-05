@@ -38,6 +38,13 @@ func ( ci defMapCastIface ) InferStructFor( qn *mg.QualifiedTypeName ) bool {
     return false
 }
 
+func ( ci defMapCastIface ) AllowAssignment(
+    expct, act *mg.QualifiedTypeName ) bool {
+
+    if _, ok := ci.dm.GetOk( act ); ! ok { return false }
+    return canAssignType( expct, act, ci.dm )
+}
+
 type fieldTyper struct { 
     flds []*FieldSet 
     dm *DefinitionMap
@@ -443,6 +450,12 @@ func ( pi parametersCastIface ) CastAtomic(
     return pi.ci.CastAtomic( in, at, path )
 }
 
+func ( pi parametersCastIface ) AllowAssignment(
+    expct, act *mg.QualifiedTypeName ) bool {
+
+    return pi.ci.AllowAssignment( expct, act )
+}
+
 func ( pi parametersCastIface ) getFieldSets(
     qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error ) {
 
@@ -542,22 +555,6 @@ type errorProcReactor struct {
     rct mg.ReactorEventProcessor
     proc mg.ReactorEventProcessor
 }
-//
-//func ( epr *errorProcReactor ) errorTypeForStruct( 
-//    qn *mg.QualifiedTypeName ) ( mg.TypeReference, bool ) {
-//
-//    if epr.impl.defs.HasBuiltInDefinition( qn ) {
-//        return &mg.AtomicTypeReference{ Name: qn }, true
-//    }
-//    if typ, ok := canThrowErrorOfType( qn, epr.impl.opDef.Signature ); ok {
-//        return typ, true
-//    }
-//    if secQn := epr.impl.svcDef.Security; secQn != nil {
-//        pd := expectProtoDef( secQn, epr.impl.defs )
-//        return canThrowErrorOfType( qn, pd.Signature )
-//    }
-//    return nil, false
-//}
 
 func ( epr *errorProcReactor ) errorTypeForStruct( 
     qn *mg.QualifiedTypeName ) ( mg.TypeReference, bool ) {
@@ -565,12 +562,14 @@ func ( epr *errorProcReactor ) errorTypeForStruct(
     if epr.impl.defs.HasBuiltInDefinition( qn ) {
         return &mg.AtomicTypeReference{ Name: qn }, true
     }
-    if typ, ok := canThrowErrorOfType( qn, epr.impl.opDef.Signature ); ok {
+    if _, ok := epr.impl.defs.GetOk( qn ); ! ok { return nil, false }
+    opSig := epr.impl.opDef.Signature
+    if typ, ok := canThrowErrorOfType( qn, opSig, epr.impl.defs ); ok {
         return typ, true
     }
     if secQn := epr.impl.svcDef.Security; secQn != nil {
         pd := expectProtoDef( secQn, epr.impl.defs )
-        return canThrowErrorOfType( qn, pd.Signature )
+        return canThrowErrorOfType( qn, pd.Signature, epr.impl.defs )
     }
     return nil, false
 }

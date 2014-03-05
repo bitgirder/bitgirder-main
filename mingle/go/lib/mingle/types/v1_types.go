@@ -77,3 +77,13 @@ func init() {
     initCoreV1Prims()
     initCoreV1Exceptions()
 }
+
+// package note: not safe to call before completion of package init
+func NewV1DefinitionMap() *DefinitionMap {
+    res := NewDefinitionMap()
+    res.MustAddFrom( coreTypesV1 )
+    coreTypesV1.EachDefinition( func( def Definition ) {
+        res.setBuiltIn( def.GetName() )
+    })
+    return res
+}

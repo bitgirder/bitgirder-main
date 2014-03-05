@@ -75,6 +75,12 @@ func ( c svcReqCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
     return qn.Equals( QnameServiceRequest )
 }
 
+func ( c svcReqCastIface ) AllowAssignment( 
+    expct, act *QualifiedTypeName ) bool {
+
+    return false
+}
+
 type svcReqFieldTyper int
 
 func ( t svcReqFieldTyper ) FieldTypeFor( 
@@ -301,6 +307,12 @@ func ( i svcRespCastIface ) FieldTyperFor(
     qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
 
     return valueFieldTyper( 1 ), nil
+}
+
+func ( i svcRespCastIface ) AllowAssignment(
+    expct, act *QualifiedTypeName ) bool {
+
+    return false
 }
 
 func ( i svcRespCastIface ) CastAtomic(

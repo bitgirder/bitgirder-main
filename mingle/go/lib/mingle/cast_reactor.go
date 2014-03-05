@@ -36,6 +36,10 @@ type CastInterface interface {
         in Value, 
         at *AtomicTypeReference, 
         path objpath.PathNode ) ( Value, error, bool )
+    
+    // will be called when act != expct to determine whether to continue
+    // processing an input having type act
+    AllowAssignment( expct, act *QualifiedTypeName ) bool
 }
 
 type valueFieldTyper int
@@ -62,6 +66,12 @@ func ( i castInterfaceDefault ) CastAtomic(
     path objpath.PathNode ) ( Value, error, bool ) {
 
     return nil, nil, false
+}
+
+func ( i castInterfaceDefault ) AllowAssignment( 
+    expct, act *QualifiedTypeName ) bool {
+
+    return false
 }
 
 type CastReactor struct {
@@ -272,7 +282,8 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
         return cr.processMapStartWithAtomicType( me, at, callTyp, next )
     }
 
-    if at.Name.Equals( ss.Type ) || at.Equals( TypeValue ) {
+    if at.Name.Equals( ss.Type ) || at.Equals( TypeValue ) ||
+       cr.iface.AllowAssignment( at.Name.( *QualifiedTypeName ), ss.Type ) {
         return cr.completeStartStruct( ss, next )
     }
 

@@ -70,6 +70,11 @@ implements MingleValueReactorPipeline.Processor,
                     AtomicTypeReference at,
                     ObjectPath< MingleIdentifier > path )
             throws MingleValueCastException;
+        
+        public
+        boolean
+        allowAssign( QualifiedTypeName targ,
+                     QualifiedTypeName act );
     }
 
     private final static Delegate DEFAULT_DELEGATE = new Delegate() 
@@ -91,6 +96,14 @@ implements MingleValueReactorPipeline.Processor,
                     ObjectPath< MingleIdentifier > path )
         {
             return null;
+        }
+
+        public
+        boolean
+        allowAssign( QualifiedTypeName targ,
+                     QualifiedTypeName act )
+        {
+            return false;
         }
     };
 
@@ -453,8 +466,12 @@ implements MingleValueReactorPipeline.Processor,
             return;
         } 
 
-        if ( at.getName().equals( ev.structType() ) || 
-             at.equals( Mingle.TYPE_VALUE ) )
+        QualifiedTypeName act = ev.structType();
+        QualifiedTypeName targ = (QualifiedTypeName) at.getName();
+
+        if ( at.getName().equals( act ) || 
+             at.equals( Mingle.TYPE_VALUE ) ||
+             del.allowAssign( targ, act ) )
         {
             completeStartStruct( ev, next );
             return;

@@ -19,16 +19,6 @@ func ( dm *DefinitionMap ) setBuiltIn( qn *mg.QualifiedTypeName ) {
     dm.builtIn.Put( qn, true )
 }
 
-// package note: not safe to call before completion of package init
-func NewV1DefinitionMap() *DefinitionMap {
-    res := NewDefinitionMap()
-    res.MustAddFrom( coreTypesV1 )
-    coreTypesV1.EachDefinition( func( def Definition ) {
-        res.setBuiltIn( def.GetName() )
-    })
-    return res
-}
-
 func ( m *DefinitionMap ) Len() int { return m.m.Len() }
 
 func ( m *DefinitionMap ) GetOk( 
@@ -44,7 +34,7 @@ func ( m *DefinitionMap ) Get( qn *mg.QualifiedTypeName ) Definition {
 }
 
 func ( m *DefinitionMap ) MustGet( qn *mg.QualifiedTypeName ) Definition {
-    if res := m.Get( qn ); res != nil { return res }
+    if res, ok := m.GetOk( qn ); ok { return res }
     panic( libErrorf( "no definition for type: %s", qn ) )
 }
 
