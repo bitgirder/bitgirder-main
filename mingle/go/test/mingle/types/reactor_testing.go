@@ -1036,5 +1036,4 @@ func GetStdReactorTests() []interface{} {
 }
 
 // To add:
-//  - req/resp for inherited service ops
 //  - resp errors can also be declared in @security prototype
