@@ -111,7 +111,7 @@ func ( tc *ReactorTestCall ) callServiceResponse( st *ServiceResponseTest ) {
     chk := &responseCheck{ st: st, PathAsserter: tc.PathAsserter }
     svcDef := st.Definitions.MustGet( st.ServiceType ).( *ServiceDefinition )
     opDef := svcDef.mustFindOperation( st.Operation )
-    rct := NewResponseReactor( st.Definitions, opDef, chk )
+    rct := NewResponseReactor( st.Definitions, svcDef, opDef, chk )
     pip := mg.InitReactorPipeline( rct )
     tc.visitAndCheck( st.In, pip, chk, st.Error )
 }

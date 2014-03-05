@@ -843,7 +843,8 @@ func ( rti *rtInit ) addServiceResponseTests() {
     opIdStr := "op1"
     id := mg.MustIdentifier
     mkTyp := mg.MustTypeReference
-    svcType := mg.MustQualifiedTypeName( "ns1@v1/Service1" )
+    qn := mg.MustQualifiedTypeName
+    svcType := qn( "ns1@v1/Service1" )
     newRespTest := func( od *OperationDefinition ) *ServiceResponseTest {
         dm := MakeV1DefMap(
             MakeStructDef( 
@@ -862,8 +863,23 @@ func ( rti *rtInit ) addServiceResponseTests() {
                     MakeFieldDef( "f2", "ns1@v1/S1?", nil ),
                 },
             ),
+            MakeStructDef(
+                "ns1@v1/SecErr1",
+                "",
+                []*FieldDefinition{ MakeFieldDef( "f1", "Int32?", nil ) },
+            ),
             MakeEnumDef( "ns1@v1/E1", "e1" ),
-            MakeServiceDef( svcType.ExternalForm(), "", "", od ),
+            &PrototypeDefinition{
+                Name: qn( "ns1@v1/Sec1" ),
+                Signature: MakeCallSig(
+                    []*FieldDefinition{
+                        MakeFieldDef( "authentication", "Int32", nil ),
+                    },
+                    "Int32",
+                    []string{ "ns1@v1/SecErr1" },
+                ),
+            },
+            MakeServiceDef( svcType.ExternalForm(), "", "ns1@v1/Sec1", od ),
         )
         return &ServiceResponseTest{ 
             Definitions: dm,
@@ -908,6 +924,9 @@ func ( rti *rtInit ) addServiceResponseTests() {
     err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
     addErrSucc( err1, err1, "ns1@v1/Err1" )
     addErrSucc( err1, err1, "ns1@v1/Err1", "ns1@v1/Err2" )
+    secErr1 := mg.MustStruct( "ns1@v1/SecErr1", "f1", int32( 1 ) )
+    addErrSucc( secErr1, secErr1 )
+    addErrSucc( secErr1, secErr1, "ns1@v1/Err1" )
     // We're not really checking here that the error values are correct as
     // mingle struct values (most should have at least a 'message' field), only
     // that the types are allowed by the response cast even when not explicitly
@@ -992,6 +1011,11 @@ func ( rti *rtInit ) addServiceResponseTests() {
         errorForUnexpectedErrorType( pathErr, mkTyp( "ns1@v1/UndeclaredErr" ) ),
     )
     addErrFail(
+        mg.MustStruct( "ns1@v1/SecErr1", "not-a-field", int32( 1 ) ),
+        []string{},
+        mg.NewUnrecognizedFieldError( pathErr, id( "not-a-field" ) ),
+    )
+    addErrFail(
         int32( 1 ),
         []string{},
         errorForUnexpectedErrorType( pathErr, mg.TypeInt32 ),
@@ -1036,4 +1060,6 @@ func GetStdReactorTests() []interface{} {
 }
 
 // To add:
-//  - resp errors can also be declared in @security prototype
+//
+//  - subclass assignment at top level, in field value, as svc param, svc
+//  result, thrown error, and thrown error from auth

@@ -38,41 +38,6 @@ func ( ci defMapCastIface ) InferStructFor( qn *mg.QualifiedTypeName ) bool {
     return false
 }
 
-func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
-    flds := make( []*FieldSet, 0, 2 )
-    for {
-        flds = append( flds, sd.Fields )
-        spr := sd.GetSuperType()
-        if spr == nil { break }
-        if def, ok := dm.GetOk( spr ); ok {
-            if sd, ok = def.( *StructDefinition ); ! ok {
-                tmpl := "super type %s of %s is not a struct"
-                panic( libErrorf( tmpl, spr, sd.GetName() ) )
-            }
-        } else {
-            tmpl := "can't find super type %s of %s"
-            panic( libErrorf( tmpl, spr, sd.GetName() ) )
-        }
-    }
-    return flds
-}
-
-func expectAuthTypeOf( 
-    secQn *mg.QualifiedTypeName, dm *DefinitionMap ) mg.TypeReference {
-
-    if def, ok := dm.GetOk( secQn ); ok {
-        if protDef, ok := def.( *PrototypeDefinition ); ok {
-            flds := protDef.Signature.GetFields()
-            if fd := flds.Get( mg.IdAuthentication ); fd != nil {
-                return fd.Type
-            }
-            panic( libErrorf( "no auth for security: %s", secQn ) )
-        }
-        panic( libErrorf( "not a prototype: %s", secQn ) )
-    }
-    panic( libErrorf( "no such security def: %s", secQn ) )
-}
-
 type fieldTyper struct { 
     flds []*FieldSet 
     dm *DefinitionMap
@@ -556,6 +521,7 @@ type ResponseReactorInterface interface {
 
 type mgRespImpl struct {
     defs *DefinitionMap
+    svcDef *ServiceDefinition
     opDef *OperationDefinition
     iface ResponseReactorInterface
 }
@@ -572,35 +538,60 @@ func ( impl *mgRespImpl ) GetResultProcessor(
 }
 
 type errorProcReactor struct {
-    defs *DefinitionMap
-    throws []mg.TypeReference
+    impl *mgRespImpl
+    rct mg.ReactorEventProcessor
     proc mg.ReactorEventProcessor
 }
+//
+//func ( epr *errorProcReactor ) errorTypeForStruct( 
+//    qn *mg.QualifiedTypeName ) ( mg.TypeReference, bool ) {
+//
+//    if epr.impl.defs.HasBuiltInDefinition( qn ) {
+//        return &mg.AtomicTypeReference{ Name: qn }, true
+//    }
+//    if typ, ok := canThrowErrorOfType( qn, epr.impl.opDef.Signature ); ok {
+//        return typ, true
+//    }
+//    if secQn := epr.impl.svcDef.Security; secQn != nil {
+//        pd := expectProtoDef( secQn, epr.impl.defs )
+//        return canThrowErrorOfType( qn, pd.Signature )
+//    }
+//    return nil, false
+//}
 
 func ( epr *errorProcReactor ) errorTypeForStruct( 
     qn *mg.QualifiedTypeName ) ( mg.TypeReference, bool ) {
 
-    if epr.defs.HasBuiltInDefinition( qn ) {
+    if epr.impl.defs.HasBuiltInDefinition( qn ) {
         return &mg.AtomicTypeReference{ Name: qn }, true
     }
-    for _, typ := range epr.throws {
-        if mg.TypeNameIn( typ ).Equals( qn ) { return typ, true }
+    if typ, ok := canThrowErrorOfType( qn, epr.impl.opDef.Signature ); ok {
+        return typ, true
+    }
+    if secQn := epr.impl.svcDef.Security; secQn != nil {
+        pd := expectProtoDef( secQn, epr.impl.defs )
+        return canThrowErrorOfType( qn, pd.Signature )
     }
     return nil, false
 }
 
+func ( epr *errorProcReactor ) initProc( ev mg.ReactorEvent ) error {
+    if ss, ok := ev.( *mg.StructStartEvent ); ok {
+        if typ, ok := epr.errorTypeForStruct( ss.Type ); ok {
+            cr := newCastReactorDefinitionMap( typ, epr.impl.defs )
+            cr.skipPathSetter = true
+            epr.proc = mg.InitReactorPipeline( cr, epr.rct )
+            return nil
+        }
+        typ := ss.Type.AsAtomicType()
+        return errorForUnexpectedErrorType( ss.GetPath(), typ )
+    } 
+    return errorForUnexpectedErrorValue( ev )
+}
+
 func ( epr *errorProcReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
     if ( epr.proc == nil ) { 
-        if ss, ok := ev.( *mg.StructStartEvent ); ok {
-            if typ, ok := epr.errorTypeForStruct( ss.Type ); ok {
-                cr := newCastReactorDefinitionMap( typ, epr.defs )
-                cr.skipPathSetter = true
-                epr.proc = mg.InitReactorPipeline( cr )
-            } else {
-                typ := ss.Type.AsAtomicType()
-                return errorForUnexpectedErrorType( ss.GetPath(), typ )
-            }
-        } else { return errorForUnexpectedErrorValue( ev ) }
+        if err := epr.initProc( ev ); err != nil { return err }
     }
     return epr.proc.ProcessEvent( ev )
 }
@@ -610,15 +601,12 @@ func ( impl *mgRespImpl ) GetErrorProcessor(
 
     rct, err := impl.iface.GetErrorProcessor( p )
     if err != nil { return nil, err }
-    epr := &errorProcReactor{ 
-        defs: impl.defs, 
-        throws: impl.opDef.Signature.Throws,
-    }
-    return mg.InitReactorPipeline( epr, rct ), nil
+    return &errorProcReactor{ impl: impl, rct: rct }, nil
 }
 
 func NewResponseReactor(
     defs *DefinitionMap,
+    svcDef *ServiceDefinition,
     opDef *OperationDefinition,
     iface ResponseReactorInterface ) *mg.ServiceResponseReactor {
 
@@ -628,6 +616,7 @@ func NewResponseReactor(
         tmpl := "operation '%s' declares unrecognized return type: %s"
         panic( libErrorf( tmpl, opDef.Name, resTyp ) )
     }
-    mgIface := &mgRespImpl{ iface: iface, defs: defs, opDef: opDef }
+    mgIface := 
+        &mgRespImpl{ iface: iface, defs: defs, svcDef: svcDef, opDef: opDef }
     return mg.NewServiceResponseReactor( mgIface )
 }
