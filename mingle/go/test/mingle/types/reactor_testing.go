@@ -574,261 +574,261 @@ func ( rti *rtInit ) addDefaultPathTests() {
     )
 }
 
-//type ServiceMaps struct {
-//    Definitions *DefinitionMap
-//    ServiceIds *mg.IdentifierMap
-//}
-//
-//func ( sm *ServiceMaps ) BuildOpMap() *ServiceDefinitionMap {
-//    res := NewServiceDefinitionMap( sm.Definitions )
-//    sm.ServiceIds.EachPair( func( svcId *mg.Identifier, val interface{} ) {
-//        qn := val.( *mg.QualifiedTypeName )
-//        res.MustPut( qn.Namespace, svcId, qn )
-//    })
-//    return res
-//}
-//
-//type ServiceRequestTest struct {
-//    In mg.Value
-//    Maps *ServiceMaps 
-//    Parameters *mg.SymbolMap
-//    Authentication mg.Value
-//    Error error
-//}
-//
-//func ( rti *rtInit ) addServiceRequestTests() {
-//    id := mg.MustIdentifier
-//    dm := MakeV1DefMap(
-//        MakeStructDef( "ns1@v1/S1", "",
-//            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
-//        MakeStructDef( "ns1@v1/Auth1", "",
-//            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
-//        MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
-//        &PrototypeDefinition{
-//            Name: mg.MustQualifiedTypeName( "ns1@v1/Sec1" ),
-//            Signature: MakeCallSig(
-//                []*FieldDefinition{
-//                    MakeFieldDef(
-//                        "authentication",
-//                        "ns1@v1/Auth1",
-//                        nil,
-//                    ),
-//                },
-//                "Null",
-//                []string{},
-//            ),
-//        },
-//        MakeServiceDef(
-//            "ns1@v1/Service1", "", "",
-//            MakeOpDef( "op1",
-//                MakeCallSig(
-//                    []*FieldDefinition{ MakeFieldDef( "p1", "Int32?", nil ) },
-//                    "Null",
-//                    []string{},
-//                ),
-//            ),
-//            MakeOpDef( "op2",
-//                MakeCallSig( []*FieldDefinition{}, "Null", []string{} ) ),
-//            MakeOpDef( "op3",
-//                MakeCallSig(
-//                    []*FieldDefinition{
-//                        MakeFieldDef( "p1", "Int32", nil ),
-//                        MakeFieldDef( "p2", "Int32", nil ),
-//                    },
-//                    "Null",
-//                    []string{},
-//                ),
-//            ),
-//        ),
-//        MakeServiceDef(
-//            "ns1@v1/Service2", "", "ns1@v1/Sec1",
-//            MakeOpDef( "op1",
-//                MakeCallSig(
-//                    []*FieldDefinition{
-//                        MakeFieldDef( "p1", "Int32", int32( 42 ) ),
-//                        MakeFieldDef( 
-//                            "p2", 
-//                            "ns1@v1/E1", 
-//                            mg.MustEnum( "ns1@v1/E1", "e2" ),
-//                        ),
-//                        MakeFieldDef( "p3", "ns1@v1/S1?", nil ),
-//                        MakeFieldDef(
-//                            "p4",
-//                            "Int32+",
-//                            mg.MustList( 
-//                                int32( -3 ), int32( -2 ), int32( -1 ) ),
-//                        ),
-//                    },
-//                    "Null",
-//                    []string{},
-//                ),
-//            ),
-//        ),
-//    )
-//    svcIds := mg.NewIdentifierMap();
-//    svcIds.Put( id( "svc1" ), mg.MustQualifiedTypeName( "ns1@v1/Service1" ) )
-//    svcIds.Put( id( "svc2" ), mg.MustQualifiedTypeName( "ns1@v1/Service2" ) )
-//    maps := &ServiceMaps{ Definitions: dm, ServiceIds: svcIds }
-//    addSucc := func( in mg.Value, params *mg.SymbolMap, auth mg.Value ) {
-//        rti.addTests(
-//            &ServiceRequestTest{
-//                Maps: maps,
-//                In: in,
-//                Parameters: params,
-//                Authentication: auth,
-//            },
-//        )
-//    }
-//    addErr := func( in mg.Value, err error ) {
-//        rti.addTests( &ServiceRequestTest{ In: in, Maps: maps, Error: err } )
-//    }
-//    pathParams := objpath.RootedAt( mg.IdParameters )
-//    pathAuth := objpath.RootedAt( mg.IdAuthentication )
-//    mkReq := func( 
-//        ns, svc, op string, params, auth interface{} ) *mg.SymbolMap {
-//        pairs := []interface{}{
-//            mg.IdNamespace, ns,
-//            mg.IdService, svc,
-//            mg.IdOperation, op,
-//        }
-//        if params != nil { 
-//            pairs = append( pairs, mg.IdParameters, mg.MustValue( params ) )
-//        }
-//        if auth != nil {
-//            pairs = append( pairs, mg.IdAuthentication, mg.MustValue( auth ) )
-//        }
-//        return mg.MustSymbolMap( pairs... )
-//    }
-//    addSucc( 
-//        mkReq( "ns1@v1", "svc1", "op1", mg.MustSymbolMap( "p1", "1" ), "1" ),
-//        mg.MustSymbolMap( "p1", int32( 1 ) ),
-//        nil,
-//    )
-//    addSucc(
-//        mkReq( "ns1@v1", "svc1", "op1", nil, nil ),
-//        mg.MustSymbolMap(),
-//        nil,
-//    )
-//    svc2Op1Params1 := mg.MustSymbolMap(
-//        "p1", int32( 1 ),
-//        "p2", mg.MustEnum( "ns1@v1/E1", "e1" ),
-//        "p3", mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
-//        "p4", mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) ),
-//    )
-//    svc2Op1ParamsDefl := func( extra ...interface{} ) *mg.SymbolMap {
-//        pairs := []interface{}{
-//            "p1", int32( 42 ),
-//            "p2", mg.MustEnum( "ns1@v1/E1", "e2" ),
-//            "p4", mg.MustList( int32( -3 ), int32( -2 ), int32( -1 ) ),
-//        }
-//        pairs = append( pairs, extra... )
-//        return mg.MustSymbolMap( pairs... )
-//    }
-//    auth1Val1 := mg.MustStruct( "ns1@v1/Auth1", "f1", int32( 1 ) )
-//    addSucc(
-//        mkReq( 
-//            "ns1@v1", "svc2", "op1",
-//             mg.MustSymbolMap(
-//                "p1", "1",
-//                "p2", "e1",
-//                "p3", mg.MustSymbolMap( "f1", "1" ),
-//                "p4", mg.MustList( int64( 1 ), "2", int32( 3 ) ),
-//            ),
-//            mg.MustSymbolMap( "f1", "1" ),
-//        ),
-//        svc2Op1Params1,
-//        auth1Val1,
-//    )
-//    addSucc(
-//        mkReq( "ns1@v1", "svc2", "op1", nil, auth1Val1 ),
-//        svc2Op1ParamsDefl(),
-//        auth1Val1,
-//    )
-//    addSucc(
-//        mkReq( "ns1@v1", "svc2", "op1", 
-//            mg.MustSymbolMap( "p3", mg.MustStruct( "ns1@v1/S1", "f1", "1" ) ),
-//            auth1Val1,
-//        ),
-//        svc2Op1ParamsDefl( 
-//            "p3", mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
-//        auth1Val1,
-//    )
-//    addSucc(
-//        mkReq( "ns1@v1", "svc1", "op2", mg.MustSymbolMap(), nil ),
-//        mg.MustSymbolMap(), 
-//        nil,
-//    )
-//    addSucc(
-//        mkReq( "ns1@v1", "svc1", "op2", nil, nil ), 
-//        mg.MustSymbolMap(),
-//        nil,
-//    )
-//    addSucc(
-//        mkReq( "ns1@v1", "svc1", "op2", nil, int32( 1 ) ),
-//        mg.MustSymbolMap(),
-//        nil,
-//    )
-//    addErr(
-//        mkReq( "ns1@v1", "svc2", "op1", mg.MustSymbolMap(), nil ),
-//        mg.NewMissingFieldsError( 
-//            nil, []*mg.Identifier{ mg.IdAuthentication } ),
-//    )
-//    addErr(
-//        mkReq( 
-//            "ns1@v1", "svc2", "op1", 
-//            mg.MustSymbolMap( "p1", []byte{} ), 
-//            auth1Val1,
-//        ),
-//        newTcErr( 
-//            mg.TypeInt32, mg.TypeBuffer, pathParams.Descend( id( "p1" ) ) ),
-//    )
-//    addErr(
-//        mkReq( 
-//            "ns1@v1", "svc2", "op1", 
-//            mg.MustSymbolMap( "p2", "bad" ), 
-//            auth1Val1,
-//        ),
-//        newVcErr( 
-//            pathParams.Descend( id( "p2" ) ), 
-//            "illegal value for enum ns1@v1/E1: bad",
-//        ),
-//    )
-//    addErr(
-//        mkReq( 
-//            "ns1@v1", "svc2", "op1", 
-//            svc2Op1Params1, 
-//            mg.MustStruct( "ns1@v1/Auth2" ),
-//        ),
-//        newTcErr( "ns1@v1/Auth1", "ns1@v1/Auth2", pathAuth ),
-//    )
-//    addErr(
-//        mkReq( "ns1@v1", "svc1", "op1", 
-//            mg.MustSymbolMap( "not-a-field", false ),
-//            int32( 1 ),
-//        ),
-//        mg.NewUnrecognizedFieldError( pathParams, id( "not-a-field" ) ),
-//    ) 
-//    addErr(
-//        mkReq( "ns1@v1", "svc1", "op3", nil, nil ),
-//        mg.NewMissingFieldsError( pathParams, makeIdList( "p1", "p2" ) ),
-//    )
-//    addErr(
-//        mkReq( "ns1@v2", "svc1", "op1", nil, nil ),
-//        mg.NewEndpointErrorNamespace( 
-//            mg.MustNamespace( "ns1@v2" ), objpath.RootedAt( mg.IdNamespace ) ),
-//    )
-//    addErr(
-//        mkReq( "ns1@v1", "svc3", "op1", nil, nil ),
-//        mg.NewEndpointErrorService( 
-//            mg.MustIdentifier( "svc3" ), objpath.RootedAt( mg.IdService ) ),
-//    )
-//    addErr(
-//        mkReq( "ns1@v1", "svc1", "badOp", nil, nil ),
-//        mg.NewEndpointErrorOperation( 
-//            mg.MustIdentifier( "badOp" ), objpath.RootedAt( mg.IdOperation ) ),
-//    )
-//}
-//
+type ServiceMaps struct {
+    Definitions *DefinitionMap
+    ServiceIds *mg.IdentifierMap
+}
+
+func ( sm *ServiceMaps ) BuildOpMap() *ServiceDefinitionMap {
+    res := NewServiceDefinitionMap( sm.Definitions )
+    sm.ServiceIds.EachPair( func( svcId *mg.Identifier, val interface{} ) {
+        qn := val.( *mg.QualifiedTypeName )
+        res.MustPut( qn.Namespace, svcId, qn )
+    })
+    return res
+}
+
+type ServiceRequestTest struct {
+    In mg.Value
+    Maps *ServiceMaps 
+    Parameters *mg.SymbolMap
+    Authentication mg.Value
+    Error error
+}
+
+func ( rti *rtInit ) addServiceRequestTests() {
+    id := mg.MustIdentifier
+    dm := MakeV1DefMap(
+        MakeStructDef( "ns1@v1/S1", "",
+            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
+        MakeStructDef( "ns1@v1/Auth1", "",
+            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
+        MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
+        &PrototypeDefinition{
+            Name: mg.MustQualifiedTypeName( "ns1@v1/Sec1" ),
+            Signature: MakeCallSig(
+                []*FieldDefinition{
+                    MakeFieldDef(
+                        "authentication",
+                        "ns1@v1/Auth1",
+                        nil,
+                    ),
+                },
+                "Null",
+                []string{},
+            ),
+        },
+        MakeServiceDef(
+            "ns1@v1/Service1", "", "",
+            MakeOpDef( "op1",
+                MakeCallSig(
+                    []*FieldDefinition{ MakeFieldDef( "p1", "Int32?", nil ) },
+                    "Null",
+                    []string{},
+                ),
+            ),
+            MakeOpDef( "op2",
+                MakeCallSig( []*FieldDefinition{}, "Null", []string{} ) ),
+            MakeOpDef( "op3",
+                MakeCallSig(
+                    []*FieldDefinition{
+                        MakeFieldDef( "p1", "Int32", nil ),
+                        MakeFieldDef( "p2", "Int32", nil ),
+                    },
+                    "Null",
+                    []string{},
+                ),
+            ),
+        ),
+        MakeServiceDef(
+            "ns1@v1/Service2", "", "ns1@v1/Sec1",
+            MakeOpDef( "op1",
+                MakeCallSig(
+                    []*FieldDefinition{
+                        MakeFieldDef( "p1", "Int32", int32( 42 ) ),
+                        MakeFieldDef( 
+                            "p2", 
+                            "ns1@v1/E1", 
+                            mg.MustEnum( "ns1@v1/E1", "e2" ),
+                        ),
+                        MakeFieldDef( "p3", "ns1@v1/S1?", nil ),
+                        MakeFieldDef(
+                            "p4",
+                            "Int32+",
+                            mg.MustList( 
+                                int32( -3 ), int32( -2 ), int32( -1 ) ),
+                        ),
+                    },
+                    "Null",
+                    []string{},
+                ),
+            ),
+        ),
+    )
+    svcIds := mg.NewIdentifierMap();
+    svcIds.Put( id( "svc1" ), mg.MustQualifiedTypeName( "ns1@v1/Service1" ) )
+    svcIds.Put( id( "svc2" ), mg.MustQualifiedTypeName( "ns1@v1/Service2" ) )
+    maps := &ServiceMaps{ Definitions: dm, ServiceIds: svcIds }
+    addSucc := func( in mg.Value, params *mg.SymbolMap, auth mg.Value ) {
+        rti.addTests(
+            &ServiceRequestTest{
+                Maps: maps,
+                In: in,
+                Parameters: params,
+                Authentication: auth,
+            },
+        )
+    }
+    addErr := func( in mg.Value, err error ) {
+        rti.addTests( &ServiceRequestTest{ In: in, Maps: maps, Error: err } )
+    }
+    pathParams := objpath.RootedAt( mg.IdParameters )
+    pathAuth := objpath.RootedAt( mg.IdAuthentication )
+    mkReq := func( 
+        ns, svc, op string, params, auth interface{} ) *mg.SymbolMap {
+        pairs := []interface{}{
+            mg.IdNamespace, ns,
+            mg.IdService, svc,
+            mg.IdOperation, op,
+        }
+        if params != nil { 
+            pairs = append( pairs, mg.IdParameters, mg.MustValue( params ) )
+        }
+        if auth != nil {
+            pairs = append( pairs, mg.IdAuthentication, mg.MustValue( auth ) )
+        }
+        return mg.MustSymbolMap( pairs... )
+    }
+    addSucc( 
+        mkReq( "ns1@v1", "svc1", "op1", mg.MustSymbolMap( "p1", "1" ), "1" ),
+        mg.MustSymbolMap( "p1", int32( 1 ) ),
+        nil,
+    )
+    addSucc(
+        mkReq( "ns1@v1", "svc1", "op1", nil, nil ),
+        mg.MustSymbolMap(),
+        nil,
+    )
+    svc2Op1Params1 := mg.MustSymbolMap(
+        "p1", int32( 1 ),
+        "p2", mg.MustEnum( "ns1@v1/E1", "e1" ),
+        "p3", mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        "p4", mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) ),
+    )
+    svc2Op1ParamsDefl := func( extra ...interface{} ) *mg.SymbolMap {
+        pairs := []interface{}{
+            "p1", int32( 42 ),
+            "p2", mg.MustEnum( "ns1@v1/E1", "e2" ),
+            "p4", mg.MustList( int32( -3 ), int32( -2 ), int32( -1 ) ),
+        }
+        pairs = append( pairs, extra... )
+        return mg.MustSymbolMap( pairs... )
+    }
+    auth1Val1 := mg.MustStruct( "ns1@v1/Auth1", "f1", int32( 1 ) )
+    addSucc(
+        mkReq( 
+            "ns1@v1", "svc2", "op1",
+             mg.MustSymbolMap(
+                "p1", "1",
+                "p2", "e1",
+                "p3", mg.MustSymbolMap( "f1", "1" ),
+                "p4", mg.MustList( int64( 1 ), "2", int32( 3 ) ),
+            ),
+            mg.MustSymbolMap( "f1", "1" ),
+        ),
+        svc2Op1Params1,
+        auth1Val1,
+    )
+    addSucc(
+        mkReq( "ns1@v1", "svc2", "op1", nil, auth1Val1 ),
+        svc2Op1ParamsDefl(),
+        auth1Val1,
+    )
+    addSucc(
+        mkReq( "ns1@v1", "svc2", "op1", 
+            mg.MustSymbolMap( "p3", mg.MustStruct( "ns1@v1/S1", "f1", "1" ) ),
+            auth1Val1,
+        ),
+        svc2Op1ParamsDefl( 
+            "p3", mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
+        auth1Val1,
+    )
+    addSucc(
+        mkReq( "ns1@v1", "svc1", "op2", mg.MustSymbolMap(), nil ),
+        mg.MustSymbolMap(), 
+        nil,
+    )
+    addSucc(
+        mkReq( "ns1@v1", "svc1", "op2", nil, nil ), 
+        mg.MustSymbolMap(),
+        nil,
+    )
+    addSucc(
+        mkReq( "ns1@v1", "svc1", "op2", nil, int32( 1 ) ),
+        mg.MustSymbolMap(),
+        nil,
+    )
+    addErr(
+        mkReq( "ns1@v1", "svc2", "op1", mg.MustSymbolMap(), nil ),
+        mg.NewMissingFieldsError( 
+            nil, []*mg.Identifier{ mg.IdAuthentication } ),
+    )
+    addErr(
+        mkReq( 
+            "ns1@v1", "svc2", "op1", 
+            mg.MustSymbolMap( "p1", []byte{} ), 
+            auth1Val1,
+        ),
+        newTcErr( 
+            mg.TypeInt32, mg.TypeBuffer, pathParams.Descend( id( "p1" ) ) ),
+    )
+    addErr(
+        mkReq( 
+            "ns1@v1", "svc2", "op1", 
+            mg.MustSymbolMap( "p2", "bad" ), 
+            auth1Val1,
+        ),
+        newVcErr( 
+            pathParams.Descend( id( "p2" ) ), 
+            "illegal value for enum ns1@v1/E1: bad",
+        ),
+    )
+    addErr(
+        mkReq( 
+            "ns1@v1", "svc2", "op1", 
+            svc2Op1Params1, 
+            mg.MustStruct( "ns1@v1/Auth2" ),
+        ),
+        newTcErr( "ns1@v1/Auth1", "ns1@v1/Auth2", pathAuth ),
+    )
+    addErr(
+        mkReq( "ns1@v1", "svc1", "op1", 
+            mg.MustSymbolMap( "not-a-field", false ),
+            int32( 1 ),
+        ),
+        mg.NewUnrecognizedFieldError( pathParams, id( "not-a-field" ) ),
+    ) 
+    addErr(
+        mkReq( "ns1@v1", "svc1", "op3", nil, nil ),
+        mg.NewMissingFieldsError( pathParams, makeIdList( "p1", "p2" ) ),
+    )
+    addErr(
+        mkReq( "ns1@v2", "svc1", "op1", nil, nil ),
+        mg.NewEndpointErrorNamespace( 
+            mg.MustNamespace( "ns1@v2" ), objpath.RootedAt( mg.IdNamespace ) ),
+    )
+    addErr(
+        mkReq( "ns1@v1", "svc3", "op1", nil, nil ),
+        mg.NewEndpointErrorService( 
+            mg.MustIdentifier( "svc3" ), objpath.RootedAt( mg.IdService ) ),
+    )
+    addErr(
+        mkReq( "ns1@v1", "svc1", "badOp", nil, nil ),
+        mg.NewEndpointErrorOperation( 
+            mg.MustIdentifier( "badOp" ), objpath.RootedAt( mg.IdOperation ) ),
+    )
+}
+
 //type ServiceResponseTest struct {
 //    Definitions *DefinitionMap
 //    ServiceType *mg.QualifiedTypeName
@@ -1022,7 +1022,7 @@ func ( rti *rtInit ) init() {
     rti.addDeepCatchallTests()
     rti.addDefaultCastTests()
     rti.addDefaultPathTests()
-//    rti.addServiceRequestTests()
+    rti.addServiceRequestTests()
 //    rti.addServiceResponseTests()
 }
 

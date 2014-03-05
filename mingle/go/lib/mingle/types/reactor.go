@@ -18,10 +18,16 @@ func newUnrecognizedTypeError(
     return mg.NewValueCastErrorf( p, "unrecognized type: %s", qn )
 }
 
-//// A synthetic type which we use along with a mingle.CastReactor to cast request
-//// parameter maps to conform to their respective OperationDefinitions
-//var typeTypedParameterMap = 
-//    mg.MustQualifiedTypeName( "mingle:types@v1/TypedParameterMap" )
+// A synthetic type which we use along with a mingle.CastReactor to cast request
+// parameter maps to conform to their respective OperationDefinitions
+var qnTypedParameterMap *mg.QualifiedTypeName
+var typTypedParameterMap *mg.AtomicTypeReference
+
+func init() {
+    qnTypedParameterMap = 
+        mg.MustQualifiedTypeName( "mingle:types@v1/TypedParameterMap" )
+    typTypedParameterMap = qnTypedParameterMap.AsAtomicType()
+}
 
 type defMapCastIface struct { dm *DefinitionMap }
 
@@ -62,22 +68,23 @@ func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
 //    if def, ok := dm.GetOk( qn ); ok { return def }
 //    panic( libErrorf( "map has no definition for type %s", qn ) )
 //}
-//
-//func expectAuthTypeOf( 
-//    secQn *mg.QualifiedTypeName, dm *DefinitionMap ) mg.TypeReference {
-//    if def, ok := dm.GetOk( secQn ); ok {
-//        if protDef, ok := def.( *PrototypeDefinition ); ok {
-//            flds := protDef.Signature.GetFields()
-//            if fd := flds.Get( mg.IdAuthentication ); fd != nil {
-//                return fd.Type
-//            }
-//            panic( libErrorf( "No auth for security: %s", secQn ) )
-//        }
-//        panic( libErrorf( "Not a prototype: %s", secQn ) )
-//    }
-//    panic( libErrorf( "No such security def: %s", secQn ) )
-//}
-//
+
+func expectAuthTypeOf( 
+    secQn *mg.QualifiedTypeName, dm *DefinitionMap ) mg.TypeReference {
+
+    if def, ok := dm.GetOk( secQn ); ok {
+        if protDef, ok := def.( *PrototypeDefinition ); ok {
+            flds := protDef.Signature.GetFields()
+            if fd := flds.Get( mg.IdAuthentication ); fd != nil {
+                return fd.Type
+            }
+            panic( libErrorf( "no auth for security: %s", secQn ) )
+        }
+        panic( libErrorf( "not a prototype: %s", secQn ) )
+    }
+    panic( libErrorf( "no such security def: %s", secQn ) )
+}
+
 //func valDefOf( fd *FieldDefinition, dm *DefinitionMap ) Definition {
 //    qn := typeNameIn( fd )
 //    return expectDef( dm, qn )
@@ -175,18 +182,26 @@ type fieldSetGetter interface {
         qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error )
 }
 
+func fieldSetsForTypeInDefMap(
+    qn *mg.QualifiedTypeName, 
+    dm *DefinitionMap, 
+    path objpath.PathNode ) ( []*FieldSet, error ) {
+
+    if def, ok := dm.GetOk( qn ); ok {
+        if sd, ok := def.( *StructDefinition ); ok {
+            return collectFieldSets( sd, dm ), nil
+        } 
+        return nil, notAStructError( path, qn )
+    } 
+    return nil, newUnrecognizedTypeError( path, qn )
+}
+
 type defMapFieldSetGetter struct { dm *DefinitionMap }
 
 func ( fsg defMapFieldSetGetter ) getFieldSets(
     qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error ) {
 
-    if def, ok := fsg.dm.GetOk( qn ); ok {
-        if sd, ok := def.( *StructDefinition ); ok {
-            return collectFieldSets( sd, fsg.dm ), nil
-        } 
-        return nil, notAStructError( path, qn )
-    } 
-    return nil, newUnrecognizedTypeError( path, qn )
+    return fieldSetsForTypeInDefMap( qn, fsg.dm, path )
 }
 
 type castReactor struct {
@@ -195,10 +210,13 @@ type castReactor struct {
     dm *DefinitionMap
     fsg fieldSetGetter
     stack *stack.Stack
+    skipPathSetter bool
 }
 
 func ( cr *castReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    pip.Add( mg.NewCastReactor( cr.typ, cr.iface ) )
+    mgCastRct := mg.NewCastReactor( cr.typ, cr.iface )
+    mgCastRct.SkipPathSetter = cr.skipPathSetter
+    pip.Add( mgCastRct )
 }
 
 type fieldCtx struct {
@@ -345,7 +363,7 @@ func newCastReactorBase(
     typ mg.TypeReference, 
     iface mg.CastInterface,
     dm *DefinitionMap, 
-    fsg fieldSetGetter ) mg.PipelineProcessor {
+    fsg fieldSetGetter ) *castReactor {
 
     return &castReactor{ 
         typ: typ,
@@ -398,137 +416,165 @@ func NewCastReactorDefinitionMap(
 //    }
 //    return nil
 //}
-//
-//type OpMatch interface {
-//}
-//
-//type RequestReactorInterface interface {
-//
-//    GetAuthenticationProcessor( 
-//        om OpMatch, pg mg.PathGetter ) ( mg.ReactorEventProcessor, error )
-//
-//    GetParametersProcessor(
-//        om OpMatch, pg mg.PathGetter ) ( mg.ReactorEventProcessor, error )
-//}
-//
-//type mgReqImpl struct {
-//
-//    *opMatcher
-//    iface RequestReactorInterface
-//
-//    sawAuth bool
-//}
-//
-//func ( impl *mgReqImpl ) needsAuth() bool { return impl.sd.Security != nil }
-//
-//func ( impl *mgReqImpl ) GetAuthenticationProcessor( 
-//    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
-//    impl.sawAuth = true
-//    pg = mg.ImmediatePathGetter{ pg.GetPath() }
-//    if secQn := impl.sd.Security; secQn != nil { 
-//        authTyp := expectAuthTypeOf( secQn, impl.defMap() )
-//        dm := impl.defMap()
-//        fsg := defMapFieldSetGetter{ dm }
-//        cr := newCastReactor( authTyp, defMapCastIface{ dm }, dm, fsg, pg )
-//        authRct, err := 
-//            impl.iface.GetAuthenticationProcessor( impl.opMatcher, pg )
-//        if err != nil { return nil, err }
-//        return mg.InitReactorPipeline( cr, authRct ), nil
-//    }
-//    return mg.DiscardProcessor, nil
-//}
-//
-//type parametersCastIface struct {
-//    ci defMapCastIface
-//    opDef *OperationDefinition
-//    defs *DefinitionMap
-//}
-//
-//func ( pi parametersCastIface ) InferStructFor( 
-//    qn *mg.QualifiedTypeName ) bool {
-//    if qn.Equals( typeTypedParameterMap ) { return true }
-//    return pi.ci.InferStructFor( qn )
-//}
-//
-//func ( pi parametersCastIface ) fieldSets() []*FieldSet {
-//    return []*FieldSet{ pi.opDef.Signature.Fields }
-//}
-//
-//func ( pi parametersCastIface ) FieldTyperFor(
-//    qn *mg.QualifiedTypeName, pg mg.PathGetter ) ( mg.FieldTyper, error ) {
-//    if qn.Equals( typeTypedParameterMap ) { 
-//        return fieldTyper{ flds: pi.fieldSets(), dm: pi.defs }, nil
-//    }
-//    return pi.ci.FieldTyperFor( qn, pg )
-//}
-//
-//func ( pi parametersCastIface ) CastAtomic(
-//    in mg.Value, 
-//    at *mg.AtomicTypeReference, 
-//    pg mg.PathGetter ) ( mg.Value, error, bool ) {
-//    return pi.ci.CastAtomic( in, at, pg )
-//}
-//
-//func ( pi parametersCastIface ) getFieldSets(
-//    qn *mg.QualifiedTypeName, pg mg.PathGetter ) ( []*FieldSet, error ) {
-//    if qn.Equals( typeTypedParameterMap ) { return pi.fieldSets(), nil }
-//    return ( defMapFieldSetGetter{ pi.defs } ).getFieldSets( qn, pg )
-//}
-//
-//type parametersReactor struct { rep mg.ReactorEventProcessor }
-//
-//func ( pr parametersReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
-//    if ss, ok := ev.( mg.StructStartEvent ); ok {
-//        if ss.Type.Equals( typeTypedParameterMap ) { ev = mg.NewMapStartEvent() }
-//    }
-//    return pr.rep.ProcessEvent( ev )
-//}
-//
-//func ( impl *mgReqImpl ) checkGotAuth( pg mg.PathGetter ) error {
-//    if impl.needsAuth() {
-//        if ! impl.sawAuth {
-//            // take parent since pg itself will be at 'parameters'
-//            path := objpath.ParentOf( pg.GetPath() )
-//            flds := []*mg.Identifier{ mg.IdAuthentication }
-//            return mg.NewMissingFieldsError( path, flds )
-//        }
-//    }
-//    return nil
-//}
-//
-//func ( impl *mgReqImpl ) GetParametersProcessor(
-//    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
-//    if err := impl.checkGotAuth( pg ); err != nil { return nil, err }
-//    pg = mg.ImmediatePathGetter{ pg.GetPath() }
-//    dm := impl.defMap()
-//    pci := parametersCastIface{ 
-//        ci: defMapCastIface{ dm },
-//        defs: dm,
-//        opDef: impl.opDef,
-//    }
-//    typ := typeTypedParameterMap.AsAtomicType()
-//    cr := newCastReactor( typ, pci, dm, pci, pg )
-//    rep, err := impl.iface.GetParametersProcessor( impl.opMatcher, pg )
-//    if err != nil { return nil, err }
-//    paramsRct := parametersReactor{ rep }
-//    return mg.InitReactorPipeline( 
-//        cr, 
-////        mg.NewDebugReactor( mg.DebugLoggerFunc( log.Printf ) ),
-//        paramsRct,
-//    ), nil
-//}
-//
-//func NewRequestReactor( 
-//    svcDefs *ServiceDefinitionMap, 
-//    iface RequestReactorInterface ) *mg.ServiceRequestReactor {
-//    return mg.NewServiceRequestReactor(
-//        &mgReqImpl{ 
-//            opMatcher: &opMatcher{ svcDefs: svcDefs },
-//            iface: iface,
-//        },
-//    )
-//}
-//
+
+type RequestReactorInterface interface {
+
+    GetAuthenticationProcessor( 
+        path objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+
+    GetParametersProcessor(
+        path objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+}
+
+type mgReqImpl struct {
+
+    svcDefs *ServiceDefinitionMap
+
+    ns *mg.Namespace
+    sd *ServiceDefinition
+    opDef *OperationDefinition
+
+    iface RequestReactorInterface
+
+    sawAuth bool
+}
+
+func ( impl *mgReqImpl ) defMap() *DefinitionMap {
+    return impl.svcDefs.GetDefinitionMap()
+}
+
+func ( impl *mgReqImpl ) Namespace( 
+    ns *mg.Namespace, p objpath.PathNode ) error {
+
+    if ! impl.svcDefs.HasNamespace( ns ) {
+        return mg.NewEndpointErrorNamespace( ns, p )
+    }
+    impl.ns = ns
+    return nil
+}
+
+func ( impl *mgReqImpl ) Service( 
+    svc *mg.Identifier, p objpath.PathNode ) error {
+
+    if sd, ok := impl.svcDefs.GetOk( impl.ns, svc ); ok {
+        impl.sd = sd
+        return nil
+    }
+    return mg.NewEndpointErrorService( svc, p )
+}
+
+func ( impl *mgReqImpl ) Operation( 
+    op *mg.Identifier, p objpath.PathNode ) error {
+
+    if impl.opDef = impl.sd.findOperation( op ); impl.opDef == nil {
+        return mg.NewEndpointErrorOperation( op, p )
+    }
+    return nil
+}
+
+func ( impl *mgReqImpl ) needsAuth() bool { return impl.sd.Security != nil }
+
+func ( impl *mgReqImpl ) GetAuthenticationProcessor( 
+    path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+
+    impl.sawAuth = true
+    if secQn := impl.sd.Security; secQn != nil { 
+        authTyp := expectAuthTypeOf( secQn, impl.defMap() )
+        cr := NewCastReactorDefinitionMap( authTyp, impl.defMap() )
+        authRct, err := impl.iface.GetAuthenticationProcessor( path )
+        if err != nil { return nil, err }
+        return mg.InitReactorPipeline( cr, authRct ), nil
+    }
+    return mg.DiscardProcessor, nil
+}
+
+type parametersCastIface struct {
+    ci defMapCastIface
+    opDef *OperationDefinition
+    defs *DefinitionMap
+}
+
+func ( pi parametersCastIface ) InferStructFor( 
+    qn *mg.QualifiedTypeName ) bool {
+
+    if qn.Equals( qnTypedParameterMap ) { return true }
+    return pi.ci.InferStructFor( qn )
+}
+
+func ( pi parametersCastIface ) fieldSets() []*FieldSet {
+    return []*FieldSet{ pi.opDef.Signature.Fields }
+}
+
+func ( pi parametersCastIface ) FieldTyperFor(
+    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( mg.FieldTyper, error ) {
+
+    if qn.Equals( qnTypedParameterMap ) { 
+        return fieldTyper{ flds: pi.fieldSets(), dm: pi.defs }, nil
+    }
+    return pi.ci.FieldTyperFor( qn, path )
+}
+
+func ( pi parametersCastIface ) CastAtomic(
+    in mg.Value, 
+    at *mg.AtomicTypeReference, 
+    path objpath.PathNode ) ( mg.Value, error, bool ) {
+
+    return pi.ci.CastAtomic( in, at, path )
+}
+
+func ( pi parametersCastIface ) getFieldSets(
+    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error ) {
+
+    if qn.Equals( qnTypedParameterMap ) { return pi.fieldSets(), nil }
+    return fieldSetsForTypeInDefMap( qn, pi.defs, path )
+}
+
+type parametersReactor struct { rep mg.ReactorEventProcessor }
+
+func ( pr parametersReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
+    ev2 := ev
+    if ss, ok := ev.( *mg.StructStartEvent ); ok {
+        if ss.Type.Equals( qnTypedParameterMap ) { 
+            ev2 = mg.NewMapStartEvent() 
+            ev2.SetPath( ev.GetPath() )
+        }
+    }
+    return pr.rep.ProcessEvent( ev2 )
+}
+
+// If we return an error we use the parent of path, since path will be
+// positioned at the 'parameters' field, from which we call this func.
+func ( impl *mgReqImpl ) checkGotAuth( path objpath.PathNode ) error {
+    if impl.sawAuth || ( ! impl.needsAuth() ) { return nil }
+    flds := []*mg.Identifier{ mg.IdAuthentication }
+    par := objpath.ParentOf( path )
+    return mg.NewMissingFieldsError( par, flds )
+}
+
+func ( impl *mgReqImpl ) GetParametersProcessor(
+    path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+
+    if err := impl.checkGotAuth( path ); err != nil { return nil, err }
+    typ := typTypedParameterMap
+    dm := impl.defMap()
+    ci := defMapCastIface{ impl.defMap() }
+    pci := parametersCastIface{ ci: ci, defs: ci.dm, opDef: impl.opDef }
+    cr := newCastReactorBase( typ, pci, dm, pci )
+    cr.skipPathSetter = true
+    proc, err := impl.iface.GetParametersProcessor( path )
+    if err != nil { return nil, err }
+    paramsRct := parametersReactor{ proc }
+    return mg.InitReactorPipeline( cr, paramsRct ), nil
+}
+
+func NewRequestReactor( 
+    svcDefs *ServiceDefinitionMap, 
+    iface RequestReactorInterface ) *mg.ServiceRequestReactor {
+
+    reqImpl := &mgReqImpl{ svcDefs: svcDefs, iface: iface }
+    return mg.NewServiceRequestReactor( reqImpl )
+}
+
 //type errorProcReactor struct {
 //    defs *DefinitionMap
 //    throws []mg.TypeReference

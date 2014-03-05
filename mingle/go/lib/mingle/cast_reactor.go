@@ -67,6 +67,7 @@ func ( i castInterfaceDefault ) CastAtomic(
 type CastReactor struct {
     iface CastInterface
     stack *stack.Stack
+    SkipPathSetter bool
 }
 
 func NewCastReactor( expct TypeReference, iface CastInterface ) *CastReactor {
@@ -81,7 +82,7 @@ func NewDefaultCastReactor( expct TypeReference ) *CastReactor {
 
 func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     EnsureStructuralReactor( pip )
-    EnsurePathSettingProcessor( pip )
+    if ! cr.SkipPathSetter { EnsurePathSettingProcessor( pip ) }
 }
 
 type listCast struct {

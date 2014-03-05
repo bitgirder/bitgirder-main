@@ -56,6 +56,7 @@ type ServiceRequestReactor struct {
 
 func NewServiceRequestReactor( 
     iface ServiceRequestReactorInterface ) *ServiceRequestReactor {
+
     return &ServiceRequestReactor{ iface: iface }
 }
 
