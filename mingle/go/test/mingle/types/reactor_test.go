@@ -79,43 +79,42 @@ func ( tc *ReactorTestCall ) callServiceRequest( st *ServiceRequestTest ) {
     chk := &requestCheck{ st: st, PathAsserter: tc.PathAsserter }
     rct := NewRequestReactor( st.Maps.BuildOpMap(), chk )
     pip := mg.InitReactorPipeline( rct )
-//    tc.Logf( "Feeding request: %s", mg.QuoteValue( st.In ) )
     tc.visitAndCheck( st.In, pip, chk, st.Error )
 }
 
-//type responseCheck struct {
-//    st *ServiceResponseTest
-//    *assert.PathAsserter
-//    resultProc, errorProc *mg.ValueBuilder
-//}
-//
-//func ( chk *responseCheck ) GetResultProcessor( 
-//    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
-//    chk.resultProc = mg.NewValueBuilder()
-//    return chk.resultProc, nil
-//}
-//
-//func ( chk *responseCheck ) GetErrorProcessor( 
-//    pg mg.PathGetter ) ( mg.ReactorEventProcessor, error ) {
-//    chk.errorProc = mg.NewValueBuilder()
-//    return chk.errorProc, nil
-//}
-//
-//func ( chk *responseCheck ) check() {
-//    mg.CheckBuiltValue( 
-//        chk.st.ResultValue, chk.resultProc, chk.Descend( "result" ) )
-//    mg.CheckBuiltValue( 
-//        chk.st.ErrorValue, chk.errorProc, chk.Descend( "error" ) )
-//}
-//
-//func ( tc *ReactorTestCall ) callServiceResponse( st *ServiceResponseTest ) {
-//    chk := &responseCheck{ st: st, PathAsserter: tc.PathAsserter }
-//    svcDef := st.Definitions.MustGet( st.ServiceType ).( *ServiceDefinition )
-//    opDef := svcDef.mustFindOperation( st.Operation )
-//    rct := NewResponseReactor( st.Definitions, opDef, chk )
-//    pip := mg.InitReactorPipeline( rct )
-//    tc.visitAndCheck( st.In, pip, chk, st.Error )
-//}
+type responseCheck struct {
+    st *ServiceResponseTest
+    *assert.PathAsserter
+    resultProc, errorProc *mg.ValueBuilder
+}
+
+func ( chk *responseCheck ) GetResultProcessor( 
+    p objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+
+    return initValueBuilder( &( chk.resultProc ) )
+}
+
+func ( chk *responseCheck ) GetErrorProcessor( 
+    p objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+
+    return initValueBuilder( &( chk.errorProc ) )
+}
+
+func ( chk *responseCheck ) check() {
+    mg.CheckBuiltValue( 
+        chk.st.ResultValue, chk.resultProc, chk.Descend( "result" ) )
+    mg.CheckBuiltValue( 
+        chk.st.ErrorValue, chk.errorProc, chk.Descend( "error" ) )
+}
+
+func ( tc *ReactorTestCall ) callServiceResponse( st *ServiceResponseTest ) {
+    chk := &responseCheck{ st: st, PathAsserter: tc.PathAsserter }
+    svcDef := st.Definitions.MustGet( st.ServiceType ).( *ServiceDefinition )
+    opDef := svcDef.mustFindOperation( st.Operation )
+    rct := NewResponseReactor( st.Definitions, opDef, chk )
+    pip := mg.InitReactorPipeline( rct )
+    tc.visitAndCheck( st.In, pip, chk, st.Error )
+}
 
 func ( tc *ReactorTestCall ) call() {
 //    tc.Logf( "Calling test of type %T", tc.Test )
@@ -123,7 +122,7 @@ func ( tc *ReactorTestCall ) call() {
     case *CastReactorTest: tc.callCast( v )
     case *EventPathTest: tc.callEventPath( v )
     case *ServiceRequestTest: tc.callServiceRequest( v )
-//    case *ServiceResponseTest: tc.callServiceResponse( v )
+    case *ServiceResponseTest: tc.callServiceResponse( v )
     default: panic( libErrorf( "Unhandled test type: %T", tc.Test ) )
     }
 }
