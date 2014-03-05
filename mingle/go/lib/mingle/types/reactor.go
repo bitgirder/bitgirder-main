@@ -57,18 +57,6 @@ func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
     return flds
 }
 
-//func typeNameIn( fd *FieldDefinition ) *mg.QualifiedTypeName {
-//    nm := mg.TypeNameIn( fd.Type )
-//    if qn, ok := nm.( *mg.QualifiedTypeName ); ok { return qn }
-//    panic( libErrorf( 
-//        "Name in type %s is not a qname: %s (%T)", fd.Type, nm, nm ) )
-//}
-//
-//func expectDef( dm *DefinitionMap, qn *mg.QualifiedTypeName ) Definition {
-//    if def, ok := dm.GetOk( qn ); ok { return def }
-//    panic( libErrorf( "map has no definition for type %s", qn ) )
-//}
-
 func expectAuthTypeOf( 
     secQn *mg.QualifiedTypeName, dm *DefinitionMap ) mg.TypeReference {
 
@@ -84,11 +72,6 @@ func expectAuthTypeOf(
     }
     panic( libErrorf( "no such security def: %s", secQn ) )
 }
-
-//func valDefOf( fd *FieldDefinition, dm *DefinitionMap ) Definition {
-//    qn := typeNameIn( fd )
-//    return expectDef( dm, qn )
-//}
 
 type fieldTyper struct { 
     flds []*FieldSet 
@@ -389,42 +372,6 @@ func NewCastReactorDefinitionMap(
     
     return newCastReactorDefinitionMap( typ, dm )
 }
-
-//type opMatcher struct {
-//
-//    svcDefs *ServiceDefinitionMap
-//
-//    ns *mg.Namespace
-//    sd *ServiceDefinition
-//    opDef *OperationDefinition
-//}
-//
-//func ( om *opMatcher ) defMap() *DefinitionMap {
-//    return om.svcDefs.GetDefinitionMap()
-//}
-//
-//func ( om *opMatcher ) Namespace( ns *mg.Namespace, pg mg.PathGetter ) error {
-//    if ! om.svcDefs.HasNamespace( ns ) {
-//        return mg.NewEndpointErrorNamespace( ns, pg.GetPath() )
-//    }
-//    om.ns = ns
-//    return nil
-//}
-//
-//func ( om *opMatcher ) Service( svc *mg.Identifier, pg mg.PathGetter ) error {
-//    if sd, ok := om.svcDefs.GetOk( om.ns, svc ); ok {
-//        om.sd = sd
-//        return nil
-//    }
-//    return mg.NewEndpointErrorService( svc, pg.GetPath() )
-//}
-//
-//func ( om *opMatcher ) Operation( op *mg.Identifier, pg mg.PathGetter ) error {
-//    if om.opDef = om.sd.findOperation( op ); om.opDef == nil {
-//        return mg.NewEndpointErrorOperation( op, pg.GetPath() )
-//    }
-//    return nil
-//}
 
 type RequestReactorInterface interface {
 
