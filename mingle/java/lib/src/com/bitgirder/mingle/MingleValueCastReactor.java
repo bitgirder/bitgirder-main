@@ -469,17 +469,14 @@ implements MingleValueReactorPipeline.Processor,
         QualifiedTypeName act = ev.structType();
         QualifiedTypeName targ = (QualifiedTypeName) at.getName();
 
-        if ( at.getName().equals( act ) || 
-             at.equals( Mingle.TYPE_VALUE ) ||
+        if ( at.getName().equals( act ) || at.equals( Mingle.TYPE_VALUE ) ||
              del.allowAssign( targ, act ) )
         {
             completeStartStruct( ev, next );
             return;
         }
  
-        AtomicTypeReference failTyp = 
-            new AtomicTypeReference( ev.structType(), null );
-
+        AtomicTypeReference failTyp = new AtomicTypeReference( act, null );
         failCastType( ev, callTyp, failTyp );
     }
 
