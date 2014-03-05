@@ -364,7 +364,7 @@ func castAtomicWithCallType(
     return
 }
 
-func castAtomic(
+func CastAtomic(
     mgVal Value, 
     at *AtomicTypeReference,
     path objpath.PathNode ) ( val Value, err error ) {

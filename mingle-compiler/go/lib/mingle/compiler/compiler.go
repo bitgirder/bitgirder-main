@@ -1309,9 +1309,17 @@ func ( c *Compilation ) buildExpression(
     return expTree.compile( expctType, bs )
 }
 
+func castConstVal( val mg.Value, typ mg.TypeReference ) ( mg.Value, error ) {
+    rct := mg.NewDefaultCastReactor( typ )
+    vb := mg.NewValueBuilder()
+    pip := mg.InitReactorPipeline( rct, vb )
+    if err := mg.VisitValue( val, pip ); err != nil { return nil, err }
+    return vb.GetValue(), nil
+}
+
 func ( c *Compilation ) validateConstVal(
     val mg.Value, typ mg.TypeReference, errLoc *loc.Location ) bool {
-    if _, err := mg.CastValue( val, typ, objpathConstExp ); err != nil {
+    if _, err := castConstVal( val, typ ); err != nil {
         if ve, ok := err.( *mg.ValueCastError ); ok {
             c.addError( errLoc, ve.Message() )
         } else { c.addError( errLoc, err.Error() ) }

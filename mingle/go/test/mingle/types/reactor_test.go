@@ -136,7 +136,6 @@ func TestReactors( t *testing.T ) {
                 Test: rt,
             },
         }
-        tc.Logf( "starting" )
         tc.call()
         a = a.Next()
     }

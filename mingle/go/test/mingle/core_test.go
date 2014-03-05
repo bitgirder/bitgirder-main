@@ -433,7 +433,7 @@ func TestComparer( t *testing.T ) {
     f( String( "a" ), String( "b" ), false )
     for _, typ := range NumericTypes {
         mkNum := func( s string ) Comparer {
-            val, err := castAtomic( String( s ), typ, idPathRootVal )
+            val, err := CastAtomic( String( s ), typ, idPathRootVal )
             if err != nil { t.Fatal( err ) }
             return val.( Comparer )
         }
