@@ -831,9 +831,9 @@ func initServiceRequestTests() {
     )
     mkReq1 := func( params, auth Value ) *Struct {
         pairs := []interface{}{ 
-            IdNamespace, ns1.ExternalForm(),
-            IdService, svc1.ExternalForm(),
-            IdOperation, op1.ExternalForm(),
+            IdNamespace, NamespaceAsBytes( ns1 ),
+            IdService, IdentifierAsBytes( svc1 ),
+            IdOperation, IdentifierAsBytes( op1 ),
         }
         if params != nil { pairs = append( pairs, IdParameters, params ) }
         if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }

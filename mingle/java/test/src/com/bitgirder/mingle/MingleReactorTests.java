@@ -14,6 +14,8 @@ import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ListPath;
 import com.bitgirder.lang.path.DictionaryPath;
 
+import com.bitgirder.lang.reflect.ReflectUtils;
+
 import com.bitgirder.pipeline.Pipelines;
 
 import com.bitgirder.test.Test;
@@ -596,6 +598,50 @@ class MingleReactorTests
     }
 
     private
+    final
+    static
+    class ServiceRequestReactorTest
+    extends TestImpl
+    {
+        private Object source;
+
+        private MingleNamespace namespace;
+        private MingleIdentifier service;
+        private MingleIdentifier operation;
+        private MingleSymbolMap parameters;
+        private Queue< EventExpectation > parameterEvents;
+        private MingleValue auth;
+        private Queue< EventExpectation > authEvents;
+
+        public
+        void
+        call()
+        {
+            throw new UnsupportedOperationException( "Unimplemented" );
+        }
+    }
+
+    private
+    final
+    static
+    class ServiceResponseReactorTest
+    extends TestImpl
+    {
+        private MingleValue in;
+        private MingleValue resVal;
+        private Queue< EventExpectation > resEvents;
+        private MingleValue errVal;
+        private Queue< EventExpectation > errEvents;
+
+        public
+        void
+        call()
+        {
+            throw new UnsupportedOperationException( "Unimplemented" );
+        }
+    }
+
+    private
     static
     class TestImplReader
     extends MingleTestGen.StructFileReader< TestImpl >
@@ -645,10 +691,22 @@ class MingleReactorTests
         }
 
         private
+        MingleNamespace
+        asNamespace( byte[] arr )
+            throws Exception
+        {
+            if ( arr == null ) return null;
+
+            return MingleBinReader.create( arr ).readNamespace();
+        }
+
+        private
         List< MingleIdentifier >
         asIdentifierList( MingleList ml )
             throws Exception
         {
+            if ( ml == null ) return null;
+
             List< MingleIdentifier > res = Lang.newList();
 
             for ( MingleValue mv : ml ) {
@@ -777,15 +835,53 @@ class MingleReactorTests
         }
 
         private
-        MingleValueCastException
-        asValueCastException( MingleSymbolMap map )
+        < E extends MingleValueException >
+        E
+        asValueException( Class< E > cls,
+                          MingleStruct ms )
             throws Exception
         {
-            if ( map == null ) return null;
-            
-            return new MingleValueCastException(
-                mapExpect( map, "message", String.class ),
-                asIdentifierPath( mapExpect( map, "location", byte[].class ) )
+            MingleSymbolMap map = ms.getFields();
+
+            String msg = mapExpect( map, "message", String.class );
+
+            ObjectPath< MingleIdentifier > loc = 
+                asIdentifierPath( mapGet( map, "location", byte[].class ) );
+
+            return ReflectUtils.newInstance(
+                cls,
+                new Class< ? >[]{ String.class, ObjectPath.class },
+                new Object[]{ msg, loc }
+            );
+        }
+
+        private
+        MingleMissingFieldsException
+        asMissingFieldsException( MingleStruct ms )
+            throws Exception
+        {
+            MingleSymbolMap map = ms.getFields();
+
+            List< MingleIdentifier > flds =
+                asIdentifierList( 
+                    mapExpect( map, "fields", MingleList.class ) );
+
+            ObjectPath< MingleIdentifier > loc =
+                asIdentifierPath( mapGet( map, "location", byte[].class ) );
+
+            return new MingleMissingFieldsException( flds, loc );
+        }
+
+        private
+        MingleUnrecognizedFieldException
+        asUnrecognizedFieldException( MingleStruct ms )
+            throws Exception
+        {
+            MingleSymbolMap map = ms.getFields();
+
+            return new MingleUnrecognizedFieldException(
+                asIdentifier( mapExpect( map, "field", byte[].class ) ),
+                asIdentifierPath( mapGet( map, "location", byte[].class ) )
             );
         }
 
@@ -799,7 +895,11 @@ class MingleReactorTests
             String nm = ms.getType().getName().toString();
 
             if ( nm.equals( "ValueCastError" ) ) {
-                return asValueCastException( ms.getFields() );
+                return asValueException( MingleValueCastException.class, ms );
+            } else if ( nm.equals( "MissingFieldsError" ) ) {
+                return asMissingFieldsException( ms );
+            } else if ( nm.equals( "UnrecognizedFieldError" ) ) {
+                return asUnrecognizedFieldException( ms );
             }
 
             throw state.failf( "unhandled error: %s", nm );
@@ -830,28 +930,81 @@ class MingleReactorTests
         }
 
         private
+        EventExpectation
+        asEventExpectation( MingleStruct ms )
+            throws Exception
+        {
+            EventExpectation res = new EventExpectation();
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.event = asReactorEvent( 
+                mapExpect( map, "event", MingleStruct.class ) );
+
+            res.path = asIdentifierPath( mapGet( map, "path", byte[].class ) );
+
+            return res;
+        }
+
+        private
         Queue< EventExpectation >
         asEventExpectationQueue( MingleList ml )
             throws Exception
         {
+            if ( ml == null ) return null;
+
             Queue< EventExpectation > res = Lang.newQueue();
 
-            for ( MingleValue mv : ml ) 
-            {
-                EventExpectation ee = new EventExpectation();
-
-                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
-
-                ee.event = asReactorEvent( 
-                    mapExpect( map, "event", MingleStruct.class ) );
-
-                ee.path =
-                    asIdentifierPath( mapGet( map, "path", byte[].class ) );
-
-                res.add( ee );
+            for ( MingleValue mv : ml ) {
+                res.add( asEventExpectation( (MingleStruct) mv ) );
             }
 
             return res;
+        }
+
+        private
+        Object
+        asObject( MingleStruct ms )
+            throws Exception
+        {
+            String nm = ms.getType().getName().toString();
+            MingleSymbolMap map = ms.getFields();
+
+            if ( nm.equals( "ReactorEventSource" ) ) {
+                return asReactorEvents(
+                    mapExpect( map, "events", MingleList.class ) );
+            } else if ( nm.equals( "ValueSource" ) ) {
+                return mapExpect( map, "value", MingleValue.class );
+            }
+
+            throw state.failf( "don't know how to convert type: %s", 
+                ms.getType() );
+        }
+
+        private
+        List< ? >
+        asObject( MingleList ml )
+            throws Exception
+        {
+            List< Object > res = Lang.newList();
+            for ( MingleValue mv : ml ) res.add( asObject( mv ) );
+
+            return res;
+        }
+
+        private
+        Object
+        asObject( MingleValue mv )
+            throws Exception
+        {
+            if ( mv instanceof MingleStruct ) {
+                return asObject( (MingleStruct) mv );
+            } else if ( mv instanceof MingleList ) {
+                return asObject( (MingleList) mv );
+            } 
+
+            throw state.failf( "unhandled object (%s): %s", 
+                mv.getClass(), Mingle.inspect( mv ) );
         }
 
         private
@@ -1074,6 +1227,83 @@ class MingleReactorTests
             return res;
         }
 
+        private
+        void
+        setOptError( TestImpl ti,
+                     MingleSymbolMap map )
+            throws Exception
+        {
+            MingleStruct errStruct = mapGet( map, "error", MingleStruct.class );
+            if ( errStruct != null ) ti.expectFailure( asError( errStruct ) );
+        }
+
+        private
+        ServiceRequestReactorTest
+        asServiceRequestReactorTest( MingleStruct ms )
+            throws Exception
+        {
+            ServiceRequestReactorTest res = new ServiceRequestReactorTest();
+            res.setLabel( makeName( ms, null ) );
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.source = 
+                asObject( mapExpect( map, "source", MingleValue.class ) );
+
+            res.namespace = 
+                asNamespace( mapGet( map, "namespace", byte[].class ) );
+
+            res.service =
+                asIdentifier( mapGet( map, "service", byte[].class ) );
+
+            res.operation = 
+                asIdentifier( mapGet( map, "operation", byte[].class ) );
+
+            res.parameters = mapGet( map, "parameters", MingleSymbolMap.class );
+
+            res.parameterEvents = 
+                asEventExpectationQueue(
+                    mapGet( map, "parameterEvents", MingleList.class ) );
+
+            res.auth =
+                mapGet( map, "authentication", MingleValue.class );
+
+            res.authEvents =
+                asEventExpectationQueue(
+                    mapGet( map, "authenticationEvents", MingleList.class ) );
+            
+            setOptError( res, map );
+
+            return res;
+        }
+
+        private
+        ServiceResponseReactorTest
+        asServiceResponseReactorTest( MingleStruct ms )
+            throws Exception
+        {
+            ServiceResponseReactorTest res = new ServiceResponseReactorTest();
+            res.setLabel( makeName( ms, null ) );
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.in = mapExpect( map, "in", MingleValue.class );
+
+            res.resVal = mapGet( map, "resVal", MingleValue.class );
+
+            res.resEvents = asEventExpectationQueue( 
+                mapGet( map, "resEvents", MingleList.class ) );
+            
+            res.errVal = mapGet( map, "errVal", MingleValue.class );
+
+            res.errEvents = asEventExpectationQueue(
+                mapGet( map, "errEvents", MingleList.class ) );
+
+            setOptError( res, map );
+
+            return res;
+        }
+
         protected
         TestImpl
         convertStruct( MingleStruct ms )
@@ -1096,10 +1326,13 @@ class MingleReactorTests
                 return asFieldOrderMissingFieldsTest( ms );
             } else if ( nm.equals( "FieldOrderPathTest" ) ) {
                 return asFieldOrderPathTest( ms );
+            } else if ( nm.equals( "ServiceRequestReactorTest" ) ) {
+                return asServiceRequestReactorTest( ms );
+            } else if ( nm.equals( "ServiceResponseReactorTest" ) ) {
+                return asServiceResponseReactorTest( ms );
+            } else {
+                throw state.failf( "unhandled test: %s", nm );
             }
-            
-//            codef( "skipping test: %s", nm );
-            return null;
         }
     }
 

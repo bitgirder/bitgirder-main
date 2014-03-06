@@ -57,7 +57,9 @@ func vceAsValue( vce *mg.ValueCastError ) mg.Value {
 }
 
 func ufeAsValue( ufe *mg.UnrecognizedFieldError ) mg.Value {
-    return mkStruct( "UnrecognizedFieldError", valueErrorFieldPairs( ufe )... )
+    pairs := valueErrorFieldPairs( ufe )
+    pairs = append( pairs, "field", asValue( ufe.Field ) )
+    return mkStruct( "UnrecognizedFieldError", pairs... )
 }
 
 func mfeAsValue( mfe *mg.MissingFieldsError ) mg.Value {
@@ -141,9 +143,18 @@ func fieldOrderReactorTestOrderAsValue(
     )
 }
 
+func asFeedSource( src interface{} ) mg.Value {
+    switch v := src.( type ) {
+    case mg.Value: return mkStruct( "ValueSource", "value", v )
+    case []mg.ReactorEvent: 
+        return mkStruct( "ReactorEventSource", "events", asValue( v ) )
+    }
+    panic( fmt.Errorf( "unhandled source: %T", src ) )
+}
+
 func svcReqTestAsValue( st *mg.ServiceRequestReactorTest ) mg.Value {
     pairs := []interface{}{
-        "source", asValue( st.Source ),
+        "source", asFeedSource( st.Source ),
         "parameter-events", asValue( st.ParameterEvents ),
         "authentication", asValue( st.Authentication ),
         "authentication-events", asValue( st.AuthenticationEvents ),

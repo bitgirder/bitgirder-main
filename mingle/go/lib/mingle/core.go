@@ -1254,16 +1254,16 @@ func ( e *MissingFieldsError ) Fields() []*Identifier { return e.flds }
 
 type UnrecognizedFieldError struct {
     impl ValueErrorImpl
-    fld *Identifier
+    Field *Identifier
 }
 
 func NewUnrecognizedFieldError( 
     p objpath.PathNode, fld *Identifier ) *UnrecognizedFieldError {
-    return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, fld: fld }
+    return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, Field: fld }
 }
 
 func ( e *UnrecognizedFieldError ) Message() string {
-    return fmt.Sprintf( "unrecognized field: %s", e.fld )
+    return fmt.Sprintf( "unrecognized field: %s", e.Field )
 }
 
 func ( e *UnrecognizedFieldError ) Error() string {

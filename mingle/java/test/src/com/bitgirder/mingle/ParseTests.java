@@ -147,10 +147,10 @@ class ParseTests
 
             errMsgKey( TestType.TYPE_REFERENCE, "ns1@v1/T1*? +" ),
                 "Unrecognized token start: \" \" (U+0020)",
-            
+ 
             errMsgKey( TestType.TYPE_REFERENCE, "mingle:core@v1~\"s*\"" ),
                 "Expected '/' but found: '~'",
-            
+ 
             errMsgKey( TestType.TYPE_REFERENCE, "S1~12.1" ),
                 new ParseErrorExpectation(
                     1, "cannot resolve as a standard type: S1" ),
