@@ -669,7 +669,7 @@ func ( r *BinReader ) ReadAtomicTypeReference() ( at *AtomicTypeReference,
                                                   err error ) {
     if _, err = r.ExpectTypeCode( tcAtomTyp ); err != nil { return }
     at = &AtomicTypeReference{}
-    if at.Name, err = r.ReadTypeName(); err != nil { return }
+    if at.Name, err = r.ReadQualifiedTypeName(); err != nil { return }
     if at.Restriction, err = r.readRestriction(); err != nil { return }
     return
 }

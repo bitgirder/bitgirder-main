@@ -668,9 +668,7 @@ func ( c *Compilation ) getSuperType(
     if ti.SuperType == nil { return nil }
     res := bs.resolveType( ti.SuperType, ti.SuperTypeLoc )
     if res == nil { return nil }
-    if at, ok := res.( *mg.AtomicTypeReference ); ok { 
-        return at.Name.( *mg.QualifiedTypeName )
-    } 
+    if at, ok := res.( *mg.AtomicTypeReference ); ok { return at.Name } 
     c.addErrorf( 
         ti.SuperTypeLoc, "Non-atomic supertype for %s: %s", ti.Name, res )
     return nil

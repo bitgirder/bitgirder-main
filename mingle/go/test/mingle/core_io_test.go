@@ -70,7 +70,7 @@ func TestAsAndFromBytes( t *testing.T ) {
     qn := MustQualifiedTypeName( "ns1@v1/T1" )
     qn2, err := QualifiedTypeNameFromBytes( QualifiedTypeNameAsBytes( qn ) )
     if err == nil { a.True( qn.Equals( qn2 ) ) } else { a.Fatal( err ) }
-    typ := MustTypeReference( "L*" )
+    typ := MustTypeReference( "ns1@v1/L*" )
     typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
     if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }
     p := idPathRootVal.Descend( id( "id1" ) )

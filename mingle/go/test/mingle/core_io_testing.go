@@ -160,7 +160,6 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
     set( MustNamespace( "ns1:ns2@v1" ) )
     set( MustDeclaredTypeName( "T1" ) )
     set( MustQualifiedTypeName( "ns1:ns2@v1/T1" ) )
-    set( MustTypeReference( "T1" ) )
     set( MustTypeReference( `String~"a"` ) )
     set( MustTypeReference( `String~["a","b"]` ) )
     set( MustTypeReference( 
@@ -172,12 +171,11 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
     set( MustTypeReference( "Float32~(0.0,1.0]" ) )
     set( MustTypeReference( "Float64~[0.0,1.0)" ) )
     set( MustTypeReference( "Float64~(,)" ) )
-    set( MustTypeReference( "T1*" ) )
-    set( MustTypeReference( "T1+" ) )
-    set( MustTypeReference( "T1*?" ) )
     set( MustTypeReference( "ns1@v1/T1" ) )
+    set( MustTypeReference( "ns1@v1/T1+" ) )
     set( MustTypeReference( "ns1@v1/T1*" ) )
     set( MustTypeReference( "ns1@v1/T1?" ) )
+    set( MustTypeReference( "ns1@v1/T1?+??*" ) )
 }
 
 func addBinIoRoundtripTests( tests []interface{} ) []interface{} {

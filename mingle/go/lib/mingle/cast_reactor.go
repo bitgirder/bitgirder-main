@@ -187,12 +187,9 @@ func ( cr *CastReactor ) inferStructForMap(
     at *AtomicTypeReference,
     next ReactorEventProcessor ) ( error, bool ) {
 
-    qn, ok := at.Name.( *QualifiedTypeName )
-    if ! ok { return nil, false }
+    if ! cr.iface.InferStructFor( at.Name ) { return nil, false }
 
-    if ! cr.iface.InferStructFor( qn ) { return nil, false }
-
-    ev := NewStructStartEvent( qn )
+    ev := NewStructStartEvent( at.Name )
     ev.SetPath( me.GetPath() )
 
     return cr.completeStartStruct( ev, next ), true
@@ -283,7 +280,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     }
 
     if at.Name.Equals( ss.Type ) || at.Equals( TypeValue ) ||
-       cr.iface.AllowAssignment( at.Name.( *QualifiedTypeName ), ss.Type ) {
+       cr.iface.AllowAssignment( at.Name, ss.Type ) {
         return cr.completeStartStruct( ss, next )
     }
 

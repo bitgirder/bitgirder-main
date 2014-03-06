@@ -132,7 +132,7 @@ func convertPtTypeReference( tVal interface{} ) TypeReference {
     switch t := tVal.( type ) {
     case *pt.AtomicTypeReference: 
         return &AtomicTypeReference{
-            Name: convertPtVal( t.Name ).( TypeName ),
+            Name: convertPtVal( t.Name ).( *QualifiedTypeName ),
             Restriction: convertPtRestriction( t.Restriction ),
         }
     case *pt.ListTypeReference:
@@ -355,10 +355,7 @@ type restrictionSyntaxTest struct {
 }
 
 func ( t *restrictionSyntaxTest ) call() {
-    if ctr, err := parseCompletableTypeReference( t.str ); err == nil {
-        nm := ConvertSyntaxTypeName( ctr.Name )
-        comp := CompleteType( &AtomicTypeReference{ Name: nm }, ctr )
-        assert.True( MustTypeReference( t.typ ).Equals( comp ) )
+    if ctr, _, err := parseCompletableTypeReference( t.str ); err == nil {
         assert.Equal( t.restriction, ctr.Restriction )
     } else { t.Fatal( err ) }
 }
@@ -483,13 +480,11 @@ func TestTypeReferenceRestrictionSyntax( t *testing.T ) {
 }
 
 func TestTypeReferenceStringer( t *testing.T ) {
-    for _, base := range []string{ "ns1@v1/T1", "T1" } {
-        for _, quant := range []string{ "", "*", "+", "?", "*++" } {
-            expct := base + quant
-            ref := MustTypeReference( expct )
-            assert.Equal( expct, ref.String() )
-            assert.Equal( expct, ref.ExternalForm() )
-        }
+    for _, quant := range []string{ "", "*", "+", "?", "*++" } {
+        expct := "ns1@v1/T1" + quant
+        ref := MustTypeReference( expct )
+        assert.Equal( expct, ref.String() )
+        assert.Equal( expct, ref.ExternalForm() )
     }
 }
 
@@ -515,15 +510,13 @@ func assertTypeRefBaseEquality( str string, t *testing.T ) TypeReference {
 
 func TestAtomicTypeReferenceEquality( t *testing.T ) {
     at1 := assertTypeRefBaseEquality( "ns1@v1/T1", t )
-    nm1 := assertTypeRefBaseEquality( "T1", t )
-    tests := make( []equalityTest, 0, 16 )
+    tests := []equalityTest{}
     for _, str := range []string{ 
             "ns1@v1/T2", "ns2@v1/T1", "ns1@v1/T1?", "ns1@v1/T1*",
-            "ns1@v1/T1+", "ns1@v1/T1**+", "T2", "T1*", "T2?", "T2+", 
+            "ns1@v1/T1+", "ns1@v1/T1**+", 
     } {
         ref := MustTypeReference( str )
         tests = append( tests, equalityTest{ at1, ref, false } )
-        tests = append( tests, equalityTest{ nm1, ref, false } )
     }
     assertEqualityTests( typeEqFunc, t, tests... )
 }
@@ -532,14 +525,13 @@ func TestListTypeReferenceEquality( t *testing.T ) {
     lt1 := assertTypeRefBaseEquality( "ns1@v1/T1*", t )
     tests := make( []equalityTest, 0, 16 )
     for _, quant := range []string { "*", "+", "**", "*+*", "*?**+" } {
-        for _, base := range []string { "T1", "ns1@v1/T1" } {
-            ref1 := MustTypeReference( base + quant )
-            ref2 := MustTypeReference( base + quant )
-            tests = append( tests, equalityTest{ ref1, ref2, true } )
-        }
+        str := "ns1@v1/T1" + quant
+        ref1 := MustTypeReference( str )
+        ref2 := MustTypeReference( str )
+        tests = append( tests, equalityTest{ ref1, ref2, true } )
     }
     for _, str := range []string {
-        "T1*", "ns1@v1/T1+", "ns1@v1/T1**", "ns1@v1/T1?", "ns1@v1/T1?*",
+        "ns1@v1/T1+", "ns1@v1/T1**", "ns1@v1/T1?", "ns1@v1/T1?*",
     } {
         ref := MustTypeReference( str )
         tests = append( tests, equalityTest{ lt1, ref, false } )
@@ -549,18 +541,15 @@ func TestListTypeReferenceEquality( t *testing.T ) {
 
 func TestNullableTypeReferenceEquality( t *testing.T ) {
     nt1 := assertTypeRefBaseEquality( "ns1@v1/T1?", t )
-    assertTypeRefBaseEquality( "T2?", t )
-    tests := make( []equalityTest, 0, 16 )
+    tests := []equalityTest{}
     for _, quant := range []string { "?", "??", "*?", "+?", "*?+?" } {
-        for _, base := range []string { "T1", "ns1@v1/T1" } {
-            str := base + quant
-            ref1 := MustTypeReference( str )
-            ref2 := MustTypeReference( str )
-            tests = append( tests, equalityTest{ ref1, ref2, true } )
-        }
+        str := "ns1@v1/T1" + quant
+        ref1 := MustTypeReference( str )
+        ref2 := MustTypeReference( str )
+        tests = append( tests, equalityTest{ ref1, ref2, true } )
     }
     for _, str := range []string {
-        "T1?", "ns1@v1/T1*?", "ns1@v1/T1??", "ns1@v1/T1?*", "ns1@v1/T1+",
+        "ns1@v1/T1*?", "ns1@v1/T1??", "ns1@v1/T1?*", "ns1@v1/T1+",
     } {
         ref := MustTypeReference( str )
         tests = append( tests, equalityTest{ nt1, ref, false } )

@@ -130,11 +130,12 @@ func MustQualifiedTypeName( input string ) *QualifiedTypeName {
     }).( *QualifiedTypeName )
 }
 
-func resolveStandardTypeName( nm TypeName ) TypeName {
-    if dn, ok := nm.( *DeclaredTypeName ); ok {
-        if qn, ok := ResolveInCore( dn ); ok { return qn }
-    }
-    return nm
+func resolveStandardTypeName( 
+    dn *DeclaredTypeName, l *loc.Location ) ( *QualifiedTypeName, error ) {
+
+    if qn, ok := ResolveInCore( dn ); ok { return qn, nil }
+    msg := fmt.Sprintf( "cannot resolve as a standard type: %s", dn )
+    return nil, &loc.ParseError{ msg, l }
 }
 
 type RestrictionTypeError struct { msg string }
@@ -288,11 +289,11 @@ func ResolveStandardRestriction(
 // could be inlined in parseStandardTypeReference(), but we use this in tests as
 // well, so pull it out separately
 func parseCompletableTypeReference( 
-    s string ) ( *syntax.CompletableTypeReference, error ) {
+    s string ) ( *syntax.CompletableTypeReference, *loc.Location, error ) {
     sb := sxBldr( s )
-    ctr, _, err := sb.ExpectTypeReference( nil )
+    ctr, l, err := sb.ExpectTypeReference( nil )
     if err == nil { err = sb.CheckTrailingToken() }
-    return ctr, err
+    return ctr, l, err
 }
 
 func typeCompleter( val interface{}, tq syntax.TypeQuantifier ) interface{} {
@@ -312,18 +313,29 @@ func CompleteType(
 }
 
 func parseTypeReference( s string ) ( TypeReference, error ) {
-    ctr, err := parseCompletableTypeReference( s )
+    ctr, l, err := parseCompletableTypeReference( s )
     if err != nil { return nil, err }
-    nm := resolveStandardTypeName( ConvertSyntaxTypeName( ctr.Name ) )
-    var vr ValueRestriction
+    nm := ConvertSyntaxTypeName( ctr.Name )
+    atr := &AtomicTypeReference{}
+    if dn, isDeclNm := nm.( *DeclaredTypeName ); isDeclNm {
+        if atr.Name, err = resolveStandardTypeName( dn, l ); err != nil { 
+            return nil, err
+        }
+    } else { atr.Name = nm.( *QualifiedTypeName ) }
+//    nm := resolveStandardTypeName( ConvertSyntaxTypeName( ctr.Name ) )
+//    var vr ValueRestriction
+//    if sx := ctr.Restriction; sx != nil {
+//        if qn, ok := nm.( *QualifiedTypeName ); ok {
+//            if vr, err = ResolveStandardRestriction( qn, sx ); err != nil {
+//                return nil, err
+//            }
+//        } else { return nil, errorRestrictionTargetType( nm, sx ) }
+//    }
     if sx := ctr.Restriction; sx != nil {
-        if qn, ok := nm.( *QualifiedTypeName ); ok {
-            if vr, err = ResolveStandardRestriction( qn, sx ); err != nil {
-                return nil, err
-            }
-        } else { return nil, errorRestrictionTargetType( nm, sx ) }
+        atr.Restriction, err = ResolveStandardRestriction( atr.Name, sx )
+        if err != nil { return nil, err }
     }
-    atr := &AtomicTypeReference{ Name: nm, Restriction: vr }
+//    atr := &AtomicTypeReference{ Name: nm, Restriction: vr }
     return CompleteType( atr, ctr ), nil
 }
 

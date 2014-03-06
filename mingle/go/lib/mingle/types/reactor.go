@@ -120,12 +120,10 @@ func ( ci defMapCastIface ) CastAtomic(
     at *mg.AtomicTypeReference,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
 
-    if qn, ok := at.Name.( *mg.QualifiedTypeName ); ok {
-        if def, ok := ci.dm.GetOk( qn ); ok {
-            if ed, ok := def.( *EnumDefinition ); ok {
-                res, err := castEnum( v, ed, path )
-                return res, err, true
-            }
+    if def, ok := ci.dm.GetOk( at.Name ); ok {
+        if ed, ok := def.( *EnumDefinition ); ok {
+            res, err := castEnum( v, ed, path )
+            return res, err, true
         }
     }
     return nil, nil, false

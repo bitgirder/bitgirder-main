@@ -19,7 +19,7 @@ func asCoreV1Qn( nm string ) *mg.QualifiedTypeName {
 func initCoreV1Prims() {
     for _, primTyp := range mg.PrimitiveTypes {
         pd := &PrimitiveDefinition{}
-        pd.Name = primTyp.Name.( *mg.QualifiedTypeName )
+        pd.Name = primTyp.Name
         coreTypesV1.MustAdd( pd )
     }
 }

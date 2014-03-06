@@ -675,15 +675,23 @@ class CoreIoTests
                     false, null, null, false, MingleFloat64.class )
             ),
  
-            listType( atomic( declaredName( "T1" ) ), true ),
-            
-            listType( atomic( declaredName( "T1" ) ), false ),
-            
-            nullableType( listType( atomic( declaredName( "T1" ) ), true ) ),
-            
             atomic( qname( "ns1@v1/T1" ) ),
 
             listType( atomic( qname( "ns1@v1/T1" ) ), true ),
+            
+            listType( atomic( qname( "ns1@v1/T1" ) ), false ),
+
+            listType( 
+                nullableType(
+                    nullableType(
+                        listType(
+                            nullableType( atomic( qname( "ns1@v1/T1" ) ) ),
+                            false
+                        )
+                    )
+                ),
+                true
+            ),
 
             nullableType( listType( atomic( qname( "ns1@v1/T1" ) ), true ) ),
  

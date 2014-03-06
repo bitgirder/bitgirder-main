@@ -407,7 +407,6 @@ func init() {
         }
     }
     typRefFail := peFailBinder( TestTypeTypeReference )
-    atStuff := &AtomicTypeReference{ Name: declNm( "Stuff" ) }
     qnMgStr := primQn( "String" )
     atMgStr := &AtomicTypeReference{ Name: qnMgStr }
     at2 := &AtomicTypeReference{
@@ -428,24 +427,6 @@ func init() {
         }
     }
     CoreParseTests = append( CoreParseTests,
-        typRefSucc( "Stuff", "", atStuff ),
-        typRefSucc( "Stuff*", "", &ListTypeReference{ atStuff, true } ),
-        typRefSucc( "Stuff?", "", &NullableTypeReference{ atStuff } ),
-        typRefSucc( "Stuff?*+**", "", 
-            &ListTypeReference{
-                &ListTypeReference{
-                    &ListTypeReference{
-                        &ListTypeReference{
-                            &NullableTypeReference{ atStuff },
-                            true,
-                        },
-                        false,
-                    },
-                    true,
-                },
-                true,
-            },
-        ),
         typRefSucc( "mingle:core@v1/String", "", atMgStr ),
         typRefSucc( "mingle:core@v1/String*", "", 
             &ListTypeReference{ atMgStr, true } ),
@@ -564,15 +545,14 @@ func init() {
         typRefFail( "Int32~[,]", 7, "Infinite range must be open" ),
         typRefFail( "Int32~[8,]", 10, "Infinite high range must be open" ),
         typRefFail( "Int32~[,8]", 7, "Infinite low range must be open" ),
+        typRefFail( "Stuff", 1, `cannot resolve as a standard type: Stuff` ),
+        typRefFail( `Stuff~(,)`, 1,
+            `cannot resolve as a standard type: Stuff` ),
         typRefFail( "S1~12.1", 4, "Expected type restriction but found: 12.1" ),
         typRefRestrictFail( `ns1@v1/T~"a"`, 
             "Invalid target type for regex restriction: ns1@v1/T" ),
         typRefRestrictFail( `ns1@v1/T~[0,1]`, 
             "Invalid target type for range restriction: ns1@v1/T" ),
-        typRefRestrictFail( `Stuff~"a"`, 
-            "Invalid target type for regex restriction: Stuff" ),
-        typRefRestrictFail( `Stuff~[0,1]`, 
-            "Invalid target type for range restriction: Stuff" ),
         typRefRestrictFail( `String~[0,"1")`, 
             "Got number as min value for range" ),
         typRefRestrictFail( `String~["0",1)`, 

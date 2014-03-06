@@ -358,7 +358,7 @@ func ( r *RangeRestriction ) AcceptsValue( val Value ) bool {
 }
 
 type AtomicTypeReference struct {
-    Name TypeName
+    Name *QualifiedTypeName
     Restriction ValueRestriction
 }
 
@@ -444,8 +444,7 @@ func asTypeReference( typ TypeReferenceInitializer ) TypeReference {
     switch v := typ.( type ) {
     case string: return MustTypeReference( v )
     case TypeReference: return v
-    case *QualifiedTypeName, *DeclaredTypeName:
-        return &AtomicTypeReference{ Name: v.( TypeName ) }
+    case *QualifiedTypeName: return &AtomicTypeReference{ Name: v }
     }
     panic( libErrorf( "Unhandled type ref initializer: %T", typ ) )
 }
