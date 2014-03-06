@@ -369,7 +369,7 @@ class MingleParser
     }
 
     private
-    TypeName
+    QualifiedTypeName
     expectTypeName( MingleNameResolver r )
         throws MingleSyntaxException,
                IOException
@@ -379,10 +379,14 @@ class MingleParser
         if ( tok instanceof MingleIdentifier ) return expectQname();
         else if ( tok instanceof DeclaredTypeName )
         {
+            int errPos = nextPos();
             DeclaredTypeName nm = expectDeclaredTypeName();
+            
             QualifiedTypeName qn = r.resolve( nm );
+            if ( qn != null ) return qn;
 
-            return qn == null ? nm : qn;
+            throw new MingleSyntaxException( 
+                "cannot resolve as a standard type: " + nm, errPos );
         }
 
         String expctMsg = "identifier or declared type name";
@@ -733,7 +737,7 @@ class MingleParser
         checkUnexpectedEnd( "type reference" );
 
         int nmPos = nextPos();
-        TypeName nm = expectTypeName( r );
+        QualifiedTypeName nm = expectTypeName( r );
 
         MingleValueRestriction vr = null;
 

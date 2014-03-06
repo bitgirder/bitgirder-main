@@ -246,7 +246,7 @@ class MingleBinReader
     processAtomicType()
         throws IOException
     {
-        TypeName nm = readTypeName();
+        QualifiedTypeName nm = readQualifiedTypeName();
 
         MingleValueRestriction vr = null;
         byte tc = nextTc( "restriction", RESTRICTION_TYPE_CODES );

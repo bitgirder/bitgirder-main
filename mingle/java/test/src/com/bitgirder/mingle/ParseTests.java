@@ -152,7 +152,8 @@ class ParseTests
                 "Expected '/' but found: '~'",
             
             errMsgKey( TestType.TYPE_REFERENCE, "S1~12.1" ),
-                "Expected restriction but found: NUMBER",
+                new ParseErrorExpectation(
+                    1, "cannot resolve as a standard type: S1" ),
 
             errMsgKey( 
                 TestType.TYPE_REFERENCE, "mingle:core@v1/String~=\"sdf\"" ),
@@ -714,7 +715,7 @@ class ParseTests
         AtomicTypeReference
         convertAtomicRef( MingleSymbolMap map )
         {
-            TypeName nm = (TypeName) 
+            QualifiedTypeName nm = (QualifiedTypeName) 
                 convertValue( mapExpect( map, "name", MingleStruct.class ) );
 
             MingleValueRestriction rst = null;

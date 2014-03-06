@@ -203,7 +203,8 @@ class Mingle
 
         if ( nm instanceof QualifiedTypeName )
         {
-            return valueClassFor( new AtomicTypeReference( nm, null ) );
+            QualifiedTypeName qn = (QualifiedTypeName) nm;
+            return valueClassFor( new AtomicTypeReference( qn, null ) );
         }
 
         return null;

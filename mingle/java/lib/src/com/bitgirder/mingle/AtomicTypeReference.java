@@ -11,17 +11,17 @@ extends MingleTypeReference
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final TypeName name;
+    private final QualifiedTypeName name;
     private final MingleValueRestriction restriction;
 
-    AtomicTypeReference( TypeName name,
+    AtomicTypeReference( QualifiedTypeName name,
                          MingleValueRestriction restriction )
     {
         this.name = inputs.notNull( name, "name" );
         this.restriction = restriction;
     }
 
-    public TypeName getName() { return name; }
+    public QualifiedTypeName getName() { return name; }
 
     public MingleValueRestriction getRestriction() { return restriction; }
 
@@ -69,7 +69,7 @@ extends MingleTypeReference
     public
     static
     AtomicTypeReference
-    create( TypeName nm )
+    create( QualifiedTypeName nm )
     {
         return new AtomicTypeReference( nm, null );
     }
@@ -77,7 +77,7 @@ extends MingleTypeReference
     public
     static
     AtomicTypeReference
-    create( TypeName nm,
+    create( QualifiedTypeName nm,
             MingleValueRestriction restriction )
     {
         inputs.notNull( restriction, "restriction" );

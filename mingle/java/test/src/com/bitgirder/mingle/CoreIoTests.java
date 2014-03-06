@@ -615,8 +615,6 @@ class CoreIoTests
 
             QualifiedTypeName.create( "ns1:ns2@v1/T1" ),
 
-            atomic( declaredName( "T1" ) ),
-
             atomic( qname( "mingle:core@v1/String" ),
                 MingleRegexRestriction.create( "a" ) ),
 

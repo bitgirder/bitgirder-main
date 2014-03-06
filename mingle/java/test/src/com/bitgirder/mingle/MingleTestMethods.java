@@ -44,7 +44,7 @@ class MingleTestMethods
     public
     static
     AtomicTypeReference
-    atomic( TypeName name )
+    atomic( QualifiedTypeName name )
     {
         inputs.notNull( name, "name" );
         return new AtomicTypeReference( name, null );
@@ -53,7 +53,7 @@ class MingleTestMethods
     public
     static
     AtomicTypeReference
-    atomic( TypeName name,
+    atomic( QualifiedTypeName name,
             MingleValueRestriction restriction )
     {
         inputs.notNull( name, "name" );

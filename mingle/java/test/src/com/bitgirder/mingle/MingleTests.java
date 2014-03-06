@@ -77,9 +77,7 @@ class MingleTests
         assertValueClassFor( Mingle.TYPE_SYMBOL_MAP, MingleSymbolMap.class );
 
         assertValueClassFor(
-            new AtomicTypeReference( new DeclaredTypeName( "Blah" ), null ),
-            null
-        );
+            new AtomicTypeReference( qname( "ns1@v1/S1" ), null ), null );
     }
 
     private
