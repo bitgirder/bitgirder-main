@@ -29,7 +29,7 @@ implements MingleValueReactorPipeline.Processor,
 
     private ObjectPath< MingleIdentifier > path;
 
-    // true between arrival of START_LIST and completion of the first list value
+    // true between arrival of LIST_START and completion of the first list value
     private boolean awaitingList0;
 
     private final Deque< MingleValueReactorEvent.Type > endTypes = 
@@ -116,12 +116,12 @@ implements MingleValueReactorPipeline.Processor,
     }
 
     // if this is the end of a list, we pop the path before sending the event,
-    // though we'll pop the START_LIST from endTypes afterwards
+    // though we'll pop the LIST_START from endTypes afterwards
     private
     void
     prepareEnd()
     {
-        if ( endTypes.peek() == MingleValueReactorEvent.Type.START_LIST ) {
+        if ( endTypes.peek() == MingleValueReactorEvent.Type.LIST_START ) {
             pathPop();
         }
     }
@@ -132,10 +132,10 @@ implements MingleValueReactorPipeline.Processor,
     {
         switch ( ev.type() ) {
         case VALUE: prepareValue(); break;
-        case START_STRUCT: prepareStartStruct( ev ); break;
-        case START_MAP: prepareStartMap( ev ); break;
-        case START_LIST: prepareStartList( ev ); break;
-        case START_FIELD: prepareStartField( ev ); break;
+        case STRUCT_START: prepareStartStruct( ev ); break;
+        case MAP_START: prepareStartMap( ev ); break;
+        case LIST_START: prepareStartList( ev ); break;
+        case FIELD_START: prepareStartField( ev ); break;
         case END: prepareEnd(); break;
         default: state.failf( "unhandled event: %s", ev.type() );
         }
@@ -149,7 +149,7 @@ implements MingleValueReactorPipeline.Processor,
     {
         if ( endTypes.isEmpty() ) return;
 
-        if ( endTypes.peek() == MingleValueReactorEvent.Type.START_FIELD ) {
+        if ( endTypes.peek() == MingleValueReactorEvent.Type.FIELD_START ) {
             endTypes.pop();
             pathPop();
         }
@@ -162,9 +162,9 @@ implements MingleValueReactorPipeline.Processor,
         MingleValueReactorEvent.Type evTyp = endTypes.pop();
 
         switch ( evTyp ) {
-        case START_LIST: 
-        case START_STRUCT: 
-        case START_MAP: 
+        case LIST_START: 
+        case STRUCT_START: 
+        case MAP_START: 
             valueCompleted(); break;
         default: state.failf( "unexpected end type: %s", evTyp );
         }

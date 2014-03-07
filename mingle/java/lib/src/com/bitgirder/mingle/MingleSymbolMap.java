@@ -20,6 +20,7 @@ implements MingleValue
 
     private final Map< MingleIdentifier, MingleValue > fields;
 
+    private
     MingleSymbolMap( Map< MingleIdentifier, MingleValue > fields )
     {
         this.fields = fields;
@@ -271,4 +272,13 @@ implements MingleValue
     }
 
     public static MingleSymbolMap empty() { return EMPTY; }
+
+    // fields is assumed to be non-null, unchanging, and to not contain values
+    // of type MingleNull
+    static
+    MingleSymbolMap
+    createUnsafe( Map< MingleIdentifier, MingleValue > fields )
+    {
+        return new MingleSymbolMap( fields );
+    }
 }

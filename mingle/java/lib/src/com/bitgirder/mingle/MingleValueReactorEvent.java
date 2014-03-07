@@ -22,18 +22,18 @@ class MingleValueReactorEvent
     enum Type
     {
         VALUE,
-        START_LIST,
-        START_MAP,
-        START_STRUCT,
-        START_FIELD,
+        LIST_START,
+        MAP_START,
+        STRUCT_START,
+        FIELD_START,
         END;
     }
 
     private Type type;
 
-    private MingleIdentifier fld; // valid for START_FIELD
+    private MingleIdentifier fld; // valid for FIELD_START
 
-    private QualifiedTypeName structType; // valid for START_STRUCT
+    private QualifiedTypeName structType; // valid for STRUCT_START
 
     private MingleValue val; // valid for VALUE
 
@@ -76,9 +76,9 @@ class MingleValueReactorEvent
         this.type = type;
     }
 
-    public void setStartList() { resetTo( Type.START_LIST ); }
+    public void setStartList() { resetTo( Type.LIST_START ); }
 
-    public void setStartMap() { resetTo( Type.START_MAP ); }
+    public void setStartMap() { resetTo( Type.MAP_START ); }
 
     public void setEnd() { resetTo( Type.END ); }
 
@@ -87,7 +87,7 @@ class MingleValueReactorEvent
     setStartStruct( QualifiedTypeName qn )
     {
         this.structType = inputs.notNull( qn, "qn" );
-        resetTo( Type.START_STRUCT );
+        resetTo( Type.STRUCT_START );
     }
 
     public
@@ -95,7 +95,7 @@ class MingleValueReactorEvent
     setStartField( MingleIdentifier fld )
     {
         this.fld = inputs.notNull( fld, "fld" );
-        resetTo( Type.START_FIELD );
+        resetTo( Type.FIELD_START );
     }
 
     public
@@ -110,14 +110,14 @@ class MingleValueReactorEvent
     MingleIdentifier
     field()
     {
-        return checkType( fld, Type.START_FIELD, "field()" );
+        return checkType( fld, Type.FIELD_START, "field()" );
     }
 
     public
     QualifiedTypeName
     structType()
     {
-        return checkType( structType, Type.START_STRUCT, "structType()" );
+        return checkType( structType, Type.STRUCT_START, "structType()" );
     }
 
     public
@@ -164,8 +164,8 @@ class MingleValueReactorEvent
         }
 
         switch ( type ) {
-        case START_FIELD: addPair( res, "field", fld ); break;
-        case START_STRUCT: addPair( res, "structType", structType ); break;
+        case FIELD_START: addPair( res, "field", fld ); break;
+        case STRUCT_START: addPair( res, "structType", structType ); break;
         case VALUE: addPair( res, "value", Mingle.inspect( val ) ); break;
         }
 

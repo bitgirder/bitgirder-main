@@ -206,9 +206,9 @@ class MingleTestMethods
 
         switch ( ev1.type() ) {
         case VALUE: o1 = ev1.value(); o2 = ev2.value(); desc = "value"; break;
-        case START_FIELD:
+        case FIELD_START:
             o1 = ev1.field(); o2 = ev2.field(); desc = "field"; break;
-        case START_STRUCT:
+        case STRUCT_START:
             o1 = ev1.structType(); o2 = ev2.structType(); desc = "structType";
             break;
         default: return;

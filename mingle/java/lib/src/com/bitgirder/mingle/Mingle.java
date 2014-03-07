@@ -71,6 +71,12 @@ class Mingle
     public final static MingleIdentifier ID_AUTHENTICATION;
     public final static MingleIdentifier ID_PARAMETERS;
 
+    public final static QualifiedTypeName QNAME_RESPONSE;
+    public final static MingleTypeReference TYPE_RESPONSE;
+
+    public final static MingleIdentifier ID_RESULT;
+    public final static MingleIdentifier ID_ERROR;
+
     private final static Map< DeclaredTypeName, QualifiedTypeName > 
         CORE_DECL_NAMES;
 
@@ -78,6 +84,7 @@ class Mingle
         Map< MingleTypeReference, Class< ? extends MingleValue > > 
             VALUE_CLASSES;
 
+    public final static NullableTypeReference TYPE_NULLABLE_VALUE;
     public final static ListTypeReference TYPE_VALUE_LIST;
 
     private final static ObjectPathFormatter< MingleIdentifier > 
@@ -767,112 +774,6 @@ class Mingle
         return appendIdPath( p, new StringBuilder() );
     }
 
-    // Static class init follows
-
-    private
-    static
-    MingleIdentifier
-    initId( String... parts )
-    {
-        return new MingleIdentifier( parts );
-    }
-
-    private
-    static
-    MingleNamespace
-    initNs( MingleIdentifier ver,
-            MingleIdentifier... parts )
-    {
-        return new MingleNamespace( parts, ver );
-    }
-
-    private
-    static
-    QualifiedTypeName
-    initCoreQname( String nm )
-    {
-        state.notNull( NS_CORE, "NS_CORE" );
-        state.notNull( CORE_DECL_NAMES, "CORE_DECL_NAMES" );
-
-        DeclaredTypeName dn = new DeclaredTypeName( nm );
-        QualifiedTypeName res = new QualifiedTypeName( NS_CORE, dn );
-
-        Lang.putUnique( CORE_DECL_NAMES, dn, res );
-
-        return res;
-    }
-
-    private
-    static
-    AtomicTypeReference
-    initCoreType( QualifiedTypeName qn )
-    {
-        state.notNull( VALUE_CLASSES, "VALUE_CLASSES" );
-        AtomicTypeReference res = new AtomicTypeReference( qn, null );
-
-        try
-        {
-            String nm = "com.bitgirder.mingle.Mingle" + qn.getName();
-            Class< ? > c1 = Class.forName( nm );
-
-            VALUE_CLASSES.put( res, c1.asSubclass( MingleValue.class ) );
-        }
-        catch ( Exception ex )
-        {
-            String msg = "Couldn't initialize core type class for " + qn;
-            throw new RuntimeException( msg );
-        }
-
-        return res;
-    }
-
-    static
-    {
-        NS_CORE = 
-            initNs( initId( "v1" ), initId( "mingle" ), initId( "core" ) );
-
-        CORE_DECL_NAMES = Lang.newMap();
-        VALUE_CLASSES = Lang.newMap();
-        
-        QNAME_BOOLEAN = initCoreQname( "Boolean" );
-        TYPE_BOOLEAN = initCoreType( QNAME_BOOLEAN );
-        QNAME_INT32 = initCoreQname( "Int32" );
-        TYPE_INT32 = initCoreType( QNAME_INT32 );
-        QNAME_INT64 = initCoreQname( "Int64" );
-        TYPE_INT64 = initCoreType( QNAME_INT64 );
-        QNAME_UINT32 = initCoreQname( "Uint32" );
-        TYPE_UINT32 = initCoreType( QNAME_UINT32 );
-        QNAME_UINT64 = initCoreQname( "Uint64" );
-        TYPE_UINT64 = initCoreType( QNAME_UINT64 );
-        QNAME_FLOAT32 = initCoreQname( "Float32" );
-        TYPE_FLOAT32 = initCoreType( QNAME_FLOAT32 );
-        QNAME_FLOAT64 = initCoreQname( "Float64" );
-        TYPE_FLOAT64 = initCoreType( QNAME_FLOAT64 );
-        QNAME_STRING = initCoreQname( "String" );
-        TYPE_STRING = initCoreType( QNAME_STRING );
-        QNAME_BUFFER = initCoreQname( "Buffer" );
-        TYPE_BUFFER = initCoreType( QNAME_BUFFER );
-        QNAME_TIMESTAMP = initCoreQname( "Timestamp" );
-        TYPE_TIMESTAMP = initCoreType( QNAME_TIMESTAMP );
-        QNAME_SYMBOL_MAP = initCoreQname( "SymbolMap" );
-        TYPE_SYMBOL_MAP = initCoreType( QNAME_SYMBOL_MAP );
-        QNAME_NULL = initCoreQname( "Null" );
-        TYPE_NULL = initCoreType( QNAME_NULL );
-        QNAME_VALUE = initCoreQname( "Value" );
-        TYPE_VALUE = initCoreType( QNAME_VALUE );
-
-        TYPE_VALUE_LIST = new ListTypeReference( TYPE_VALUE, true );
-
-        QNAME_REQUEST = initCoreQname( "Request" );
-        TYPE_REQUEST = new AtomicTypeReference( QNAME_REQUEST, null );
-
-        ID_NAMESPACE = initId( "namespace" );
-        ID_SERVICE = initId( "service" );
-        ID_OPERATION = initId( "operation" );
-        ID_PARAMETERS = initId( "parameters" );
-        ID_AUTHENTICATION = initId( "authentication" );
-    }
-
     private
     final
     static
@@ -1070,5 +971,118 @@ class Mingle
         throws MingleValueCastException
     {
         return objectForValue( mv, path, IDENTIFIER_CONVERTER );
+    }
+
+    // Static class init follows
+
+    private
+    static
+    MingleIdentifier
+    initId( String... parts )
+    {
+        return new MingleIdentifier( parts );
+    }
+
+    private
+    static
+    MingleNamespace
+    initNs( MingleIdentifier ver,
+            MingleIdentifier... parts )
+    {
+        return new MingleNamespace( parts, ver );
+    }
+
+    private
+    static
+    QualifiedTypeName
+    initCoreQname( String nm )
+    {
+        state.notNull( NS_CORE, "NS_CORE" );
+        state.notNull( CORE_DECL_NAMES, "CORE_DECL_NAMES" );
+
+        DeclaredTypeName dn = new DeclaredTypeName( nm );
+        QualifiedTypeName res = new QualifiedTypeName( NS_CORE, dn );
+
+        Lang.putUnique( CORE_DECL_NAMES, dn, res );
+
+        return res;
+    }
+
+    private
+    static
+    AtomicTypeReference
+    initCoreType( QualifiedTypeName qn )
+    {
+        state.notNull( VALUE_CLASSES, "VALUE_CLASSES" );
+        AtomicTypeReference res = new AtomicTypeReference( qn, null );
+
+        try
+        {
+            String nm = "com.bitgirder.mingle.Mingle" + qn.getName();
+            Class< ? > c1 = Class.forName( nm );
+
+            VALUE_CLASSES.put( res, c1.asSubclass( MingleValue.class ) );
+        }
+        catch ( Exception ex )
+        {
+            String msg = "Couldn't initialize core type class for " + qn;
+            throw new RuntimeException( msg );
+        }
+
+        return res;
+    }
+
+    static
+    {
+        NS_CORE = 
+            initNs( initId( "v1" ), initId( "mingle" ), initId( "core" ) );
+
+        CORE_DECL_NAMES = Lang.newMap();
+        VALUE_CLASSES = Lang.newMap();
+        
+        QNAME_BOOLEAN = initCoreQname( "Boolean" );
+        TYPE_BOOLEAN = initCoreType( QNAME_BOOLEAN );
+        QNAME_INT32 = initCoreQname( "Int32" );
+        TYPE_INT32 = initCoreType( QNAME_INT32 );
+        QNAME_INT64 = initCoreQname( "Int64" );
+        TYPE_INT64 = initCoreType( QNAME_INT64 );
+        QNAME_UINT32 = initCoreQname( "Uint32" );
+        TYPE_UINT32 = initCoreType( QNAME_UINT32 );
+        QNAME_UINT64 = initCoreQname( "Uint64" );
+        TYPE_UINT64 = initCoreType( QNAME_UINT64 );
+        QNAME_FLOAT32 = initCoreQname( "Float32" );
+        TYPE_FLOAT32 = initCoreType( QNAME_FLOAT32 );
+        QNAME_FLOAT64 = initCoreQname( "Float64" );
+        TYPE_FLOAT64 = initCoreType( QNAME_FLOAT64 );
+        QNAME_STRING = initCoreQname( "String" );
+        TYPE_STRING = initCoreType( QNAME_STRING );
+        QNAME_BUFFER = initCoreQname( "Buffer" );
+        TYPE_BUFFER = initCoreType( QNAME_BUFFER );
+        QNAME_TIMESTAMP = initCoreQname( "Timestamp" );
+        TYPE_TIMESTAMP = initCoreType( QNAME_TIMESTAMP );
+        QNAME_SYMBOL_MAP = initCoreQname( "SymbolMap" );
+        TYPE_SYMBOL_MAP = initCoreType( QNAME_SYMBOL_MAP );
+        QNAME_NULL = initCoreQname( "Null" );
+        TYPE_NULL = initCoreType( QNAME_NULL );
+        QNAME_VALUE = initCoreQname( "Value" );
+        TYPE_VALUE = initCoreType( QNAME_VALUE );
+
+        TYPE_NULLABLE_VALUE = new NullableTypeReference( TYPE_VALUE );
+        TYPE_VALUE_LIST = new ListTypeReference( TYPE_VALUE, true );
+
+        QNAME_REQUEST = initCoreQname( "Request" );
+        TYPE_REQUEST = new AtomicTypeReference( QNAME_REQUEST, null );
+
+        ID_NAMESPACE = initId( "namespace" );
+        ID_SERVICE = initId( "service" );
+        ID_OPERATION = initId( "operation" );
+        ID_PARAMETERS = initId( "parameters" );
+        ID_AUTHENTICATION = initId( "authentication" );
+
+        QNAME_RESPONSE = initCoreQname( "Response" );
+        TYPE_RESPONSE = new AtomicTypeReference( QNAME_RESPONSE, null );
+
+        ID_RESULT = initId( "result" );
+        ID_ERROR = initId( "error" );
     }
 }

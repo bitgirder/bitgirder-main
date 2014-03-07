@@ -369,8 +369,12 @@ class MingleBinReader
         while ( true )
         {
             byte tc = nextTc( "symbol map", TC_END, TC_FIELD );
-            if ( tc == TC_END ) return new MingleSymbolMap( m );
-            m.put( readIdentifier(), readValue() );
+            if ( tc == TC_END ) return MingleSymbolMap.createUnsafe( m );
+
+            MingleIdentifier fld = readIdentifier();
+            MingleValue mv = readValue();
+
+            if ( ! ( mv instanceof MingleNull ) ) m.put( fld, mv );
         }
     }
 

@@ -42,9 +42,17 @@ implements MingleValueReactorPipeline.Processor,
         fieldTypeFor( MingleIdentifier fld,
                       ObjectPath< MingleIdentifier > path ) 
         {
-            return Mingle.TYPE_VALUE;
+            return Mingle.TYPE_NULLABLE_VALUE;
         }
     };
+
+    public 
+    static 
+    FieldTyper 
+    getDefaultFieldTyper() 
+    { 
+        return DEFAULT_FIELD_TYPER;
+    }
 
     public
     static
@@ -547,10 +555,10 @@ implements MingleValueReactorPipeline.Processor,
     {
         switch ( ev.type() ) {
         case VALUE: processValue( ev, next ); return;
-        case START_LIST: processStartList( ev, next ); return;
-        case START_MAP: processStartMap( ev, next ); return;
-        case START_STRUCT: processStartStruct( ev, next ); return;
-        case START_FIELD: processStartField( ev, next ); return;
+        case LIST_START: processStartList( ev, next ); return;
+        case MAP_START: processStartMap( ev, next ); return;
+        case STRUCT_START: processStartStruct( ev, next ); return;
+        case FIELD_START: processStartField( ev, next ); return;
         case END: processEnd( ev, next ); return;
         }
 

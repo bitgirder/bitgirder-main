@@ -18,7 +18,7 @@ import java.util.List;
 // this impl follows the go impl, so see there for more on its design
 public
 final
-class MingleServiceRequestReactor
+class MingleRequestReactor
 implements MingleValueReactor,
            PipelineInitializer< Object >
 {
@@ -38,15 +38,22 @@ implements MingleValueReactor,
     
     private final Delegate del;
 
-    private int depth;
     private TopFieldType topFld = TopFieldType.NONE;
 
     private MingleValueReactor evProc;
 
     private boolean hadParams;
 
+    private final MingleValueReactors.DepthTracker depthTracker =
+        new MingleValueReactors.DepthTracker() {
+            protected void depthBecameOne() {
+                evProc = null;
+                topFld = TopFieldType.NONE;
+            }
+        };
+
     private
-    MingleServiceRequestReactor( Delegate del )
+    MingleRequestReactor( Delegate del )
     {
         this.del = del;
     }
@@ -81,26 +88,6 @@ implements MingleValueReactor,
                       MingleTypeReference typ )
     {
         failInvalidValue( p, typ.getExternalForm() );
-    }
-
-    private
-    void
-    updateDepth( MingleValueReactorEvent ev )
-        throws Exception
-    {
-        switch ( ev.type() ) {
-        case START_FIELD: return;
-        case START_MAP:
-        case START_STRUCT:
-        case START_LIST:
-            ++depth; break;
-        case END: --depth; break;
-        }
-
-        if ( depth == 1 ) {
-            evProc = null;
-            topFld = TopFieldType.NONE;
-        }
     }
 
     private
@@ -215,11 +202,11 @@ implements MingleValueReactor,
         throws Exception
     {
         switch ( ev.type() ) {
-        case START_FIELD: startField( ev ); return;
-        case START_STRUCT: startStruct( ev ); return;
-        case START_LIST: 
+        case FIELD_START: startField( ev ); return;
+        case STRUCT_START: startStruct( ev ); return;
+        case LIST_START: 
             failInvalidValue( ev.path(), Mingle.TYPE_VALUE_LIST ); return;
-        case START_MAP: 
+        case MAP_START: 
             failInvalidValue( ev.path(), Mingle.TYPE_SYMBOL_MAP ); return;
         case VALUE: value( ev ); return;
         case END: end( ev ); return;
@@ -235,7 +222,7 @@ implements MingleValueReactor,
         if ( evProc == null ) implProcessEvent( ev );
         else evProc.processEvent( ev );
 
-        updateDepth( ev );
+        depthTracker.update( ev );
     }
 
     public
@@ -273,11 +260,11 @@ implements MingleValueReactor,
 
     public
     static
-    MingleServiceRequestReactor
+    MingleRequestReactor
     create( Delegate del )
     {
         inputs.notNull( del, "del" );
-        return new MingleServiceRequestReactor( del );
+        return new MingleRequestReactor( del );
     }
             
     private final static MingleValueReactorFieldOrder REQ_ORDER =

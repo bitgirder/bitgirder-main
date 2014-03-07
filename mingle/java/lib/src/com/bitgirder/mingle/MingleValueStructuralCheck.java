@@ -32,7 +32,7 @@ implements MingleValueReactor
     // LIST_ACC_OBJ is used in the stack to indicate that we are accumulating a
     // list
     private final static Object LIST_ACC_OBJ =
-        MingleValueReactorEvent.Type.START_LIST;
+        MingleValueReactorEvent.Type.LIST_START;
 
     private final MingleValueReactorTopType topType;
 
@@ -52,13 +52,13 @@ implements MingleValueReactor
     descForEvent( MingleValueReactorEvent ev )
     {
         switch ( ev.type() ) {
-        case START_LIST: return "list start";
-        case START_MAP: return "map start";
+        case LIST_START: return "list start";
+        case MAP_START: return "map start";
         case END: return "end";
         case VALUE: return "value";
-        case START_FIELD: 
+        case FIELD_START: 
             return "start of field '" + ev.field().getExternalForm() + "'";
-        case START_STRUCT:
+        case STRUCT_START:
             return "start of struct " + ev.structType().getExternalForm();
         default: throw state.failf( "unhandled type: %s", ev.type() );
         }
@@ -287,10 +287,10 @@ implements MingleValueReactor
 
         switch ( ev.type() ) {
         case VALUE: checkValue( ev ); break;
-        case START_MAP: checkStartStructure( ev ); break;
-        case START_LIST: checkStartList( ev ); break;
-        case START_STRUCT: checkStartStructure( ev ); break;
-        case START_FIELD: checkStartField( ev ); break;
+        case MAP_START: checkStartStructure( ev ); break;
+        case LIST_START: checkStartList( ev ); break;
+        case STRUCT_START: checkStartStructure( ev ); break;
+        case FIELD_START: checkStartField( ev ); break;
         case END: checkEnd( ev ); break;
         default: state.failf( "unhandled event: %s", ev.type() );
         }

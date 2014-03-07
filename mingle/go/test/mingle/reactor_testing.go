@@ -747,7 +747,7 @@ func initFieldOrderReactorTests() {
     initFieldOrderPathTests()
 }
 
-type ServiceRequestReactorTest struct {
+type RequestReactorTest struct {
     Source interface{}
     Namespace *Namespace
     Service *Identifier
@@ -759,7 +759,7 @@ type ServiceRequestReactorTest struct {
     Error error
 }
 
-func initServiceRequestTests() {
+func initRequestTests() {
     ns1 := MustNamespace( "ns1@v1" )
     svc1 := id( "service1" )
     op1 := id( "op1" )
@@ -783,7 +783,7 @@ func initServiceRequestTests() {
         NewStructStartEvent( authQn ), evFldF1, i32Val1, NewEndEvent() }
     addSucc1 := func( evs ...interface{} ) {
         AddStdReactorTests(
-            &ServiceRequestReactorTest{
+            &RequestReactorTest{
                 Source: CopySource( flattenEvs( evs... ) ),
                 Namespace: ns1,
                 Service: svc1,
@@ -811,7 +811,7 @@ func initServiceRequestTests() {
         NewEndEvent(),
     )
     AddStdReactorTests(
-        &ServiceRequestReactorTest{
+        &RequestReactorTest{
             Source: CopySource(
                 flattenEvs( evReqTyp,
                     evFldNs, evNs1,
@@ -841,7 +841,7 @@ func initServiceRequestTests() {
     }
     addSucc2 := func( src interface{}, authExpct Value ) {
         AddStdReactorTests(
-            &ServiceRequestReactorTest{
+            &RequestReactorTest{
                 Namespace: ns1,
                 Service: svc1,
                 Operation: op1,
@@ -878,7 +878,7 @@ func initServiceRequestTests() {
     addPathSucc := func( 
         paramsIn, paramsExpct *SymbolMap, paramEvs []EventExpectation,
         auth Value, authEvs []EventExpectation ) {
-        t := &ServiceRequestReactorTest{
+        t := &RequestReactorTest{
             Namespace: ns1,
             Service: svc1,
             Operation: op1,
@@ -941,7 +941,7 @@ func initServiceRequestTests() {
         return writeMgIo( func( w *BinWriter ) { w.WriteIdentifier( id ) } )
     }
     AddStdReactorTests(
-        &ServiceRequestReactorTest{
+        &RequestReactorTest{
             Namespace: ns1,
             Service: svc1,
             Operation: op1,
@@ -954,16 +954,16 @@ func initServiceRequestTests() {
         },
     )
     AddStdReactorTests(
-        &ServiceRequestReactorTest{
+        &RequestReactorTest{
             Source: MustStruct( "ns1@v1/S1" ),
             Error: NewTypeCastError(
                 TypeRequest, MustTypeReference( "ns1@v1/S1" ), nil ),
         },
     )
     createReqVcErr := func( 
-        val interface{}, path idPath, msg string ) *ServiceRequestReactorTest {
+        val interface{}, path idPath, msg string ) *RequestReactorTest {
 
-        return &ServiceRequestReactorTest{
+        return &RequestReactorTest{
             Source: MustValue( val ),
             Error: NewValueCastError( path, msg ),
         }
@@ -1014,7 +1014,7 @@ func initServiceRequestTests() {
         AddStdReactorTests( test )
     }()
     AddStdReactorTests(
-        &ServiceRequestReactorTest{
+        &RequestReactorTest{
             Source: MustSymbolMap(
                 IdNamespace, ns1.ExternalForm(),
                 IdService, svc1.ExternalForm(),
@@ -1035,7 +1035,7 @@ func initServiceRequestTests() {
     // *BinWriter.Read(Identfier|Namespace) when parsing invalid
     // namespace/service/operation Buffers
     createBinRdErr := func( path *Identifier, msg string, 
-        pairs ...interface{} ) *ServiceRequestReactorTest {
+        pairs ...interface{} ) *RequestReactorTest {
 
         return createReqVcErr(
             MustSymbolMap( pairs... ), objpath.RootedAt( path ), msg )
@@ -1101,7 +1101,7 @@ func initServiceRequestTests() {
     }()
     t1Bad := qname( "foo@v1/Request" )
     AddStdReactorTests(
-        &ServiceRequestReactorTest{
+        &RequestReactorTest{
             Source: MustStruct( t1Bad ),
             Error: NewTypeCastError(
                 TypeRequest, t1Bad.AsAtomicType(), nil ),
@@ -1113,7 +1113,7 @@ func initServiceRequestTests() {
     // reactor is in fact being set up correctly and that we have set up the
     // right required fields.
     AddStdReactorTests(
-        &ServiceRequestReactorTest{
+        &RequestReactorTest{
             Source: MustSymbolMap( 
                 IdNamespace, ns1.ExternalForm(),
                 IdOperation, op1.ExternalForm(),
@@ -1124,7 +1124,7 @@ func initServiceRequestTests() {
     )
 }
 
-type ServiceResponseReactorTest struct {
+type ResponseReactorTest struct {
     In Value
     ResVal Value
     ResEvents []EventExpectation
@@ -1133,10 +1133,10 @@ type ServiceResponseReactorTest struct {
     Error error
 }
 
-func initServiceResponseTests() {
+func initResponseTests() {
     addSucc := func( in, res, err Value ) {
         AddStdReactorTests(
-            &ServiceResponseReactorTest{ In: in, ResVal: res, ErrVal: err } )
+            &ResponseReactorTest{ In: in, ResVal: res, ErrVal: err } )
     }
     i32Val1 := Int32( 1 )
     err1 := MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
@@ -1152,14 +1152,14 @@ func initServiceResponseTests() {
     pathErr := objpath.RootedAt( IdError )
     pathErrF1 := pathErr.Descend( id( "f1" ) )
     AddStdReactorTests(
-        &ServiceResponseReactorTest{
+        &ResponseReactorTest{
             In: MustStruct( QnameResponse, "result", int32( 1 ) ),
             ResVal: i32Val1,
             ResEvents: []EventExpectation{ 
                 { NewValueEvent( i32Val1 ), pathRes },
             },
         },
-        &ServiceResponseReactorTest{
+        &ResponseReactorTest{
             In: MustSymbolMap( "result", MustSymbolMap( "f1", int32( 1 ) ) ),
             ResVal: MustSymbolMap( "f1", int32( 1 ) ),
             ResEvents: []EventExpectation{
@@ -1169,14 +1169,14 @@ func initServiceResponseTests() {
                 { NewEndEvent(), pathRes },
             },
         },
-        &ServiceResponseReactorTest{
+        &ResponseReactorTest{
             In: MustSymbolMap( "error", int32( 1 ) ),
             ErrVal: i32Val1,
             ErrEvents: []EventExpectation{ 
                 { NewValueEvent( i32Val1 ), pathErr },
             },
         },
-        &ServiceResponseReactorTest{
+        &ResponseReactorTest{
             In: MustSymbolMap( "error", err1 ),
             ErrVal: err1,
             ErrEvents: []EventExpectation{
@@ -1188,16 +1188,16 @@ func initServiceResponseTests() {
         },
     )
     addFail := func( in Value, err error ) {
-        AddStdReactorTests( &ServiceResponseReactorTest{ In: in, Error: err } )
+        AddStdReactorTests( &ResponseReactorTest{ In: in, Error: err } )
     }
     addFail(
         err1.Fields,
         NewUnrecognizedFieldError( nil, id( "f1" ) ),
     )
     addFail(
-        MustStruct( "ns1@v1/ServiceResponse" ),
+        MustStruct( "ns1@v1/Response" ),
         NewTypeCastError( 
-            TypeResponse, MustTypeReference( "ns1@v1/ServiceResponse" ), nil ),
+            TypeResponse, MustTypeReference( "ns1@v1/Response" ), nil ),
     )
     addFail(
         MustSymbolMap( IdResult, i32Val1, IdError, err1 ),
@@ -1207,8 +1207,8 @@ func initServiceResponseTests() {
 }
 
 func initServiceTests() {
-    initServiceRequestTests()
-    initServiceResponseTests()
+    initRequestTests()
+    initResponseTests()
 }
 
 type CastReactorTest struct {
@@ -1606,6 +1606,11 @@ func ( t *crtInit ) addMapTests() {
     lt2 := &ListTypeReference{ TypeSymbolMap, false }
     t.addSucc( l1, l1, lt1 )
     t.addSucc( l2, l2, lt2 )
+    t.addSucc(
+        MustSymbolMap( "f1", NullVal ), 
+        MustSymbolMap( "f1", NullVal ), 
+        TypeValue,
+    )
     t.addSucc( MustList( s2, s2 ), MustList( m2, m2 ), lt2 )
     t.addTcError( int32( 1 ), TypeSymbolMap, TypeInt32 )
     t.addTcError0(
@@ -1640,6 +1645,8 @@ func ( t *crtInit ) addStructTests() {
     l1 := MustList( s1, s2 )
     t.addSucc( l1, l1, &ListTypeReference{ t1, false } )
     t.addSucc( l1, l1, &ListTypeReference{ t1, true } )
+    s4 := MustStruct( "ns1@v1/T4", "f1", NullVal )
+    t.addSucc( s4, s4, s4.Type )
     f1 := func( in interface{}, inTyp TypeReferenceInitializer ) {
         t.addTcError0(
             MustList( s1, in ),

@@ -11,17 +11,17 @@ enum MingleValueReactorTopType
     VALUE( 
         EnumSet.of(
             MingleValueReactorEvent.Type.VALUE,
-            MingleValueReactorEvent.Type.START_LIST,
-            MingleValueReactorEvent.Type.START_MAP,
-            MingleValueReactorEvent.Type.START_STRUCT
+            MingleValueReactorEvent.Type.LIST_START,
+            MingleValueReactorEvent.Type.MAP_START,
+            MingleValueReactorEvent.Type.STRUCT_START
         )
     ),
 
-    LIST( EnumSet.of( MingleValueReactorEvent.Type.START_LIST ) ),
+    LIST( EnumSet.of( MingleValueReactorEvent.Type.LIST_START ) ),
     
-    MAP( EnumSet.of( MingleValueReactorEvent.Type.START_MAP ) ),
+    MAP( EnumSet.of( MingleValueReactorEvent.Type.MAP_START ) ),
 
-    STRUCT( EnumSet.of( MingleValueReactorEvent.Type.START_STRUCT ) );
+    STRUCT( EnumSet.of( MingleValueReactorEvent.Type.STRUCT_START ) );
 
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();

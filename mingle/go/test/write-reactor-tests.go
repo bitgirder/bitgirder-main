@@ -110,15 +110,19 @@ func eventPathTestAsValue( t *mg.EventPathTest ) mg.Value {
     )
 }
 
-func svcRespTestAsValue( t *mg.ServiceResponseReactorTest ) mg.Value {
-    return mkStruct( "ServiceResponseReactorTest",
+func respTestAsValue( t *mg.ResponseReactorTest ) mg.Value {
+    pairs := []interface{}{
         "in", t.In,
         "res-val", t.ResVal,
-        "res-events", asValue( t.ResEvents ),
         "err-val", t.ErrVal,
-        "err-events", asValue( t.ErrEvents ),
         "error", asValue( t.Error ),
-    )
+    }
+    setEvs := func( k string, evs []mg.EventExpectation ) {
+        if evs != nil { pairs = append( pairs, k, asValue( evs ) ) }
+    }
+    setEvs( "res-events", t.ResEvents )
+    setEvs( "err-events", t.ErrEvents )
+    return mkStruct( "ResponseReactorTest", pairs... )
 }
 
 func eeAsValue( ee mg.EventExpectation ) mg.Value {
@@ -152,7 +156,7 @@ func asFeedSource( src interface{} ) mg.Value {
     panic( fmt.Errorf( "unhandled source: %T", src ) )
 }
 
-func svcReqTestAsValue( st *mg.ServiceRequestReactorTest ) mg.Value {
+func reqTestAsValue( st *mg.RequestReactorTest ) mg.Value {
     pairs := []interface{}{
         "source", asFeedSource( st.Source ),
         "authentication", asValue( st.Authentication ),
@@ -173,7 +177,7 @@ func svcReqTestAsValue( st *mg.ServiceRequestReactorTest ) mg.Value {
     if evs := st.AuthenticationEvents; evs != nil {
         pairs = append( pairs, "authentication-events", asValue( evs ) )
     }
-    return mkStruct( "ServiceRequestReactorTest", pairs... )
+    return mkStruct( "RequestReactorTest", pairs... )
 }
 
 func asValue( val interface{} ) mg.Value {
@@ -218,8 +222,8 @@ func asValue( val interface{} ) mg.Value {
     case *mg.EventPathTest: return eventPathTestAsValue( v )
     case *mg.StructuralReactorErrorTest: 
         return structuralReactorErrorTestAsValue( v )
-    case *mg.ServiceRequestReactorTest: return svcReqTestAsValue( v )
-    case *mg.ServiceResponseReactorTest: return svcRespTestAsValue( v )
+    case *mg.RequestReactorTest: return reqTestAsValue( v )
+    case *mg.ResponseReactorTest: return respTestAsValue( v )
     }
     panic( fmt.Errorf( "unhandled: %T", val ) )
 }

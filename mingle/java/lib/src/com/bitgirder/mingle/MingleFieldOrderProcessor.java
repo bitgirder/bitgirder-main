@@ -107,7 +107,7 @@ implements MingleValueReactorPipeline.Processor,
         private MingleValueReactorFieldOrder order;
 
         // fieldQueue, saved, specs, and requiredRemaining are lazily
-        // instantiated upon arrival of this instance's START_STRUCT event
+        // instantiated upon arrival of this instance's STRUCT_START event
 
         private Queue< MingleIdentifier > fieldQueue;
 
@@ -118,7 +118,7 @@ implements MingleValueReactorPipeline.Processor,
         private Map< MingleIdentifier, MingleValueReactorFieldSpecification >
             specs;
 
-        // set in START_FIELD, cleared after field value
+        // set in FIELD_START, cleared after field value
         private MingleIdentifier curFld;
         private List< MingleValueReactorEvent > curAcc;
 
@@ -191,8 +191,8 @@ implements MingleValueReactorPipeline.Processor,
             throws Exception
         {
             switch ( ev.type() ) {
-            case START_STRUCT: processStartStruct( ev ); break;
-            case START_FIELD: processStartField( ev ); break;
+            case STRUCT_START: processStartStruct( ev ); break;
+            case FIELD_START: processStartField( ev ); break;
             default: state.failf( "unhandled struct event: %s", ev.type() );
             }
         }
@@ -399,11 +399,11 @@ implements MingleValueReactorPipeline.Processor,
         throws Exception
     {
         switch ( ev.type() ) {
-        case START_LIST: processStartContainer( ev, next ); break;
-        case START_MAP: processStartContainer( ev, next ); break;
-        case START_STRUCT: processStartStruct( ev, next ); break;
+        case LIST_START: processStartContainer( ev, next ); break;
+        case MAP_START: processStartContainer( ev, next ); break;
+        case STRUCT_START: processStartStruct( ev, next ); break;
         case VALUE: processValue( ev ); break;
-        case START_FIELD: stack.peek().processEvent( ev ); break;
+        case FIELD_START: stack.peek().processEvent( ev ); break;
         case END: processEnd( ev ); break; 
         default: state.failf( "unhandled event: %s", ev.type() );
         }
@@ -416,7 +416,7 @@ implements MingleValueReactorPipeline.Processor,
         throws Exception
     {
         if ( stack.isEmpty() && 
-                ev.type() != MingleValueReactorEvent.Type.START_STRUCT ) 
+                ev.type() != MingleValueReactorEvent.Type.STRUCT_START ) 
         {
             next.processEvent( ev );
             return;

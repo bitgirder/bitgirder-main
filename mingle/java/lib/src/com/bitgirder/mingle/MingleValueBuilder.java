@@ -3,6 +3,8 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import static com.bitgirder.log.CodeLoggers.Statics.*;
+
 import com.bitgirder.lang.Lang;
 
 import com.bitgirder.pipeline.PipelineInitializer;
@@ -59,7 +61,7 @@ implements MingleValueReactor,
 
             MingleSymbolMap.BuilderImpl< ?, ? > b =
                 (MingleSymbolMap.BuilderImpl< ?, ? >) stack.peek();
-
+            
             b.set( fld, mv );
             return;
         }
@@ -98,12 +100,12 @@ implements MingleValueReactor,
     processEvent( MingleValueReactorEvent ev )
     {
         switch ( ev.type() ) {
-        case START_MAP: stack.push( new MingleSymbolMap.Builder() ); return;
-        case START_STRUCT: 
+        case MAP_START: stack.push( new MingleSymbolMap.Builder() ); return;
+        case STRUCT_START: 
             stack.push( new MingleStruct.Builder().setType( ev.structType() ) );
             return;
-        case START_FIELD: stack.push( ev.field() ); return;
-        case START_LIST: stack.push( Lang.< Object >newList() ); return;
+        case FIELD_START: stack.push( ev.field() ); return;
+        case LIST_START: stack.push( Lang.< Object >newList() ); return;
         case VALUE: processValue( ev.value() ); return;
         case END: processEnd(); return;
         }

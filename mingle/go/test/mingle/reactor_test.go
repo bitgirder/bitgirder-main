@@ -275,7 +275,7 @@ func valueCheckReactor(
 
 type requestCheck struct {
     *assert.PathAsserter
-    st *ServiceRequestReactorTest
+    st *RequestReactorTest
     reqFldMin requestFieldType
     auth *ValueBuilder
     params *ValueBuilder
@@ -345,15 +345,15 @@ func ( chk *requestCheck ) checkRequest() {
         chk.st.Parameters, chk.params, chk.Descend( "parameters" ) )
 }
 
-func ( c *ReactorTestCall ) callServiceRequest(
-    st *ServiceRequestReactorTest ) {
+func ( c *ReactorTestCall ) callRequest(
+    st *RequestReactorTest ) {
 
     reqChk := &requestCheck{ 
         PathAsserter: c.PathAsserter, 
         st: st,
         reqFldMin: reqFieldNs,
     }
-    rct := InitReactorPipeline( NewServiceRequestReactor( reqChk ) )
+    rct := InitReactorPipeline( NewRequestReactor( reqChk ) )
     if err := FeedSource( st.Source, rct ); err == nil {
         c.CheckNoError( st.Error )
         reqChk.checkRequest()
@@ -362,7 +362,7 @@ func ( c *ReactorTestCall ) callServiceRequest(
 
 type responseCheck struct {
     *assert.PathAsserter
-    st *ServiceResponseReactorTest
+    st *ResponseReactorTest
     err *ValueBuilder
     res *ValueBuilder
 }
@@ -388,11 +388,11 @@ func ( rc *responseCheck ) check() {
     CheckBuiltValue( rc.st.ErrVal, rc.err, rc.Descend( "Error" ) )
 }
 
-func ( c *ReactorTestCall ) callServiceResponse( 
-    st *ServiceResponseReactorTest ) {
+func ( c *ReactorTestCall ) callResponse( 
+    st *ResponseReactorTest ) {
 
     chk := &responseCheck{ PathAsserter: c.PathAsserter, st: st }
-    rct := InitReactorPipeline( NewServiceResponseReactor( chk ) )
+    rct := InitReactorPipeline( NewResponseReactor( chk ) )
     if err := VisitValue( st.In, rct ); err == nil {
         c.CheckNoError( st.Error )
         chk.check()
@@ -409,8 +409,8 @@ func ( c *ReactorTestCall ) call() {
     case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
     case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
     case *CastReactorTest: c.callCast( s )
-    case *ServiceRequestReactorTest: c.callServiceRequest( s )
-    case *ServiceResponseReactorTest: c.callServiceResponse( s )
+    case *RequestReactorTest: c.callRequest( s )
+    case *ResponseReactorTest: c.callResponse( s )
     default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
     }
 }

@@ -1,7 +1,7 @@
 package com.bitgirder.mingle;
 
 import static com.bitgirder.mingle.MingleTestMethods.*;
-import static com.bitgirder.mingle.MingleServiceRequestReactor.TopFieldType;
+import static com.bitgirder.mingle.MingleRequestReactor.TopFieldType;
 
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
@@ -381,6 +381,8 @@ class MingleReactorTests
             return new MingleValueReactorPipeline.Builder().
                 addProcessor( MinglePathSettingProcessor.create( path ) ).
                 addProcessor( createCastReactor() ).
+                addReactor(
+                    MingleValueReactors.createDebugReactor( "[post-cast]" ) ).
                 addReactor( MingleValueBuilder.create() ).
                 build();
         }
@@ -396,6 +398,9 @@ class MingleReactorTests
 
             MingleValueBuilder vb = Pipelines.
                 lastElementOfType( pip.pipeline(), MingleValueBuilder.class );
+
+            codef( "expct: %s, act: %s", 
+                Mingle.inspect( expect ), Mingle.inspect( vb.value() ) );
 
             MingleTests.assertEqual( expect, vb.value() );
         }
@@ -521,10 +526,10 @@ class MingleReactorTests
         processEvent( MingleValueReactorEvent ev )
         {
             switch ( ev.type() ) {
-            case START_LIST: stack.push( "list" ); break;
-            case START_MAP: stack.push( "map" ); break;
-            case START_STRUCT: pushStruct( ev.structType() ); break;
-            case START_FIELD: startField( ev.field() ); break;
+            case LIST_START: stack.push( "list" ); break;
+            case MAP_START: stack.push( "map" ); break;
+            case STRUCT_START: pushStruct( ev.structType() ); break;
+            case FIELD_START: startField( ev.field() ); break;
             case END: stack.pop(); break;
             }
         }
@@ -650,9 +655,9 @@ class MingleReactorTests
     private
     final
     static
-    class ServiceRequestReactorTest
+    class RequestReactorTest
     extends TestImpl
-    implements MingleServiceRequestReactor.Delegate
+    implements MingleRequestReactor.Delegate
     {
         private Object source;
 
@@ -734,8 +739,8 @@ class MingleReactorTests
         call()
             throws Exception
         {
-            MingleServiceRequestReactor rct = 
-                MingleServiceRequestReactor.create( this );
+            MingleRequestReactor rct = 
+                MingleRequestReactor.create( this );
 
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
@@ -753,20 +758,52 @@ class MingleReactorTests
     private
     final
     static
-    class ServiceResponseReactorTest
+    class ResponseReactorTest
     extends TestImpl
+    implements MingleResponseReactor.Delegate
     {
         private MingleValue in;
-        private MingleValue resVal;
-        private Queue< EventExpectation > resEvents;
-        private MingleValue errVal;
-        private Queue< EventExpectation > errEvents;
+
+        private final ValueReactorCheck resChk = new ValueReactorCheck();
+        private final ValueReactorCheck errChk = new ValueReactorCheck();
+
+        public
+        MingleValueReactor
+        getResultReactor( ObjectPath< MingleIdentifier > p )
+        {
+//            return resChk.reactor();
+            return new MingleValueReactorPipeline.Builder().
+                addReactor(
+                    MingleValueReactors.createDebugReactor( "[res]" ) ).
+                addReactor( resChk.reactor() ).
+                build();
+        }
+
+        public
+        MingleValueReactor
+        getErrorReactor( ObjectPath< MingleIdentifier > p )
+        {
+            return errChk.reactor();
+        }
 
         public
         void
         call()
+            throws Exception
         {
-            throw new UnsupportedOperationException( "Unimplemented" );
+            MingleResponseReactor rct = MingleResponseReactor.create( this );
+
+            MingleValueReactorPipeline pip =
+                new MingleValueReactorPipeline.Builder().
+                    addReactor( 
+                        MingleValueReactors.createDebugReactor( "[test]" ) ).
+                    addReactor( rct ).
+                    build();
+
+            feedSource( in, pip );
+
+            resChk.checkComplete();
+            errChk.checkComplete();
         }
     }
 
@@ -1374,11 +1411,11 @@ class MingleReactorTests
         }
 
         private
-        ServiceRequestReactorTest
-        asServiceRequestReactorTest( MingleStruct ms )
+        RequestReactorTest
+        asRequestReactorTest( MingleStruct ms )
             throws Exception
         {
-            ServiceRequestReactorTest res = new ServiceRequestReactorTest();
+            RequestReactorTest res = new RequestReactorTest();
             res.setLabel( makeName( ms, null ) );
 
             MingleSymbolMap map = ms.getFields();
@@ -1415,25 +1452,25 @@ class MingleReactorTests
         }
 
         private
-        ServiceResponseReactorTest
-        asServiceResponseReactorTest( MingleStruct ms )
+        ResponseReactorTest
+        asResponseReactorTest( MingleStruct ms )
             throws Exception
         {
-            ServiceResponseReactorTest res = new ServiceResponseReactorTest();
+            ResponseReactorTest res = new ResponseReactorTest();
             res.setLabel( makeName( ms, null ) );
 
             MingleSymbolMap map = ms.getFields();
 
             res.in = mapExpect( map, "in", MingleValue.class );
 
-            res.resVal = mapGet( map, "resVal", MingleValue.class );
+            res.resChk.value = mapGet( map, "resVal", MingleValue.class );
 
-            res.resEvents = asEventExpectationQueue( 
+            res.resChk.events = asEventExpectationQueue( 
                 mapGet( map, "resEvents", MingleList.class ) );
             
-            res.errVal = mapGet( map, "errVal", MingleValue.class );
+            res.errChk.value = mapGet( map, "errVal", MingleValue.class );
 
-            res.errEvents = asEventExpectationQueue(
+            res.errChk.events = asEventExpectationQueue(
                 mapGet( map, "errEvents", MingleList.class ) );
 
             setOptError( res, map );
@@ -1463,11 +1500,10 @@ class MingleReactorTests
                 return asFieldOrderMissingFieldsTest( ms );
             } else if ( nm.equals( "FieldOrderPathTest" ) ) {
                 return asFieldOrderPathTest( ms );
-            } else if ( nm.equals( "ServiceRequestReactorTest" ) ) {
-                return asServiceRequestReactorTest( ms );
-            } else if ( nm.equals( "ServiceResponseReactorTest" ) ) {
-//                return asServiceResponseReactorTest( ms );
-                return null;
+            } else if ( nm.equals( "RequestReactorTest" ) ) {
+                return asRequestReactorTest( ms );
+            } else if ( nm.equals( "ResponseReactorTest" ) ) {
+                return asResponseReactorTest( ms );
             } else {
                 throw state.failf( "unhandled test: %s", nm );
             }
@@ -1542,7 +1578,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/15",
+            "RequestReactorTest/15",
             new MingleValueCastException(
                 "can't convert to namespace from mingle:core@v1/Boolean",
                 ObjectPath.getRoot( Mingle.ID_NAMESPACE )
@@ -1550,7 +1586,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/19",
+            "RequestReactorTest/19",
             new MingleValueCastException(
                 "can't convert to identifier from mingle:core@v1/Boolean",
                 ObjectPath.getRoot( Mingle.ID_SERVICE )
@@ -1558,7 +1594,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/20",
+            "RequestReactorTest/20",
             new MingleValueCastException(
                 "can't convert to identifier from mingle:core@v1/Boolean",
                 ObjectPath.getRoot( Mingle.ID_OPERATION )
@@ -1566,7 +1602,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/22",
+            "RequestReactorTest/22",
             new MingleValueCastException(
                 "could not read namespace: [offset 0]: Expected namespace but saw type code 0x0f",
                 ObjectPath.getRoot( Mingle.ID_NAMESPACE )
@@ -1574,7 +1610,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/23",
+            "RequestReactorTest/23",
             new MingleValueCastException(
                 "could not read identifier: [offset 0]: Expected identifier but saw type code 0x0f",
                 ObjectPath.getRoot( Mingle.ID_SERVICE )
@@ -1582,7 +1618,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/24",
+            "RequestReactorTest/24",
             new MingleValueCastException(
                 "could not read identifier: [offset 0]: Expected identifier but saw type code 0x0f",
                 ObjectPath.getRoot( Mingle.ID_OPERATION )
@@ -1590,7 +1626,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/25",
+            "RequestReactorTest/25",
             new MingleValueCastException(
                 "could not parse namespace: (at or near char 5) Illegal start of identifier part: \":\" (U+003A)",
                 ObjectPath.getRoot( Mingle.ID_NAMESPACE )
@@ -1598,7 +1634,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/26",
+            "RequestReactorTest/26",
             new MingleValueCastException(
                 "could not parse identifier: (at or near char 1) Illegal start of identifier part: \"2\" (U+0032)",
                 ObjectPath.getRoot( Mingle.ID_SERVICE )
@@ -1606,7 +1642,7 @@ class MingleReactorTests
         );
 
         OBJECT_OVERRIDES.put(
-            "ServiceRequestReactorTest/27",
+            "RequestReactorTest/27",
             new MingleValueCastException(
                 "could not parse identifier: (at or near char 1) Illegal start of identifier part: \"2\" (U+0032)",
                 ObjectPath.getRoot( Mingle.ID_OPERATION )

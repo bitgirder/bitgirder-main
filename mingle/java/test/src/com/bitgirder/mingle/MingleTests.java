@@ -280,6 +280,18 @@ class MingleTests
         la.isFalse( it2.hasNext(), "list lengths differ" );
     }
 
+    private
+    static
+    void
+    assertEqualNull( MingleValue mv1,
+                     MingleValue mv2,
+                     PathWiseAsserter< MingleIdentifier > a )
+    {
+        if ( mv1 == null ) mv1 = MingleNull.getInstance();
+        if ( mv2 == null ) mv2 = MingleNull.getInstance();
+        a.equal( mv1, mv2 );
+    }
+
     public
     static
     void
@@ -288,17 +300,23 @@ class MingleTests
                  PathWiseAsserter< MingleIdentifier > a )
     {
         inputs.notNull( a, "a" );
+        codef( "checking mv1 %s, mv2 %s at %s", mv1, mv2, a.formatPath() );
         
         if ( ! a.sameNullity( mv1, mv2 ) ) return;
 
-        if ( mv1 instanceof MingleStruct ) assertEqualStruct( mv1, mv2, a );
-        else if ( mv1 instanceof MingleEnum ) assertEqualEnum( mv1, mv2, a );
-        else if ( mv1 instanceof MingleSymbolMap ) 
-        {
+        if ( mv1 instanceof MingleStruct ) {
+            assertEqualStruct( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleEnum ) {
+            assertEqualEnum( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleSymbolMap ) {
             assertEqualMap( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleList ) {
+            assertEqualList( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleNull || mv2 instanceof MingleNull ) {
+            assertEqualNull( mv1, mv2, a );
+        } else {
+            a.equal( mv1, mv2 );
         }
-        else if ( mv1 instanceof MingleList ) assertEqualList( mv1, mv2, a );
-        else a.equal( mv1, mv2 );
     }
 
     public

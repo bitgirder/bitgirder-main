@@ -91,7 +91,7 @@ func TestRequestReactorImplErrors( t *testing.T ) {
             failOn: failOn,
             in: in,
         }
-        test.callWith( NewServiceRequestReactor( test ) )
+        test.callWith( NewRequestReactor( test ) )
     }
 }
 
@@ -102,7 +102,7 @@ func TestResponseReactorImplErrors( t *testing.T ) {
             failOn: failOn,
             in: in,
         }
-        test.callWith( NewServiceResponseReactor( test ) )
+        test.callWith( NewResponseReactor( test ) )
     }
     chk( IdResult, MustSymbolMap( "result", 1 ) )
     chk( IdError, MustSymbolMap( "error", 1 ) )

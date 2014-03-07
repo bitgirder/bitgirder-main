@@ -501,10 +501,10 @@ func ( impl *mgReqImpl ) GetParametersReactor(
 
 func NewRequestReactor( 
     svcDefs *ServiceDefinitionMap, 
-    iface RequestReactorInterface ) *mg.ServiceRequestReactor {
+    iface RequestReactorInterface ) *mg.RequestReactor {
 
     reqImpl := &mgReqImpl{ svcDefs: svcDefs, iface: iface }
-    return mg.NewServiceRequestReactor( reqImpl )
+    return mg.NewRequestReactor( reqImpl )
 }
 
 func errorForUnexpectedErrorType( 
@@ -605,7 +605,7 @@ func NewResponseReactor(
     defs *DefinitionMap,
     svcDef *ServiceDefinition,
     opDef *OperationDefinition,
-    iface ResponseReactorInterface ) *mg.ServiceResponseReactor {
+    iface ResponseReactorInterface ) *mg.ResponseReactor {
 
     resTyp := opDef.Signature.Return
     qn := mg.TypeNameIn( resTyp ).( *mg.QualifiedTypeName )
@@ -615,5 +615,5 @@ func NewResponseReactor(
     }
     mgIface := 
         &mgRespImpl{ iface: iface, defs: defs, svcDef: svcDef, opDef: opDef }
-    return mg.NewServiceResponseReactor( mgIface )
+    return mg.NewResponseReactor( mgIface )
 }
