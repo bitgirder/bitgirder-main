@@ -236,6 +236,8 @@ class MingleValueReactors
     {
         inputs.notNull( ctx, "ctx" );
 
+        ensureStructuralCheck( ctx );
+
         MinglePathSettingProcessor res = Pipelines.lastElementOfType(
             ctx.pipeline(), MinglePathSettingProcessor.class );
 

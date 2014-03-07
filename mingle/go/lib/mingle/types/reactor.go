@@ -345,10 +345,10 @@ func NewCastReactorDefinitionMap(
 
 type RequestReactorInterface interface {
 
-    GetAuthenticationProcessor( 
+    GetAuthenticationReactor( 
         path objpath.PathNode ) ( mg.ReactorEventProcessor, error )
 
-    GetParametersProcessor(
+    GetParametersReactor(
         path objpath.PathNode ) ( mg.ReactorEventProcessor, error )
 }
 
@@ -400,14 +400,14 @@ func ( impl *mgReqImpl ) Operation(
 
 func ( impl *mgReqImpl ) needsAuth() bool { return impl.sd.Security != nil }
 
-func ( impl *mgReqImpl ) GetAuthenticationProcessor( 
+func ( impl *mgReqImpl ) GetAuthenticationReactor( 
     path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     impl.sawAuth = true
     if secQn := impl.sd.Security; secQn != nil { 
         authTyp := expectAuthTypeOf( secQn, impl.defMap() )
         cr := NewCastReactorDefinitionMap( authTyp, impl.defMap() )
-        authRct, err := impl.iface.GetAuthenticationProcessor( path )
+        authRct, err := impl.iface.GetAuthenticationReactor( path )
         if err != nil { return nil, err }
         return mg.InitReactorPipeline( cr, authRct ), nil
     }
@@ -483,7 +483,7 @@ func ( impl *mgReqImpl ) checkGotAuth( path objpath.PathNode ) error {
     return mg.NewMissingFieldsError( par, flds )
 }
 
-func ( impl *mgReqImpl ) GetParametersProcessor(
+func ( impl *mgReqImpl ) GetParametersReactor(
     path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     if err := impl.checkGotAuth( path ); err != nil { return nil, err }
@@ -493,7 +493,7 @@ func ( impl *mgReqImpl ) GetParametersProcessor(
     pci := parametersCastIface{ ci: ci, defs: ci.dm, opDef: impl.opDef }
     cr := newCastReactorBase( typ, pci, dm, pci )
     cr.skipPathSetter = true
-    proc, err := impl.iface.GetParametersProcessor( path )
+    proc, err := impl.iface.GetParametersReactor( path )
     if err != nil { return nil, err }
     paramsRct := parametersReactor{ proc }
     return mg.InitReactorPipeline( cr, paramsRct ), nil
@@ -526,8 +526,8 @@ func errorForUnexpectedErrorValue( ev mg.ReactorEvent ) error {
 }
 
 type ResponseReactorInterface interface {
-    GetResultProcessor( p objpath.PathNode ) ( mg.ReactorEventProcessor, error )
-    GetErrorProcessor( p objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+    GetResultReactor( p objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+    GetErrorReactor( p objpath.PathNode ) ( mg.ReactorEventProcessor, error )
 }
 
 type mgRespImpl struct {
@@ -537,11 +537,11 @@ type mgRespImpl struct {
     iface ResponseReactorInterface
 }
 
-func ( impl *mgRespImpl ) GetResultProcessor( 
+func ( impl *mgRespImpl ) GetResultReactor( 
     path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     resTyp := impl.opDef.Signature.Return
-    rct, err := impl.iface.GetResultProcessor( path )
+    rct, err := impl.iface.GetResultReactor( path )
     if err != nil { return nil, err }
     cr := newCastReactorDefinitionMap( resTyp, impl.defs )
     cr.skipPathSetter = true
@@ -593,10 +593,10 @@ func ( epr *errorProcReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
     return epr.proc.ProcessEvent( ev )
 }
 
-func ( impl *mgRespImpl ) GetErrorProcessor( 
+func ( impl *mgRespImpl ) GetErrorReactor( 
     p objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
-    rct, err := impl.iface.GetErrorProcessor( p )
+    rct, err := impl.iface.GetErrorReactor( p )
     if err != nil { return nil, err }
     return &errorProcReactor{ impl: impl, rct: rct }, nil
 }

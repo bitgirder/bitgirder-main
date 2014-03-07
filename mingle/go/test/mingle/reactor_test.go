@@ -324,14 +324,14 @@ func ( chk *requestCheck ) getProcessor(
     return valueCheckReactor( *vbPtr, evs, chk.PathAsserter ), nil
 }
 
-func ( chk *requestCheck ) GetAuthenticationProcessor(
+func ( chk *requestCheck ) GetAuthenticationReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     evs := chk.st.AuthenticationEvents
     return chk.getProcessor( reqFieldAuth, &( chk.auth ), evs )
 }
 
-func ( chk *requestCheck ) GetParametersProcessor(
+func ( chk *requestCheck ) GetParametersReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     evs := chk.st.ParameterEvents
@@ -367,7 +367,7 @@ type responseCheck struct {
     res *ValueBuilder
 }
 
-func ( rc *responseCheck ) GetResultProcessor( 
+func ( rc *responseCheck ) GetResultReactor( 
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     rc.res = NewValueBuilder()
@@ -375,7 +375,7 @@ func ( rc *responseCheck ) GetResultProcessor(
     return res, nil
 }
 
-func ( rc *responseCheck ) GetErrorProcessor(
+func ( rc *responseCheck ) GetErrorReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     rc.err = NewValueBuilder()

@@ -14,6 +14,8 @@ import com.bitgirder.lang.path.ObjectPathFormatter;
 
 import com.bitgirder.io.Base64Exception;
 
+import java.io.IOException;
+
 import java.util.Map;
 import java.util.List;
 import java.util.Iterator;
@@ -59,6 +61,15 @@ class Mingle
     public final static MingleTypeReference TYPE_NULL;
     public final static QualifiedTypeName QNAME_VALUE;
     public final static MingleTypeReference TYPE_VALUE;
+
+    public final static QualifiedTypeName QNAME_REQUEST;
+    public final static MingleTypeReference TYPE_REQUEST;
+
+    public final static MingleIdentifier ID_NAMESPACE;
+    public final static MingleIdentifier ID_SERVICE;
+    public final static MingleIdentifier ID_OPERATION;
+    public final static MingleIdentifier ID_AUTHENTICATION;
+    public final static MingleIdentifier ID_PARAMETERS;
 
     private final static Map< DeclaredTypeName, QualifiedTypeName > 
         CORE_DECL_NAMES;
@@ -851,6 +862,15 @@ class Mingle
         TYPE_VALUE = initCoreType( QNAME_VALUE );
 
         TYPE_VALUE_LIST = new ListTypeReference( TYPE_VALUE, true );
+
+        QNAME_REQUEST = initCoreQname( "Request" );
+        TYPE_REQUEST = new AtomicTypeReference( QNAME_REQUEST, null );
+
+        ID_NAMESPACE = initId( "namespace" );
+        ID_SERVICE = initId( "service" );
+        ID_OPERATION = initId( "operation" );
+        ID_PARAMETERS = initId( "parameters" );
+        ID_AUTHENTICATION = initId( "authentication" );
     }
 
     private
@@ -914,5 +934,141 @@ class Mingle
         inputs.notNull( id, "id" );
 
         return Enum.valueOf( cls, asJavaEnumString( id ) );
+    }
+
+    private
+    static
+    interface ConverterImpl< V >
+    {
+        public String targetName();
+
+        public V readBinary( MingleBinReader rd ) throws IOException;
+
+        public V parse( String s ) throws MingleSyntaxException;
+    }
+
+    private
+    static
+    < V >
+    V
+    objectForString( MingleString ms,
+                     ObjectPath< MingleIdentifier > path,
+                     ConverterImpl< V > cv )
+    {
+        try { return cv.parse( ms.toString() ); }
+        catch ( MingleSyntaxException mse ) 
+        {
+            String msg = String.format(
+                "could not parse %s: %s", cv.targetName(), mse.getMessage() );
+
+            throw new MingleValueCastException( msg, path );
+        }
+    }
+
+    private
+    static
+    < V >
+    V
+    objectForBuffer( MingleBuffer mb,
+                     ObjectPath< MingleIdentifier > path,
+                     ConverterImpl< V > cv )
+    {
+        try { return cv.readBinary( MingleBinReader.create( mb ) ); }
+        catch ( IOException ioe ) 
+        {
+            String msg = String.format(
+                "could not read %s: %s", cv.targetName(), ioe.getMessage() );
+
+            throw new MingleValueCastException( msg, path );
+        }
+    }
+
+    private
+    static
+    < V >
+    V
+    objectForValue( MingleValue mv,
+                    ObjectPath< MingleIdentifier > path,
+                    ConverterImpl< V > cv )
+        throws MingleValueCastException
+    {
+        inputs.notNull( mv, "mv" );
+        inputs.notNull( path, "path" );
+
+        if ( mv instanceof MingleString ) {
+            return objectForString( (MingleString) mv, path, cv );
+        } else if ( mv instanceof MingleBuffer ) {
+            return objectForBuffer( (MingleBuffer) mv, path, cv );
+        } 
+
+        String msg = String.format(
+            "can't convert to %s from %s", 
+            cv.targetName(), inferredTypeOf( mv ) );
+
+        throw new MingleValueCastException( msg, path );
+    }
+    
+    private final static ConverterImpl< MingleNamespace > NAMESPACE_CONVERTER =
+        new ConverterImpl< MingleNamespace >()
+        {
+            public String targetName() { return "namespace"; }
+
+            public
+            MingleNamespace
+            readBinary( MingleBinReader rd )
+                throws IOException
+            {
+                return rd.readNamespace();
+            }
+
+            public
+            MingleNamespace
+            parse( String s )
+                throws MingleSyntaxException
+            {
+                return MingleNamespace.parse( s );
+            }
+        };
+
+    public
+    static
+    MingleNamespace
+    namespaceForValue( MingleValue mv,
+                       ObjectPath< MingleIdentifier > path )
+        throws MingleValueCastException
+    {
+        return objectForValue( mv, path, NAMESPACE_CONVERTER );
+    }
+
+    private final static ConverterImpl< MingleIdentifier > 
+        IDENTIFIER_CONVERTER = new ConverterImpl< MingleIdentifier >()
+        {
+            public String targetName() { return "identifier"; }
+
+            public
+            MingleIdentifier
+            readBinary( MingleBinReader rd )
+                throws IOException
+            {
+                return rd.readIdentifier();
+            }
+
+            public
+            MingleIdentifier
+            parse( String s )
+                throws MingleSyntaxException
+            {
+                return MingleIdentifier.parse( s );
+            }
+        };
+
+    public
+    static
+    MingleIdentifier
+    identifierForValue( MingleValue mv,
+                        ObjectPath< MingleIdentifier > path )
+        throws MingleValueCastException
+    {
+        return objectForValue( mv, path, IDENTIFIER_CONVERTER );
     }
 }

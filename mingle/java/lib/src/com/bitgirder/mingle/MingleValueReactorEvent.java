@@ -135,11 +135,10 @@ class MingleValueReactorEvent
         this.path = path;
     }
 
-    // Returns the path value most recently set by a call to setPath(), or null
-    // if none or if clearPath() was called. The path returned from this call
-    // may be a mutable one, but should never change while this instance is
-    // being used in an invocation of MingleValueReactor.processEvent() unless
-    // the reactor itself changes it.
+    // Returns the path value most recently set by a call to setPath(), which
+    // may be null.  The path returned from this call may be a mutable one, but
+    // should never change while this instance is being used in an invocation of
+    // MingleValueReactor.processEvent() unless the reactor itself changes it.
     public ObjectPath< MingleIdentifier > path() { return path; }
 
     private

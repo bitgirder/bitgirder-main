@@ -330,4 +330,15 @@ class PathTests
         
         for ( ; p != null; p = p.getParent() ) assertCopy( p );
     }
+
+    @Test
+    public
+    void
+    testNullSafeMethods()
+    {
+        ObjectPath< String > p = 
+            ObjectPaths.descend( ObjectPaths.descend( null, "p1" ), "p2" );
+        
+        state.equalString( "p1.p2", format( p ) );
+    }
 }

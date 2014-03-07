@@ -45,25 +45,25 @@ func ( t serviceReactorImplTest ) getProcessor(
     return DiscardProcessor, nil
 }
 
-func ( t serviceReactorImplTest ) GetAuthenticationProcessor( 
+func ( t serviceReactorImplTest ) GetAuthenticationReactor( 
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     return t.getProcessor( path, IdAuthentication )
 }
 
-func ( t serviceReactorImplTest ) GetParametersProcessor( 
+func ( t serviceReactorImplTest ) GetParametersReactor( 
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     return t.getProcessor( path, IdParameters )
 }
 
-func ( t serviceReactorImplTest ) GetErrorProcessor(
+func ( t serviceReactorImplTest ) GetErrorReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     return t.getProcessor( path, IdError )
 }
 
-func ( t serviceReactorImplTest ) GetResultProcessor(
+func ( t serviceReactorImplTest ) GetResultReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
     return t.getProcessor( path, IdResult )
@@ -78,7 +78,7 @@ func ( t serviceReactorImplTest ) callWith( rct ReactorEventProcessor ) {
 
 func TestRequestReactorImplErrors( t *testing.T ) {
     a := assert.NewPathAsserter( t )
-    in := MustStruct( QnameServiceRequest,
+    in := MustStruct( QnameRequest,
         "namespace", "ns1@v1",
         "service", "svc1",
         "operation", "op1",

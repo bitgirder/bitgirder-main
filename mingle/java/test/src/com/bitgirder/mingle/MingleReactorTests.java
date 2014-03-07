@@ -1,6 +1,7 @@
 package com.bitgirder.mingle;
 
 import static com.bitgirder.mingle.MingleTestMethods.*;
+import static com.bitgirder.mingle.MingleServiceRequestReactor.TopFieldType;
 
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
@@ -52,6 +53,36 @@ class MingleReactorTests
         {
             setLabel( getClass().getSimpleName() + ":" + 
                 Strings.crossJoin( "=", ",", pairs ) );
+        }
+
+        final 
+        void
+        feedReactorEvents( List< MingleValueReactorEvent > evs,
+                           MingleValueReactor rct )
+            throws Exception
+        {
+            for ( MingleValueReactorEvent ev : evs ) rct.processEvent( ev );
+        }
+
+        final
+        void
+        feedSource( Object src,
+                    MingleValueReactor rct )
+            throws Exception
+        {
+            if ( src instanceof MingleValue ) {
+                MingleValueReactors.visitValue( (MingleValue) src, rct );
+            } 
+            else if ( src instanceof List ) 
+            {
+                List< MingleValueReactorEvent > evs = 
+                    Lang.castUnchecked( src );
+
+                feedReactorEvents( evs, rct );
+            } 
+            else {
+                state.failf( "unhandled source: %s", src );
+            }
         }
     }
 
@@ -108,9 +139,7 @@ class MingleReactorTests
                     addReactor( chk ).
                     build();
 
-            for ( MingleValueReactorEvent ev : events ) {
-                pip.processEvent( ev );
-            }
+            feedReactorEvents( events, pip );
         }
     }
 
@@ -126,55 +155,40 @@ class MingleReactorTests
     private
     final
     static
-    class EventPathTest
-    extends TestImpl
+    class EventPathCheckReactor
     implements MingleValueReactor
     {
-        private ObjectPath< MingleIdentifier > startPath;
-        private Queue< EventExpectation > events;
-
-        // the most recent path seen
-        private ObjectPath< MingleIdentifier > lastPath;
-
-        private EventPathTest( CharSequence name ) { super( name ); }
+        private final Queue< EventExpectation > events;
 
         private
-        ObjectPath< MingleIdentifier >
-        append( ObjectPath< MingleIdentifier > head,
-                ObjectPath< MingleIdentifier > tail )
+        EventPathCheckReactor( Queue< EventExpectation > events )
         {
-            if ( tail == null ) return head;
-
-            for ( ObjectPath< MingleIdentifier > elt : tail.collectDescent() )
-            {
-                if ( elt instanceof DictionaryPath ) 
-                {
-                    DictionaryPath< MingleIdentifier > dp = 
-                        Lang.castUnchecked( elt );
-                    
-                    head = head.descend( dp.getKey() );
-                }
-                else if ( elt instanceof ListPath ) 
-                {
-                    ListPath< ? > lp = (ListPath< ? >) elt;
-                    head = head.startImmutableList( lp.getIndex() );
-                }
-                else state.failf( "unhandled elt: %s", elt );
-            }
-
-            return head;
+            this.events = events;
         }
 
         public
         void
         processEvent( MingleValueReactorEvent ev )
         {
-            ObjectPath< MingleIdentifier > expct = events.peek().path;
-            assertIdPathsEqual( expct, ev.path() );
+            state.isFalse( events.isEmpty(), "no more events expected" );
 
-            lastPath = ev.path();
-            events.remove();
+            ObjectPath< MingleIdentifier > expct = events.remove().path;
+            assertIdPathsEqual( expct, ev.path() );
         }
+
+        void checkComplete() { state.isTrue( events.isEmpty() ); }
+    }
+
+    private
+    final
+    static
+    class EventPathTest
+    extends TestImpl
+    {
+        private ObjectPath< MingleIdentifier > startPath;
+        private Queue< EventExpectation > events;
+
+        private EventPathTest( CharSequence name ) { super( name ); }
 
         private
         void
@@ -197,15 +211,17 @@ class MingleReactorTests
                 MinglePathSettingProcessor.create() :
                 MinglePathSettingProcessor.create( startPath );
 
+            EventPathCheckReactor chk = new EventPathCheckReactor( events );
+
             MingleValueReactorPipeline pip =
                 new MingleValueReactorPipeline.Builder().
                     addReactor( MingleValueReactors.createDebugReactor() ).
                     addProcessor( ps ).
-                    addReactor( this ).
+                    addReactor( chk ).
                     build();
  
             feedEvents( pip );
-            state.isTrue( events.isEmpty() );
+            chk.checkComplete();
         }
     }
 
@@ -600,24 +616,137 @@ class MingleReactorTests
     private
     final
     static
+    class ValueReactorCheck
+    {
+        private MingleValue value;
+        private Queue< EventExpectation > events;
+
+        private final MingleValueBuilder vb = MingleValueBuilder.create();
+        private EventPathCheckReactor evChk;
+
+        private
+        MingleValueReactor
+        reactor()
+        {
+            if ( events == null ) return vb;
+
+            evChk = new EventPathCheckReactor( events );
+
+            return new MingleValueReactorPipeline.Builder().
+                addReactor( vb ).
+                addReactor( evChk ).
+                build();
+        }
+
+        private
+        void
+        checkComplete()
+        {
+            if ( value != null ) MingleTests.assertEqual( value, vb.value() );
+            if ( evChk != null ) evChk.checkComplete();
+        }
+    }
+
+    private
+    final
+    static
     class ServiceRequestReactorTest
     extends TestImpl
+    implements MingleServiceRequestReactor.Delegate
     {
         private Object source;
 
         private MingleNamespace namespace;
         private MingleIdentifier service;
         private MingleIdentifier operation;
-        private MingleSymbolMap parameters;
-        private Queue< EventExpectation > parameterEvents;
-        private MingleValue auth;
-        private Queue< EventExpectation > authEvents;
+        private final ValueReactorCheck paramsChk = new ValueReactorCheck();
+        private final ValueReactorCheck authChk = new ValueReactorCheck();
+
+        private TopFieldType reqFldMin = TopFieldType.NONE;
+
+        private
+        void
+        checkOrder( TopFieldType ft )
+        {
+            state.isFalsef( 
+                ft.ordinal() < reqFldMin.ordinal(),
+                "saw top field %s but min is %s", ft, reqFldMin );
+
+            reqFldMin = ft;
+        }
+
+        private
+        void
+        checkValue( Object expct,
+                    Object act,
+                    ObjectPath< MingleIdentifier > p,
+                    TopFieldType ft )
+        {
+            checkOrder( ft );            
+
+            state.equalf( expct, act,
+                "%s: expected %s but got %s", 
+                Mingle.formatIdPath( p ), expct, act );
+        }
+
+        public
+        void
+        namespace( MingleNamespace ns,
+                   ObjectPath< MingleIdentifier > p )
+        {
+            checkValue( namespace, ns, p, TopFieldType.NAMESPACE );
+        }
+
+        public
+        void
+        service( MingleIdentifier svc,
+                 ObjectPath< MingleIdentifier > p )
+        {
+            checkValue( service, svc, p, TopFieldType.SERVICE );
+        }
+
+        public
+        void
+        operation( MingleIdentifier op,
+                   ObjectPath< MingleIdentifier > p )
+        {
+            checkValue( operation, op, p, TopFieldType.OPERATION );
+        }
+
+        public
+        MingleValueReactor
+        getAuthenticationReactor( ObjectPath< MingleIdentifier > p )
+        {
+            checkOrder( TopFieldType.AUTHENTICATION );
+            return authChk.reactor();
+        }
+
+        public
+        MingleValueReactor
+        getParametersReactor( ObjectPath< MingleIdentifier > p )
+        {
+            checkOrder( TopFieldType.PARAMETERS );
+            return paramsChk.reactor();
+        }
 
         public
         void
         call()
+            throws Exception
         {
-            throw new UnsupportedOperationException( "Unimplemented" );
+            MingleServiceRequestReactor rct = 
+                MingleServiceRequestReactor.create( this );
+
+            MingleValueReactorPipeline pip =
+                new MingleValueReactorPipeline.Builder().
+                    addReactor( MingleValueReactors.createDebugReactor() ).
+                    addReactor( rct ).
+                    build();
+
+            feedSource( source, pip );
+
+            authChk.checkComplete();
+            paramsChk.checkComplete();
         }
     }
 
@@ -653,6 +782,17 @@ class MingleReactorTests
         TestImplReader()
         {
             super( "reactor-tests.bin" );
+        }
+
+        private
+        void
+        setErrorOverride( TestImpl t )
+        {
+            Object ov = OBJECT_OVERRIDES.get( t.getLabel() );
+
+            if ( ov instanceof Exception ) {
+                t.resetExpectFailure( (Exception) ov );
+            }
         }
 
         private
@@ -1072,11 +1212,7 @@ class MingleReactorTests
         {
             Object ov = OBJECT_OVERRIDES.get( t.getLabel() );
             
-            if ( ov instanceof MingleValue ) {
-                t.expect = (MingleValue) ov;
-            } else if ( ov instanceof MingleValueCastException ) {
-                t.resetExpectFailure( (MingleValueCastException) ov );
-            }
+            if ( ov instanceof MingleValue ) t.expect = (MingleValue) ov;
         }
 
         private
@@ -1090,7 +1226,7 @@ class MingleReactorTests
             setCastReactorTestValues( res, map );
 
             setCastReactorLabel( res );
-            setCastReactorOverrides( res );
+            setCastReactorOverrides( res ); // needs label set first
 
             return res;
         }
@@ -1259,16 +1395,17 @@ class MingleReactorTests
             res.operation = 
                 asIdentifier( mapGet( map, "operation", byte[].class ) );
 
-            res.parameters = mapGet( map, "parameters", MingleSymbolMap.class );
+            res.paramsChk.value = 
+                mapGet( map, "parameters", MingleSymbolMap.class );
 
-            res.parameterEvents = 
+            res.paramsChk.events = 
                 asEventExpectationQueue(
                     mapGet( map, "parameterEvents", MingleList.class ) );
 
-            res.auth =
+            res.authChk.value =
                 mapGet( map, "authentication", MingleValue.class );
 
-            res.authEvents =
+            res.authChk.events =
                 asEventExpectationQueue(
                     mapGet( map, "authenticationEvents", MingleList.class ) );
             
@@ -1304,9 +1441,9 @@ class MingleReactorTests
             return res;
         }
 
-        protected
+        private
         TestImpl
-        convertStruct( MingleStruct ms )
+        convertTest( MingleStruct ms )
             throws Exception
         {
             String nm = ms.getType().getName().toString();
@@ -1329,10 +1466,24 @@ class MingleReactorTests
             } else if ( nm.equals( "ServiceRequestReactorTest" ) ) {
                 return asServiceRequestReactorTest( ms );
             } else if ( nm.equals( "ServiceResponseReactorTest" ) ) {
-                return asServiceResponseReactorTest( ms );
+//                return asServiceResponseReactorTest( ms );
+                return null;
             } else {
                 throw state.failf( "unhandled test: %s", nm );
             }
+        }
+
+        protected
+        TestImpl
+        convertStruct( MingleStruct ms )
+            throws Exception
+        {
+            TestImpl res = convertTest( ms );
+            if ( res == null ) return null;
+
+            setErrorOverride( res );
+
+            return res;
         }
     }
 
@@ -1387,6 +1538,78 @@ class MingleReactorTests
             new MingleValueCastException(
                 "Value 2012-01-01T00:00:00.000000000Z does not satisfy restriction [\"2000-01-01T00:00:00.000000000Z\",\"2001-01-01T00:00:00.000000000Z\"]",
                 inValRoot
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/15",
+            new MingleValueCastException(
+                "can't convert to namespace from mingle:core@v1/Boolean",
+                ObjectPath.getRoot( Mingle.ID_NAMESPACE )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/19",
+            new MingleValueCastException(
+                "can't convert to identifier from mingle:core@v1/Boolean",
+                ObjectPath.getRoot( Mingle.ID_SERVICE )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/20",
+            new MingleValueCastException(
+                "can't convert to identifier from mingle:core@v1/Boolean",
+                ObjectPath.getRoot( Mingle.ID_OPERATION )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/22",
+            new MingleValueCastException(
+                "could not read namespace: [offset 0]: Expected namespace but saw type code 0x0f",
+                ObjectPath.getRoot( Mingle.ID_NAMESPACE )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/23",
+            new MingleValueCastException(
+                "could not read identifier: [offset 0]: Expected identifier but saw type code 0x0f",
+                ObjectPath.getRoot( Mingle.ID_SERVICE )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/24",
+            new MingleValueCastException(
+                "could not read identifier: [offset 0]: Expected identifier but saw type code 0x0f",
+                ObjectPath.getRoot( Mingle.ID_OPERATION )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/25",
+            new MingleValueCastException(
+                "could not parse namespace: (at or near char 5) Illegal start of identifier part: \":\" (U+003A)",
+                ObjectPath.getRoot( Mingle.ID_NAMESPACE )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/26",
+            new MingleValueCastException(
+                "could not parse identifier: (at or near char 1) Illegal start of identifier part: \"2\" (U+0032)",
+                ObjectPath.getRoot( Mingle.ID_SERVICE )
+            )
+        );
+
+        OBJECT_OVERRIDES.put(
+            "ServiceRequestReactorTest/27",
+            new MingleValueCastException(
+                "could not parse identifier: (at or near char 1) Illegal start of identifier part: \"2\" (U+0032)",
+                ObjectPath.getRoot( Mingle.ID_OPERATION )
             )
         );
     }

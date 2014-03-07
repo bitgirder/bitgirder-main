@@ -1061,10 +1061,10 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
-    QnameServiceRequest *QualifiedTypeName
-    TypeServiceRequest *AtomicTypeReference
-    QnameServiceResponse *QualifiedTypeName
-    TypeServiceResponse *AtomicTypeReference
+    QnameRequest *QualifiedTypeName
+    TypeRequest *AtomicTypeReference
+    QnameResponse *QualifiedTypeName
+    TypeResponse *AtomicTypeReference
     TypeOpaqueList *ListTypeReference
     TypeNullableValue *NullableTypeReference
     IdNamespace *Identifier
@@ -1141,8 +1141,8 @@ func init() {
         TypeFloat32,
         TypeFloat64,
     }
-    QnameServiceRequest, TypeServiceRequest = f1( "Request" )
-    QnameServiceResponse, TypeServiceResponse = f1( "Response" )
+    QnameRequest, TypeRequest = f1( "Request" )
+    QnameResponse, TypeResponse = f1( "Response" )
     IdNamespace = id( "namespace" )
     IdService = id( "service" )
     IdOperation = id( "operation" )

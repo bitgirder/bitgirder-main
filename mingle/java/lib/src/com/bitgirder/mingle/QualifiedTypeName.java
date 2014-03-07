@@ -34,16 +34,10 @@ implements TypeName
     equals( Object other )
     {
         if ( other == this ) return true;
-        else
-        {
-            if ( other instanceof QualifiedTypeName )
-            {
-                QualifiedTypeName n2 = (QualifiedTypeName) other;
+        if ( ! ( other instanceof QualifiedTypeName ) ) return false;
 
-                return ns.equals( n2.ns ) && name.equals( n2.name );
-            }
-            else return false;
-        }
+        QualifiedTypeName n2 = (QualifiedTypeName) other;
+        return ns.equals( n2.ns ) && name.equals( n2.name );
     }
 
     public

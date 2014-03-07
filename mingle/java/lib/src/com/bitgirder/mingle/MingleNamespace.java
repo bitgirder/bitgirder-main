@@ -6,6 +6,8 @@ import com.bitgirder.validation.State;
 import com.bitgirder.lang.Strings;
 import com.bitgirder.lang.Lang;
 
+import com.bitgirder.lang.path.ObjectPath;
+
 import java.util.Arrays;
 import java.util.List;
 

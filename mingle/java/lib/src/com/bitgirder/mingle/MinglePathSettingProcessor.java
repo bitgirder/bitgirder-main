@@ -64,8 +64,6 @@ implements MingleValueReactorPipeline.Processor,
     void
     updateList()
     {
-        codef( "in updateList, path: %s, awaitingList0: %s",
-            path, awaitingList0 );
         if ( awaitingList0 ) {
             if ( path == null ) path = ObjectPath.getRoot();
             path = path.startMutableList();
@@ -180,6 +178,8 @@ implements MingleValueReactorPipeline.Processor,
         case VALUE: valueCompleted(); break;
         case END: endCompleted(); break;
         }
+        
+        ev.setPath( null );
     }
 
     public

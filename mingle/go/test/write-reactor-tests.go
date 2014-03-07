@@ -155,9 +155,7 @@ func asFeedSource( src interface{} ) mg.Value {
 func svcReqTestAsValue( st *mg.ServiceRequestReactorTest ) mg.Value {
     pairs := []interface{}{
         "source", asFeedSource( st.Source ),
-        "parameter-events", asValue( st.ParameterEvents ),
         "authentication", asValue( st.Authentication ),
-        "authentication-events", asValue( st.AuthenticationEvents ),
         "error", asValue( st.Error ),
     }
     if st.Namespace != nil {
@@ -168,8 +166,12 @@ func svcReqTestAsValue( st *mg.ServiceRequestReactorTest ) mg.Value {
     }
     addId( "service", st.Service )
     addId( "operation", st.Operation )
-    if st.Parameters != nil { 
-        pairs = append( pairs, "parameters", st.Parameters )
+    if m := st.Parameters; m != nil { pairs = append( pairs, "parameters", m ) }
+    if evs := st.ParameterEvents; evs != nil {
+        pairs = append( pairs, "parameter-events", asValue( evs ) )
+    }
+    if evs := st.AuthenticationEvents; evs != nil {
+        pairs = append( pairs, "authentication-events", asValue( evs ) )
     }
     return mkStruct( "ServiceRequestReactorTest", pairs... )
 }

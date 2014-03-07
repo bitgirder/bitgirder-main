@@ -56,13 +56,13 @@ type requestCheck struct {
     params *mg.ValueBuilder
 }
 
-func ( chk *requestCheck ) GetAuthenticationProcessor(
+func ( chk *requestCheck ) GetAuthenticationReactor(
     path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     return initValueBuilder( &( chk.auth ) )
 }
 
-func ( chk *requestCheck ) GetParametersProcessor(
+func ( chk *requestCheck ) GetParametersReactor(
     path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     return initValueBuilder( &( chk.params ) )
@@ -88,13 +88,13 @@ type responseCheck struct {
     resultProc, errorProc *mg.ValueBuilder
 }
 
-func ( chk *responseCheck ) GetResultProcessor( 
+func ( chk *responseCheck ) GetResultReactor( 
     p objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     return initValueBuilder( &( chk.resultProc ) )
 }
 
-func ( chk *responseCheck ) GetErrorProcessor( 
+func ( chk *responseCheck ) GetErrorReactor( 
     p objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
 
     return initValueBuilder( &( chk.errorProc ) )

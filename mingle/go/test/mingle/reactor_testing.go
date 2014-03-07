@@ -772,7 +772,7 @@ func initServiceRequestTests() {
     evFldParams := NewFieldStartEvent( IdParameters )
     evFldAuth := NewFieldStartEvent( IdAuthentication )
     evFldF1 := NewFieldStartEvent( id( "f1" ) )
-    evReqTyp := NewStructStartEvent( QnameServiceRequest )
+    evReqTyp := NewStructStartEvent( QnameRequest )
     evNs1 := NewValueEvent( String( ns1.ExternalForm() ) )
     evSvc1 := NewValueEvent( String( svc1.ExternalForm() ) )
     evOp1 := NewValueEvent( String( op1.ExternalForm() ) )
@@ -797,8 +797,8 @@ func initServiceRequestTests() {
         evFldNs, evNs1,
         evFldSvc, evSvc1,
         evFldOp, evOp1,
-        evFldParams, evParams1,
         evFldAuth, evAuth1,
+        evFldParams, evParams1,
     }
     addSucc1( evReqTyp, fullOrderedReq1Flds, NewEndEvent() )
     addSucc1( NewMapStartEvent(), fullOrderedReq1Flds, NewEndEvent() )
@@ -837,7 +837,7 @@ func initServiceRequestTests() {
         }
         if params != nil { pairs = append( pairs, IdParameters, params ) }
         if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }
-        return MustStruct( QnameServiceRequest, pairs... )
+        return MustStruct( QnameRequest, pairs... )
     }
     addSucc2 := func( src interface{}, authExpct Value ) {
         AddStdReactorTests(
@@ -894,7 +894,7 @@ func initServiceRequestTests() {
         }
         if paramsIn != nil { pairs = append( pairs, IdParameters, paramsIn ) }
         if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }
-        t.Source = MustStruct( QnameServiceRequest, pairs... )
+        t.Source = MustStruct( QnameRequest, pairs... )
         AddStdReactorTests( t )
     }
     pathParams := objpath.RootedAt( IdParameters )
@@ -946,11 +946,18 @@ func initServiceRequestTests() {
             Service: svc1,
             Operation: op1,
             Parameters: EmptySymbolMap(),
-            Source: MustStruct( QnameServiceRequest,
+            Source: MustStruct( QnameRequest,
                 IdNamespace, nsBuf( ns1 ),
                 IdService, idBuf( svc1 ),
                 IdOperation, idBuf( op1 ),
             ),
+        },
+    )
+    AddStdReactorTests(
+        &ServiceRequestReactorTest{
+            Source: MustStruct( "ns1@v1/S1" ),
+            Error: NewTypeCastError(
+                TypeRequest, MustTypeReference( "ns1@v1/S1" ), nil ),
         },
     )
     createReqVcErr := func( 
@@ -1097,7 +1104,7 @@ func initServiceRequestTests() {
         &ServiceRequestReactorTest{
             Source: MustStruct( t1Bad ),
             Error: NewTypeCastError(
-                TypeServiceRequest, t1Bad.AsAtomicType(), nil ),
+                TypeRequest, t1Bad.AsAtomicType(), nil ),
         },
     )
     // Not exhaustively re-testing all ways a field could be missing (assume for
@@ -1133,7 +1140,7 @@ func initServiceResponseTests() {
     }
     i32Val1 := Int32( 1 )
     err1 := MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
-    addSucc( MustStruct( QnameServiceResponse ), nil, nil )
+    addSucc( MustStruct( QnameResponse ), nil, nil )
     addSucc( MustSymbolMap(), nil, nil )
     addSucc( MustSymbolMap( IdResult, NullVal ), NullVal, nil )
     addSucc( MustSymbolMap( IdResult, i32Val1 ), i32Val1, nil )
@@ -1146,7 +1153,7 @@ func initServiceResponseTests() {
     pathErrF1 := pathErr.Descend( id( "f1" ) )
     AddStdReactorTests(
         &ServiceResponseReactorTest{
-            In: MustStruct( QnameServiceResponse, "result", int32( 1 ) ),
+            In: MustStruct( QnameResponse, "result", int32( 1 ) ),
             ResVal: i32Val1,
             ResEvents: []EventExpectation{ 
                 { NewValueEvent( i32Val1 ), pathRes },
@@ -1190,10 +1197,7 @@ func initServiceResponseTests() {
     addFail(
         MustStruct( "ns1@v1/ServiceResponse" ),
         NewTypeCastError( 
-            TypeServiceResponse, 
-            MustTypeReference( "ns1@v1/ServiceResponse" ),
-            nil, 
-        ),
+            TypeResponse, MustTypeReference( "ns1@v1/ServiceResponse" ), nil ),
     )
     addFail(
         MustSymbolMap( IdResult, i32Val1, IdError, err1 ),

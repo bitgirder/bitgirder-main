@@ -15,10 +15,10 @@ type ServiceRequestReactorInterface interface {
 
     Operation( op *Identifier, path objpath.PathNode ) error
 
-    GetAuthenticationProcessor( 
+    GetAuthenticationReactor( 
         path objpath.PathNode ) ( ReactorEventProcessor, error )
 
-    GetParametersProcessor( 
+    GetParametersReactor( 
         path objpath.PathNode ) ( ReactorEventProcessor, error )
 }
 
@@ -40,10 +40,10 @@ type ServiceRequestReactor struct {
 
     evProc ReactorEventProcessor
 
-    // 0: before StartStruct{ QnameServiceRequest } and after final *EndEvent
+    // 0: before StartStruct{ QnameRequest } and after final *EndEvent
     //
-    // 1: when reading or expecting a service request field (namespace, service,
-    // etc)
+    // 1: when reading or expecting a toplevel request field (namespace,
+    // service, etc)
     //
     // > 1: accumulating some nested value for 'parameters' or 'authentication' 
     depth int 
@@ -51,7 +51,6 @@ type ServiceRequestReactor struct {
     fld requestFieldType
 
     hadParams bool // true if the input contained explicit params
-//    paramsSynth bool // true when we are synthesizing empty params
 }
 
 func NewServiceRequestReactor( 
@@ -60,7 +59,7 @@ func NewServiceRequestReactor(
     return &ServiceRequestReactor{ iface: iface }
 }
 
-func ( sr *ServiceRequestReactor ) updateEvProc( ev ReactorEvent ) {
+func ( sr *ServiceRequestReactor ) updateDepth( ev ReactorEvent ) {
     switch ev.( type ) {
     case *FieldStartEvent: return
     case *StructStartEvent, *ListStartEvent, *MapStartEvent: sr.depth++
@@ -72,7 +71,7 @@ func ( sr *ServiceRequestReactor ) updateEvProc( ev ReactorEvent ) {
 type svcReqCastIface int
 
 func ( c svcReqCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
-    return qn.Equals( QnameServiceRequest )
+    return qn.Equals( QnameRequest )
 }
 
 func ( c svcReqCastIface ) AllowAssignment( 
@@ -93,7 +92,7 @@ func ( t svcReqFieldTyper ) FieldTypeFor(
 func ( c svcReqCastIface ) FieldTyperFor( 
     qn *QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
     
-    if qn.Equals( QnameServiceRequest ) { return svcReqFieldTyper( 1 ), nil }
+    if qn.Equals( QnameRequest ) { return svcReqFieldTyper( 1 ), nil }
     return nil, nil
 }
 
@@ -109,16 +108,20 @@ type svcReqFieldOrderGetter int
 
 func ( g svcReqFieldOrderGetter ) FieldOrderFor( 
     qn *QualifiedTypeName ) FieldOrder {
-    if qn.Equals( QnameServiceRequest ) { return svcReqFieldOrder }
+    if qn.Equals( QnameRequest ) { return svcReqFieldOrder }
     return nil
 }
 
+// note that cast reactor needs to be added ahead of field order reactor since
+// the cast reactor may supply the top-level type (TypeRequest) for an input
+// which is just a symbol map, and this top-level type is needed to access the
+// field order.
 func ( sr *ServiceRequestReactor ) InitializePipeline( 
     pip *pipeline.Pipeline ) {
     
     EnsureStructuralReactor( pip ) 
     EnsurePathSettingProcessor( pip )
-    pip.Add( NewCastReactor( TypeServiceRequest, svcReqCastIface( 1 ) ) )
+    pip.Add( NewCastReactor( TypeRequest, svcReqCastIface( 1 ) ) )
     pip.Add( NewFieldOrderReactor( svcReqFieldOrderGetter( 1 ) ) )
 }
 
@@ -128,9 +131,12 @@ func ( sr *ServiceRequestReactor ) invalidValueErr(
     return NewValueCastErrorf( path, "invalid value: %s", desc )
 }
 
+// top level type (reqFieldNone) should have been checked by upstream cast
+// reactor, so we just check that here and panic. otherwise we don't expect a
+// struct for any fields that we process so return that as an error
 func ( sr *ServiceRequestReactor ) startStruct( ev *StructStartEvent ) error {
     if sr.fld == reqFieldNone { // we're at the top of the request
-        if ev.Type.Equals( QnameServiceRequest ) { return nil }
+        if ev.Type.Equals( QnameRequest ) { return nil }
         // panic because upstream cast should have checked already
         panic( libErrorf( "Unexpected service request type: %s", ev.Type ) )
     }
@@ -153,10 +159,10 @@ func ( sr *ServiceRequestReactor ) startField(
     case fld.Equals( IdOperation ): sr.fld = reqFieldOp
     case fld.Equals( IdAuthentication ): 
         sr.fld = reqFieldAuth
-        sr.evProc, err = sr.iface.GetAuthenticationProcessor( fs.GetPath() )
+        sr.evProc, err = sr.iface.GetAuthenticationReactor( fs.GetPath() )
     case fld.Equals( IdParameters ): 
         sr.fld = reqFieldParams
-        sr.evProc, err = sr.iface.GetParametersProcessor( fs.GetPath() )
+        sr.evProc, err = sr.iface.GetParametersReactor( fs.GetPath() )
         if err == nil { sr.hadParams = true }
     default: err = NewUnrecognizedFieldError( fs.GetPath(), fs.Field )
     }
@@ -253,13 +259,13 @@ func ( sr *ServiceRequestReactor ) visitSyntheticParams(
 
 func ( sr *ServiceRequestReactor ) end( ee *EndEvent ) error {
     if sr.hadParams { return nil }
-    ep, err := sr.iface.GetParametersProcessor( ee.GetPath() );
+    ep, err := sr.iface.GetParametersReactor( ee.GetPath() );
     if err != nil { return err }
     return sr.visitSyntheticParams( ep, ee.GetPath() )
 }
 
 func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
-    defer sr.updateEvProc( ev )
+    defer sr.updateDepth( ev )
     if sr.evProc != nil { return sr.evProc.ProcessEvent( ev ) }
     switch v := ev.( type ) {
     case *FieldStartEvent: return sr.startField( v )
@@ -276,8 +282,8 @@ func ( sr *ServiceRequestReactor ) ProcessEvent( ev ReactorEvent ) error {
 }
 
 type ServiceResponseReactorInterface interface {
-    GetResultProcessor( path objpath.PathNode ) ( ReactorEventProcessor, error )
-    GetErrorProcessor( path objpath.PathNode ) ( ReactorEventProcessor, error )
+    GetResultReactor( path objpath.PathNode ) ( ReactorEventProcessor, error )
+    GetErrorReactor( path objpath.PathNode ) ( ReactorEventProcessor, error )
 }
 
 type ServiceResponseReactor struct {
@@ -300,7 +306,7 @@ func NewServiceResponseReactor(
 type svcRespCastIface int
 
 func ( i svcRespCastIface ) InferStructFor( qn *QualifiedTypeName ) bool {
-    return qn.Equals( QnameServiceResponse )
+    return qn.Equals( QnameResponse )
 }
 
 func ( i svcRespCastIface ) FieldTyperFor( 
@@ -327,10 +333,10 @@ func ( sr *ServiceResponseReactor ) InitializePipeline(
     pip *pipeline.Pipeline ) {
 
     EnsureStructuralReactor( pip )
-    pip.Add( NewCastReactor( TypeServiceResponse, svcRespCastIface( 1 ) ) )
+    pip.Add( NewCastReactor( TypeResponse, svcRespCastIface( 1 ) ) )
 }
 
-func ( sr *ServiceResponseReactor ) updateEvProc( ev ReactorEvent ) {
+func ( sr *ServiceResponseReactor ) updateDepth( ev ReactorEvent ) {
     switch ev.( type ) {
     case *FieldStartEvent: return
     case *StructStartEvent, *MapStartEvent, *ListStartEvent: sr.depth++
@@ -359,7 +365,7 @@ func ( sr *ServiceResponseReactor ) sendEvProcEvent( ev ReactorEvent ) error {
 }
 
 func ( sr *ServiceResponseReactor ) startStruct( t *QualifiedTypeName ) error {
-    if t.Equals( QnameServiceResponse ) { return nil }
+    if t.Equals( QnameResponse ) { return nil }
     panic( libErrorf( "Got unexpected (toplevel) struct type: %s", t ) )
 }
 
@@ -368,16 +374,16 @@ func ( sr *ServiceResponseReactor ) startField( fs *FieldStartEvent ) error {
     fld, path := fs.Field, fs.GetPath()
     switch {
     case fld.Equals( IdResult ): 
-        sr.evProc, err = sr.iface.GetResultProcessor( path )
+        sr.evProc, err = sr.iface.GetResultReactor( path )
     case fld.Equals( IdError ): 
-        sr.evProc, err = sr.iface.GetErrorProcessor( path )
+        sr.evProc, err = sr.iface.GetErrorReactor( path )
     default: return NewUnrecognizedFieldError( path.Parent(), fld )
     }
     return err
 }
 
 func ( sr *ServiceResponseReactor ) ProcessEvent( ev ReactorEvent ) error {
-    defer sr.updateEvProc( ev )
+    defer sr.updateDepth( ev )
     if sr.evProc != nil { return sr.sendEvProcEvent( ev ) }
     switch v := ev.( type ) {
     case *StructStartEvent: return sr.startStruct( v.Type )

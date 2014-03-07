@@ -208,4 +208,16 @@ class ObjectPaths
     {
         return asCopy( p, false );
     }
+
+    public
+    static
+    < V >
+    ObjectPath< V >
+    descend( ObjectPath< V > p,
+             V elt )
+    {
+        inputs.notNull( elt, "elt" );
+
+        return p == null ? ObjectPath.getRoot( elt ) : p.descend( elt );
+    }
 }

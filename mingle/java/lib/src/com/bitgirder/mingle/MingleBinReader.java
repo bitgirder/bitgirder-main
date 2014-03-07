@@ -530,4 +530,13 @@ class MingleBinReader
         inputs.notNull( buf, "buf" );
         return create( new ByteArrayInputStream( buf ) );
     }
+
+    public
+    static
+    MingleBinReader
+    create( MingleBuffer mb )
+    {
+        inputs.notNull( mb, "mb" );
+        return create( mb.array() );
+    }
 }
