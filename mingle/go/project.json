@@ -6,7 +6,8 @@
         "mingle/parser/lexer", 
         "mingle/parser/loc",
         "mingle/parser/syntax",
-        "mingle/types"
+        "mingle/types",
+        "mingle/bind"
     ],
     "test-packages": [
         "mingle/testing",

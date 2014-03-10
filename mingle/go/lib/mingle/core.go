@@ -825,13 +825,21 @@ func ( m *SymbolMap ) EachPair( v func( *Identifier, Value ) ) {
 
 // For small maps it may be faster to scan linearly; we can sample and measure
 // this down the line when optimizing that becomes necessary
-func ( m *SymbolMap ) GetById( fld *Identifier ) Value {
+func ( m *SymbolMap ) getIndexOk( fld *Identifier ) ( idx int, ok bool ) {
     f := func( i int ) bool { return m.fields[ i ].id.Compare( fld ) >= 0 }
-    indx := sort.Search( len( m.fields ), f )
-    if indx < len( m.fields ) && m.fields[ indx ].id.Equals( fld ) {
-        return m.fields[ indx ].val
-    }
+    idx = sort.Search( len( m.fields ), f )
+    ok = idx < len( m.fields ) && m.fields[ idx ].id.Equals( fld )
+    return
+}
+     
+func ( m *SymbolMap ) GetById( fld *Identifier ) Value {
+    if idx, ok := m.getIndexOk( fld ); ok { return m.fields[ idx ].val }
     return nil
+}
+
+func ( m *SymbolMap ) HasField( fld *Identifier ) bool {
+    _, ok := m.getIndexOk( fld )
+    return ok
 }
 
 type MapLiteralError struct {
@@ -919,17 +927,18 @@ func NewSymbolMapAccessor(
     return &SymbolMapAccessor{ m, path }
 }
 
+func ( m *SymbolMapAccessor ) GetMap() *SymbolMap { return m.m }
+
 func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
     if acc.path == nil { return objpath.RootedAt( fld ) }
     return acc.path.Descend( fld )
 }
 
-func ( acc *SymbolMapAccessor ) GetValueById( id *Identifier ) ( Value, error ) {
-    val, err := acc.m.GetById( id ), error( nil )
-    if val == nil { 
-        err = NewValueCastError( acc.descend( id ), "value is null" )
-    }
-    return val, err
+func ( acc *SymbolMapAccessor ) GetValueById( 
+    id *Identifier ) ( Value, error ) {
+
+    if val := acc.m.GetById( id ); val != nil { return val, nil }
+    return nil, NewValueCastError( acc.descend( id ), "value is null" )
 }
 
 func ( acc *SymbolMapAccessor ) GetValueByString( id string ) ( Value, error ) {
