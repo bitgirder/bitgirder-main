@@ -7,25 +7,6 @@ import (
 //    "log"
 )
 
-type ReactorTopType int
-
-const (
-    ReactorTopTypeValue = ReactorTopType( iota )
-    ReactorTopTypeList
-    ReactorTopTypeMap 
-    ReactorTopTypeStruct 
-)
-
-func ( t ReactorTopType ) String() string {
-    switch t {
-    case ReactorTopTypeValue: return "value"
-    case ReactorTopTypeList: return "list"
-    case ReactorTopTypeMap: return "map"
-    case ReactorTopTypeStruct: return "struct"
-    }
-    panic( libErrorf( "Unhandled reactor top type: %d", t ) )
-}
-
 type StructuralReactor struct {
     stack *stack.Stack
     topTyp ReactorTopType

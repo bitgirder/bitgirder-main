@@ -4,109 +4,90 @@ import (
     mg "mingle"
     "testing"
     "bitgirder/assert"
+    "bitgirder/objpath"
 )
 
-var mkTestId = mg.MakeTestId
+type valueBindingImpl struct { val mg.Value }
 
-func mkTestStruct( typNm string, flds ...interface{} ) *mg.Struct {
-    return mg.MustStruct( "mingle:bind:test@v1/" + typNm, flds... )
+func ( vb valueBindingImpl ) BoundValue() ( mg.Value, error ) { 
+    return vb.val, nil
 }
 
-type bindTestType1 struct {
-    f1 int32
-}
-
-type testUnbindReactor struct { vb *mg.ValueBuilder }
-
-func newTestUnbindReactor() *testUnbindReactor {
-    return &testUnbindReactor{ vb: mg.NewValueBuilder() }
-}
-
-func ( ub *testUnbindReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
-    return ub.vb.ProcessEvent( ev )
-}
-
-func ( ub *testUnbindReactor ) newBindTestType1( 
-    acc *mg.SymbolMapAccessor ) ( interface{}, error ) {
-
-    res := &bindTestType1{}
-    f1 := mkTestId( 1 )
-    m := acc.GetMap()
-    if m.HasField( f1 ) { 
-        res.f1 = acc.MustGoInt32ById( f1 ) 
-    } else { 
-        return nil, mg.NewMissingFieldsError( nil, []*mg.Identifier{ f1 } ) 
+func bindingForValue( val interface{} ) interface{} {
+    switch v := val.( type ) {
+    case int32: return valueBindingImpl{ mg.MustValue( v ) }
     }
-    return res, nil
+    panic( libErrorf( "unhandled test value: %T", val ) )
 }
 
-func ( ub *testUnbindReactor ) GoValue() ( interface{}, error ) {
-    val := ub.vb.GetValue()
-    ms := val.( *mg.Struct )
-    acc := mg.NewSymbolMapAccessor( ms.Fields, nil )
-    switch ms.Type.Name.ExternalForm() {
-    case "BindTestType1": return ub.newBindTestType1( acc )
+type valUnbinderImpl struct { 
+    typ mg.TypeReference 
+    val interface{}
+}
+
+func ( ub *valUnbinderImpl ) UnboundValue( 
+    path objpath.PathNode ) ( interface{}, error ) { 
+
+    if ub.val == nil { return nil, NewUnbindError( path, "no value built" ) }
+    return ub.val, nil
+}
+
+func ( ub *valUnbinderImpl ) UnbindValue(
+    val mg.Value, path objpath.PathNode ) error {
+
+    switch v := val.( type ) {
+    case mg.Int32: ub.val = int32( v ); return nil
     }
-    panic( libErrorf( "unhandled unbind type: %s", ms.Type ) )
+    return NewUnbindErrorf( path, "unhandled value: %T", val )
 }
 
-type testBinder struct {}
-
-func newTestBinder() *testBinder { return &testBinder{} }
-
-func ( tb *testBinder ) asMingleValue( goVal interface{} ) mg.Value {
-    switch v := goVal.( type ) {
-    case *bindTestType1: return mkTestStruct( "BindTestType1", "f1", v.f1 )
+func unbinderForType( typ mg.TypeReference ) Unbinder {
+    switch {
+    case typ.Equals( mg.TypeInt32 ): return &valUnbinderImpl{ typ: typ }
     }
-    panic( libErrorf( "unhandled type: %T", goVal ) )
+    panic( libErrorf( "unhandled unbinder type: %s", typ ) )
 }
 
-func ( tb *testBinder ) BindToReactor( goVal interface{},
-                                       rct mg.ReactorEventProcessor,
-                                       ctx *BinderContext ) error {
-
-    val := tb.asMingleValue( goVal )
-    return mg.VisitValue( val, rct )
+type roundtripTestCall struct {
+    *assert.PathAsserter
+    rt *RoundtripTest
+    binder *Binder
 }
 
-func ( tb *testBinder ) NewUnbindReactor( ctx *BinderContext ) UnbindReactor {
-    return newTestUnbindReactor()
-}
-
-func TestBinderInterface( t *testing.T ) {
-    a := &assert.Asserter{ t }
-    val := &bindTestType1{ f1: 1 }
-    bndr := newTestBinder()
-    mgValExpct := mkTestStruct( "BindTestType1", "f1", int32( 1 ) )
+func ( c *roundtripTestCall ) bindToValue() mg.Value {
     vb := mg.NewValueBuilder()
-    ctx := NewBinderContext()
-    if err := bndr.BindToReactor( val, vb, ctx ); err != nil { a.Fatal( err ) }
-    mg.EqualValues( mgValExpct, vb.GetValue(), a )    
-    rct := bndr.NewUnbindReactor( ctx )
-    if err := mg.VisitValue( vb.GetValue(), rct ); err != nil { a.Fatal( err ) }
-    if val2, err := rct.GoValue(); err != nil { 
-        a.Fatal( err ) 
-    } else { a.Equal( val, val2 ) }
+    binding := bindingForValue( c.rt.Object )
+    if err := c.binder.Bind( binding, vb ); err != nil { c.Fatal( err ) }
+    return vb.GetValue()
 }
 
-// the choice of error is somewhat arbitrary -- we just choose a missing fields
-// error since that is representative of the type of error an unbinder might
-// return. the main goal here is simply to test that the interfaces provide a
-// clear way for an unbinder to return such an error in the normal reactor flow
-func TestUnbindReactorErrorPropagation( t *testing.T ) {
-    bndr := newTestBinder()
-    ctx := NewBinderContext()
-    rct := bndr.NewUnbindReactor( ctx )
-    val := mkTestStruct( "BindTestType1" )
-    var errAct error
-    if errAct = mg.VisitValue( val, rct ); errAct == nil {
-        var ubVal interface{}
-        if ubVal, errAct = rct.GoValue(); errAct == nil {
-            t.Fatalf( "got value: %v", ubVal )
-        }
-    }
-    flds := []*mg.Identifier{ mg.MustIdentifier( "f1" ) }
-    expctErr := mg.NewMissingFieldsError( nil, flds )
+func ( c *roundtripTestCall ) unbindFromValue( val mg.Value ) interface{} {
+    ub := unbinderForType( c.rt.Type )
+    rct := c.binder.NewUnbindReactor( ub )
+    if err := mg.VisitValue( val, rct ); err != nil { c.Fatal( err ) }
+    c.True( rct.HasValue() )
+    return rct.UnboundValue()
+}
+
+func ( c *roundtripTestCall ) call() {
+    c.binder = NewBinder()
+    val := c.bindToValue()
+    goVal2 := c.unbindFromValue( val )
+    c.Equal( c.rt.Object, goVal2 )
+}
+
+func callRoundtripTest( rt *RoundtripTest, a *assert.PathAsserter ) {
+    ( &roundtripTestCall{ rt: rt, PathAsserter: a } ).call()
+}
+
+func TestBinderStandardTests( t *testing.T ) {
     pa := assert.NewPathAsserter( t )
-    mg.AssertCastError( expctErr, errAct, pa )
+    la := pa.StartList()
+    for _, bt := range StandardBindTests() {
+        switch v := bt.( type ) {
+        case *RoundtripTest: callRoundtripTest( v, la )
+        default: panic( libErrorf( "unhandled test: %T", bt ) )
+        }
+        la = la.Next()
+    }
 }
