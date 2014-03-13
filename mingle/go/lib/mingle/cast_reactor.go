@@ -123,13 +123,46 @@ func ( cr *CastReactor ) processAtomicValue(
     return next.ProcessEvent( ve )
 }
 
+func nullValueEventForAtomicType( 
+    ve *ValueEvent, at *AtomicTypeReference ) *ValueEvent {
+
+    var val Value
+    switch {
+    case at.Equals( TypeInt32 ): val = Int32( 0 )
+    case at.Equals( TypeInt64 ): val = Int64( 0 )
+    case at.Equals( TypeUint32 ): val = Uint32( 0 )
+    case at.Equals( TypeUint64 ): val = Uint64( 0 )
+    case at.Equals( TypeFloat32 ): val = Float32( 0 )
+    case at.Equals( TypeFloat64 ): val = Float64( 0 )
+    }
+    if val != nil { 
+        ve = CopyEvent( ve, true ).( *ValueEvent )
+        ve.Val = val
+    }
+    return ve
+}
+
+// ve will contain NullVal, but this function can return a different value based
+// on the underlying type of typ
+func nullValueEventForType( ve *ValueEvent, typ TypeReference ) *ValueEvent {
+
+    switch v := typ.( type ) {
+    case *AtomicTypeReference: return nullValueEventForAtomicType( ve, v )
+    case *NullableTypeReference: return nullValueEventForType( ve, v.Type )
+    case *ListTypeReference: return ve
+    }
+    panic( libErrorf( "unhandled type reference: %T", typ ) )
+}
+
 func ( cr *CastReactor ) processNullableValue(
     ve *ValueEvent,
     nt *NullableTypeReference,
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
-    if _, ok := ve.Val.( *Null ); ok { return next.ProcessEvent( ve ) }
+    if _, ok := ve.Val.( *Null ); ok { 
+        return next.ProcessEvent( nullValueEventForType( ve, nt ) ) 
+    }
     return cr.processValueWithType( ve, nt.Type, callTyp, next )
 }
 

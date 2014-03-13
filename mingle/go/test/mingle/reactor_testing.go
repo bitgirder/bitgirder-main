@@ -1543,18 +1543,37 @@ func ( t *crtInit ) addEnumTests() {
 
 func ( t *crtInit ) addNullableTests() {
     typs := []TypeReference{}
+    addNullSucc := func( expct interface{}, typ TypeReference ) {
+        t.addSucc( nil, expct, typ )
+    }
     for _, prim := range PrimitiveTypes {
-        typs = append( typs, &NullableTypeReference{ prim } )
+        if ! IsNumericType( prim ) {
+            typs = append( typs, &NullableTypeReference{ prim } )
+        }
     }
     typs = append( typs,
         MustTypeReference( "Null" ),
         MustTypeReference( "String??" ),
         MustTypeReference( "String*?" ),
+        MustTypeReference( "Int32?*?" ),
         MustTypeReference( "String+?" ),
         MustTypeReference( "ns1@v1/T?" ),
         MustTypeReference( "ns1@v1/T*?" ),
     )
-    for _, typ := range typs { t.addSucc( nil, nil, typ ) }
+    for _, typ := range typs { addNullSucc( nil, typ ) }
+    for _, numTyp := range NumericTypes {
+        typ := &NullableTypeReference{ numTyp }
+        switch {
+        case numTyp.Equals( TypeInt32 ): addNullSucc( Int32( 0 ), typ )
+        case numTyp.Equals( TypeInt64 ): addNullSucc( Int64( 0 ), typ )
+        case numTyp.Equals( TypeUint32 ): addNullSucc( Uint32( 0 ), typ )
+        case numTyp.Equals( TypeUint64 ): addNullSucc( Uint64( 0 ), typ )
+        case numTyp.Equals( TypeFloat32 ): addNullSucc( Float32( 0 ), typ )
+        case numTyp.Equals( TypeFloat64 ): addNullSucc( Float64( 0 ), typ )
+        default: panic( libErrorf( "unhandled num type: %s", numTyp ) )
+        }
+    }
+    addNullSucc( Int32( 0 ), MustTypeReference( "Int32???" ) ) 
 }
 
 func ( t *crtInit ) addListTests() {

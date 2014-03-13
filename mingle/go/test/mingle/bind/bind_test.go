@@ -3,49 +3,138 @@ package bind
 import (
     mg "mingle"
     "testing"
+    "reflect"
     "bitgirder/assert"
     "bitgirder/objpath"
 )
 
+var mkTyp = mg.MustTypeReference
+
 type valueBindingImpl struct { val mg.Value }
 
-func ( vb valueBindingImpl ) BoundValue() ( mg.Value, error ) { 
+func ( vb valueBindingImpl ) BoundValue( 
+    path objpath.PathNode ) ( mg.Value, error ) { 
+
     return vb.val, nil
 }
 
-func bindingForValue( val interface{} ) interface{} {
-    switch v := val.( type ) {
-    case int32: return valueBindingImpl{ mg.MustValue( v ) }
+type listBindingImpl struct { 
+    list reflect.Value
+    idx int
+}
+
+func newListBindingImpl( list interface{} ) *listBindingImpl {
+    return &listBindingImpl{ list: reflect.ValueOf( list ) }
+}
+
+func ( lb *listBindingImpl ) HasNextBinding() bool {
+    return lb.idx < lb.list.Len()
+}
+
+func ( lb *listBindingImpl ) NextBinding( 
+    path objpath.PathNode ) ( interface{}, error ) {
+
+    idx := lb.idx
+    lb.idx++
+    var val interface{}
+    rv := lb.list.Index( idx )
+    switch rv.Kind() {
+    case reflect.Slice: if ! rv.IsNil() { val = rv.Interface() }
+    default: val = rv.Interface()
     }
-    panic( libErrorf( "unhandled test value: %T", val ) )
+    return bindingForValue( path, val )
 }
 
-type valUnbinderImpl struct { 
-    typ mg.TypeReference 
-    val interface{}
-}
+func bindingForValue( 
+    path objpath.PathNode, val interface{} ) ( interface{}, error ) {
 
-func ( ub *valUnbinderImpl ) UnboundValue( 
-    path objpath.PathNode ) ( interface{}, error ) { 
-
-    if ub.val == nil { return nil, NewUnbindError( path, "no value built" ) }
-    return ub.val, nil
-}
-
-func ( ub *valUnbinderImpl ) UnbindValue(
-    val mg.Value, path objpath.PathNode ) error {
-
-    switch v := val.( type ) {
-    case mg.Int32: ub.val = int32( v ); return nil
+    if val == nil { return valueBindingImpl{ mg.NullVal }, nil }
+    if reflect.TypeOf( val ).Kind() == reflect.Slice {
+        return newListBindingImpl( val ), nil
     }
-    return NewUnbindErrorf( path, "unhandled value: %T", val )
+    return valueBindingImpl{ mg.MustValue( val ) }, nil
 }
 
-func unbinderForType( typ mg.TypeReference ) Unbinder {
+type listUnbinderImpl struct {
+    list interface{}
+    start func() interface{}
+    apnd func( list, val interface{} ) interface{}
+    next func() Unbinder
+}
+
+func ( lu *listUnbinderImpl ) StartList( 
+    path objpath.PathNode ) ( ListUnbinder, error ) {
+
+    lu.list = lu.start()
+    return lu, nil
+}
+
+func ( lu *listUnbinderImpl ) Append( 
+    val interface{}, path objpath.PathNode ) ( ListUnbinder, error ) {
+
+    lu.list = lu.apnd( lu.list, val )
+    return lu, nil
+}
+
+func ( lu *listUnbinderImpl ) NextUnbinder(
+    path objpath.PathNode ) ( Unbinder, error ) {
+
+    return lu.next(), nil
+}
+
+func ( lu *listUnbinderImpl ) EndList( 
+    path objpath.PathNode ) ( interface{}, error ) {
+
+    return lu.list, nil
+}
+
+func newListUnbinder( typ mg.TypeReference ) ListUnbinder {
+
     switch {
-    case typ.Equals( mg.TypeInt32 ): return &valUnbinderImpl{ typ: typ }
+    case typ.Equals( mkTyp( "Int32*" ) ) ||
+         typ.Equals( mkTyp( "Int32*?" ) ): 
+        return &listUnbinderImpl{
+            start: func() interface{} { return []int32{} },
+            apnd: func( list, val interface{} ) interface{} {
+                return append( list.( []int32 ), val.( int32 ) )
+            },
+            next: func() Unbinder { return Int32ValueUnbinder },
+        }
+    case typ.Equals( mkTyp( "Int32*+" ) ) ||
+         typ.Equals( mkTyp( "Int32*?*" ) ):
+        return &listUnbinderImpl{
+            start: func() interface{} { return [][]int32{} },
+            apnd: func( list, val interface{} ) interface{} {
+                if val == nil { return append( list.( [][]int32 ), nil ) }
+                return append( list.( [][]int32 ), val.( []int32 ) )
+            },
+            next: func() Unbinder {
+                eltTyp := typ.( *mg.ListTypeReference ).ElementType
+                return newListUnbinder( eltTyp )
+            },
+        }
     }
-    panic( libErrorf( "unhandled unbinder type: %s", typ ) )
+    panic( libErrorf( "unhandled list type: %s", typ ) )
+}
+
+func valueUnbinderForType( 
+    path objpath.PathNode, typ *mg.AtomicTypeReference ) ( Unbinder, error ) {
+
+    switch {
+    case typ.Equals( mg.TypeInt32 ): return Int32ValueUnbinder, nil
+    }
+    return nil, NewUnbindErrorf( path, "unhandled unbinder type: %s", typ )
+}
+
+func unbinderForType( 
+    path objpath.PathNode, typ mg.TypeReference ) ( Unbinder, error ) {
+
+    switch v := typ.( type ) {
+    case *mg.AtomicTypeReference: return valueUnbinderForType( path, v )
+    case *mg.NullableTypeReference: return unbinderForType( path, v.Type )
+    case *mg.ListTypeReference: return newListUnbinder( v ), nil
+    }
+    return nil, NewUnbindErrorf( path, "unhandled unbinder type: %s", typ )
 }
 
 type roundtripTestCall struct {
@@ -56,15 +145,20 @@ type roundtripTestCall struct {
 
 func ( c *roundtripTestCall ) bindToValue() mg.Value {
     vb := mg.NewValueBuilder()
-    binding := bindingForValue( c.rt.Object )
-    if err := c.binder.Bind( binding, vb ); err != nil { c.Fatal( err ) }
+    binding, err := bindingForValue( nil, c.rt.Object )
+    if err != nil { c.Fatal( err ) }
+    if err = c.binder.Bind( binding, vb ); err != nil { c.Fatal( err ) }
     return vb.GetValue()
 }
 
 func ( c *roundtripTestCall ) unbindFromValue( val mg.Value ) interface{} {
-    ub := unbinderForType( c.rt.Type )
+    ub, err := unbinderForType( nil, c.rt.Type )
+    if err != nil { c.Fatal( err ) }
+    ps := mg.NewPathSettingProcessor()
+    dbg := mg.NewDebugReactor( c )
     rct := c.binder.NewUnbindReactor( ub )
-    if err := mg.VisitValue( val, rct ); err != nil { c.Fatal( err ) }
+    pip := mg.InitReactorPipeline( ps, dbg, rct )
+    if err = mg.VisitValue( val, pip ); err != nil { c.Fatal( err ) }
     c.True( rct.HasValue() )
     return rct.UnboundValue()
 }
@@ -72,6 +166,7 @@ func ( c *roundtripTestCall ) unbindFromValue( val mg.Value ) interface{} {
 func ( c *roundtripTestCall ) call() {
     c.binder = NewBinder()
     val := c.bindToValue()
+    mg.EqualValues( c.rt.Value, val, c )
     goVal2 := c.unbindFromValue( val )
     c.Equal( c.rt.Object, goVal2 )
 }
