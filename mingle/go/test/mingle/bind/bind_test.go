@@ -101,7 +101,8 @@ func newListUnbinder( typ mg.TypeReference ) ListUnbinder {
             next: func() Unbinder { return Int32ValueUnbinder },
         }
     case typ.Equals( mkTyp( "Int32*+" ) ) ||
-         typ.Equals( mkTyp( "Int32*?*" ) ):
+         typ.Equals( mkTyp( "Int32*?*" ) ) ||
+         typ.Equals( mkTyp( "Int32**" ) ):
         return &listUnbinderImpl{
             start: func() interface{} { return [][]int32{} },
             apnd: func( list, val interface{} ) interface{} {
@@ -135,6 +136,12 @@ func unbinderForType(
     case *mg.ListTypeReference: return newListUnbinder( v ), nil
     }
     return nil, NewUnbindErrorf( path, "unhandled unbinder type: %s", typ )
+}
+
+func mustUnbinderForType( typ mg.TypeReference ) Unbinder {
+    ub, err := unbinderForType( nil, typ )
+    if err == nil { return ub }
+    panic( err )
 }
 
 type roundtripTestCall struct {
@@ -175,12 +182,48 @@ func callRoundtripTest( rt *RoundtripTest, a *assert.PathAsserter ) {
     ( &roundtripTestCall{ rt: rt, PathAsserter: a } ).call()
 }
 
+func assertUnbindError( 
+    expct *UnbindError, act error, a *assert.PathAsserter ) {
+
+    if ue, ok := act.( *UnbindError ); ok {
+        a.Equalf( expct, ue, "expected %s (%T) but got %s (%T)",
+            expct, expct, act, act )
+    } else {
+        a.Fatal( act )
+    }
+}
+
+func assertError( expct, act error, a *assert.PathAsserter ) {
+    switch v := expct.( type ) {
+    case *UnbindError: assertUnbindError( v, act, a )
+    default: mg.AssertCastError( expct, act, a )
+    }
+}
+
+func callUnbindErrorTest( ue *UnbindErrorTest, a *assert.PathAsserter ) {
+    b := NewBinder()
+    ps := mg.NewPathSettingProcessor()
+//    if _, ok := ue.Type.( *mg.ListTypeReference ); ok {
+//        ps.SetStartPath( objpath.RootedAtList() )
+//    }
+    dbg := mg.NewDebugReactor( a )
+    rct := b.NewUnbindReactor( mustUnbinderForType( ue.Type ) )
+    pip := mg.InitReactorPipeline( ps, dbg, rct )
+    if err := mg.FeedSource( ue.Source, pip ); err == nil {
+        a.Fatalf( "expected error (%T): %s", ue.Error, ue.Error )
+    } else {
+        if ue.Error == nil { a.Fatal( err ) }
+        assertError( ue.Error, err, a )
+    }
+}
+
 func TestBinderStandardTests( t *testing.T ) {
     pa := assert.NewPathAsserter( t )
     la := pa.StartList()
     for _, bt := range StandardBindTests() {
         switch v := bt.( type ) {
         case *RoundtripTest: callRoundtripTest( v, la )
+        case *UnbindErrorTest: callUnbindErrorTest( v, la )
         default: panic( libErrorf( "unhandled test: %T", bt ) )
         }
         la = la.Next()

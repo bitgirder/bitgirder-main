@@ -84,10 +84,10 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     s1F1Succ( sm1, sm1, "SymbolMap" )
     s1F1Succ( sm1, sm1, "Value" )
     s1F1Succ( int32( 1 ), int32( 1 ), "Int32?" )
-    s1F1Succ( nil, mg.NullVal, "Int32?" )
+    s1F1Succ( nil, int32( 0 ), "Int32?" )
     s1F1Succ(
         mg.MustList( "1", nil, int64( 1 ) ),
-        mg.MustList( int32( 1 ), nil, int32( 1 ) ),
+        mg.MustList( int32( 1 ), int32( 0 ), int32( 1 ) ),
         "Int32?*",
     )
     s1F1Fail( []byte{}, "Int32", tcErr1( mg.TypeInt32, mg.TypeBuffer ) )
@@ -959,7 +959,7 @@ func ( rti *rtInit ) addServiceResponseTests() {
     addResSucc( nil, nil, "Null" )
     addResSucc( int32( 1 ), int32( 1 ), "Int32" )
     addResSucc( "1", int32( 1 ), "Int32" )
-    addResSucc( nil, nil, "Int32?" )
+    addResSucc( nil, int32( 0 ), "Int32?" )
     en1 := mg.MustEnum( "ns1@v1/E1", "e1" )
     addResSucc( en1, en1, "ns1@v1/E1" )
     addResSucc( "e1", en1, "ns1@v1/E1" )

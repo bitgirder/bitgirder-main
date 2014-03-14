@@ -6,6 +6,7 @@ import (
     "bitgirder/pipeline"
     "bitgirder/stack"
     "bitgirder/objpath"
+//    "log"
 )
 
 func formatError( path objpath.PathNode,
@@ -222,6 +223,10 @@ func ( ur *UnbindReactor ) valueUnbinderProcessEvent(
 func ( ur *UnbindReactor ) listUnbinderStartValue(
     ev mg.ReactorEvent, lbCtx *listUnbinderContext ) error {
  
+    if ! lbCtx.accumulating {
+        return NewUnbindErrorf( ev.GetPath(), 
+            "expected list start but got %s", mg.EventToString( ev ) )
+    }
     if isNullValEvent( ev ) { 
         return ur.processUnboundValue( nil, ev.GetPath() ) 
     }

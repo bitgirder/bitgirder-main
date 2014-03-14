@@ -26,7 +26,7 @@ func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
 
     chk := NewEventPathCheckReactor( pt.Events, c.PathAsserter )
     pip := InitReactorPipeline( rct, chk )
-    
+ 
     src := eventExpectSource( pt.Events )
     if err := FeedEventSource( src, pip ); err != nil { c.Fatal( err ) }
 

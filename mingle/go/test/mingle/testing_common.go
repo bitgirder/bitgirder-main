@@ -32,4 +32,4 @@ func atomicRef( s string ) *AtomicTypeReference {
     return typeRef( s ).( *AtomicTypeReference )
 }
 
-func id( s string ) *Identifier { return MustIdentifier( s ) }
+var id = MustIdentifier
