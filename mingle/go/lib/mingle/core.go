@@ -428,6 +428,28 @@ func ( typ *NullableTypeReference ) Equals( ref TypeReference ) bool {
     return false
 }
 
+type PointerTypeReference struct { Type TypeReference }
+
+func NewPointerTypeReference( typ TypeReference ) *PointerTypeReference {
+    return &PointerTypeReference{ Type: typ }
+}
+
+func ( pt *PointerTypeReference ) Equals( ref TypeReference ) bool {
+    if ref == nil { return false }
+    if pt2, ok := ref.( *PointerTypeReference ); ok {
+        return pt.Type.Equals( pt2.Type )
+    }
+    return false
+}
+
+func ( pt *PointerTypeReference ) ExternalForm() string {
+    return "*" + pt.Type.ExternalForm()
+}
+
+func ( pt *PointerTypeReference ) String() string { return pt.ExternalForm() }
+
+func ( pt *PointerTypeReference ) typeRefImpl() {}
+
 func TypeNameIn( typ TypeReference ) TypeName {
     switch v := typ.( type ) {
     case *AtomicTypeReference: return v.Name
@@ -454,6 +476,7 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     case *AtomicTypeReference: return v
     case *ListTypeReference: return AtomicTypeIn( v.ElementType )
     case *NullableTypeReference: return AtomicTypeIn( v.Type )
+    case *PointerTypeReference: return AtomicTypeIn( v.Type )
     }
     panic( fmt.Errorf( "No atomic type in %s (%T)", ref, ref ) )
 }
@@ -997,6 +1020,14 @@ func MustStruct(
     return res
 }
 
+type PointerValue struct { Val Value }
+
+func NewPointerValue( val Value ) *PointerValue { 
+    return &PointerValue{ Val: val }
+}
+
+func ( pv *PointerValue ) valImpl() {}
+
 type IdentifiedName struct {
     Namespace *Namespace
     Names []*Identifier
@@ -1190,6 +1221,10 @@ func IsIntegerType( typ TypeReference ) bool {
            typ.Equals( TypeUint64 )
 }
 
+func typeOfPointerValue( pv *PointerValue ) *PointerTypeReference {
+    return NewPointerTypeReference( TypeOf( pv.Val ) )
+}
+
 func TypeOf( mgVal Value ) TypeReference {
     switch v := mgVal.( type ) {
     case Boolean: return TypeBoolean
@@ -1207,6 +1242,7 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Struct: return v.Type.AsAtomicType()
     case *List: return TypeOpaqueList
     case *Null: return TypeNull
+    case *PointerValue: return typeOfPointerValue( v )
     }
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }

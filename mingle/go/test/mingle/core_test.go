@@ -388,6 +388,13 @@ func TestTypeOf( t *testing.T ) {
     typ := &AtomicTypeReference{ Name: qn }
     assert.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
     assert.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
+    ptrTyp := NewPointerTypeReference( typ )
+    assert.Equal( ptrTyp, TypeOf( NewPointerValue( &Enum{ Type: qn } ) ) )
+    assert.Equal( ptrTyp, TypeOf( NewPointerValue( &Struct{ Type: qn } ) ) )
+    assert.Equal( NewPointerTypeReference( TypeInt32 ), 
+        TypeOf( NewPointerValue( Int32( 1 ) ) ) )
+    assert.Equal( NewPointerTypeReference( TypeOpaqueList ), 
+        TypeOf( NewPointerValue( MustList() ) ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
@@ -396,6 +403,8 @@ func TestAtomicTypeIn( t *testing.T ) {
     for _, ext := range []string{ "", "?", "*", "+", "**+", "*+?++", "??" } {
         typ2 := MustTypeReference( str + ext )
         assert.True( typ.Equals( AtomicTypeIn( typ2 ) ) )
+        assert.True( 
+            typ.Equals( AtomicTypeIn( NewPointerTypeReference( typ2 ) ) ) )
     }
 }
 
@@ -780,20 +789,47 @@ func TestUnrecognizedFieldErrorFormatting( t *testing.T ) {
     )
 }
 
-//func TestServiceIdMap( t *testing.T ) {
-//    m := NewServiceIdMap()
-//    ns1 := MustNamespace( "ns1@v1" )
-//    ns2 := MustNamespace( "ns1@v2" )
-//    svc1 := id( "svc1" )
-//    svc2 := id( "svc2" )
-//    m.Put( ns1, svc1, 1 )
-//    chkGetOk := func( 
-//        expctVal interface{}, expctOk bool, ns *Namespace, svc *Identifier ) {
-//        actVal, actOk := m.GetOk( ns, svc )
-//        assert.Equal( expctOk, actOk )
-//        if actOk { assert.Equal( expctVal, actVal ) }
-//    }
-//    chkGetOk( 1, true, ns1, svc1 )
-//    chkGetOk( nil, false, ns1, svc2 )
-//    chkGetOk( nil, false, ns2, svc2 )
-//}
+func TestTypeReferenceEquals( t *testing.T ) {
+    chk0 := func( t1, t2 TypeReference, eq bool ) {
+        if t1.Equals( t2 ) {
+            if ! eq { t.Fatalf( "%s == %s", t1, t2 ) }
+        } else {
+            if eq { t.Fatalf( "%s != %s", t1, t2 ) }
+        }
+    }
+    chk := func( t1, t2 TypeReference, eq bool ) {
+        chk0( t1, t2, eq )
+        chk0( t2, t1, eq )
+    }
+    qn1 := qname( "ns1@v1/T1" )
+    qn2 := qname( "ns1@v1/T2" )
+    at1 := &AtomicTypeReference{ Name: qn1 }
+    at2 := &AtomicTypeReference{ Name: qn2 }
+    nt1 := &NullableTypeReference{ at1 }
+    nt2 := &NullableTypeReference{ at2 }
+    lt1Empty := &ListTypeReference{ ElementType: at1, AllowsEmpty: true }
+    lt1NonEmpty := &ListTypeReference{ ElementType: at1, AllowsEmpty: false }
+    pt1 := NewPointerTypeReference( at1 )
+    pt2 := NewPointerTypeReference( at2 )
+    chk( at1, at1, true )
+    chk( at1, &AtomicTypeReference{ Name: qn1 }, true )
+    chk( at1, at2, false )
+    chk( lt1Empty, lt1Empty, true )
+    chk( lt1Empty, lt1NonEmpty, false )
+    chk( lt1Empty, 
+        &ListTypeReference{ ElementType: at2, AllowsEmpty: true }, false )
+    chk( lt1Empty, 
+        &ListTypeReference{ ElementType: lt1Empty, AllowsEmpty: true }, false )
+    chk( nt1, nt1, true )
+    chk( nt1, &NullableTypeReference{ at1 }, true )
+    chk( nt1, nt2, false )
+    chk( nt1, lt1Empty, false )
+    chk( pt1, pt1, true )
+    chk( pt1, NewPointerTypeReference( at1 ), true )
+    chk( pt1, pt2, false )
+    chk( pt1, NewPointerTypeReference( pt1 ), false )
+    chk( pt1, NewPointerTypeReference( lt1NonEmpty ), false )
+    chk( pt1, NewPointerTypeReference( nt1 ), false )
+    chk( NewPointerTypeReference( lt1Empty ), 
+        NewPointerTypeReference( lt1Empty ), true )
+}
