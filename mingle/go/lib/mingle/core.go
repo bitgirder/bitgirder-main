@@ -412,6 +412,10 @@ type NullableTypeReference struct {
     Type TypeReference
 }
 
+func NewNullableTypeReference( typ TypeReference ) *NullableTypeReference {
+    return &NullableTypeReference{ Type: typ }
+}
+
 func ( t *NullableTypeReference ) typeRefImpl() {}
 
 func ( t *NullableTypeReference ) ExternalForm() string {

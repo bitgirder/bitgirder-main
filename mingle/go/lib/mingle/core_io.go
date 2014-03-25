@@ -686,8 +686,9 @@ func ( r *BinReader ) ReadListTypeReference() ( lt *ListTypeReference,
 func ( r *BinReader ) ReadNullableTypeReference() ( nt *NullableTypeReference,
                                                     err error ) {
     if _, err = r.ExpectTypeCode( tcNullableTyp ); err != nil { return }
-    nt = &NullableTypeReference{}
-    if nt.Type, err = r.ReadTypeReference(); err != nil { return }
+    var typ TypeReference
+    if typ, err = r.ReadTypeReference(); err != nil { return }
+    nt = NewNullableTypeReference( typ )
     return
 }
 

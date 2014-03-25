@@ -299,7 +299,7 @@ func parseCompletableTypeReference(
 func typeCompleter( val interface{}, tq syntax.TypeQuantifier ) interface{} {
     typ := val.( TypeReference )
     switch tq {
-    case syntax.TypeQuantifierNullable: return &NullableTypeReference{ typ }
+    case syntax.TypeQuantifierNullable: return NewNullableTypeReference( typ )
     case syntax.TypeQuantifierList: return &ListTypeReference{ typ, true }
     case syntax.TypeQuantifierNonEmptyList:
         return &ListTypeReference{ typ, false }

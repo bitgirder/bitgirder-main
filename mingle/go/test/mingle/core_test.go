@@ -805,8 +805,8 @@ func TestTypeReferenceEquals( t *testing.T ) {
     qn2 := qname( "ns1@v1/T2" )
     at1 := &AtomicTypeReference{ Name: qn1 }
     at2 := &AtomicTypeReference{ Name: qn2 }
-    nt1 := &NullableTypeReference{ at1 }
-    nt2 := &NullableTypeReference{ at2 }
+    nt1 := NewNullableTypeReference( at1 )
+    nt2 := NewNullableTypeReference( at2 )
     lt1Empty := &ListTypeReference{ ElementType: at1, AllowsEmpty: true }
     lt1NonEmpty := &ListTypeReference{ ElementType: at1, AllowsEmpty: false }
     pt1 := NewPointerTypeReference( at1 )
@@ -821,7 +821,7 @@ func TestTypeReferenceEquals( t *testing.T ) {
     chk( lt1Empty, 
         &ListTypeReference{ ElementType: lt1Empty, AllowsEmpty: true }, false )
     chk( nt1, nt1, true )
-    chk( nt1, &NullableTypeReference{ at1 }, true )
+    chk( nt1, NewNullableTypeReference( at1 ), true )
     chk( nt1, nt2, false )
     chk( nt1, lt1Empty, false )
     chk( pt1, pt1, true )

@@ -141,7 +141,7 @@ func convertPtTypeReference( tVal interface{} ) TypeReference {
             AllowsEmpty: t.AllowsEmpty,
         }
     case *pt.NullableTypeReference:
-        return &NullableTypeReference{ convertPtTypeReference( t.Type ) }
+        return NewNullableTypeReference( convertPtTypeReference( t.Type ) )
     }
     panic( fmt.Errorf( "Unhandled pt type reference type %T", tVal ) )
 }

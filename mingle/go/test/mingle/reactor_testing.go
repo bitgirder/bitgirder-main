@@ -1568,7 +1568,7 @@ func ( t *crtInit ) addNullableTests() {
     }
     for _, prim := range PrimitiveTypes {
         if ! IsNumericType( prim ) {
-            typs = append( typs, &NullableTypeReference{ prim } )
+            typs = append( typs, NewNullableTypeReference( prim ) )
         }
     }
     typs = append( typs,
@@ -1582,7 +1582,7 @@ func ( t *crtInit ) addNullableTests() {
     )
     for _, typ := range typs { addNullSucc( nil, typ ) }
     for _, numTyp := range NumericTypes {
-        typ := &NullableTypeReference{ numTyp }
+        typ := NewNullableTypeReference( numTyp )
         switch {
         case numTyp.Equals( TypeInt32 ): addNullSucc( Int32( 0 ), typ )
         case numTyp.Equals( TypeInt64 ): addNullSucc( Int64( 0 ), typ )
@@ -1636,7 +1636,7 @@ func ( t *crtInit ) addMapTests() {
     t.addSucc( m1, m1, TypeSymbolMap )
     t.addSucc( m1, m1, TypeValue )
     t.addSucc( m2, m2, TypeSymbolMap )
-    t.addSucc( m2, m2, &NullableTypeReference{ TypeSymbolMap } )
+    t.addSucc( m2, m2, NewNullableTypeReference( TypeSymbolMap ) )
     s2 := &Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2 }
     t.addSucc( s2, m2, TypeSymbolMap )
     l1 := MustList()
@@ -1679,7 +1679,7 @@ func ( t *crtInit ) addStructTests() {
     t.addSucc( s1, s1, TypeValue )
     t.addSucc( s1, s1, t1 )
     t.addSucc( s2, s2, t1 )
-    t.addSucc( s1, s1, &NullableTypeReference{ t1 } )
+    t.addSucc( s1, s1, NewNullableTypeReference( t1 ) )
     t.addSucc( s3, s3, t2 )
     l1 := MustList( s1, s2 )
     t.addSucc( l1, l1, &ListTypeReference{ t1, false } )
