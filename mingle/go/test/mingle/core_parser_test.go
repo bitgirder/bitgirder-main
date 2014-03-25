@@ -488,93 +488,10 @@ func TestTypeReferenceStringer( t *testing.T ) {
     }
 }
 
-func TestTypeReferenceMustPanic( t *testing.T ) {
+func TestMustTypeReferencePanic( t *testing.T ) {
     errExpct := 
         &pt.ParseErrorExpect{ 7, "Expected type path but found: END" }
     pt.AssertParsePanic( errExpct, t, func() { MustTypeReference( "ns1@v1" ) } )
-}
-
-func typeEqFunc ( a, b interface{} ) bool {
-    return a.( TypeReference ).Equals( b.( TypeReference) )
-}
-
-func assertTypeRefBaseEquality( str string, t *testing.T ) TypeReference {
-    res := MustTypeReference( str )
-    assertEquality( res, nil, res.Equals( nil ), false, t )
-    assertEquality( res, res, res.Equals( res ), true, t )
-    // Check equality with a different instance
-    ref2 := MustTypeReference( res.ExternalForm() )
-    assertEquality( res, ref2, res.Equals( ref2 ), true, t )
-    return res
-}
-
-func TestAtomicTypeReferenceEquality( t *testing.T ) {
-    at1 := assertTypeRefBaseEquality( "ns1@v1/T1", t )
-    tests := []equalityTest{}
-    for _, str := range []string{ 
-            "ns1@v1/T2", "ns2@v1/T1", "ns1@v1/T1?", "ns1@v1/T1*",
-            "ns1@v1/T1+", "ns1@v1/T1**+", 
-    } {
-        ref := MustTypeReference( str )
-        tests = append( tests, equalityTest{ at1, ref, false } )
-    }
-    assertEqualityTests( typeEqFunc, t, tests... )
-}
-
-func TestListTypeReferenceEquality( t *testing.T ) {
-    lt1 := assertTypeRefBaseEquality( "ns1@v1/T1*", t )
-    tests := make( []equalityTest, 0, 16 )
-    for _, quant := range []string { "*", "+", "**", "*+*", "*?**+" } {
-        str := "ns1@v1/T1" + quant
-        ref1 := MustTypeReference( str )
-        ref2 := MustTypeReference( str )
-        tests = append( tests, equalityTest{ ref1, ref2, true } )
-    }
-    for _, str := range []string {
-        "ns1@v1/T1+", "ns1@v1/T1**", "ns1@v1/T1?", "ns1@v1/T1?*",
-    } {
-        ref := MustTypeReference( str )
-        tests = append( tests, equalityTest{ lt1, ref, false } )
-    }
-    assertEqualityTests( typeEqFunc, t, tests... )
-}
-
-func TestNullableTypeReferenceEquality( t *testing.T ) {
-    nt1 := assertTypeRefBaseEquality( "ns1@v1/T1?", t )
-    tests := []equalityTest{}
-    for _, quant := range []string { "?", "??", "*?", "+?", "*?+?" } {
-        str := "ns1@v1/T1" + quant
-        ref1 := MustTypeReference( str )
-        ref2 := MustTypeReference( str )
-        tests = append( tests, equalityTest{ ref1, ref2, true } )
-    }
-    for _, str := range []string {
-        "ns1@v1/T1*?", "ns1@v1/T1??", "ns1@v1/T1?*", "ns1@v1/T1+",
-    } {
-        ref := MustTypeReference( str )
-        tests = append( tests, equalityTest{ nt1, ref, false } )
-    }
-    assertEqualityTests( typeEqFunc, t, tests... )
-}
-
-func TestAtomicTypeRestrictionEquality( t *testing.T ) {
-    f := func( s1, s2 string ) {
-        t1 := MustTypeReference( s1 )
-        wantEq := false
-        if s2 == "" { s2, wantEq = s1, true }
-        t2 := MustTypeReference( s2 )
-        assert.Equal( wantEq, t1.Equals( t2 ) )
-        assert.Equal( wantEq, t2.Equals( t1 ) )
-    }
-    f( "Int32~[0,2]", "" )
-    f( "Int32~(0,2]", "" )
-    f( "Int32~(0,2)", "" )
-    f( "Int32~[0,2)", "" )
-    f( "Int32~[0,2)", "Int32~[0,3)" )
-    f( "Int32~[0,2)", "Int32~(0,2)" )
-    f( "Int32~[0,2)", "Int64~[0,2)" )
-    f( `String~"a"`, "" )
-    f( `String~"a"`, `String~"b"` )
 }
 
 func TestIdentifiedNameStringer( t *testing.T ) {

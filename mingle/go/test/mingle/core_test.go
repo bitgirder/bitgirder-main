@@ -804,6 +804,16 @@ func TestTypeReferenceEquals( t *testing.T ) {
     qn1 := qname( "ns1@v1/T1" )
     qn2 := qname( "ns1@v1/T2" )
     at1 := &AtomicTypeReference{ Name: qn1 }
+    rgx := func( s string ) *RegexRestriction {
+        res, err := NewRegexRestriction( s )
+        if err != nil { panic( err ) }
+        return res
+    }
+    at1Rgx := &AtomicTypeReference{ Name: qn1, Restriction: rgx( ".*" ) }
+    rng := func( i int32 ) *RangeRestriction {
+        return &RangeRestriction{ true, Int32( i ), Int32( i + 1 ), true }
+    }
+    at1Rng := &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }
     at2 := &AtomicTypeReference{ Name: qn2 }
     nt1 := NewNullableTypeReference( at1 )
     nt2 := NewNullableTypeReference( at2 )
@@ -814,6 +824,22 @@ func TestTypeReferenceEquals( t *testing.T ) {
     chk( at1, at1, true )
     chk( at1, &AtomicTypeReference{ Name: qn1 }, true )
     chk( at1, at2, false )
+    chk( at1Rgx, at1Rgx, true )
+    chk( at1Rgx, &AtomicTypeReference{ Name: qn1, Restriction: rgx( ".*" ) },
+        true )
+    chk( at1Rgx, at1, false )
+    chk( at1Rgx, &AtomicTypeReference{ Name: qn1, Restriction: rgx( "a.*" ) },
+        false )
+    chk( at1Rgx, &AtomicTypeReference{ Name: qn2, Restriction: rgx( ".*" ) },
+        false )
+    chk( at1Rgx, at1Rng, false )
+    chk( at1Rng, &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }, 
+        true )
+    chk( at1Rng, at1, false )
+    chk( at1Rng, &AtomicTypeReference{ Name: qn1, Restriction: rng( 2 ) }, 
+        false )
+    chk( at1Rng, &AtomicTypeReference{ Name: qn2, Restriction: rng( 1 ) },
+        false )
     chk( lt1Empty, lt1Empty, true )
     chk( lt1Empty, lt1NonEmpty, false )
     chk( lt1Empty, 
