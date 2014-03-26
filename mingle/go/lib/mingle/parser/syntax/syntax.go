@@ -428,6 +428,17 @@ func ( sb *Builder ) PollPlusMinus() ( *TokenNode, bool, error ) {
     return nil, false, err
 }
 
+func ( sb *Builder ) pollPointerDepth() ( int, error ) {
+    res := 0
+    for {
+        tok, err := sb.PollSpecial( lexer.SpecialTokenAsterisk )
+        if err != nil { return 0, err }
+        if tok == nil { break }
+        res++
+    }
+    return res, nil
+}
+
 func ( sb *Builder ) expectRestrictionSyntax() (
     RestrictionSyntax, error ) {
     pmTok, neg, err := sb.PollPlusMinus()
@@ -534,19 +545,24 @@ func ( sb *Builder ) pollTypeRefRestriction() (
 type CompletableTypeReference struct {
     Name TypeName
     Restriction RestrictionSyntax
+    ptrDepth int
     quants quantList
 }
 
-type TypeCompleter func( typ interface{}, quant TypeQuantifier ) interface{}
+type TypeCompleter interface {
+    AsListType( typ interface{}, allowsEmpty bool ) interface{}
+    AsNullableType( typ interface{} ) interface{}
+    AsPointerType( typ interface{} ) interface{}
+}
 
 func ( ctr *CompletableTypeReference ) CompleteType( 
     typ interface{}, tc TypeCompleter ) interface{} {
+    for i := 0; i < ctr.ptrDepth; i++ { typ = tc.AsPointerType( typ ) }
     for _, quant := range ctr.quants {
         switch quant {
-        case lexer.SpecialTokenPlus: typ = tc( typ, TypeQuantifierNonEmptyList )
-        case lexer.SpecialTokenAsterisk: typ = tc( typ, TypeQuantifierList )
-        case lexer.SpecialTokenQuestionMark: 
-            typ = tc( typ, TypeQuantifierNullable )
+        case lexer.SpecialTokenPlus: typ = tc.AsListType( typ, false )
+        case lexer.SpecialTokenAsterisk: typ = tc.AsListType( typ, true )
+        case lexer.SpecialTokenQuestionMark: typ = tc.AsNullableType( typ )
         default: panic( fmt.Errorf( "Unexpected quant: %s", quant ) )
         }
     }
@@ -562,7 +578,8 @@ func ( sb *Builder ) ExpectTypeReference(
     verDefl Identifier ) ( ref *CompletableTypeReference, 
                            l *loc.Location,
                            err error ) {
-    tmp := new( CompletableTypeReference )
+    tmp := &CompletableTypeReference{}
+    if tmp.ptrDepth, err = sb.pollPointerDepth(); err != nil { return }
     if tmp.Name, l, err = sb.ExpectTypeName( verDefl ); err != nil { return }
     if tmp.Restriction, err = sb.pollTypeRefRestriction(); err != nil { return }
     if tmp.quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }

@@ -142,6 +142,8 @@ func convertPtTypeReference( tVal interface{} ) TypeReference {
         }
     case *pt.NullableTypeReference:
         return NewNullableTypeReference( convertPtTypeReference( t.Type ) )
+    case *pt.PointerTypeReference:
+        return NewPointerTypeReference( convertPtTypeReference( t.Type ) )
     }
     panic( fmt.Errorf( "Unhandled pt type reference type %T", tVal ) )
 }
@@ -155,7 +157,8 @@ func convertPtVal( val interface{} ) interface{} {
     case *pt.IdentifiedName: return convertPtIdentifiedName( v )
     case *pt.AtomicTypeReference, 
          *pt.ListTypeReference,
-         *pt.NullableTypeReference: 
+         *pt.NullableTypeReference,
+         *pt.PointerTypeReference: 
         return convertPtTypeReference( v )
     }
     panic( fmt.Errorf( "Unhandled pt val type (%T)", val ) )
@@ -167,6 +170,21 @@ func assertExternalForm( ext string, val interface{}, a *assert.PathAsserter ) {
     } else { a.Fatalf( "Not an external former: %T", val ) }
 }
 
+func debugType( typ TypeReference ) string {
+    switch v := typ.( type ) {
+    case *AtomicTypeReference:
+        return fmt.Sprintf( "atomic( %s )", v.ExternalForm() )
+    case *ListTypeReference:
+        return fmt.Sprintf( "list( %s, %t )", 
+            debugType( v.ElementType ), v.AllowsEmpty )
+    case *NullableTypeReference: 
+        return fmt.Sprintf( "nullable( %s )", debugType( v.Type ) )
+    case *PointerTypeReference:
+        return fmt.Sprintf( "pointer( %s )", debugType( v.Type ) )
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
 func assertCoreParse( cpt *pt.CoreParseTest, a *assert.PathAsserter ) {
     if cpt.TestType == pt.TestTypeString || cpt.TestType == pt.TestTypeNumber { 
         return 
@@ -174,6 +192,11 @@ func assertCoreParse( cpt *pt.CoreParseTest, a *assert.PathAsserter ) {
     if val, err := parseCore( cpt ); err == nil {
         if cpt.Err == nil {
             conv := convertPtVal( cpt.Expect )
+            if _, okConv := conv.( TypeReference ); okConv {
+                a.Logf( "conv: %s, val: %s",
+                    debugType( conv.( TypeReference ) ),
+                    debugType( val.( TypeReference ) ) )
+            }
             a.Equal( conv, val )
             if ext := cpt.ExternalForm; ext != "" { 
                 assertExternalForm( ext, conv, a.Descend( "ExternalForm" ) )
@@ -185,6 +208,7 @@ func assertCoreParse( cpt *pt.CoreParseTest, a *assert.PathAsserter ) {
 func TestCoreParser( t *testing.T ) {
     a := assert.NewPathAsserter( t ).StartList()
     for _, cpt := range pt.CoreParseTests {
+        a.Logf( "Starting with input %q", cpt.In )
         assertCoreParse( cpt, a )
         a = a.Next()
     }

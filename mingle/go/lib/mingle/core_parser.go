@@ -296,20 +296,26 @@ func parseCompletableTypeReference(
     return ctr, l, err
 }
 
-func typeCompleter( val interface{}, tq syntax.TypeQuantifier ) interface{} {
-    typ := val.( TypeReference )
-    switch tq {
-    case syntax.TypeQuantifierNullable: return NewNullableTypeReference( typ )
-    case syntax.TypeQuantifierList: return &ListTypeReference{ typ, true }
-    case syntax.TypeQuantifierNonEmptyList:
-        return &ListTypeReference{ typ, false }
-    }
-    panic( fmt.Errorf( "Unhandled type quantifier: %v", tq ) )
+type typeCompleter int
+
+func ( tc typeCompleter ) AsListType( 
+    typ interface{}, allowsEmpty bool ) interface{} {
+
+    return &ListTypeReference{ typ.( TypeReference ), allowsEmpty }
+}
+
+func ( tc typeCompleter ) AsNullableType( typ interface{} ) interface{} {
+    return NewNullableTypeReference( typ.( TypeReference ) )
+}
+
+func ( tc typeCompleter ) AsPointerType( typ interface{} ) interface{} {
+    return NewPointerTypeReference( typ.( TypeReference ) )
 }
 
 func CompleteType( 
     typ TypeReference, ctr *syntax.CompletableTypeReference ) TypeReference {
-    return ctr.CompleteType( typ, typeCompleter ).( TypeReference )
+
+    return ctr.CompleteType( typ, typeCompleter( 1 ) ).( TypeReference )
 }
 
 func parseTypeReference( s string ) ( TypeReference, error ) {

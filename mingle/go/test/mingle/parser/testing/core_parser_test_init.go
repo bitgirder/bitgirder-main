@@ -52,9 +52,9 @@ type ListTypeReference struct {
     AllowsEmpty bool
 }
 
-type NullableTypeReference struct {
-    Type interface{}
-}
+type NullableTypeReference struct { Type interface{} }
+
+type PointerTypeReference struct { Type interface{} }
 
 type CoreParseTestType string
 
@@ -245,6 +245,7 @@ func init() {
     }
     nsFail := peFailBinder( TestTypeNamespace )
     idV1 := id( "v1" )
+    ns1V1T1 := ns( idV1, id( "ns1" ) )
     CoreParseTests = append( CoreParseTests,
         nsSucc( "ns@v1", "ns@v1", ns( idV1, id( "ns" ) ) ),
         nsSucc( "ns1:ns2:ns3@v1", 
@@ -324,6 +325,7 @@ func init() {
         }
     }
     qnFail := peFailBinder( TestTypeQualifiedTypeName )
+    qnNs1V1T1 := qn( ns1V1T1, declNm( "T1" ) )
     CoreParseTests = append( CoreParseTests,
         qnSucc( "ns1@v1/T1", ns( idV1, id( "ns1" ) ), declNm( "T1" ) ),
         qnSucc( "ns1:ns2@v1/T1",
@@ -337,25 +339,6 @@ func init() {
         qnFail( "ns1@v1//T1", 8, "Illegal type name start: \"/\" (U+002F)" ),
         qnFail( "ns1@v1/T1#T2", 10, "Illegal type name rune: \"#\" (U+0023)" ),
     )
-//    tnSucc := func( in, extForm string, expct interface{} ) *CoreParseTest {
-//        return &CoreParseTest{
-//            In: in,
-//            ExternalForm: extForm,
-//            Expect: expct,
-//            TestType: TestTypeTypeName,
-//        }
-//    }
-//    tnFail := peFailBinder( TestTypeTypeName )
-//    CoreParseTests = append( CoreParseTests,
-//        tnSucc( 
-//            "ns1@v1/T1",
-//            "ns1@v1/T1", 
-//            qn( ns( idV1, id( "ns1" ) ), declNm( "T1" ) ),
-//        ),
-//        tnSucc( "T", "T", declNm( "T" ) ),
-//        tnFail( "2Bad", 1, "Illegal type name start: \"2\" (U+0032)" ),
-//        tnFail( "ns1@v1", 7, "Expected type path but found: END" ),
-//    )
     idNmSucc := func( 
         in, extForm string, ns *Namespace, ids ...Identifier ) *CoreParseTest {
         return &CoreParseTest{
@@ -426,6 +409,7 @@ func init() {
             TestType: TestTypeTypeReference,
         }
     }
+    atNs1V1T1 := &AtomicTypeReference{ Name: qnNs1V1T1 }
     CoreParseTests = append( CoreParseTests,
         typRefSucc( "mingle:core@v1/String", "", atMgStr ),
         typRefSucc( "mingle:core@v1/String*", "", 
@@ -455,51 +439,111 @@ func init() {
                 false,
             },
         ),
+        typRefSucc( `*ns1@v1/T1`, "", &PointerTypeReference{ atNs1V1T1 } ),
+        typRefSucc( `**ns1@v1/T1`, "",
+            &PointerTypeReference{ &PointerTypeReference{ atNs1V1T1 } } ),
+        typRefSucc( `*String`, "*mingle:core@v1/String",
+            &PointerTypeReference{ &AtomicTypeReference{ Name: qnMgStr } } ),
+        typRefSucc( `**String~".*"`, `**mingle:core@v1/String~".*"`,
+            &PointerTypeReference{
+                &PointerTypeReference{
+                    &AtomicTypeReference{ 
+                        Name: qnMgStr,
+                        Restriction: rx( ".*" ),
+                    },
+                },
+            },
+        ),
+        typRefSucc( `*ns1@v1/T1*+`, "",
+            &ListTypeReference{
+                &ListTypeReference{ &PointerTypeReference{ atNs1V1T1 }, true },
+                false,
+            },
+        ),
+        typRefSucc( `*ns1@v1/T1?*+`, "",
+            &ListTypeReference{
+                &ListTypeReference{
+                    &NullableTypeReference{ 
+                        &PointerTypeReference{ atNs1V1T1 }, 
+                    },
+                    true,
+                },
+                false,
+            },
+        ),
+        typRefSucc( `*ns1@v1/T1?*?+`, "",
+            &ListTypeReference{
+                &NullableTypeReference{
+                    &ListTypeReference{
+                        &NullableTypeReference{ 
+                            &PointerTypeReference{ atNs1V1T1 }, 
+                        },
+                        true,
+                    },
+                },
+                false,
+            },
+        ),
+        typRefSucc( `*ns1@v1/T1?`, "",
+            &NullableTypeReference{ &PointerTypeReference{ atNs1V1T1 } } ),
     )
     // Now just basic coverage of core type resolution and restrictions.
-    addCoreTypRefSucc := func( inBase string, expct interface{} ) {
-        extForm := "mingle:core@v1/" + inBase
+    addCoreTypRefSucc := func( inPref, inBase string, expct interface{} ) {
+        fqForm := inPref + "mingle:core@v1/" + inBase
         CoreParseTests = append( CoreParseTests,
-            typRefSucc( extForm, "", expct ),
-            typRefSucc( inBase, extForm, expct ),
+            typRefSucc( fqForm, fqForm, expct ),
+            typRefSucc( inPref + inBase, fqForm, expct ),
         )
+    }
+    addCoreTypRefSuccWithPtr := func( inBase string, expct interface{} ) {
+        addCoreTypRefSucc( "", inBase, expct )
+        addCoreTypRefSucc( "*", inBase, &PointerTypeReference{ expct } )
     }
     primNames := []string{
         "Boolean", "String", "Int32", "Uint32", "Int64", "Uint64", "Float32",
         "Float64", "Buffer", "Timestamp", "Value", "Null",
     }
     for _, s := range primNames {
-        addCoreTypRefSucc( s, &AtomicTypeReference{ primQn( s ), nil } )
+        addCoreTypRefSucc( "", s, &AtomicTypeReference{ primQn( s ), nil } )
+        if ! ( s == "Value" || s == "Null" ) {
+            addCoreTypRefSucc(  
+                "*",
+                s, 
+                &PointerTypeReference{
+                    &AtomicTypeReference{ primQn( s ), nil },
+                },
+            )
+        }
     }
-    addCoreTypRefSucc( `String~"^a+$"`, 
+    addCoreTypRefSuccWithPtr( `String~"^a+$"`, 
         &AtomicTypeReference{ qnMgStr, rx( "^a+$" ) },
     )
-    addCoreTypRefSucc( `String~["aaa","bbb"]`,
+    addCoreTypRefSuccWithPtr( `String~["aaa","bbb"]`,
         &AtomicTypeReference{ 
             qnMgStr, &RangeRestriction{ true, "aaa", "bbb", true },
         },
     )
     // We simultaneously permute primitive num types and interval combinations
     // with the next 4
-    addCoreTypRefSucc( `Int32~(0,1]`,
+    addCoreTypRefSuccWithPtr( `Int32~(0,1]`,
         &AtomicTypeReference{ 
             primQn( "Int32" ),
             &RangeRestriction{ false, int32( 0 ), int32( 1 ), true },
         },
     )
-    addCoreTypRefSucc( `Uint32~[0,1]`,
+    addCoreTypRefSuccWithPtr( `Uint32~[0,1]`,
         &AtomicTypeReference{ 
             primQn( "Uint32" ),
             &RangeRestriction{ true, uint32( 0 ), uint32( 1 ), true },
         },
     )
-    addCoreTypRefSucc( `Int64~[0,1)`,
+    addCoreTypRefSuccWithPtr( `Int64~[0,1)`,
         &AtomicTypeReference{ 
             primQn( "Int64" ),
             &RangeRestriction{ true, int64( 0 ), int64( 1 ), false },
         },
     )
-    addCoreTypRefSucc( `Uint64~(0,2)`,
+    addCoreTypRefSuccWithPtr( `Uint64~(0,2)`,
         &AtomicTypeReference{ 
             primQn( "Uint64" ),
             &RangeRestriction{ false, uint64( 0 ), uint64( 2 ), false },
@@ -508,27 +552,41 @@ func init() {
     // For floating points we use numbers that can convert without loss of
     // precision between machine and string form, to simplify testing of
     // external forms.
-    addCoreTypRefSucc( `Float32~[1,2)`,
+    addCoreTypRefSuccWithPtr( `Float32~[1,2)`,
         &AtomicTypeReference{
             primQn( "Float32" ),
             &RangeRestriction{ true, float32( 1.0 ), float32( 2.0 ), false },
         },
     )
-    addCoreTypRefSucc( `Float64~[0.1,2.1)`,
+    addCoreTypRefSuccWithPtr( `Float64~[0.1,2.1)`,
         &AtomicTypeReference{
             primQn( "Float64" ),
             &RangeRestriction{ true, float64( 0.1 ), float64( 2.1 ), false },
         },
     )
-    addCoreTypRefSucc( fmt.Sprintf( "Timestamp~[%q,%q]", tm1, tm2 ), atTm1 )
+    addCoreTypRefSuccWithPtr( 
+        fmt.Sprintf( "Timestamp~[%q,%q]", tm1, tm2 ), atTm1 )
     CoreParseTests = append( CoreParseTests,
         typRefFail( "/T1", 1, 
             "Expected identifier or declared type name but found: /" ),
+        // don't need to exhaustively retest all name parse errors, but we do
+        // want to make sure they happen for qn and declNm types and are
+        // reported in the correct location
+        typRefFail( "ns1", 4, "Expected ':' or '@' but found: END" ),
+        typRefFail( "ns1@", 5, "Empty identifier" ),
+        typRefFail( "ns1:@v1", 5, 
+            "Illegal start of identifier part: \"@\" (U+0040)" ),
         typRefFail( "ns1@v1", 7, "Expected type path but found: END" ),
         typRefFail( "ns1@v1/bad", 8, 
             "Illegal type name start: \"b\" (U+0062)" ),
         typRefFail( "ns1@v1/T1*?-+", 12, "Unexpected token: -" ),
         typRefFail( "ns1@v1/T1*? +", 12, `Unexpected token: " "` ),
+        typRefFail( "*", 2, "Unexpected end of input" ),
+        typRefFail( "****", 5, "Unexpected end of input" ),
+        typRefFail( "*ns1", 5, "Expected ':' or '@' but found: END" ),
+        typRefFail( "**+", 3, 
+            "Expected identifier or declared type name but found: +" ),
+        typRefFail( "*Null", 1, "invalid pointer type (STUB)" ),
         typRefFail( "mingle:core@v1/String~", 23, "Unexpected end of input" ),
         typRefFail( "mingle:core@v1/~\"s*\"", 16, 
             "Illegal type name start: \"~\" (U+007E)" ),
