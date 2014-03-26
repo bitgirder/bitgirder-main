@@ -1643,6 +1643,45 @@ func ( t *crtInit ) addListTests() {
         MustList( "1", nil, "hi" ),
         "String?*",
     )
+    s1 := MustStruct( "ns1@v1/S1" )
+    t.addSucc(
+        []interface{}{ s1, NewPointerValue( s1 ), nil },
+        MustList( NewPointerValue( s1 ), NewPointerValue( s1 ), NullVal ),
+        "*ns1@v1/S1?*",
+    )
+    t.addTcError0(
+        []interface{}{ s1, nil },
+        "*ns1@v1/S1",
+        TypeNull,
+        "*ns1@v1/S1*",
+        crtPathDefault.StartList().SetIndex( 1 ),
+    )
+    t.addTcError0(
+        []interface{}{ s1, nil },
+        "ns1@v1/S1",
+        TypeNull,
+        "ns1@v1/S1*",
+        crtPathDefault.StartList().SetIndex( 1 ),
+    )
+    t.addSucc(
+        []interface{}{ 
+            int32( 1 ), 
+            []interface{}{}, 
+            []interface{}{ int32( 1 ), int32( 2 ), int32( 3 ) },
+            "s1", 
+            s1, 
+            nil,
+        },
+        MustList(
+            NewPointerValue( Int32( 1 ) ),
+            NewPointerValue( MustList() ),
+            NewPointerValue( MustList( 1, 2, 3 ) ),
+            NewPointerValue( String( "s1" ) ),
+            NewPointerValue( s1 ),
+            NullVal,
+        ),
+        "*Null*",
+    )
     t.addSucc( MustList(), MustList(), TypeValue )
     intList1 := MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
     t.addSucc( intList1, intList1, TypeValue )
