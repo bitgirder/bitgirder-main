@@ -192,11 +192,11 @@ func assertCoreParse( cpt *pt.CoreParseTest, a *assert.PathAsserter ) {
     if val, err := parseCore( cpt ); err == nil {
         if cpt.Err == nil {
             conv := convertPtVal( cpt.Expect )
-            if _, okConv := conv.( TypeReference ); okConv {
-                a.Logf( "conv: %s, val: %s",
-                    debugType( conv.( TypeReference ) ),
-                    debugType( val.( TypeReference ) ) )
-            }
+//            if _, okConv := conv.( TypeReference ); okConv {
+//                a.Logf( "conv: %s, val: %s",
+//                    debugType( conv.( TypeReference ) ),
+//                    debugType( val.( TypeReference ) ) )
+//            }
             a.Equal( conv, val )
             if ext := cpt.ExternalForm; ext != "" { 
                 assertExternalForm( ext, conv, a.Descend( "ExternalForm" ) )
@@ -208,7 +208,7 @@ func assertCoreParse( cpt *pt.CoreParseTest, a *assert.PathAsserter ) {
 func TestCoreParser( t *testing.T ) {
     a := assert.NewPathAsserter( t ).StartList()
     for _, cpt := range pt.CoreParseTests {
-        a.Logf( "Starting with input %q", cpt.In )
+//        a.Logf( "Starting with input %q", cpt.In )
         assertCoreParse( cpt, a )
         a = a.Next()
     }

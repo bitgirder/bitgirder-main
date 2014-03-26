@@ -86,7 +86,7 @@ func ( t svcReqFieldTyper ) FieldTypeFor(
     fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
 
     if fld.Equals( IdParameters ) { return TypeSymbolMap, nil }
-    return TypeValue, nil
+    return TypeNullableValue, nil
 }
 
 func ( c svcReqCastIface ) FieldTyperFor( 

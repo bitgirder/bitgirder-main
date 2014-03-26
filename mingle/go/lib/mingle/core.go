@@ -787,6 +787,7 @@ func asAtomicValue(
     case *Enum: val = v
     case *Struct: val = v
     case *Null: val = v
+    case *PointerValue: val = v
     default:
         msg := "Unhandled mingle value %v (%T)"
         err = &ValueTypeError{ path, fmt.Sprintf( msg, inVal, inVal ) }
@@ -1101,8 +1102,6 @@ func FormatIdPath( p objpath.PathNode ) string {
 }
 
 var (
-    QnameValue *QualifiedTypeName
-    TypeValue *AtomicTypeReference
     QnameBoolean *QualifiedTypeName
     TypeBoolean *AtomicTypeReference
     QnameBuffer *QualifiedTypeName
@@ -1131,8 +1130,9 @@ var (
     TypeRequest *AtomicTypeReference
     QnameResponse *QualifiedTypeName
     TypeResponse *AtomicTypeReference
-    TypeOpaqueList *ListTypeReference
+    TypeValue *PointerTypeReference
     TypeNullableValue *NullableTypeReference
+    TypeOpaqueList *ListTypeReference
     IdNamespace *Identifier
     IdService *Identifier
     IdOperation *Identifier
@@ -1169,7 +1169,6 @@ func init() {
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
         return qn, &AtomicTypeReference{ Name: qn }
     }
-    QnameValue, TypeValue = f1( "Value" )
     QnameBoolean, TypeBoolean = f1( "Boolean" )
     QnameBuffer, TypeBuffer = f1( "Buffer" )
     QnameString, TypeString = f1( "String" )
@@ -1183,7 +1182,6 @@ func init() {
     QnameSymbolMap, TypeSymbolMap = f1( "SymbolMap" )
     QnameNull, TypeNull = f1( "Null" )
     PrimitiveTypes = []*AtomicTypeReference{
-        TypeValue,
         TypeNull,
         TypeString,
         TypeFloat64,
@@ -1197,8 +1195,9 @@ func init() {
         TypeBuffer,
         TypeSymbolMap,
     }
-    TypeOpaqueList = &ListTypeReference{ TypeValue, true }
+    TypeValue = &PointerTypeReference{ TypeNull }
     TypeNullableValue = &NullableTypeReference{ TypeValue }
+    TypeOpaqueList = &ListTypeReference{ TypeNullableValue, true }
     NumericTypes = []*AtomicTypeReference{
         TypeInt32,
         TypeInt64,

@@ -1300,8 +1300,7 @@ func ( t *crtInit ) addBaseTypeTests() {
     t.addIdent( t.en1, t.en1.Type )
     t.addIdent( t.map1, TypeSymbolMap )
     t.addIdent( t.struct1, t.struct1.Type )
-    t.addIdent( 1, TypeValue )
-    t.addIdent( nil, TypeNull )
+    t.addIdent( nil, TypeNullableValue )
     t.addSucc( Int32( -1 ), Uint32( uint32( 4294967295 ) ), TypeUint32 )
     t.addSucc( Int64( -1 ), Uint32( uint32( 4294967295 ) ), TypeUint32 )
     t.addSucc( 
@@ -1363,8 +1362,8 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( true, "Int32", "Boolean" )
     t.addTcError( true, "*Int32", "Boolean" )
     t.addTcError( true, "*Int32?", "Boolean" )
-    t.addTcError( MustList( 1, 2 ), TypeString, "Value*" )
-    t.addTcError( MustList(), "String?", "Value*" )
+    t.addTcError( MustList( 1, 2 ), TypeString, "*Null*" )
+    t.addTcError( MustList(), "String?", "*Null*" )
     t.addTcError( "s", "String*", "String" )
     t.addCrtDefault(
         &CastReactorTest{
@@ -1381,7 +1380,7 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( 12, t.struct1.Type, "Int64" )
     for _, prim := range PrimitiveTypes {
         // not an err for prims Value and SymbolMap
-        if ! ( prim == TypeValue || prim == TypeSymbolMap ) { 
+        if prim != TypeSymbolMap { 
             t.addTcError( t.struct1, prim, t.struct1.Type )
         }
     }
@@ -1487,11 +1486,23 @@ func ( t *crtInit ) addIdentityNumTests() {
     for _, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
+        ptrVal := NewPointerValue( numCtx.val )
+        ptrTyp := NewPointerTypeReference( numCtx.typ )
+        t.addSucc( numCtx.val, ptrVal, ptrTyp )
+        t.addSucc( numCtx.str, ptrVal, ptrTyp )
+        t.addSucc( ptrVal, numCtx.str, TypeString )
+        t.addSucc( ptrVal, numCtx.val, numCtx.typ )
         t.addTcError( EmptySymbolMap(), numCtx.typ, TypeSymbolMap )
+        t.addTcError( EmptySymbolMap(), ptrTyp, TypeSymbolMap )
+        t.addTcError( nil, numCtx.typ, TypeNull )
         t.addTcError( EmptyList(), numCtx.typ, TypeOpaqueList )
         t.addTcError( s1, numCtx.typ, s1.Type )
+        t.addTcError( ptrVal, s1.Type, numCtx.typ )
+        t.addTcError( s1, ptrTyp, s1.Type )
         for _, valCtx := range numTests {
             t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
+            t.addSucc( NewPointerValue( valCtx.val ), numCtx.val, numCtx.typ )
+            t.addSucc( valCtx.val, ptrVal, ptrTyp )
         }
     }
 }
@@ -1530,16 +1541,27 @@ func ( t *crtInit ) addNumTests() {
     rngErr( "-9223372036854775809", TypeInt64 )
     rngErr( "4294967296", TypeUint32 )
     t.addVcError( "-1", TypeUint32, "value out of range: -1" )
+    t.addVcError( "-1", NewPointerTypeReference( TypeUint32 ), 
+        "value out of range: -1" )
     rngErr( "18446744073709551616", TypeUint64 )
     t.addVcError( "-1", TypeUint64, "value out of range: -1" )
-    t.addVcError(
-        12, "Int32~[0,10)", "Value 12 does not satisfy restriction [0,10)" )
+    for _, tmpl := range []string{ "%s", "*%s", "%s?" } {
+        t.addVcError(
+            12, fmt.Sprintf( tmpl, "Int32~[0,10)" ), 
+            "Value 12 does not satisfy restriction [0,10)" )
+    }
 }
 
 func ( t *crtInit ) addBufferTests() {
-    buf1B64 := base64.StdEncoding.EncodeToString( t.buf1 )
+    buf1B64 := String( base64.StdEncoding.EncodeToString( t.buf1 ) )
     t.addSucc( t.buf1, buf1B64, TypeString )
+    t.addSucc( NewPointerValue( t.buf1 ), buf1B64, TypeString )
+    t.addSucc( NewPointerValue( t.buf1 ), NewPointerValue( buf1B64 ),
+        NewPointerTypeReference( TypeString ) )
     t.addSucc( buf1B64, t.buf1, TypeBuffer  )
+    t.addSucc( NewPointerValue( buf1B64 ), t.buf1, TypeBuffer )
+    t.addSucc( NewPointerValue( buf1B64 ), NewPointerValue( t.buf1 ),
+        NewPointerTypeReference( TypeBuffer ) )
     t.addVcError( "abc$/@", TypeBuffer, 
         "Invalid base64 string: illegal base64 data at input byte 3" )
 }
@@ -1559,8 +1581,15 @@ func ( t *crtInit ) addTimeTests() {
 }
 
 func ( t *crtInit ) addEnumTests() {
+    ptrTyp := 
+        NewPointerTypeReference( &AtomicTypeReference{ Name: t.en1.Type } )
+    t.addSucc( NewPointerValue( t.en1 ), NewPointerValue( t.en1 ), ptrTyp )
+    t.addSucc( t.en1, NewPointerValue( t.en1 ), ptrTyp )
     t.addSucc( t.en1, "en-val1", TypeString  )
+    t.addSucc( t.en1, NewPointerValue( MustValue( "en-val1" ) ), 
+        NewPointerTypeReference( TypeString ) )
     t.addTcError( EmptySymbolMap(), t.en1.Type, TypeSymbolMap )
+    t.addTcError( nil, t.en1.Type, TypeNull )
 }
 
 func ( t *crtInit ) addNullableTests() {
@@ -1571,6 +1600,8 @@ func ( t *crtInit ) addNullableTests() {
     for _, prim := range PrimitiveTypes {
         if isNullableType( prim ) {
             typs = append( typs, NewNullableTypeReference( prim ) )
+        } else {
+            t.addTcError( nil, prim, TypeNull )
         }
     }
     typs = append( typs,
@@ -1969,3 +2000,9 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
         EqualValues( expct, vb.GetValue(), a ) 
     }
 }
+
+// To add:
+//
+//  - pointer val casts
+//      - ints to nullablevalue
+//      - value T <--> *T

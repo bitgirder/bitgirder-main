@@ -234,7 +234,7 @@ func ( cr *CastReactor ) processMapStartWithAtomicType(
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
-    if at.Equals( TypeSymbolMap ) || at.Equals( TypeValue ) {
+    if at.Equals( TypeSymbolMap ) || at.Equals( TypeNullableValue ) {
         return cr.implMapStart( me, valueFieldTyper( 1 ), next )
     }
 
@@ -312,7 +312,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
         return cr.processMapStartWithAtomicType( me, at, callTyp, next )
     }
 
-    if at.Name.Equals( ss.Type ) || at.Equals( TypeValue ) ||
+    if at.Name.Equals( ss.Type ) || at.Equals( TypeNullableValue ) ||
        cr.iface.AllowAssignment( at.Name, ss.Type ) {
         return cr.completeStartStruct( ss, next )
     }
@@ -357,7 +357,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
-    if at.Equals( TypeValue ) {
+    if at.Equals( TypeNullableValue ) {
         return cr.processListStartWithType( le, TypeOpaqueList, callTyp, next )
     }
 

@@ -501,19 +501,10 @@ func init() {
     }
     primNames := []string{
         "Boolean", "String", "Int32", "Uint32", "Int64", "Uint64", "Float32",
-        "Float64", "Buffer", "Timestamp", "Value", "Null",
+        "Float64", "Buffer", "Timestamp", "Null",
     }
     for _, s := range primNames {
-        addCoreTypRefSucc( "", s, &AtomicTypeReference{ primQn( s ), nil } )
-        if ! ( s == "Value" || s == "Null" ) {
-            addCoreTypRefSucc(  
-                "*",
-                s, 
-                &PointerTypeReference{
-                    &AtomicTypeReference{ primQn( s ), nil },
-                },
-            )
-        }
+        addCoreTypRefSuccWithPtr( s, &AtomicTypeReference{ primQn( s ), nil } )
     }
     addCoreTypRefSuccWithPtr( `String~"^a+$"`, 
         &AtomicTypeReference{ qnMgStr, rx( "^a+$" ) },

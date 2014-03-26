@@ -85,6 +85,13 @@ func TestValueTypeErrorFormatting( t *testing.T ) {
     assert.Equal( "Blah", (&ValueTypeError{ nil, "Blah" }).Error() )
 }
 
+// if we add more pointer conversions later ( go *int32 --> &PointerValue{
+// Int32(...) } ) we'll add coverage for those here. for now we just have
+// coverage that *PointerValues are recognized and returned
+func assertAsPointerValues( t *testing.T ) {
+    assert.Equal( NewPointerValue( Int32( 1 ) ), NewPointerValue( Int32( 1 ) ) )
+}
+
 func TestAsValue( t *testing.T ) {
     assert.Equal( String( "hello" ), MustValue( "hello" ) )
     assert.Equal( String( "hello" ), MustValue( String( "hello" ) ) )
@@ -98,6 +105,7 @@ func TestAsValue( t *testing.T ) {
     assertAsNullValues( t )
     assertAsEnumValues( t )
     assertAsListValues( t )
+    assertAsPointerValues( t )
 }
 
 func TestAsValueBadValue( t *testing.T ) {
@@ -372,28 +380,29 @@ func TestTypeCastFormatting( t *testing.T ) {
 }
 
 func TestTypeOf( t *testing.T ) {
-    assert.Equal( TypeBoolean, TypeOf( Boolean( true ) ) )
-    assert.Equal( TypeBuffer, TypeOf( Buffer( []byte{} ) ) )
-    assert.Equal( TypeString, TypeOf( String( "" ) ) )
-    assert.Equal( TypeInt32, TypeOf( Int32( 1 ) ) )
-    assert.Equal( TypeInt64, TypeOf( Int64( 1 ) ) )
-    assert.Equal( TypeUint32, TypeOf( Uint32( 1 ) ) )
-    assert.Equal( TypeUint64, TypeOf( Uint64( 1 ) ) )
-    assert.Equal( TypeFloat32, TypeOf( Float32( 1.0 ) ) )
-    assert.Equal( TypeFloat64, TypeOf( Float64( 1.0 ) ) )
-    assert.Equal( TypeTimestamp, TypeOf( Now() ) )
-    assert.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
-    assert.Equal( typeRef( "mingle:core@v1/Value*" ), TypeOf( MustList() ) )
+    a := &assert.Asserter{ t }
+    a.Equal( TypeBoolean, TypeOf( Boolean( true ) ) )
+    a.Equal( TypeBuffer, TypeOf( Buffer( []byte{} ) ) )
+    a.Equal( TypeString, TypeOf( String( "" ) ) )
+    a.Equal( TypeInt32, TypeOf( Int32( 1 ) ) )
+    a.Equal( TypeInt64, TypeOf( Int64( 1 ) ) )
+    a.Equal( TypeUint32, TypeOf( Uint32( 1 ) ) )
+    a.Equal( TypeUint64, TypeOf( Uint64( 1 ) ) )
+    a.Equal( TypeFloat32, TypeOf( Float32( 1.0 ) ) )
+    a.Equal( TypeFloat64, TypeOf( Float64( 1.0 ) ) )
+    a.Equal( TypeTimestamp, TypeOf( Now() ) )
+    a.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
+    a.Equal( typeRef( "*mingle:core@v1/Null?*" ), TypeOf( MustList() ) )
     qn := qname( "ns1@v1/T1" )
     typ := &AtomicTypeReference{ Name: qn }
-    assert.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
-    assert.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
+    a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
+    a.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
     ptrTyp := NewPointerTypeReference( typ )
-    assert.Equal( ptrTyp, TypeOf( NewPointerValue( &Enum{ Type: qn } ) ) )
-    assert.Equal( ptrTyp, TypeOf( NewPointerValue( &Struct{ Type: qn } ) ) )
-    assert.Equal( NewPointerTypeReference( TypeInt32 ), 
+    a.Equal( ptrTyp, TypeOf( NewPointerValue( &Enum{ Type: qn } ) ) )
+    a.Equal( ptrTyp, TypeOf( NewPointerValue( &Struct{ Type: qn } ) ) )
+    a.Equal( NewPointerTypeReference( TypeInt32 ), 
         TypeOf( NewPointerValue( Int32( 1 ) ) ) )
-    assert.Equal( NewPointerTypeReference( TypeOpaqueList ), 
+    a.Equal( NewPointerTypeReference( TypeOpaqueList ), 
         TypeOf( NewPointerValue( MustList() ) ) )
 }
 
@@ -415,7 +424,6 @@ func TestResolveInCore( t *testing.T ) {
             assert.True( qn.Equals( expct ) )
         } else { t.Fatalf( "Couldn't resolve: %s", nm ) }
     }
-    f( "Value", QnameValue )
     f( "Boolean", QnameBoolean )
     f( "Buffer", QnameBuffer )
     f( "String", QnameString )
