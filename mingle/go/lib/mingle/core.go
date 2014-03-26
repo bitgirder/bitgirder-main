@@ -412,7 +412,21 @@ type NullableTypeReference struct {
     Type TypeReference
 }
 
+func isNullableType( typ TypeReference ) bool {
+    switch v := typ.( type ) {
+    case *ListTypeReference: return true;
+    case *NullableTypeReference: return false;
+    case *PointerTypeReference: return true;
+    case *AtomicTypeReference:
+        return ! ( v.Name.Equals( QnameBoolean ) || IsNumericType( v ) )
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
 func NewNullableTypeReference( typ TypeReference ) *NullableTypeReference {
+    if ! isNullableType( typ ) {
+        panic( libErrorf( "not a nullable type (%T): %s", typ, typ ) )
+    }
     return &NullableTypeReference{ Type: typ }
 }
 
@@ -459,6 +473,7 @@ func TypeNameIn( typ TypeReference ) TypeName {
     case *AtomicTypeReference: return v.Name
     case *ListTypeReference: return TypeNameIn( v.ElementType )
     case *NullableTypeReference: return TypeNameIn( v.Type )
+    case *PointerTypeReference: return TypeNameIn( v.Type )
     }
     panic( fmt.Errorf( "Unhandled type reference: %T", typ ) )
 }

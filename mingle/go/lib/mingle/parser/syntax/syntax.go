@@ -386,6 +386,24 @@ func init() {
     }
 }
 
+func ( sb *Builder ) appendQuantToken( 
+    quants []lexer.SpecialToken, 
+    tn *TokenNode ) ( []lexer.SpecialToken, error ) {
+
+    st := tn.SpecialToken()
+    if l := len( quants ); l > 0 {
+        prev := quants[ l - 1 ]
+        if st == lexer.SpecialTokenQuestionMark &&
+           prev == lexer.SpecialTokenQuestionMark {
+            msg := "a nullable type cannot itself be made nullable"
+            return nil, &loc.ParseError{ msg, tn.Loc }
+        }
+    }
+    quants = append( quants, tn.SpecialToken() ) 
+    sb.SetSynthEnd()
+    return quants, nil
+}
+
 func ( sb *Builder ) expectTypeRefQuantCompleter() ( 
     quantList, error ) {
     quants := make( []lexer.SpecialToken, 0, 2 )
@@ -394,8 +412,9 @@ func ( sb *Builder ) expectTypeRefQuantCompleter() (
         var err error
         if tn, err = sb.PollSpecial( quantToks... ); err == nil {
             if loop = tn != nil; loop {
-                quants = append( quants, tn.SpecialToken() ) 
-                sb.SetSynthEnd()
+                if quants, err = sb.appendQuantToken( quants, tn ); err != nil {
+                    return nil, err
+                }
             }
         } else { return nil, err }
     }

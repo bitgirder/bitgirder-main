@@ -1358,9 +1358,11 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( int32( 1 ), "Buffer", "Int32" )
     t.addTcError( int32( 1 ), "Buffer?", "Int32" )
     t.addTcError( true, "Float32", "Boolean" )
-    t.addTcError( true, "Float32?", "Boolean" )
+    t.addTcError( true, "*Float32", "Boolean" )
+    t.addTcError( true, "*Float32?", "Boolean" )
     t.addTcError( true, "Int32", "Boolean" )
-    t.addTcError( true, "Int32?", "Boolean" )
+    t.addTcError( true, "*Int32", "Boolean" )
+    t.addTcError( true, "*Int32?", "Boolean" )
     t.addTcError( MustList( 1, 2 ), TypeString, "Value*" )
     t.addTcError( MustList(), "String?", "Value*" )
     t.addTcError( "s", "String*", "String" )
@@ -1375,7 +1377,7 @@ func ( t *crtInit ) addMiscTcErrors() {
             ),
         },
     )
-    t.addTcError( t.struct1, "Int32?", t.struct1.Type )
+    t.addTcError( t.struct1, "*Int32?", t.struct1.Type )
     t.addTcError( 12, t.struct1.Type, "Int64" )
     for _, prim := range PrimitiveTypes {
         // not an err for prims Value and SymbolMap
@@ -1567,33 +1569,20 @@ func ( t *crtInit ) addNullableTests() {
         t.addSucc( nil, expct, typ )
     }
     for _, prim := range PrimitiveTypes {
-        if ! IsNumericType( prim ) {
+        if isNullableType( prim ) {
             typs = append( typs, NewNullableTypeReference( prim ) )
         }
     }
     typs = append( typs,
-        MustTypeReference( "Null" ),
-        MustTypeReference( "String??" ),
+        MustTypeReference( "*Null?" ),
+        MustTypeReference( "String?" ),
         MustTypeReference( "String*?" ),
-        MustTypeReference( "Int32?*?" ),
+        MustTypeReference( "*Int32?*?" ),
         MustTypeReference( "String+?" ),
-        MustTypeReference( "ns1@v1/T?" ),
+        MustTypeReference( "*ns1@v1/T?" ),
         MustTypeReference( "ns1@v1/T*?" ),
     )
     for _, typ := range typs { addNullSucc( nil, typ ) }
-    for _, numTyp := range NumericTypes {
-        typ := NewNullableTypeReference( numTyp )
-        switch {
-        case numTyp.Equals( TypeInt32 ): addNullSucc( Int32( 0 ), typ )
-        case numTyp.Equals( TypeInt64 ): addNullSucc( Int64( 0 ), typ )
-        case numTyp.Equals( TypeUint32 ): addNullSucc( Uint32( 0 ), typ )
-        case numTyp.Equals( TypeUint64 ): addNullSucc( Uint64( 0 ), typ )
-        case numTyp.Equals( TypeFloat32 ): addNullSucc( Float32( 0 ), typ )
-        case numTyp.Equals( TypeFloat64 ): addNullSucc( Float64( 0 ), typ )
-        default: panic( libErrorf( "unhandled num type: %s", numTyp ) )
-        }
-    }
-    addNullSucc( Int32( 0 ), MustTypeReference( "Int32???" ) ) 
 }
 
 func ( t *crtInit ) addListTests() {

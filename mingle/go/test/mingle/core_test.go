@@ -400,7 +400,7 @@ func TestTypeOf( t *testing.T ) {
 func TestAtomicTypeIn( t *testing.T ) {
     str := "ns1@v1/T1"
     typ := MustTypeReference( str )
-    for _, ext := range []string{ "", "?", "*", "+", "**+", "*+?++", "??" } {
+    for _, ext := range []string{ "", "?", "*", "+", "**+", "*+?++" } {
         typ2 := MustTypeReference( str + ext )
         assert.True( typ.Equals( AtomicTypeIn( typ2 ) ) )
         assert.True( 
@@ -750,9 +750,10 @@ func TestResolveIn( t *testing.T ) {
 func TestTypeNameIn( t *testing.T ) {
     nmStr := "mingle:core@v1/Int32"
     nm := MustQualifiedTypeName( nmStr )
-    for _, typStr := range []string {
-        nmStr, nmStr + "~[0,3]", nmStr + "?", nmStr + "*", nmStr + "*?+",
+    for _, tmpl := range []string {
+        "%s", "*%s", "%s~[0,3]", "*%s?", "%s*", "%s*?+",
     } {
+        typStr := fmt.Sprintf( tmpl, nmStr )
         typ := MustTypeReference( typStr )
         assert.Equal( nm, TypeNameIn( typ ) )
     }

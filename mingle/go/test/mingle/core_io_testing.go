@@ -175,7 +175,7 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
     set( MustTypeReference( "ns1@v1/T1+" ) )
     set( MustTypeReference( "ns1@v1/T1*" ) )
     set( MustTypeReference( "ns1@v1/T1?" ) )
-    set( MustTypeReference( "ns1@v1/T1?+??*" ) )
+    set( MustTypeReference( "ns1@v1/T1?+?*" ) )
 }
 
 func addBinIoRoundtripTests( tests []interface{} ) []interface{} {
