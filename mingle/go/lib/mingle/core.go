@@ -527,6 +527,12 @@ func appendQuotedStruct( buf *bytes.Buffer, ms *Struct ) {
     appendQuotedSymbolMap( buf, ms.Fields )
 }
 
+func appendQuotedPointer( buf *bytes.Buffer, pv *PointerValue ) {
+    buf.WriteString( "&(" )
+    appendQuotedValue( buf, pv.Val )
+    buf.WriteString( ")" )
+}
+
 func appendQuotedValue( buf *bytes.Buffer, val Value ) {
     switch v := val.( type ) {
     case String: fmt.Fprintf( buf, "%q", string( v ) )
@@ -541,6 +547,7 @@ func appendQuotedValue( buf *bytes.Buffer, val Value ) {
     case *List: appendQuotedList( buf, v )
     case *SymbolMap: appendQuotedSymbolMap( buf, v )
     case *Struct: appendQuotedStruct( buf, v )
+    case *PointerValue: appendQuotedPointer( buf, v )
     default: fmt.Fprintf( buf, "(!%T)", val ) // seems better than a panic
     }
 }

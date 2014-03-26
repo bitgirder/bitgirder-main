@@ -505,6 +505,10 @@ func TestQuoteValue( t *testing.T ) {
     f( MustSymbolMap(), "{}" )
     f( MustSymbolMap( "k1", 1, "k2", "2" ),
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
+    f( NewPointerValue( Int32( 1 ) ), "&(1)" )
+    f( NewPointerValue( String( "a" ) ), `&("a")` )
+    f( NewPointerValue( MustList( Int32( 1 ) ) ), "&([1])" )
+    f( NewPointerValue( NewPointerValue( Int32( 1 ) ) ), "&(&(1))" )
     map1 := MustSymbolMap( "k", 1 )
     expct := `ns1@v1/T1{k:1}`
     f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
