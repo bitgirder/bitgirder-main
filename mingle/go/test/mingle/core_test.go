@@ -392,7 +392,7 @@ func TestTypeOf( t *testing.T ) {
     a.Equal( TypeFloat64, TypeOf( Float64( 1.0 ) ) )
     a.Equal( TypeTimestamp, TypeOf( Now() ) )
     a.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
-    a.Equal( typeRef( "*mingle:core@v1/Null?*" ), TypeOf( MustList() ) )
+    a.Equal( typeRef( "&mingle:core@v1/Null?*" ), TypeOf( MustList() ) )
     qn := qname( "ns1@v1/T1" )
     typ := &AtomicTypeReference{ Name: qn }
     a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
@@ -763,7 +763,7 @@ func TestTypeNameIn( t *testing.T ) {
     nmStr := "mingle:core@v1/Int32"
     nm := MustQualifiedTypeName( nmStr )
     for _, tmpl := range []string {
-        "%s", "*%s", "%s~[0,3]", "*%s?", "%s*", "%s*?+",
+        "%s", "&%s", "%s~[0,3]", "&%s?", "%s*", "%s*?+",
     } {
         typStr := fmt.Sprintf( tmpl, nmStr )
         typ := MustTypeReference( typStr )

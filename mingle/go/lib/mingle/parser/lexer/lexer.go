@@ -379,7 +379,7 @@ func ( lx *Lexer ) readWhitespace() ( tok WhitespaceToken, err error ) {
 }
 
 var specialTokChars []byte
-func init() { specialTokChars = []byte( ":;{}~()[],?<->/.*+@" ); }
+func init() { specialTokChars = []byte( ":;{}~()[],?<->/.*+@&" ); }
 
 func isSpecialTokChar( r rune ) bool {
     return bytes.IndexRune( specialTokChars, r ) >= 0
@@ -408,6 +408,7 @@ const SpecialTokenPlus = SpecialToken( "+" )
 const SpecialTokenLessThan = SpecialToken( "<" )
 const SpecialTokenGreaterThan = SpecialToken( ">" )
 const SpecialTokenAsperand = SpecialToken( "@" )
+const SpecialTokenAmpersand = SpecialToken( "&" )
 
 // Note: does not contain SpecialTokenSynthEnd
 var allSpecialToks list.List
@@ -433,6 +434,7 @@ func init() {
     allSpecialToks.PushFront( SpecialTokenLessThan )
     allSpecialToks.PushFront( SpecialTokenGreaterThan )
     allSpecialToks.PushFront( SpecialTokenAsperand )
+    allSpecialToks.PushFront( SpecialTokenAmpersand )
 }
 
 // returns l1 if err is non-nil (including io.EOF); otherwise returns a new list

@@ -1357,13 +1357,13 @@ func ( t *crtInit ) addMiscTcErrors() {
     t.addTcError( int32( 1 ), "Buffer", "Int32" )
     t.addTcError( int32( 1 ), "Buffer?", "Int32" )
     t.addTcError( true, "Float32", "Boolean" )
-    t.addTcError( true, "*Float32", "Boolean" )
-    t.addTcError( true, "*Float32?", "Boolean" )
+    t.addTcError( true, "&Float32", "Boolean" )
+    t.addTcError( true, "&Float32?", "Boolean" )
     t.addTcError( true, "Int32", "Boolean" )
-    t.addTcError( true, "*Int32", "Boolean" )
-    t.addTcError( true, "*Int32?", "Boolean" )
-    t.addTcError( MustList( 1, 2 ), TypeString, "*Null*" )
-    t.addTcError( MustList(), "String?", "*Null*" )
+    t.addTcError( true, "&Int32", "Boolean" )
+    t.addTcError( true, "&Int32?", "Boolean" )
+    t.addTcError( MustList( 1, 2 ), TypeString, "&Null*" )
+    t.addTcError( MustList(), "String?", "&Null*" )
     t.addTcError( "s", "String*", "String" )
     t.addCrtDefault(
         &CastReactorTest{
@@ -1376,7 +1376,7 @@ func ( t *crtInit ) addMiscTcErrors() {
             ),
         },
     )
-    t.addTcError( t.struct1, "*Int32?", t.struct1.Type )
+    t.addTcError( t.struct1, "&Int32?", t.struct1.Type )
     t.addTcError( 12, t.struct1.Type, "Int64" )
     for _, prim := range PrimitiveTypes {
         // not an err for prims Value and SymbolMap
@@ -1427,6 +1427,17 @@ func ( t *crtInit ) addMiscVcErrors() {
         crtPathDefault.StartList().Next(),
         "List is empty",
     )
+}
+
+func ( t *crtInit ) addMiscPointerTests() {
+    val := Int32( 1 )
+    ptr1 := NewPointerValue( val )
+    ptr2 := NewPointerValue( ptr1 )
+    t.addSucc( val, ptr1, "&Int32" )
+    t.addSucc( val, ptr2, "&&Int32" )
+    t.addSucc( ptr1, val, "Int32" )
+    t.addSucc( ptr2, val, "Int32" )
+    t.addSucc( ptr2, ptr1, "&Int32" )
 }
 
 func ( t *crtInit ) addStringTests() {
@@ -1545,7 +1556,7 @@ func ( t *crtInit ) addNumTests() {
         "value out of range: -1" )
     rngErr( "18446744073709551616", TypeUint64 )
     t.addVcError( "-1", TypeUint64, "value out of range: -1" )
-    for _, tmpl := range []string{ "%s", "*%s", "%s?" } {
+    for _, tmpl := range []string{ "%s", "&%s", "%s?" } {
         t.addVcError(
             12, fmt.Sprintf( tmpl, "Int32~[0,10)" ), 
             "Value 12 does not satisfy restriction [0,10)" )
@@ -1605,12 +1616,12 @@ func ( t *crtInit ) addNullableTests() {
         }
     }
     typs = append( typs,
-        MustTypeReference( "*Null?" ),
+        MustTypeReference( "&Null?" ),
         MustTypeReference( "String?" ),
         MustTypeReference( "String*?" ),
-        MustTypeReference( "*Int32?*?" ),
+        MustTypeReference( "&Int32?*?" ),
         MustTypeReference( "String+?" ),
-        MustTypeReference( "*ns1@v1/T?" ),
+        MustTypeReference( "&ns1@v1/T?" ),
         MustTypeReference( "ns1@v1/T*?" ),
     )
     for _, typ := range typs { addNullSucc( nil, typ ) }
@@ -1647,13 +1658,13 @@ func ( t *crtInit ) addListTests() {
     t.addSucc(
         []interface{}{ s1, NewPointerValue( s1 ), nil },
         MustList( NewPointerValue( s1 ), NewPointerValue( s1 ), NullVal ),
-        "*ns1@v1/S1?*",
+        "&ns1@v1/S1?*",
     )
     t.addTcError0(
         []interface{}{ s1, nil },
-        "*ns1@v1/S1",
+        "&ns1@v1/S1",
         TypeNull,
-        "*ns1@v1/S1*",
+        "&ns1@v1/S1*",
         crtPathDefault.StartList().SetIndex( 1 ),
     )
     t.addTcError0(
@@ -1680,26 +1691,26 @@ func ( t *crtInit ) addListTests() {
             NewPointerValue( s1 ),
             NullVal,
         ),
-        "*Null*",
+        "&Null*",
     )
     t.addSucc( MustList(), MustList(), TypeValue )
     intList1 := MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
     t.addSucc( intList1, intList1, TypeValue )
     t.addSucc( intList1, intList1, TypeOpaqueList )
     t.addSucc( intList1, intList1, "Int32*?" )
-    t.addSucc( MustList(), NewPointerValue( MustList() ), "*Int32*" )
+    t.addSucc( MustList(), NewPointerValue( MustList() ), "&Int32*" )
     t.addSucc( NewPointerValue( MustList() ), NewPointerValue( MustList() ),
-        "*Int32*" )
-    t.addSucc( NewPointerValue( MustList() ), MustList(), "*Int32*" )
+        "&Int32*" )
+    t.addSucc( NewPointerValue( MustList() ), MustList(), "&Int32*" )
     t.addSucc( nil, NullVal, "Int32*?" )
     t.addVcError( nil, "Int32*", "expected list got null" )
     t.addVcError( nil, "Int32+", "expected list got null" )
     t.addVcError( NewPointerValue( NullVal ), "Int32+", 
         "expected list got null" )
-    t.addVcError( NewPointerValue( MustList() ), "*Int32+", "empty list" )
-    t.addSucc( nil, NullVal, "*Int32*?" )
+    t.addVcError( NewPointerValue( MustList() ), "&Int32+", "empty list" )
+    t.addSucc( nil, NullVal, "&Int32*?" )
     t.addSucc( NewPointerValue( NullVal ), NewPointerValue( NullVal ),
-        "*Int32*?" )
+        "&Int32*?" )
 }
 
 func ( t *crtInit ) addMapTests() {
@@ -1733,15 +1744,15 @@ func ( t *crtInit ) addMapTests() {
     )
     nester := MustSymbolMap( "f1", MustSymbolMap( "f2", int32( 1 ) ) )
     t.addSucc( nester, nester, TypeSymbolMap )
-    t.addSucc( m1, NewPointerValue( m1 ), "*SymbolMap" )
-    t.addSucc( NewPointerValue( m1 ), NewPointerValue( m1 ), "*SymbolMap" )
+    t.addSucc( m1, NewPointerValue( m1 ), "&SymbolMap" )
+    t.addSucc( NewPointerValue( m1 ), NewPointerValue( m1 ), "&SymbolMap" )
     t.addSucc( NewPointerValue( m1 ), m1, "SymbolMap" )
     t.addSucc( nil, NullVal, "SymbolMap?" )
     t.addSucc( NewPointerValue( NullVal ), NewPointerValue( NullVal ),
-        "*SymbolMap?" )
+        "&SymbolMap?" )
     t.addVcError( nil, "SymbolMap", "expected map but got null" )
-    t.addVcError( nil, "*SymbolMap", "expected &map but got null" )
-    t.addVcError( NewPointerValue( NullVal ), "*SymbolMap", 
+    t.addVcError( nil, "&SymbolMap", "expected &map but got null" )
+    t.addVcError( NewPointerValue( NullVal ), "&SymbolMap", 
         "expected &map but got null" )
 }
 
@@ -1779,12 +1790,12 @@ func ( t *crtInit ) addStructTests() {
     }
     f1( s3, t2 )
     f1( int32( 1 ), "Int32" )
-    t.addSucc( NewPointerValue( s1 ), NewPointerValue( s1 ), "*ns1@v1/S1" )
-    t.addSucc( s1, NewPointerValue( s1 ), "*ns1@v1/S1" )
+    t.addSucc( NewPointerValue( s1 ), NewPointerValue( s1 ), "&ns1@v1/S1" )
+    t.addSucc( s1, NewPointerValue( s1 ), "&ns1@v1/S1" )
     t.addSucc( NewPointerValue( s1 ), s1, "ns1@v1/S1" )
-    t.addSucc( nil, NullVal, "*ns1@v1/S1?" )
-    t.addVcError( nil, "*ns1@v1/S1", "expected ns1@v1/S1 but got null" )
-    t.addVcError( NewPointerValue( NullVal ), "*ns1@v1/S1", 
+    t.addSucc( nil, NullVal, "&ns1@v1/S1?" )
+    t.addVcError( nil, "&ns1@v1/S1", "expected ns1@v1/S1 but got null" )
+    t.addVcError( NewPointerValue( NullVal ), "&ns1@v1/S1", 
         "expected S1 but got null" )
 }
 
@@ -1880,6 +1891,7 @@ func ( t *crtInit ) call() {
     t.addBaseTypeTests()
     t.addMiscTcErrors()
     t.addMiscVcErrors()
+    t.addMiscPointerTests()
     t.addNumTests()
     t.addStringTests()
     t.addBufferTests()
@@ -2069,9 +2081,3 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
         EqualValues( expct, vb.GetValue(), a ) 
     }
 }
-
-// To add:
-//
-//  - pointer val casts
-//      - ints to nullablevalue
-//      - value T <--> *T

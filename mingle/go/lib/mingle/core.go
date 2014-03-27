@@ -461,7 +461,7 @@ func ( pt *PointerTypeReference ) Equals( ref TypeReference ) bool {
 }
 
 func ( pt *PointerTypeReference ) ExternalForm() string {
-    return "*" + pt.Type.ExternalForm()
+    return "&" + pt.Type.ExternalForm()
 }
 
 func ( pt *PointerTypeReference ) String() string { return pt.ExternalForm() }

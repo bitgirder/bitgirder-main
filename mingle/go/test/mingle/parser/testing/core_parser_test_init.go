@@ -439,12 +439,12 @@ func init() {
                 false,
             },
         ),
-        typRefSucc( `*ns1@v1/T1`, "", &PointerTypeReference{ atNs1V1T1 } ),
-        typRefSucc( `**ns1@v1/T1`, "",
+        typRefSucc( `&ns1@v1/T1`, "", &PointerTypeReference{ atNs1V1T1 } ),
+        typRefSucc( `&&ns1@v1/T1`, "",
             &PointerTypeReference{ &PointerTypeReference{ atNs1V1T1 } } ),
-        typRefSucc( `*String`, "*mingle:core@v1/String",
+        typRefSucc( `&String`, "&mingle:core@v1/String",
             &PointerTypeReference{ &AtomicTypeReference{ Name: qnMgStr } } ),
-        typRefSucc( `**String~".*"`, `**mingle:core@v1/String~".*"`,
+        typRefSucc( `&&String~".*"`, `&&mingle:core@v1/String~".*"`,
             &PointerTypeReference{
                 &PointerTypeReference{
                     &AtomicTypeReference{ 
@@ -454,13 +454,13 @@ func init() {
                 },
             },
         ),
-        typRefSucc( `*ns1@v1/T1*+`, "",
+        typRefSucc( `&ns1@v1/T1*+`, "",
             &ListTypeReference{
                 &ListTypeReference{ &PointerTypeReference{ atNs1V1T1 }, true },
                 false,
             },
         ),
-        typRefSucc( `*ns1@v1/T1?*+`, "",
+        typRefSucc( `&ns1@v1/T1?*+`, "",
             &ListTypeReference{
                 &ListTypeReference{
                     &NullableTypeReference{ 
@@ -471,7 +471,7 @@ func init() {
                 false,
             },
         ),
-        typRefSucc( `*ns1@v1/T1?*?+`, "",
+        typRefSucc( `&ns1@v1/T1?*?+`, "",
             &ListTypeReference{
                 &NullableTypeReference{
                     &ListTypeReference{
@@ -484,7 +484,7 @@ func init() {
                 false,
             },
         ),
-        typRefSucc( `*ns1@v1/T1?`, "",
+        typRefSucc( `&ns1@v1/T1?`, "",
             &NullableTypeReference{ &PointerTypeReference{ atNs1V1T1 } } ),
     )
     // Now just basic coverage of core type resolution and restrictions.
@@ -497,7 +497,7 @@ func init() {
     }
     addCoreTypRefSuccWithPtr := func( inBase string, expct interface{} ) {
         addCoreTypRefSucc( "", inBase, expct )
-        addCoreTypRefSucc( "*", inBase, &PointerTypeReference{ expct } )
+        addCoreTypRefSucc( "&", inBase, &PointerTypeReference{ expct } )
     }
     primNames := []string{
         "Boolean", "String", "Int32", "Uint32", "Int64", "Uint64", "Float32",
@@ -572,10 +572,10 @@ func init() {
             "Illegal type name start: \"b\" (U+0062)" ),
         typRefFail( "ns1@v1/T1*?-+", 12, "Unexpected token: -" ),
         typRefFail( "ns1@v1/T1*? +", 12, `Unexpected token: " "` ),
-        typRefFail( "*", 2, "Unexpected end of input" ),
-        typRefFail( "****", 5, "Unexpected end of input" ),
-        typRefFail( "*ns1", 5, "Expected ':' or '@' but found: END" ),
-        typRefFail( "**+", 3, 
+        typRefFail( "&", 2, "Unexpected end of input" ),
+        typRefFail( "&&&&", 5, "Unexpected end of input" ),
+        typRefFail( "&ns1", 5, "Expected ':' or '@' but found: END" ),
+        typRefFail( "&&+", 3, 
             "Expected identifier or declared type name but found: +" ),
         typRefFail( "mingle:core@v1/String~", 23, "Unexpected end of input" ),
         typRefFail( "mingle:core@v1/~\"s*\"", 16, 
@@ -596,7 +596,7 @@ func init() {
         typRefFail( "Stuff", 1, `cannot resolve as a standard type: Stuff` ),
         typRefFail( `Stuff~(,)`, 1,
             `cannot resolve as a standard type: Stuff` ),
-        typRefFail( "*ns1@v1/T1???", 12, 
+        typRefFail( "&ns1@v1/T1???", 12, 
             "a nullable type cannot itself be made nullable" ),
         typRefFail( "S1~12.1", 4, "Expected type restriction but found: 12.1" ),
         typRefRestrictFail( `ns1@v1/T~"a"`, 

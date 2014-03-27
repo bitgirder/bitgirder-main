@@ -450,7 +450,7 @@ func ( sb *Builder ) PollPlusMinus() ( *TokenNode, bool, error ) {
 func ( sb *Builder ) pollPointerDepth() ( int, error ) {
     res := 0
     for {
-        tok, err := sb.PollSpecial( lexer.SpecialTokenAsterisk )
+        tok, err := sb.PollSpecial( lexer.SpecialTokenAmpersand )
         if err != nil { return 0, err }
         if tok == nil { break }
         res++

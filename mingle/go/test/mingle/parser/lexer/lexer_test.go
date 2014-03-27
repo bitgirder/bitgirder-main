@@ -36,7 +36,7 @@ camelCappedString: Text;
 ""
 "\n\r\t\f\b\"\\\u01fF"
 0 0.0 -1 -1.3e-5
-: { } ; ~ ( ) [ ] , ? - -> / . * + < > @
+: { } ; ~ ( ) [ ] , ? - -> / . * + < > @ &
 :}-->
 `
 
@@ -155,7 +155,9 @@ func TestLexerBasic( t *testing.T ) {
     a.expectToken( 10, 38, SpecialTokenGreaterThan )
     a.expectToken( 10, 39, WhitespaceToken( " " ) )
     a.expectToken( 10, 40, SpecialTokenAsperand )
-    a.expectToken( 10, 41, WhitespaceToken( "\n" ) )
+    a.expectToken( 10, 41, WhitespaceToken( " " ) )
+    a.expectToken( 10, 42, SpecialTokenAmpersand )
+    a.expectToken( 10, 43, WhitespaceToken( "\n" ) )
     a.expectToken( 11, 1, SpecialTokenColon )
     a.expectToken( 11, 2, SpecialTokenCloseBrace )
     a.expectToken( 11, 3, SpecialTokenMinus )
