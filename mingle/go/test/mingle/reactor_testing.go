@@ -1687,6 +1687,19 @@ func ( t *crtInit ) addListTests() {
     t.addSucc( intList1, intList1, TypeValue )
     t.addSucc( intList1, intList1, TypeOpaqueList )
     t.addSucc( intList1, intList1, "Int32*?" )
+    t.addSucc( MustList(), NewPointerValue( MustList() ), "*Int32*" )
+    t.addSucc( NewPointerValue( MustList() ), NewPointerValue( MustList() ),
+        "*Int32*" )
+    t.addSucc( NewPointerValue( MustList() ), MustList(), "*Int32*" )
+    t.addSucc( nil, NullVal, "Int32*?" )
+    t.addVcError( nil, "Int32*", "expected list got null" )
+    t.addVcError( nil, "Int32+", "expected list got null" )
+    t.addVcError( NewPointerValue( NullVal ), "Int32+", 
+        "expected list got null" )
+    t.addVcError( NewPointerValue( MustList() ), "*Int32+", "empty list" )
+    t.addSucc( nil, NullVal, "*Int32*?" )
+    t.addSucc( NewPointerValue( NullVal ), NewPointerValue( NullVal ),
+        "*Int32*?" )
 }
 
 func ( t *crtInit ) addMapTests() {
@@ -1695,13 +1708,13 @@ func ( t *crtInit ) addMapTests() {
     t.addSucc( m1, m1, TypeSymbolMap )
     t.addSucc( m1, m1, TypeValue )
     t.addSucc( m2, m2, TypeSymbolMap )
-    t.addSucc( m2, m2, NewNullableTypeReference( TypeSymbolMap ) )
+    t.addSucc( m2, m2, "SymbolMap?" )
     s2 := &Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2 }
     t.addSucc( s2, m2, TypeSymbolMap )
     l1 := MustList()
     l2 := MustList( m1, m2 )
-    lt1 := &ListTypeReference{ TypeSymbolMap, true }
-    lt2 := &ListTypeReference{ TypeSymbolMap, false }
+    lt1 := MustTypeReference( "SymbolMap*" )
+    lt2 := MustTypeReference( "SymbolMap+" )
     t.addSucc( l1, l1, lt1 )
     t.addSucc( l2, l2, lt2 )
     t.addSucc(
@@ -1720,6 +1733,16 @@ func ( t *crtInit ) addMapTests() {
     )
     nester := MustSymbolMap( "f1", MustSymbolMap( "f2", int32( 1 ) ) )
     t.addSucc( nester, nester, TypeSymbolMap )
+    t.addSucc( m1, NewPointerValue( m1 ), "*SymbolMap" )
+    t.addSucc( NewPointerValue( m1 ), NewPointerValue( m1 ), "*SymbolMap" )
+    t.addSucc( NewPointerValue( m1 ), m1, "SymbolMap" )
+    t.addSucc( nil, NullVal, "SymbolMap?" )
+    t.addSucc( NewPointerValue( NullVal ), NewPointerValue( NullVal ),
+        "*SymbolMap?" )
+    t.addVcError( nil, "SymbolMap", "expected map but got null" )
+    t.addVcError( nil, "*SymbolMap", "expected &map but got null" )
+    t.addVcError( NewPointerValue( NullVal ), "*SymbolMap", 
+        "expected &map but got null" )
 }
 
 func ( t *crtInit ) addStructTests() {
@@ -1756,6 +1779,13 @@ func ( t *crtInit ) addStructTests() {
     }
     f1( s3, t2 )
     f1( int32( 1 ), "Int32" )
+    t.addSucc( NewPointerValue( s1 ), NewPointerValue( s1 ), "*ns1@v1/S1" )
+    t.addSucc( s1, NewPointerValue( s1 ), "*ns1@v1/S1" )
+    t.addSucc( NewPointerValue( s1 ), s1, "ns1@v1/S1" )
+    t.addSucc( nil, NullVal, "*ns1@v1/S1?" )
+    t.addVcError( nil, "*ns1@v1/S1", "expected ns1@v1/S1 but got null" )
+    t.addVcError( NewPointerValue( NullVal ), "*ns1@v1/S1", 
+        "expected S1 but got null" )
 }
 
 func ( t *crtInit ) addInterfaceImplTests() {
