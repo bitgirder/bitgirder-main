@@ -57,6 +57,18 @@ func NewValuePointerAllocEvent( id PointerId ) *ValuePointerAllocEvent {
     }
 }
 
+type ValuePointerReferenceEvent struct {
+    *reactorEventImpl
+    Id PointerId
+}
+
+func NewValuePointerReferenceEvent( id PointerId ) *ValuePointerReferenceEvent {
+    return &ValuePointerReferenceEvent{ 
+        Id: id,
+        reactorEventImpl: &reactorEventImpl{},
+    }
+}
+
 type StructStartEvent struct { 
     *reactorEventImpl
     Type *QualifiedTypeName 
@@ -114,6 +126,8 @@ func EventToString( ev ReactorEvent ) string {
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
     case *ValuePointerAllocEvent:
+        pairs = append( pairs, []string{ "id", v.Id.String() } )
+    case *ValuePointerReferenceEvent:
         pairs = append( pairs, []string{ "id", v.Id.String() } )
     }
     if p := ev.GetPath(); p != nil {
@@ -202,49 +216,64 @@ func InitReactorPipeline( elts ...interface{} ) ReactorEventProcessor {
     return res
 }
 
-func visitSymbolMap( 
-    m *SymbolMap, callStart bool, rep ReactorEventProcessor ) error {
+type valueVisit struct {
+    rep ReactorEventProcessor
+    visitMap map[ PointerId ] bool
+}
 
+func ( vv valueVisit ) visitSymbolMap( m *SymbolMap, callStart bool ) error {
     if callStart {
-        if err := rep.ProcessEvent( NewMapStartEvent() ); err != nil { 
+        if err := vv.rep.ProcessEvent( NewMapStartEvent() ); err != nil { 
             return err 
         }
     }
     err := m.EachPairError( func( fld *Identifier, val Value ) error {
         ev := NewFieldStartEvent( fld )
-        if err := rep.ProcessEvent( ev ); err != nil { return err }
-        return VisitValue( val, rep )
+        if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+        return vv.visitValue( val )
     })
     if err != nil { return err }
-    return rep.ProcessEvent( NewEndEvent() )
+    return vv.rep.ProcessEvent( NewEndEvent() )
 }
 
-func visitStruct( ms *Struct, rep ReactorEventProcessor ) error {
+func ( vv valueVisit ) visitStruct( ms *Struct ) error {
     ev := NewStructStartEvent( ms.Type )
-    if err := rep.ProcessEvent( ev ); err != nil { return err }
-    return visitSymbolMap( ms.Fields, false, rep )
+    if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+    return vv.visitSymbolMap( ms.Fields, false )
 }
 
-func visitList( ml *List, rep ReactorEventProcessor ) error {
-    if err := rep.ProcessEvent( NewListStartEvent() ); err != nil { return err }
-    for _, val := range ml.Values() {
-        if err := VisitValue( val, rep ); err != nil { return err }
+func ( vv valueVisit ) visitList( ml *List ) error {
+    if err := vv.rep.ProcessEvent( NewListStartEvent() ); err != nil { 
+        return err 
     }
-    return rep.ProcessEvent( NewEndEvent() )
+    for _, val := range ml.Values() {
+        if err := vv.visitValue( val ); err != nil { return err }
+    }
+    return vv.rep.ProcessEvent( NewEndEvent() )
 }
 
-func visitValuePointer( vp *ValuePointer, rep ReactorEventProcessor ) error {
+func ( vv valueVisit ) visitValuePointer( vp *ValuePointer ) error {
+    if _, ok := vv.visitMap[ vp.Id ]; ok {
+        ev := NewValuePointerReferenceEvent( vp.Id )
+        return vv.rep.ProcessEvent( ev )
+    }
     ev := NewValuePointerAllocEvent( vp.Id ) 
-    if err := rep.ProcessEvent( ev ); err != nil { return err }
-    return VisitValue( vp.Val, rep )
+    if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+    vv.visitMap[ vp.Id ] = true
+    return vv.visitValue( vp.Val )
+}
+
+func ( vv valueVisit ) visitValue( mv Value ) error {
+    switch v := mv.( type ) {
+    case *Struct: return vv.visitStruct( v )
+    case *SymbolMap: return vv.visitSymbolMap( v, true )
+    case *List: return vv.visitList( v )
+    case *ValuePointer: return vv.visitValuePointer( v )
+    }
+    return vv.rep.ProcessEvent( NewValueEvent( mv ) )
 }
 
 func VisitValue( mv Value, rep ReactorEventProcessor ) error {
-    switch v := mv.( type ) {
-    case *Struct: return visitStruct( v, rep )
-    case *SymbolMap: return visitSymbolMap( v, true, rep )
-    case *List: return visitList( v, rep )
-    case *ValuePointer: return visitValuePointer( v, rep )
-    }
-    return rep.ProcessEvent( NewValueEvent( mv ) )
+    vv := valueVisit{ rep: rep, visitMap: make( map[ PointerId ] bool ) }
+    return vv.visitValue( mv )
 }

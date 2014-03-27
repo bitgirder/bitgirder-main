@@ -2206,3 +2206,5 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
 // To test:
 //
 //  - circular references
+//  - unmatched ptr refs (with correct paths in errors)
+//  - duplicate ptr allocs (with correct path of offending alloc)

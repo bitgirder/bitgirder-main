@@ -215,11 +215,22 @@ func ( w writeReactor ) value( val Value ) error {
     panic( libErrorf( "%T: Unhandled value: %T", w, val ) )
 }
 
-func ( w writeReactor ) writeValuePointerStart( 
+func ( w writeReactor ) writePointerEvent( tc uint8, id PointerId ) error {
+    
+    if err := w.WriteTypeCode( tc ); err != nil { return err }
+    return w.WriteUint64( uint64( id ) )
+}
+
+func ( w writeReactor ) writeValuePointerAlloc( 
     vp *ValuePointerAllocEvent ) error {
 
-    if err := w.WriteTypeCode( tcValPtrAlloc ); err != nil { return err }
-    return w.WriteUint64( uint64( vp.Id ) )
+    return w.writePointerEvent( tcValPtrAlloc, vp.Id )
+}
+
+func ( w writeReactor ) writeValuePointerReference( 
+    v *ValuePointerReferenceEvent ) error {
+
+    return w.writePointerEvent( tcValPtrRef, v.Id )
 }
 
 func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
@@ -230,7 +241,8 @@ func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     case *ListStartEvent: return w.startList()
     case *FieldStartEvent: return w.startField( v.Field )
     case *EndEvent: return w.WriteTypeCode( tcEnd )
-    case *ValuePointerAllocEvent: return w.writeValuePointerStart( v )
+    case *ValuePointerAllocEvent: return w.writeValuePointerAlloc( v )
+    case *ValuePointerReferenceEvent: return w.writeValuePointerReference( v )
     }
     panic( libErrorf( "Unhandled event type: %T", ev ) )
 }
@@ -568,12 +580,25 @@ func ( r *BinReader ) readScalarValue(
     return 
 }
 
-func ( r *BinReader ) readValuePointerStart( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) readPointerId() ( PointerId, error ) {
     id64, err := r.ReadUint64()
-    if err != nil { return err }
-    ev := NewValuePointerAllocEvent( PointerId( id64 ) )
+    if err != nil { return 0, err }
+    return PointerId( id64 ), nil
+}
+
+func ( r *BinReader ) readValuePointerAlloc( rep ReactorEventProcessor ) error {
+    id, err := r.readPointerId()
+    ev := NewValuePointerAllocEvent( id )
     if err = rep.ProcessEvent( ev ); err != nil { return err }
     return r.implReadValue( rep )
+}
+
+func ( r *BinReader ) readValuePointerReference( 
+    rep ReactorEventProcessor ) error {
+
+    id, err := r.readPointerId()
+    if err != nil { return err }
+    return rep.ProcessEvent( NewValuePointerReferenceEvent( id ) )
 }
 
 func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
@@ -631,7 +656,8 @@ func ( r *BinReader ) implReadValue( rep ReactorEventProcessor ) error {
     case tcNull, tcString, tcBuffer, tcTimestamp, tcInt32, tcInt64, tcUint32,
          tcUint64, tcFloat32, tcFloat64, tcBool, tcEnum:
         return r.readScalarValue( tc, rep )
-    case tcValPtrAlloc: return r.readValuePointerStart( rep )
+    case tcValPtrAlloc: return r.readValuePointerAlloc( rep )
+    case tcValPtrRef: return r.readValuePointerReference( rep )
     case tcSymMap: return r.readSymbolMap( rep )
     case tcStruct: return r.readStruct( rep )
     case tcList: return r.readList( rep )

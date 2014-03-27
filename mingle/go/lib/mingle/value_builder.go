@@ -80,10 +80,14 @@ func ( la *listAcc ) valueReady( mv Value ) bool {
 type valueAccumulator struct {
     val Value
     accs *stack.Stack
+    refs map[ PointerId ] Value
 }
 
 func newValueAccumulator() *valueAccumulator {
-    return &valueAccumulator{ accs: stack.NewStack() }
+    return &valueAccumulator{ 
+        accs: stack.NewStack(), 
+        refs: make( map[ PointerId ] Value ),
+    }
 }
 
 func ( va *valueAccumulator ) pushAcc( acc accImpl ) {
@@ -101,7 +105,9 @@ func ( va *valueAccumulator ) popAcc() accImpl {
 
 func ( va *valueAccumulator ) popAccValue() {
     acc := va.popAcc()
-    va.valueReady( acc.value() )
+    val := acc.value()
+    if ptrAcc, ok := acc.( *valPtrAcc ); ok { va.refs[ ptrAcc.id ] = val }
+    va.valueReady( val )
 }
 
 func ( va *valueAccumulator ) valueReady( val Value ) {
@@ -131,6 +137,16 @@ func ( va *valueAccumulator ) startField( fld *Identifier ) {
 
 func ( va *valueAccumulator ) end() { va.popAccValue() }
 
+func ( va *valueAccumulator ) pointerReferenced(
+    vr *ValuePointerReferenceEvent ) error {
+
+    if val, ok := va.refs[ vr.Id ]; ok {
+        va.valueReady( val )
+        return nil
+    }
+    return rctErrorf( "unhandled value pointer ref: %d", vr.Id )
+}
+
 func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     log.Printf( "processing %s", EventToString( ev ) )
     switch v := ev.( type ) {
@@ -141,6 +157,7 @@ func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     case *FieldStartEvent: va.startField( v.Field )
     case *EndEvent: va.end()
     case *ValuePointerAllocEvent: va.pushAcc( newValPtrAcc( v.Id ) )
+    case *ValuePointerReferenceEvent: return va.pointerReferenced( v )
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return nil
