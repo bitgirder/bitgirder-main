@@ -2,13 +2,27 @@ package mingle
 
 import (
     "bitgirder/stack"
-//    "log"
+    "log"
 )
 
 type accImpl interface {
-    valueReady( val Value ) 
-    end() ( Value, error )
+    valueReady( val Value ) bool
+    value() Value
 }
+
+type valPtrAcc struct {
+    id PointerId
+    val Value
+}
+
+func newValPtrAcc( id PointerId ) *valPtrAcc { return &valPtrAcc{ id: id } }
+
+func ( vp *valPtrAcc ) valueReady( val Value ) bool {
+    vp.val = val
+    return true
+}
+
+func ( vp *valPtrAcc ) value() Value { return NewValuePointer( vp.val ) }
 
 type mapAcc struct {
     arr []interface{} // alternating key, val to be passed to MustSymbolMap
@@ -18,17 +32,16 @@ func newMapAcc() *mapAcc {
     return &mapAcc{ arr: make( []interface{}, 0, 8 ) }
 }
 
-func ( ma *mapAcc ) end() ( Value, error ) { 
-    res, err := CreateSymbolMap( ma.arr... )
-    if err == nil { return res, nil } 
-    return nil, rctErrorf( "Invalid fields: %s", err.Error() )
-}
+func ( ma *mapAcc ) value() Value { return MustSymbolMap( ma.arr... ) }
 
 func ( ma *mapAcc ) startField( fld *Identifier ) {
     ma.arr = append( ma.arr, fld )
 }
 
-func ( ma *mapAcc ) valueReady( mv Value ) { ma.arr = append( ma.arr, mv ) }
+func ( ma *mapAcc ) valueReady( mv Value ) bool { 
+    ma.arr = append( ma.arr, mv ) 
+    return false
+}
 
 type structAcc struct {
     typ *QualifiedTypeName
@@ -39,13 +52,14 @@ func newStructAcc( typ *QualifiedTypeName ) *structAcc {
     return &structAcc{ typ: typ, flds: newMapAcc() }
 }
 
-func ( sa *structAcc ) end() ( Value, error ) {
-    flds, err := sa.flds.end()
-    if err != nil { return nil, err }
-    return &Struct{ Type: sa.typ, Fields: flds.( *SymbolMap ) }, nil
+func ( sa *structAcc ) value() Value {
+    flds := sa.flds.value().( *SymbolMap )
+    return &Struct{ Type: sa.typ, Fields: flds }
 }
 
-func ( sa *structAcc ) valueReady( mv Value ) { sa.flds.valueReady( mv ) }
+func ( sa *structAcc ) valueReady( mv Value ) bool { 
+    return sa.flds.valueReady( mv ) 
+}
 
 type listAcc struct {
     vals []Value
@@ -55,12 +69,11 @@ func newListAcc() *listAcc {
     return &listAcc{ make( []Value, 0, 4 ) }
 }
 
-func ( la *listAcc ) end() ( Value, error ) { 
-    return NewList( la.vals ), nil
-}
+func ( la *listAcc ) value() Value { return NewList( la.vals ) }
 
-func ( la *listAcc ) valueReady( mv Value ) {
+func ( la *listAcc ) valueReady( mv Value ) bool {
     la.vals = append( la.vals, mv )
+    return false
 }
 
 // Can make this public if needed
@@ -83,15 +96,17 @@ func ( va *valueAccumulator ) peekAcc() ( accImpl, bool ) {
 }
 
 func ( va *valueAccumulator ) popAcc() accImpl {
-    res, ok := va.peekAcc()
-    if ! ok { panic( libErrorf( "popAcc() called on empty stack" ) ) }
-    va.accs.Pop()
-    return res
+    return va.accs.Pop().( accImpl )
+}
+
+func ( va *valueAccumulator ) popAccValue() {
+    acc := va.popAcc()
+    va.valueReady( acc.value() )
 }
 
 func ( va *valueAccumulator ) valueReady( val Value ) {
     if acc, ok := va.peekAcc(); ok {
-        acc.valueReady( val )
+        if acc.valueReady( val ) { va.popAccValue() }
     } else { va.val = val }
 }
 
@@ -114,22 +129,18 @@ func ( va *valueAccumulator ) startField( fld *Identifier ) {
     }
 }
 
-func ( va *valueAccumulator ) end() error {
-    acc := va.popAcc()
-    if val, err := acc.end(); err == nil {
-        va.valueReady( val )
-    } else { return err }
-    return nil
-}
+func ( va *valueAccumulator ) end() { va.popAccValue() }
 
 func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
+    log.Printf( "processing %s", EventToString( ev ) )
     switch v := ev.( type ) {
     case *ValueEvent: va.valueReady( v.Val )
     case *ListStartEvent: va.pushAcc( newListAcc() )
     case *MapStartEvent: va.pushAcc( newMapAcc() )
     case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
     case *FieldStartEvent: va.startField( v.Field )
-    case *EndEvent: if err := va.end(); err != nil { return err }
+    case *EndEvent: va.end()
+    case *ValuePointerStartEvent: va.pushAcc( newValPtrAcc( v.Id ) )
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return nil

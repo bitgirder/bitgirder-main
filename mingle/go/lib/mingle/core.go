@@ -10,6 +10,7 @@ import (
     "bytes"
     "unicode"
     "strings"
+    "strconv"
     "unsafe"
 )
 
@@ -827,6 +828,8 @@ func ( l *List ) valImpl() {}
 
 func ( l *List ) Values() []Value { return l.vals }
 
+func ( l *List ) Get( idx int ) Value { return l.vals[ idx ] }
+
 func ( l *List ) Len() int { return len( l.vals ) }
 
 func NewList( vals []Value ) *List { return &List{ vals } }
@@ -1064,6 +1067,10 @@ func MustStruct(
 }
 
 type PointerId uint64
+
+func ( id PointerId ) String() string { 
+    return strconv.FormatUint( uint64( id ), 10 ) 
+}
 
 type ValuePointer struct { 
     Id PointerId

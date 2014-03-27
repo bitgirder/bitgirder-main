@@ -23,10 +23,8 @@ func assertBinIoInvalidData(
 }
 
 func assertBinIoRoundtripWrite(
-    wr *BinWriter,
-    obj interface{}, 
-    a *assert.PathAsserter,
-) {
+    wr *BinWriter, obj interface{}, a *assert.PathAsserter ) {
+
     if err := WriteBinIoTestValue( obj, wr ); err != nil { a.Fatal( err ) }
 }
 
@@ -38,9 +36,8 @@ func assertBinIoRoundtrip( rt *BinIoRoundtripTest, a *assert.PathAsserter ) {
 }
 
 func assertBinIoSequenceRoundtrip( 
-    rt *BinIoSequenceRoundtripTest,
-    a *assert.PathAsserter,
-) {
+    rt *BinIoSequenceRoundtripTest, a *assert.PathAsserter ) {
+
     a = a.Descend( rt.Name )
     bb := &bytes.Buffer{}
     wr := NewWriter( bb )

@@ -11,21 +11,17 @@ import (
 )
 
 func assertWriteValueValue(
-    rd *BinReader,
-    expct interface{},
-    a *assert.PathAsserter,
-) {
+    rd *BinReader, expct interface{}, a *assert.PathAsserter ) {
+    
     if val, err := rd.ReadValue(); err == nil {
         if expct == nil { val = NullVal }
-        EqualValues( expct.( Value ), val, a )
+        EqualWireValues( expct.( Value ), val, a )
     } else { a.Fatal( err ) }
 }
 
 func assertWriteValue(
-    rd *BinReader,
-    expct interface{},
-    a *assert.PathAsserter,
-) {
+    rd *BinReader, expct interface{}, a *assert.PathAsserter ) {
+
     switch v := expct.( type ) {
     case Value: assertWriteValueValue( rd, expct, a )
     case *Identifier:
@@ -58,30 +54,37 @@ type BinIoRoundtripTest struct {
 }
 
 func ( t *BinIoRoundtripTest ) AssertWriteValue( 
-    rd *BinReader, 
-    a *assert.PathAsserter,
-) {
+    rd *BinReader, a *assert.PathAsserter ) {
+
+    a.Logf( "asserting write for %s", t.Name )
     assertWriteValue( rd, t.Val, a )
 }
 
 type binIoRoundtripTestBuilder struct {
-    values map[ string ]interface{}
+
+    // tests is the definitive and deterministic ordering (the determinism is
+    // helpful when a test fails); nmCheck is used internally to prevent test
+    // construction duplicates
+    tests []interface{}
+    nmCheck map[ string ]interface{}
 }
 
 // convenience funcs with assertions on our own code against typos
 func ( b *binIoRoundtripTestBuilder ) getVal( nm string ) interface{} {
-    if val, ok := b.values[ nm ]; ok { return val }
+    if val, ok := b.nmCheck[ nm ]; ok { return val }
     panic( libErrorf( "valMap[ %q ]: no value", nm ) )
 }
 
+// sets a test with given name and val, returning val unchanged
 func ( b* binIoRoundtripTestBuilder ) setVal( 
-    nm string, 
-    val interface{},
-) interface{} {
-    if val, ok := b.values[ nm ]; ok {
-        panic( libErrorf( "valMap[ %q ] exists: %v", nm, val ) )
+    nm string, val interface{} ) interface{} {
+
+    test := &BinIoRoundtripTest{ Name: nm, Val: val }
+    if _, ok := b.nmCheck[ nm ]; ok {
+        panic( libErrorf( "valMap[ %q ] already exists", nm ) )
     }
-    b.values[ nm ] = val
+    b.nmCheck[ nm ] = test
+    b.tests = append( b.tests, test )
     return val
 }
 
@@ -120,9 +123,26 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "time-val1", MustTimestamp( "2013-10-19T02:47:00-08:00" ) )
     b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
     b.setVal( "symmap-empty", MustSymbolMap() )
+    b.setVal( "val-ptr", NewValuePointer( Int32( 1 ) ) )
+
+    val1Ptr := NewValuePointer( Int32( 1 ) )
+    b.setVal( "val-ptr-with-refs", MustList( val1Ptr, val1Ptr, val1Ptr ) )
 
     b.setVal( "symmap-flat", 
-        MustSymbolMap( "k1", int32( 1 ), "k2", int32( 2 ) ) )
+        MustSymbolMap( 
+            "k1", int32( 1 ), 
+            "k2", int32( 2 ),
+            "k3", NewValuePointer( Int32( int32( 1 ) ) ),
+        ),
+    )
+
+    b.setVal( "symmap-with-refs",
+        MustSymbolMap(
+            "k1", val1Ptr, 
+            "k2", val1Ptr,
+            "k3", MustList( val1Ptr, val1Ptr ),
+        ),
+    )
 
     b.setVal( "symmap-nested",
         MustSymbolMap( "k1", MustSymbolMap( "kk1", int32( 1 ) ) ) )
@@ -134,6 +154,16 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
 
     b.setVal( "list-nested",
         MustList( int32( 1 ), MustList(), MustList( "hello" ), NullVal ) )
+
+    b.setVal( "list-pointers",
+        MustList(
+            int32( 1 ),
+            NewValuePointer( Int32( int32( 1 ) ) ),
+            NewValuePointer(
+                MustList( NewValuePointer( Int32( int32( 1 ) ) ) ) ),
+            MustList( NewValuePointer( Int32( int32( 1 ) ) ) ),
+        ),
+    )
 }
 
 func ( b *binIoRoundtripTestBuilder ) addPathTests() {
@@ -181,15 +211,12 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
 
 func addBinIoRoundtripTests( tests []interface{} ) []interface{} {
     b := &binIoRoundtripTestBuilder{}
-    b.values = map[ string ]interface{}{}
+    b.nmCheck = map[ string ]interface{}{}
+    b.tests = []interface{}{}
     b.addValueTests()
     b.addPathTests()
     b.addDefinitionTests()
-    for nm, val := range b.values {
-        test := &BinIoRoundtripTest{ Name: nm, Val: val }
-        tests = append( tests, test )
-    }
-    return tests
+    return b.tests
 }
 
 type BinIoSequenceRoundtripTest struct {
@@ -198,9 +225,8 @@ type BinIoSequenceRoundtripTest struct {
 }
 
 func ( t *BinIoSequenceRoundtripTest ) AssertWriteValue(
-    rd *BinReader,
-    a *assert.PathAsserter,
-) {
+    rd *BinReader, a *assert.PathAsserter ) {
+
     la := a.StartList()
     for _, val := range t.Seq {
         assertWriteValue( rd, val, la )

@@ -19,26 +19,29 @@ const (
     tcAtomTyp = uint8( 0x05 )
     tcListTyp = uint8( 0x06 )
     tcNullableTyp = uint8( 0x07 )
-    tcRegexRestrict = uint8( 0x08 )
-    tcRangeRestrict = uint8( 0x09 )
-    tcBool = uint8( 0x0a )
-    tcString = uint8( 0x0b )
-    tcInt32 = uint8( 0x0c )
-    tcInt64 = uint8( 0x0d )
-    tcUint32 = uint8( 0x0e )
-    tcUint64 = uint8( 0x0f )
-    tcFloat32 = uint8( 0x10 )
-    tcFloat64 = uint8( 0x11 )
-    tcTimestamp = uint8( 0x12 )
-    tcBuffer = uint8( 0x13 )
-    tcEnum = uint8( 0x14 )
-    tcSymMap = uint8( 0x15 )
-    tcField = uint8( 0x16 )
-    tcStruct = uint8( 0x17 )
-    tcList = uint8( 0x19 )
-    tcEnd = uint8( 0x1a )
-    tcIdPath = uint8( 0x1b )
-    tcIdPathListNode = uint8( 0x1c )
+    tcPointerTyp = uint8( 0x08 )
+    tcRegexRestrict = uint8( 0x09 )
+    tcRangeRestrict = uint8( 0x0a )
+    tcValPtrAlloc = uint8( 0x0b )
+    tcValPtrRef = uint8( 0x0c )
+    tcBool = uint8( 0x0d )
+    tcString = uint8( 0x0e )
+    tcInt32 = uint8( 0x0f )
+    tcInt64 = uint8( 0x10 )
+    tcUint32 = uint8( 0x11 )
+    tcUint64 = uint8( 0x12 )
+    tcFloat32 = uint8( 0x13 )
+    tcFloat64 = uint8( 0x14 )
+    tcTimestamp = uint8( 0x15 )
+    tcBuffer = uint8( 0x16 )
+    tcEnum = uint8( 0x17 )
+    tcSymMap = uint8( 0x18 )
+    tcField = uint8( 0x19 )
+    tcStruct = uint8( 0x1a )
+    tcList = uint8( 0x1b )
+    tcEnd = uint8( 0x1c )
+    tcIdPath = uint8( 0x1d )
+    tcIdPathListNode = uint8( 0x1e )
 )
 
 type BinIoError struct { msg string }
@@ -212,6 +215,13 @@ func ( w writeReactor ) value( val Value ) error {
     panic( libErrorf( "%T: Unhandled value: %T", w, val ) )
 }
 
+func ( w writeReactor ) writeValuePointerStart( 
+    vp *ValuePointerStartEvent ) error {
+
+    if err := w.WriteTypeCode( tcValPtrAlloc ); err != nil { return err }
+    return w.WriteUint64( uint64( vp.Id ) )
+}
+
 func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
     case *ValueEvent: return w.value( v.Val )
@@ -220,6 +230,7 @@ func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     case *ListStartEvent: return w.startList()
     case *FieldStartEvent: return w.startField( v.Field )
     case *EndEvent: return w.WriteTypeCode( tcEnd )
+    case *ValuePointerStartEvent: return w.writeValuePointerStart( v )
     }
     panic( libErrorf( "Unhandled event type: %T", ev ) )
 }
@@ -276,11 +287,19 @@ func ( w *BinWriter ) WriteNullableTypeReference(
     return w.WriteTypeReference( nt.Type )
 }
 
+func ( w *BinWriter ) WritePointerTypeReference(
+    pt *PointerTypeReference ) error {
+
+    if err := w.WriteTypeCode( tcPointerTyp ); err != nil { return err }
+    return w.WriteTypeReference( pt.Type )
+}
+
 func ( w *BinWriter ) WriteTypeReference( typ TypeReference ) error {
     switch v := typ.( type ) {
     case *AtomicTypeReference: return w.WriteAtomicTypeReference( v )
     case *ListTypeReference: return w.WriteListTypeReference( v )
     case *NullableTypeReference: return w.WriteNullableTypeReference( v )
+    case *PointerTypeReference: return w.WritePointerTypeReference( v )
     }
     panic( fmt.Errorf( "%T: Unhandled type reference: %T", w, typ ) )
 }
@@ -374,9 +393,6 @@ func ( r *BinReader ) ioErrorf( tmpl string, args ...interface{} ) *BinIoError {
 }
 
 func ( r *BinReader ) ReadTypeCode() ( res uint8, err error ) {
-//    if r.tcSaved < 0 { return r.ReadUint8() }
-//    res, err, r.tcSaved = uint8( r.tcSaved ), nil, -1
-//    return res, err
     return r.ReadUint8()
 }
 
@@ -552,6 +568,14 @@ func ( r *BinReader ) readScalarValue(
     return 
 }
 
+func ( r *BinReader ) readValuePointerStart( rep ReactorEventProcessor ) error {
+    id64, err := r.ReadUint64()
+    if err != nil { return err }
+    ev := NewValuePointerStartEvent( PointerId( id64 ) )
+    if err = rep.ProcessEvent( ev ); err != nil { return err }
+    return r.implReadValue( rep )
+}
+
 func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
     for {
         tc, err := r.ReadTypeCode()
@@ -607,6 +631,7 @@ func ( r *BinReader ) implReadValue( rep ReactorEventProcessor ) error {
     case tcNull, tcString, tcBuffer, tcTimestamp, tcInt32, tcInt64, tcUint32,
          tcUint64, tcFloat32, tcFloat64, tcBool, tcEnum:
         return r.readScalarValue( tc, rep )
+    case tcValPtrAlloc: return r.readValuePointerStart( rep )
     case tcSymMap: return r.readSymbolMap( rep )
     case tcStruct: return r.readStruct( rep )
     case tcList: return r.readList( rep )
@@ -692,6 +717,15 @@ func ( r *BinReader ) ReadNullableTypeReference() ( nt *NullableTypeReference,
     return
 }
 
+func ( r *BinReader ) ReadPointerTypeReference() ( 
+    pt *PointerTypeReference, err error ) {
+
+    if _, err = r.ExpectTypeCode( tcPointerTyp ); err != nil { return }
+    var typ TypeReference
+    if typ, err = r.ReadTypeReference(); err != nil { return }
+    return NewPointerTypeReference( typ ), nil
+}
+
 func ( r *BinReader ) ReadTypeReference() ( typ TypeReference, err error ) {
     var tc uint8
     if tc, err = r.PeekTypeCode(); err != nil { return }
@@ -699,6 +733,7 @@ func ( r *BinReader ) ReadTypeReference() ( typ TypeReference, err error ) {
     case tcAtomTyp: return r.ReadAtomicTypeReference()
     case tcListTyp: return r.ReadListTypeReference()
     case tcNullableTyp: return r.ReadNullableTypeReference()
+    case tcPointerTyp: return r.ReadPointerTypeReference()
     }
     err = r.ioErrorf( "Unrecognized type reference code: 0x%02x", tc )
     return

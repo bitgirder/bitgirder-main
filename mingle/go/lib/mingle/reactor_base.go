@@ -113,6 +113,8 @@ func EventToString( ev ReactorEvent ) string {
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
+    case *ValuePointerStartEvent:
+        pairs = append( pairs, []string{ "id", v.Id.String() } )
     }
     if p := ev.GetPath(); p != nil {
         pairs = append( pairs, []string{ "path", FormatIdPath( p ) } )
@@ -231,11 +233,18 @@ func visitList( ml *List, rep ReactorEventProcessor ) error {
     return rep.ProcessEvent( NewEndEvent() )
 }
 
+func visitValuePointer( vp *ValuePointer, rep ReactorEventProcessor ) error {
+    ev := NewValuePointerStartEvent( vp.Id ) 
+    if err := rep.ProcessEvent( ev ); err != nil { return err }
+    return VisitValue( vp.Val, rep )
+}
+
 func VisitValue( mv Value, rep ReactorEventProcessor ) error {
     switch v := mv.( type ) {
     case *Struct: return visitStruct( v, rep )
     case *SymbolMap: return visitSymbolMap( v, true, rep )
     case *List: return visitList( v, rep )
+    case *ValuePointer: return visitValuePointer( v, rep )
     }
     return rep.ProcessEvent( NewValueEvent( mv ) )
 }
