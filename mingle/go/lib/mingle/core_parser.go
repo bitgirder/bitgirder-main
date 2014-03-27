@@ -6,6 +6,7 @@ import(
     "time"
     "fmt"
     "bytes"
+    "errors"
     "mingle/parser/lexer"
     "mingle/parser/loc"
     "mingle/parser/syntax"
@@ -299,23 +300,34 @@ func parseCompletableTypeReference(
 type typeCompleter int
 
 func ( tc typeCompleter ) AsListType( 
-    typ interface{}, allowsEmpty bool ) interface{} {
+    typ interface{}, allowsEmpty bool ) ( interface{}, error ) {
 
-    return &ListTypeReference{ typ.( TypeReference ), allowsEmpty }
+    return &ListTypeReference{ typ.( TypeReference ), allowsEmpty }, nil
 }
 
-func ( tc typeCompleter ) AsNullableType( typ interface{} ) interface{} {
-    return NewNullableTypeReference( typ.( TypeReference ) )
+func ( tc typeCompleter ) AsNullableType( 
+    typ interface{} ) ( interface{}, error ) {
+
+    baseTyp := typ.( TypeReference )
+    if isNullableType( baseTyp ) { 
+        return MustNullableTypeReference( baseTyp ), nil
+    }
+    return nil, errors.New( "not a nullable type" )
 }
 
-func ( tc typeCompleter ) AsPointerType( typ interface{} ) interface{} {
-    return NewPointerTypeReference( typ.( TypeReference ) )
+func ( tc typeCompleter ) AsPointerType( 
+    typ interface{} ) ( interface{}, error ) {
+
+    return NewPointerTypeReference( typ.( TypeReference ) ), nil
 }
 
 func CompleteType( 
-    typ TypeReference, ctr *syntax.CompletableTypeReference ) TypeReference {
+    typ TypeReference, 
+    ctr *syntax.CompletableTypeReference ) ( TypeReference, error ) {
 
-    return ctr.CompleteType( typ, typeCompleter( 1 ) ).( TypeReference )
+    res, err := ctr.CompleteType( typ, typeCompleter( 1 ) )
+    if err != nil { return nil, err }
+    return res.( TypeReference ), nil
 }
 
 func parseTypeReference( s string ) ( TypeReference, error ) {
@@ -328,21 +340,11 @@ func parseTypeReference( s string ) ( TypeReference, error ) {
             return nil, err
         }
     } else { atr.Name = nm.( *QualifiedTypeName ) }
-//    nm := resolveStandardTypeName( ConvertSyntaxTypeName( ctr.Name ) )
-//    var vr ValueRestriction
-//    if sx := ctr.Restriction; sx != nil {
-//        if qn, ok := nm.( *QualifiedTypeName ); ok {
-//            if vr, err = ResolveStandardRestriction( qn, sx ); err != nil {
-//                return nil, err
-//            }
-//        } else { return nil, errorRestrictionTargetType( nm, sx ) }
-//    }
     if sx := ctr.Restriction; sx != nil {
         atr.Restriction, err = ResolveStandardRestriction( atr.Name, sx )
         if err != nil { return nil, err }
     }
-//    atr := &AtomicTypeReference{ Name: nm, Restriction: vr }
-    return CompleteType( atr, ctr ), nil
+    return CompleteType( atr, ctr )
 }
 
 func ParseTypeReferenceBytes( input []byte ) ( TypeReference, error ) {

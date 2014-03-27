@@ -562,30 +562,42 @@ func ( sb *Builder ) pollTypeRefRestriction() (
 }
 
 type CompletableTypeReference struct {
+    ErrLoc *loc.Location
     Name TypeName
     Restriction RestrictionSyntax
     ptrDepth int
     quants quantList
 }
 
+func ( ctr *CompletableTypeReference ) completionError( err error ) error {
+    return &loc.ParseError{ err.Error(), ctr.ErrLoc }
+}
+
 type TypeCompleter interface {
-    AsListType( typ interface{}, allowsEmpty bool ) interface{}
-    AsNullableType( typ interface{} ) interface{}
-    AsPointerType( typ interface{} ) interface{}
+    AsListType( typ interface{}, allowsEmpty bool ) ( interface{}, error )
+    AsNullableType( typ interface{} ) ( interface{}, error )
+    AsPointerType( typ interface{} ) ( interface{}, error )
 }
 
 func ( ctr *CompletableTypeReference ) CompleteType( 
-    typ interface{}, tc TypeCompleter ) interface{} {
-    for i := 0; i < ctr.ptrDepth; i++ { typ = tc.AsPointerType( typ ) }
-    for _, quant := range ctr.quants {
-        switch quant {
-        case lexer.SpecialTokenPlus: typ = tc.AsListType( typ, false )
-        case lexer.SpecialTokenAsterisk: typ = tc.AsListType( typ, true )
-        case lexer.SpecialTokenQuestionMark: typ = tc.AsNullableType( typ )
-        default: panic( fmt.Errorf( "Unexpected quant: %s", quant ) )
+    typ interface{}, tc TypeCompleter ) ( interface{}, error ) {
+
+    var err error
+    for i := 0; i < ctr.ptrDepth; i++ { 
+        if typ, err = tc.AsPointerType( typ ); err != nil { 
+            return nil, ctr.completionError( err )
         }
     }
-    return typ
+    for _, quant := range ctr.quants {
+        switch quant {
+        case lexer.SpecialTokenPlus: typ, err = tc.AsListType( typ, false )
+        case lexer.SpecialTokenAsterisk: typ, err = tc.AsListType( typ, true )
+        case lexer.SpecialTokenQuestionMark: typ, err = tc.AsNullableType( typ )
+        default: panic( fmt.Errorf( "Unexpected quant: %s", quant ) )
+        }
+        if err != nil { return nil, ctr.completionError( err ) }
+    }
+    return typ, nil
 }
 
 // In addition to returning a type ref, this method will, via its helper
@@ -597,7 +609,7 @@ func ( sb *Builder ) ExpectTypeReference(
     verDefl Identifier ) ( ref *CompletableTypeReference, 
                            l *loc.Location,
                            err error ) {
-    tmp := &CompletableTypeReference{}
+    tmp := &CompletableTypeReference{ ErrLoc: sb.Location() }
     if tmp.ptrDepth, err = sb.pollPointerDepth(); err != nil { return }
     if tmp.Name, l, err = sb.ExpectTypeName( verDefl ); err != nil { return }
     if tmp.Restriction, err = sb.pollTypeRefRestriction(); err != nil { return }

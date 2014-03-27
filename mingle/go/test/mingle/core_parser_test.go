@@ -141,7 +141,7 @@ func convertPtTypeReference( tVal interface{} ) TypeReference {
             AllowsEmpty: t.AllowsEmpty,
         }
     case *pt.NullableTypeReference:
-        return NewNullableTypeReference( convertPtTypeReference( t.Type ) )
+        return MustNullableTypeReference( convertPtTypeReference( t.Type ) )
     case *pt.PointerTypeReference:
         return NewPointerTypeReference( convertPtTypeReference( t.Type ) )
     }

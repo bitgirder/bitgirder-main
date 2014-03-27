@@ -419,12 +419,13 @@ func isNullableType( typ TypeReference ) bool {
     case *NullableTypeReference: return false;
     case *PointerTypeReference: return true;
     case *AtomicTypeReference:
+        if ! v.Name.Namespace.Equals( CoreNsV1 ) { return false }
         return ! ( v.Name.Equals( QnameBoolean ) || IsNumericType( v ) )
     }
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
 
-func NewNullableTypeReference( typ TypeReference ) *NullableTypeReference {
+func MustNullableTypeReference( typ TypeReference ) *NullableTypeReference {
     if ! isNullableType( typ ) {
         panic( libErrorf( "not a nullable type (%T): %s", typ, typ ) )
     }

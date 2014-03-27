@@ -143,7 +143,7 @@ func initValueBuildReactorTests() {
     addTest( NewValuePointer( s1 ) )
     addTest( 
         NewValuePointer(
-            MustStruct( 
+            MustStruct( "ns1@v1/S1",
                 "f1", Int32( 1 ),
                 "f2", NewValuePointer( Int32( 2 ) ),
                 "f3", 
@@ -1727,7 +1727,7 @@ func ( t *crtInit ) addNullableTests() {
     }
     for _, prim := range PrimitiveTypes {
         if isNullableType( prim ) {
-            typs = append( typs, NewNullableTypeReference( prim ) )
+            typs = append( typs, MustNullableTypeReference( prim ) )
         } else {
             t.addTcError( nil, prim, TypeNull )
         }
@@ -1889,7 +1889,7 @@ func ( t *crtInit ) addStructTests() {
     t.addSucc( s1, s1, TypeValue )
     t.addSucc( s1, s1, t1 )
     t.addSucc( s2, s2, t1 )
-    t.addSucc( s1, s1, NewNullableTypeReference( t1 ) )
+    t.addSucc( s1, s1, "&ns1@v1/T1?" )
     t.addSucc( s3, s3, t2 )
     l1 := MustList( s1, s2 )
     t.addSucc( l1, l1, &ListTypeReference{ t1, false } )
@@ -1942,7 +1942,7 @@ func ( t *crtInit ) addInterfaceImplTests() {
         MustList( int32( 1 ), int32( -1 ) ),
         "ns1@v1/S3*",
     )
-    addSucc( nil, nil, "ns1@v1/S3?" )
+    addSucc( nil, nil, "&ns1@v1/S3?" )
     arb := MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
     addSucc( arb, arb, arb.Type )
     add( t.createTcError( int32( 1 ), "ns1@v1/S3", TypeInt32 ) )
@@ -1952,7 +1952,7 @@ func ( t *crtInit ) addInterfaceImplTests() {
             int32( 1 ), 
             "ns1@v1/S3", 
             TypeInt32, 
-            "ns1@v1/S3?", 
+            "&ns1@v1/S3?", 
             crtPathDefault,
         ),
     )
@@ -1966,7 +1966,7 @@ func ( t *crtInit ) addInterfaceImplTests() {
         ),
     )
     add( t.createVcError( "cast3", "ns1@v1/S3", "test-message-cast3" ) )
-    add( t.createVcError( "cast3", "ns1@v1/S3?", "test-message-cast3" ) )
+    add( t.createVcError( "cast3", "&ns1@v1/S3?", "test-message-cast3" ) )
     add(
         t.createVcError0( 
             MustList( "cast2", "cast3" ),
