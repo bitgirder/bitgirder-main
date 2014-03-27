@@ -216,7 +216,7 @@ func ( w writeReactor ) value( val Value ) error {
 }
 
 func ( w writeReactor ) writeValuePointerStart( 
-    vp *ValuePointerStartEvent ) error {
+    vp *ValuePointerAllocEvent ) error {
 
     if err := w.WriteTypeCode( tcValPtrAlloc ); err != nil { return err }
     return w.WriteUint64( uint64( vp.Id ) )
@@ -230,7 +230,7 @@ func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     case *ListStartEvent: return w.startList()
     case *FieldStartEvent: return w.startField( v.Field )
     case *EndEvent: return w.WriteTypeCode( tcEnd )
-    case *ValuePointerStartEvent: return w.writeValuePointerStart( v )
+    case *ValuePointerAllocEvent: return w.writeValuePointerStart( v )
     }
     panic( libErrorf( "Unhandled event type: %T", ev ) )
 }
@@ -571,7 +571,7 @@ func ( r *BinReader ) readScalarValue(
 func ( r *BinReader ) readValuePointerStart( rep ReactorEventProcessor ) error {
     id64, err := r.ReadUint64()
     if err != nil { return err }
-    ev := NewValuePointerStartEvent( PointerId( id64 ) )
+    ev := NewValuePointerAllocEvent( PointerId( id64 ) )
     if err = rep.ProcessEvent( ev ); err != nil { return err }
     return r.implReadValue( rep )
 }

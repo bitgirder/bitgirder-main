@@ -45,13 +45,13 @@ func NewValueEvent( val Value ) *ValueEvent {
     return &ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
 }
 
-type ValuePointerStartEvent struct {
+type ValuePointerAllocEvent struct {
     *reactorEventImpl
     Id PointerId
 }
 
-func NewValuePointerStartEvent( id PointerId ) *ValuePointerStartEvent {
-    return &ValuePointerStartEvent{ 
+func NewValuePointerAllocEvent( id PointerId ) *ValuePointerAllocEvent {
+    return &ValuePointerAllocEvent{ 
         Id: id, 
         reactorEventImpl: &reactorEventImpl{},
     }
@@ -113,7 +113,7 @@ func EventToString( ev ReactorEvent ) string {
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
-    case *ValuePointerStartEvent:
+    case *ValuePointerAllocEvent:
         pairs = append( pairs, []string{ "id", v.Id.String() } )
     }
     if p := ev.GetPath(); p != nil {
@@ -234,7 +234,7 @@ func visitList( ml *List, rep ReactorEventProcessor ) error {
 }
 
 func visitValuePointer( vp *ValuePointer, rep ReactorEventProcessor ) error {
-    ev := NewValuePointerStartEvent( vp.Id ) 
+    ev := NewValuePointerAllocEvent( vp.Id ) 
     if err := rep.ProcessEvent( ev ); err != nil { return err }
     return VisitValue( vp.Val, rep )
 }

@@ -140,7 +140,7 @@ func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
     case *FieldStartEvent: va.startField( v.Field )
     case *EndEvent: va.end()
-    case *ValuePointerStartEvent: va.pushAcc( newValPtrAcc( v.Id ) )
+    case *ValuePointerAllocEvent: va.pushAcc( newValPtrAcc( v.Id ) )
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return nil

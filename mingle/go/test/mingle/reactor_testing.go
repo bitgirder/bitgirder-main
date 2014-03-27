@@ -184,7 +184,7 @@ func initStructuralReactorTests() {
     evStartField1 := NewFieldStartEvent( id( 1 ) )
     evStartField2 := NewFieldStartEvent( id( 2 ) )
     evValue1 := NewValueEvent( Int64( int64( 1 ) ) )
-    evValuePtr1 := NewValuePointerStartEvent( 1 )
+    evValuePtr1 := NewValuePointerAllocEvent( 1 )
     mk1 := func( 
         errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
@@ -269,11 +269,11 @@ func initEventPathTests() {
     evValue := func( i int64 ) *ValueEvent {
         return NewValueEvent( Int64( i ) )
     }
-    evValuePtr := func( i uint64 ) *ValuePointerStartEvent { 
-        return NewValuePointerStartEvent( PointerId( i ) ) 
+    evValuePtr := func( i uint64 ) *ValuePointerAllocEvent { 
+        return NewValuePointerAllocEvent( PointerId( i ) ) 
     }
     nextPtrId := uint64( 1 )
-    nextEvValuePtr := func() *ValuePointerStartEvent {
+    nextEvValuePtr := func() *ValuePointerAllocEvent {
         defer func() { nextPtrId++ }()
         return evValuePtr( nextPtrId )
     }
