@@ -503,9 +503,19 @@ func init() {
         "Boolean", "String", "Int32", "Uint32", "Int64", "Uint64", "Float32",
         "Float64", "Buffer", "Timestamp", "Null",
     }
-    for _, s := range primNames {
-        addCoreTypRefSuccWithPtr( s, &AtomicTypeReference{ primQn( s ), nil } )
-    }
+    func() {
+        for _, s := range primNames {
+            primTyp := &AtomicTypeReference{ primQn( s ), nil }
+            nullTyp := &NullableTypeReference{ primTyp }
+            in := s + "?"
+            addCoreTypRefSuccWithPtr( s, primTyp )
+            if ( s == "String" || s == "Buffer" ) {
+                typRefSucc( in, "mingle:core@v1" + in, nullTyp )
+            } else {
+                typRefFail( in, 1, "not a nullable type" )
+            }
+        }
+    }()
     addCoreTypRefSuccWithPtr( `String~"^a+$"`, 
         &AtomicTypeReference{ qnMgStr, rx( "^a+$" ) },
     )
@@ -598,6 +608,7 @@ func init() {
             `cannot resolve as a standard type: Stuff` ),
         typRefFail( "&ns1@v1/T1???", 12, 
             "a nullable type cannot itself be made nullable" ),
+        typRefFail( "ns1@v1/T1?", 1, "not a nullable type" ),
         typRefFail( "S1~12.1", 4, "Expected type restriction but found: 12.1" ),
         typRefRestrictFail( `ns1@v1/T~"a"`, 
             "Invalid target type for regex restriction: ns1@v1/T" ),

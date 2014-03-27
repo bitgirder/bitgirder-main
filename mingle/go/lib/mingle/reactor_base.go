@@ -45,6 +45,18 @@ func NewValueEvent( val Value ) *ValueEvent {
     return &ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
 }
 
+type ValuePointerStartEvent struct {
+    *reactorEventImpl
+    Id PointerId
+}
+
+func NewValuePointerStartEvent( id PointerId ) *ValuePointerStartEvent {
+    return &ValuePointerStartEvent{ 
+        Id: id, 
+        reactorEventImpl: &reactorEventImpl{},
+    }
+}
+
 type StructStartEvent struct { 
     *reactorEventImpl
     Type *QualifiedTypeName 

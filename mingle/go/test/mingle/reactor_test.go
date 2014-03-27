@@ -38,6 +38,11 @@ func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
     pip := InitReactorPipeline( rct )
     if err := VisitValue( vb.Val, pip ); err == nil {
         c.Equal( vb.Val, rct.GetValue() )
+        if chks := vb.Checks; chks != nil {
+            for _, chk := range chks {
+                c.Fatalf( "unhandled value check: %s", chk )
+            }
+        }
     } else { c.Fatal( err ) }
 }
 

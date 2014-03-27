@@ -12,6 +12,8 @@ import (
 
 var StdReactorTests []interface{}
 
+func init() { StdReactorTests = []interface{}{} }
+
 func AddStdReactorTests( t ...interface{} ) {
     StdReactorTests = append( StdReactorTests, t... )
 }
@@ -71,7 +73,41 @@ func MakeTestIdPath( elts ...interface{} ) objpath.PathNode {
     return res
 }
 
-type ValueBuildTest struct { Val Value }
+type BuiltValueCheck string
+
+const (
+    BuiltValueCheckUniqueRefs = BuiltValueCheck( "unique-refs" )
+)
+
+type ValueBuildTest struct { 
+    Val Value 
+    Checks []BuiltValueCheck // may be nil or empty
+}
+
+// coverage of structs also gives us coverage of maps
+func initSelfReferenceValueBuildReactorTests() {
+    addTest := func( val Value ) { 
+        AddStdReactorTests( 
+            ValueBuildTest{ 
+                Val: val,
+                Checks: []BuiltValueCheck{ BuiltValueCheckUniqueRefs },
+            },
+        )
+    }
+    qn := MustQualifiedTypeName
+    s1, s2 := NewStruct( qn( "ns1@v1/S1" ) ), NewStruct( qn( "ns1@v1/S2" ) )
+    s1Ref, s2Ref := NewValuePointer( s1 ), NewValuePointer( s2 )
+    s1.Fields.Set( MustIdentifier( "f1" ), s2Ref )
+    s1.Fields.Set( MustIdentifier( "self1" ), s1Ref )
+    s2.Fields.Set( MustIdentifier( "f2" ), s1Ref )
+    s2.Fields.Set( MustIdentifier( "l1" ), MustList( s1Ref, s2Ref ) )
+    addTest( s1Ref )
+    addTest( s2Ref )
+    addTest( MustList( s1Ref, s2Ref ) )
+    l1 := MustList( Int32( 1 ) )
+    l1.Add( l1 )
+    addTest( l1 )
+}
 
 func initValueBuildReactorTests() {
     s1 := MustStruct( "ns1@v1/S1",
@@ -80,17 +116,47 @@ func initValueBuildReactorTests() {
         "map1", MustSymbolMap(),
         "struct1", MustStruct( "ns1@v1/S2" ),
     )
-    mk := func( v Value ) interface{} { return ValueBuildTest{ v } }
-    StdReactorTests = append( StdReactorTests,
-        mk( String( "hello" ) ),
-        mk( MustList() ),
-        mk( MustList( 1, 2, 3 ) ),
-        mk( MustList( 1, MustList(), MustList( 1, 2 ) ) ),
-        mk( MustSymbolMap() ),
-        mk( MustSymbolMap( "f1", "v1", "f2", MustList(), "f3", s1 ) ),
-        mk( s1 ),
-        mk( MustStruct( "ns1@v1/S3" ) ),
+    addTest := func( v Value ) { 
+        AddStdReactorTests( ValueBuildTest{ Val: v } ) 
+    }
+    addTest( String( "hello" ) )
+    addTest( MustList() )
+    addTest( MustList( 1, 2, 3 ) )
+    addTest( MustList( 1, MustList(), MustList( 1, 2 ) ) )
+    addTest( MustSymbolMap() )
+    addTest( MustSymbolMap( "f1", "v1", "f2", MustList(), "f3", s1 ) )
+    addTest( s1 )
+    addTest( MustStruct( "ns1@v1/S3" ) )
+    addTest( NewValuePointer( String( "hello" ) ) )
+    addTest( NewValuePointer( MustList() ) )
+    addTest( 
+        NewValuePointer( 
+            MustList(
+                NewValuePointer( Int32( 0 ) ),
+                Int32( 1 ),
+                NewValuePointer( MustList( 0, 1 ) ),
+                String( "s1" ),
+                NewValuePointer( String( "s2" ) ),
+            ),
+        ),
     )
+    addTest( NewValuePointer( s1 ) )
+    addTest( 
+        NewValuePointer(
+            MustStruct( 
+                "f1", Int32( 1 ),
+                "f2", NewValuePointer( Int32( 2 ) ),
+                "f3", 
+                    NewValuePointer( 
+                        MustList( NewValuePointer( Int32( 1 ) ) ) ),
+                "f4", NewValuePointer( 
+                    MustSymbolMap( "g1", NullVal, "g2", Int32( 1 ) ) ),
+            ),
+        ),
+    )
+    valPtr1 := NewValuePointer( Int32( 1 ) )
+    addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
+    initSelfReferenceValueBuildReactorTests()
 }
 
 type StructuralReactorErrorTest struct {
@@ -118,6 +184,7 @@ func initStructuralReactorTests() {
     evStartField1 := NewFieldStartEvent( id( 1 ) )
     evStartField2 := NewFieldStartEvent( id( 2 ) )
     evValue1 := NewValueEvent( Int64( int64( 1 ) ) )
+    evValuePtr1 := NewValuePointerStartEvent( 1 )
     mk1 := func( 
         errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
@@ -147,6 +214,9 @@ func initStructuralReactorTests() {
         mk1( "Expected field name or end of fields but got value",
             evStartStruct1, evValue1,
         ),
+        mk1( "Expected field name or end of fields but got &value",
+            evStartStruct1, evValuePtr1,
+        ),
         mk1( "Expected field name or end of fields but got list start",
             evStartStruct1, NewListStartEvent(),
         ),
@@ -164,6 +234,8 @@ func initStructuralReactorTests() {
             evStartStruct1, evStartField1, NewListStartEvent(), evStartField1,
         ),
         mk2( "Expected struct but got value", ReactorTopTypeStruct, evValue1 ),
+        mk2( "Expected struct but got &value", ReactorTopTypeStruct, 
+            evValuePtr1 ),
         mk2( "Expected struct but got list start", ReactorTopTypeStruct,
             NewListStartEvent(),
         ),
@@ -185,122 +257,162 @@ func initStructuralReactorTests() {
 }
 
 func initEventPathTests() {
-    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
-    id := MakeTestId
-    evStartField1 := NewFieldStartEvent( id( 1 ) )
-    evStartField2 := NewFieldStartEvent( id( 2 ) )
-    evValue1 := NewValueEvent( Int64( int64( 1 ) ) )
-    evEnd := NewEndEvent()
-    mk := func( name string, evs ...EventExpectation ) *EventPathTest {
-        return &EventPathTest{ Name: name, Events: evs }
-    }
     p := MakeTestIdPath
     ee := func( ev ReactorEvent, p objpath.PathNode ) EventExpectation {
         return EventExpectation{ Event: ev, Path: p }
     }
-    AddStdReactorTests(
-        mk( "empty" ),
-        mk( "top-value", ee( evValue1, nil ) ),
-        mk( "empty-struct", 
-            ee( evStartStruct1, nil ), 
-            ee( evStartField1, p( 1 ) ),
-                ee( evValue1, p( 1 ) ),
-            ee( evEnd, nil ),
-        ),
-        mk( "empty-map",
-            ee( NewMapStartEvent(), nil ),
-            ee( evStartField1, p( 1 ) ),
-                ee( evValue1, p( 1 ) ),
-            ee( evEnd, nil ),
-        ),
-        mk( "flat-struct",
-            ee( evStartStruct1, nil ),
-            ee( evStartField1, p( 1 ) ),
-                ee( evValue1, p( 1 ) ),
-            ee( evEnd, nil ),
-        ),
-        mk( "empty-list",
-            ee( NewListStartEvent(), nil ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "flat-list",
-            ee( NewListStartEvent(), nil ),
-                ee( evValue1, p( "0" ) ),
-                ee( evValue1, p( "1" ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "nested-list1",
-            ee( NewListStartEvent(), nil ),
-                ee( NewMapStartEvent(), p( "0" ) ),
-                ee( NewEndEvent(), p( "0" ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "nested-list2",
-            ee( NewListStartEvent(), nil ),
-                ee( NewMapStartEvent(), p( "0" ) ),
-                ee( NewEndEvent(), p( "0" ) ),
-                ee( evValue1, p( "1" ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "nested-list3",
-            ee( NewListStartEvent(), nil ),
-                ee( evValue1, p( "0" ) ),
-                ee( NewMapStartEvent(), p( "1" ) ),
-                ee( evStartField1, p( "1", 1 ) ),
-                    ee( evValue1, p( "1", 1 ) ),
+    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
+    id := MakeTestId
+    evStartField := func( i int ) *FieldStartEvent {
+        return NewFieldStartEvent( id( i ) )
+    }
+    evValue := func( i int64 ) *ValueEvent {
+        return NewValueEvent( Int64( i ) )
+    }
+    evValuePtr := func( i uint64 ) *ValuePointerStartEvent { 
+        return NewValuePointerStartEvent( PointerId( i ) ) 
+    }
+    nextPtrId := uint64( 1 )
+    nextEvValuePtr := func() *ValuePointerStartEvent {
+        defer func() { nextPtrId++ }()
+        return evValuePtr( nextPtrId )
+    }
+    evEnd := NewEndEvent()
+    addTest := func( name string, evs ...EventExpectation ) {
+        ptrStart := ee( nextEvValuePtr(), nil )
+        evsWithPtr := append( []EventExpectation{ ptrStart }, evs... )
+        AddStdReactorTests(
+            &EventPathTest{ Name: name, Events: evs },
+            &EventPathTest{ Name: name + "-pointer", Events: evsWithPtr },
+        )
+    }
+    addTest( "empty" )
+    addTest( "top-value", ee( evValue( 1 ), nil ) )
+    addTest( "empty-struct",
+        ee( evStartStruct1, nil ),
+        ee( evEnd, nil ),
+    )
+    addTest( "empty-map",
+        ee( NewMapStartEvent(), nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( evValue( 1 ), p( 1 ) ),
+        ee( evEnd, nil ),
+    )
+    addTest( "flat-struct",
+        ee( evStartStruct1, nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( evValue( 1 ), p( 1 ) ),
+        ee( evStartField( 2 ), p( 2 ) ),
+            ee( nextEvValuePtr(), p( 2 ) ),
+                ee( evValue( 2 ), p( 2 ) ),
+        ee( evEnd, nil ),
+    )
+    addTest( "empty-list",
+        ee( NewListStartEvent(), nil ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "flat-list",
+        ee( NewListStartEvent(), nil ),
+            ee( evValue( 1 ), p( "0" ) ),
+            ee( evValue( 1 ), p( "1" ) ),
+            ee( nextEvValuePtr(), p( "2" ) ),
+                ee( evValue( 2 ), p( "2" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "nested-list1",
+        ee( NewListStartEvent(), nil ),
+            ee( NewMapStartEvent(), p( "0" ) ),
+            ee( NewEndEvent(), p( "0" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "nested-list2",
+        ee( NewListStartEvent(), nil ),
+            ee( NewMapStartEvent(), p( "0" ) ),
+            ee( NewEndEvent(), p( "0" ) ),
+            ee( evValue( 1 ), p( "1" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "nested-list3",
+        ee( NewListStartEvent(), nil ),
+            ee( evValue( 1 ), p( "0" ) ),
+            ee( NewMapStartEvent(), p( "1" ) ),
+                ee( evStartField( 1 ), p( "1", 1 ) ),
+                    ee( evValue( 1 ), p( "1", 1 ) ),
                 ee( NewEndEvent(), p( "1" ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "list-regress1",
-            ee( NewListStartEvent(), nil ),
-                ee( NewListStartEvent(), p( "0" ) ),
-                ee( NewEndEvent(), p( "0" ) ),
-                ee( evValue1, p( "1" ) ),
-                ee( evValue1, p( "2" ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "flat-map",
-            ee( NewMapStartEvent(), nil ),
-            ee( evStartField1, p( 1 ) ),
-                ee( evValue1, p( 1 ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "struct-with-containers1",
-            ee( evStartStruct1, nil ),
-            ee( evStartField1, p( 1 ) ),
-                ee( NewListStartEvent(), p( 1 ) ),
-                    ee( evValue1, p( 1, "0" ) ),
-                    ee( evValue1, p( 1, "1" ) ),
-                ee( NewEndEvent(), p( 1 ) ),
-            ee( NewEndEvent(), nil ),
-        ),
-        mk( "struct-with-containers2",
-            ee( evStartStruct1, nil ),
-            ee( evStartField1, p( 1 ) ),
-                ee( NewMapStartEvent(), p( 1 ) ),
-                ee( evStartField2, p( 1, 2 ) ),
-                    ee( NewListStartEvent(), p( 1, 2 ) ),
-                        ee( evValue1, p( 1, 2, "0" ) ),
-                        ee( evValue1, p( 1, 2, "1" ) ),
-                        ee( NewListStartEvent(), p( 1, 2, "2" ) ),
-                            ee( evValue1, p( 1, 2, "2", "0" ) ),
-                            ee( NewMapStartEvent(), p( 1, 2, "2", "1" ) ),
-                            ee( evStartField1, p( 1, 2, "2", "1", 1 ) ),
-                                ee( evValue1, p( 1, 2, "2", "1", 1 ) ),
-                            ee( NewEndEvent(), p( 1, 2, "2", "1" ) ),
-                        ee( NewEndEvent(), p( 1, 2, "2" ) ),
-                    ee( NewEndEvent(), p( 1, 2 ) ),
-                ee( NewEndEvent(), p( 1 ) ),
-            ee( NewEndEvent(), nil ),
-        ),
+            ee( nextEvValuePtr(), p( "2" ) ),
+                ee( NewListStartEvent(), p( "2" ) ),
+                    ee( evValue( 1 ), p( "2", "0" ) ),
+                    ee( nextEvValuePtr(), p( "2", "1" ) ),
+                        ee( NewListStartEvent(), p( "2", "1" ) ),
+                            ee( evValue( 1 ), p( "2", "1", "0" ) ),
+                            ee( evValue( 2 ), p( "2", "1", "1" ) ),
+                        ee( NewEndEvent(), p( "2", "1" ) ),
+                    ee( evValue( 3 ), p( "2", "2" ) ),
+                ee( NewEndEvent(), p( "2" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "list-regress1",
+        ee( NewListStartEvent(), nil ),
+            ee( NewListStartEvent(), p( "0" ) ),
+            ee( NewEndEvent(), p( "0" ) ),
+            ee( evValue( 1 ), p( "1" ) ),
+            ee( evValue( 1 ), p( "2" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "flat-map",
+        ee( NewMapStartEvent(), nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( evValue( 1 ), p( 1 ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "struct-with-containers1",
+        ee( evStartStruct1, nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( NewListStartEvent(), p( 1 ) ),
+                ee( evValue( 1 ), p( 1, "0" ) ),
+                ee( evValue( 1 ), p( 1, "1" ) ),
+            ee( NewEndEvent(), p( 1 ) ),
+        ee( evStartField( 2 ), p( 2 ) ),
+            ee( nextEvValuePtr(), p( 2 ) ),
+                ee( evValue( 1 ), p( 2 ) ),
+        ee( evStartField( 3 ), p( 3 ) ),
+            ee( NewListStartEvent(), p( 3 ) ),
+                ee( nextEvValuePtr(), p( 3, "0" ) ),
+                    ee( evValue( 0 ), p( 3, "0" ) ),
+                ee( nextEvValuePtr(), p( 3, "1" ) ),
+                    ee( evValue( 0 ), p( 3, "1" ) ),
+            ee( NewEndEvent(), p( 3 ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "struct-with-containers2",
+        ee( evStartStruct1, nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( NewMapStartEvent(), p( 1 ) ),
+            ee( evStartField( 2 ), p( 1, 2 ) ),
+                ee( NewListStartEvent(), p( 1, 2 ) ),
+                    ee( evValue( 1 ), p( 1, 2, "0" ) ),
+                    ee( evValue( 1 ), p( 1, 2, "1" ) ),
+                    ee( NewListStartEvent(), p( 1, 2, "2" ) ),
+                        ee( evValue( 1 ), p( 1, 2, "2", "0" ) ),
+                        ee( NewMapStartEvent(), p( 1, 2, "2", "1" ) ),
+                        ee( evStartField( 1 ), p( 1, 2, "2", "1", 1 ) ),
+                            ee( evValue( 1 ), p( 1, 2, "2", "1", 1 ) ),
+                        ee( evStartField( 2 ), p( 1, 2, "2", "1", 2 ) ),
+                            ee( nextEvValuePtr(), p( 1, 2, "2", "1", 2 ) ),
+                            ee( evValue( 2 ), p( 1, 2, "2", "1", 2 ) ),
+                        ee( NewEndEvent(), p( 1, 2, "2", "1" ) ),
+                    ee( NewEndEvent(), p( 1, 2, "2" ) ),
+                ee( NewEndEvent(), p( 1, 2 ) ),
+            ee( NewEndEvent(), p( 1 ) ),
+        ee( NewEndEvent(), nil ),
     )
     AddStdReactorTests(
         &EventPathTest{
             Name: "non-empty-dict-start-path",
             Events: []EventExpectation{
                 { NewMapStartEvent(), p( 2 ) },
-                { evStartField1, p( 2, 1 ) },
-                { evValue1, p( 2, 1 ) },
+                { evStartField( 1 ), p( 2, 1 ) },
+                { evValue( 1 ), p( 2, 1 ) },
                 { NewEndEvent(), p( 2 ) },
             },
             StartPath: p( 2 ),
@@ -309,8 +421,8 @@ func initEventPathTests() {
             Name: "non-empty-list-start-path",
             Events: []EventExpectation{ 
                 { NewMapStartEvent(), p( 2, "3" ) },
-                { evStartField1, p( 2, "3", 1 ) },
-                { evValue1, p( 2, "3", 1 ) },
+                { evStartField( 1 ), p( 2, "3", 1 ) },
+                { evValue( 1 ), p( 2, "3", 1 ) },
                 { NewEndEvent(), p( 2, "3" ) },
             },
             StartPath: p( 2, "3" ),
@@ -1431,8 +1543,8 @@ func ( t *crtInit ) addMiscVcErrors() {
 
 func ( t *crtInit ) addMiscPointerTests() {
     val := Int32( 1 )
-    ptr1 := NewPointerValue( val )
-    ptr2 := NewPointerValue( ptr1 )
+    ptr1 := NewValuePointer( val )
+    ptr2 := NewValuePointer( ptr1 )
     t.addSucc( val, ptr1, "&Int32" )
     t.addSucc( val, ptr2, "&&Int32" )
     t.addSucc( ptr1, val, "Int32" )
@@ -1497,7 +1609,7 @@ func ( t *crtInit ) addIdentityNumTests() {
     for _, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
-        ptrVal := NewPointerValue( numCtx.val )
+        ptrVal := NewValuePointer( numCtx.val )
         ptrTyp := NewPointerTypeReference( numCtx.typ )
         t.addSucc( numCtx.val, ptrVal, ptrTyp )
         t.addSucc( numCtx.str, ptrVal, ptrTyp )
@@ -1512,8 +1624,9 @@ func ( t *crtInit ) addIdentityNumTests() {
         t.addTcError( s1, ptrTyp, s1.Type )
         for _, valCtx := range numTests {
             t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
-            t.addSucc( NewPointerValue( valCtx.val ), numCtx.val, numCtx.typ )
+            t.addSucc( NewValuePointer( valCtx.val ), numCtx.val, numCtx.typ )
             t.addSucc( valCtx.val, ptrVal, ptrTyp )
+            t.addSucc( NewValuePointer( valCtx.val ), ptrVal, ptrTyp )
         }
     }
 }
@@ -1566,12 +1679,12 @@ func ( t *crtInit ) addNumTests() {
 func ( t *crtInit ) addBufferTests() {
     buf1B64 := String( base64.StdEncoding.EncodeToString( t.buf1 ) )
     t.addSucc( t.buf1, buf1B64, TypeString )
-    t.addSucc( NewPointerValue( t.buf1 ), buf1B64, TypeString )
-    t.addSucc( NewPointerValue( t.buf1 ), NewPointerValue( buf1B64 ),
+    t.addSucc( NewValuePointer( t.buf1 ), buf1B64, TypeString )
+    t.addSucc( NewValuePointer( t.buf1 ), NewValuePointer( buf1B64 ),
         NewPointerTypeReference( TypeString ) )
     t.addSucc( buf1B64, t.buf1, TypeBuffer  )
-    t.addSucc( NewPointerValue( buf1B64 ), t.buf1, TypeBuffer )
-    t.addSucc( NewPointerValue( buf1B64 ), NewPointerValue( t.buf1 ),
+    t.addSucc( NewValuePointer( buf1B64 ), t.buf1, TypeBuffer )
+    t.addSucc( NewValuePointer( buf1B64 ), NewValuePointer( t.buf1 ),
         NewPointerTypeReference( TypeBuffer ) )
     t.addVcError( "abc$/@", TypeBuffer, 
         "Invalid base64 string: illegal base64 data at input byte 3" )
@@ -1592,15 +1705,19 @@ func ( t *crtInit ) addTimeTests() {
 }
 
 func ( t *crtInit ) addEnumTests() {
-    ptrTyp := 
+    ptrTyp :=
         NewPointerTypeReference( &AtomicTypeReference{ Name: t.en1.Type } )
-    t.addSucc( NewPointerValue( t.en1 ), NewPointerValue( t.en1 ), ptrTyp )
-    t.addSucc( t.en1, NewPointerValue( t.en1 ), ptrTyp )
+    t.addSucc( NewValuePointer( t.en1 ), NewValuePointer( t.en1 ), ptrTyp )
+    t.addSucc( t.en1, NewValuePointer( t.en1 ), ptrTyp )
     t.addSucc( t.en1, "en-val1", TypeString  )
-    t.addSucc( t.en1, NewPointerValue( MustValue( "en-val1" ) ), 
+    t.addSucc( t.en1, NewValuePointer( MustValue( "en-val1" ) ), 
         NewPointerTypeReference( TypeString ) )
     t.addTcError( EmptySymbolMap(), t.en1.Type, TypeSymbolMap )
     t.addTcError( nil, t.en1.Type, TypeNull )
+    t.addTcError( t.en1, "ns1@v1/E2", t.en1.Type )
+    t.addTcError( NewValuePointer( t.en1 ), "ns1@v1/E2", t.en1.Type )
+    t.addTcError( t.en1, "&ns1@v1/E2", t.en1.Type )
+    t.addTcError( NewValuePointer( t.en1 ), "&ns1@v1/E2", t.en1.Type )
 }
 
 func ( t *crtInit ) addNullableTests() {
@@ -1656,8 +1773,8 @@ func ( t *crtInit ) addListTests() {
     )
     s1 := MustStruct( "ns1@v1/S1" )
     t.addSucc(
-        []interface{}{ s1, NewPointerValue( s1 ), nil },
-        MustList( NewPointerValue( s1 ), NewPointerValue( s1 ), NullVal ),
+        []interface{}{ s1, NewValuePointer( s1 ), nil },
+        MustList( NewValuePointer( s1 ), NewValuePointer( s1 ), NullVal ),
         "&ns1@v1/S1?*",
     )
     t.addTcError0(
@@ -1684,11 +1801,11 @@ func ( t *crtInit ) addListTests() {
             nil,
         },
         MustList(
-            NewPointerValue( Int32( 1 ) ),
-            NewPointerValue( MustList() ),
-            NewPointerValue( MustList( 1, 2, 3 ) ),
-            NewPointerValue( String( "s1" ) ),
-            NewPointerValue( s1 ),
+            NewValuePointer( Int32( 1 ) ),
+            NewValuePointer( MustList() ),
+            NewValuePointer( MustList( 1, 2, 3 ) ),
+            NewValuePointer( String( "s1" ) ),
+            NewValuePointer( s1 ),
             NullVal,
         ),
         "&Null*",
@@ -1698,18 +1815,18 @@ func ( t *crtInit ) addListTests() {
     t.addSucc( intList1, intList1, TypeValue )
     t.addSucc( intList1, intList1, TypeOpaqueList )
     t.addSucc( intList1, intList1, "Int32*?" )
-    t.addSucc( MustList(), NewPointerValue( MustList() ), "&Int32*" )
-    t.addSucc( NewPointerValue( MustList() ), NewPointerValue( MustList() ),
+    t.addSucc( MustList(), NewValuePointer( MustList() ), "&Int32*" )
+    t.addSucc( NewValuePointer( MustList() ), NewValuePointer( MustList() ),
         "&Int32*" )
-    t.addSucc( NewPointerValue( MustList() ), MustList(), "&Int32*" )
+    t.addSucc( NewValuePointer( MustList() ), MustList(), "&Int32*" )
     t.addSucc( nil, NullVal, "Int32*?" )
     t.addVcError( nil, "Int32*", "expected list got null" )
     t.addVcError( nil, "Int32+", "expected list got null" )
-    t.addVcError( NewPointerValue( NullVal ), "Int32+", 
+    t.addVcError( NewValuePointer( NullVal ), "Int32+", 
         "expected list got null" )
-    t.addVcError( NewPointerValue( MustList() ), "&Int32+", "empty list" )
+    t.addVcError( NewValuePointer( MustList() ), "&Int32+", "empty list" )
     t.addSucc( nil, NullVal, "&Int32*?" )
-    t.addSucc( NewPointerValue( NullVal ), NewPointerValue( NullVal ),
+    t.addSucc( NewValuePointer( NullVal ), NewValuePointer( NullVal ),
         "&Int32*?" )
 }
 
@@ -1744,15 +1861,15 @@ func ( t *crtInit ) addMapTests() {
     )
     nester := MustSymbolMap( "f1", MustSymbolMap( "f2", int32( 1 ) ) )
     t.addSucc( nester, nester, TypeSymbolMap )
-    t.addSucc( m1, NewPointerValue( m1 ), "&SymbolMap" )
-    t.addSucc( NewPointerValue( m1 ), NewPointerValue( m1 ), "&SymbolMap" )
-    t.addSucc( NewPointerValue( m1 ), m1, "SymbolMap" )
+    t.addSucc( m1, NewValuePointer( m1 ), "&SymbolMap" )
+    t.addSucc( NewValuePointer( m1 ), NewValuePointer( m1 ), "&SymbolMap" )
+    t.addSucc( NewValuePointer( m1 ), m1, "SymbolMap" )
     t.addSucc( nil, NullVal, "SymbolMap?" )
-    t.addSucc( NewPointerValue( NullVal ), NewPointerValue( NullVal ),
+    t.addSucc( NewValuePointer( NullVal ), NewValuePointer( NullVal ),
         "&SymbolMap?" )
     t.addVcError( nil, "SymbolMap", "expected map but got null" )
     t.addVcError( nil, "&SymbolMap", "expected &map but got null" )
-    t.addVcError( NewPointerValue( NullVal ), "&SymbolMap", 
+    t.addVcError( NewValuePointer( NullVal ), "&SymbolMap", 
         "expected &map but got null" )
 }
 
@@ -1790,13 +1907,17 @@ func ( t *crtInit ) addStructTests() {
     }
     f1( s3, t2 )
     f1( int32( 1 ), "Int32" )
-    t.addSucc( NewPointerValue( s1 ), NewPointerValue( s1 ), "&ns1@v1/S1" )
-    t.addSucc( s1, NewPointerValue( s1 ), "&ns1@v1/S1" )
-    t.addSucc( NewPointerValue( s1 ), s1, "ns1@v1/S1" )
+    t.addSucc( NewValuePointer( s1 ), NewValuePointer( s1 ), "&ns1@v1/S1" )
+    t.addSucc( s1, NewValuePointer( s1 ), "&ns1@v1/S1" )
+    t.addSucc( NewValuePointer( s1 ), s1, "ns1@v1/S1" )
     t.addSucc( nil, NullVal, "&ns1@v1/S1?" )
     t.addVcError( nil, "&ns1@v1/S1", "expected ns1@v1/S1 but got null" )
-    t.addVcError( NewPointerValue( NullVal ), "&ns1@v1/S1", 
+    t.addVcError( NewValuePointer( NullVal ), "&ns1@v1/S1", 
         "expected S1 but got null" )
+    t.addTcError( s1, "ns1@v1/S2", "ns1@v1/S1" )
+    t.addTcError( NewValuePointer( s1 ), "ns1@v1/S2", "&ns1@v1/S1" )
+    t.addTcError( s1, "&ns1@v1/S2", "ns1@v1/S1" )
+    t.addTcError( NewValuePointer( s1 ), "&ns1@v1/S2", "&ns1@v1/S1" )
 }
 
 func ( t *crtInit ) addInterfaceImplTests() {
@@ -2081,3 +2202,7 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
         EqualValues( expct, vb.GetValue(), a ) 
     }
 }
+
+// To test:
+//
+//  - circular references

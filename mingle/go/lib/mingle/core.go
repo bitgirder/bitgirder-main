@@ -10,6 +10,7 @@ import (
     "bytes"
     "unicode"
     "strings"
+    "unsafe"
 )
 
 type IdentifierFormat uint
@@ -527,7 +528,7 @@ func appendQuotedStruct( buf *bytes.Buffer, ms *Struct ) {
     appendQuotedSymbolMap( buf, ms.Fields )
 }
 
-func appendQuotedPointer( buf *bytes.Buffer, pv *PointerValue ) {
+func appendQuotedPointer( buf *bytes.Buffer, pv *ValuePointer ) {
     buf.WriteString( "&(" )
     appendQuotedValue( buf, pv.Val )
     buf.WriteString( ")" )
@@ -547,7 +548,7 @@ func appendQuotedValue( buf *bytes.Buffer, val Value ) {
     case *List: appendQuotedList( buf, v )
     case *SymbolMap: appendQuotedSymbolMap( buf, v )
     case *Struct: appendQuotedStruct( buf, v )
-    case *PointerValue: appendQuotedPointer( buf, v )
+    case *ValuePointer: appendQuotedPointer( buf, v )
     default: fmt.Fprintf( buf, "(!%T)", val ) // seems better than a panic
     }
 }
@@ -787,7 +788,7 @@ func asAtomicValue(
     case *Enum: val = v
     case *Struct: val = v
     case *Null: val = v
-    case *PointerValue: val = v
+    case *ValuePointer: val = v
     default:
         msg := "Unhandled mingle value %v (%T)"
         err = &ValueTypeError{ path, fmt.Sprintf( msg, inVal, inVal ) }
@@ -818,6 +819,8 @@ type List struct {
 
 var constEmptyList = &List{ []Value{} }
 func EmptyList() *List { return constEmptyList }
+
+func ( l *List ) Add( val Value ) { l.vals = append( l.vals, val ) }
 
 func ( l *List ) valImpl() {}
 
@@ -851,6 +854,8 @@ type fieldEntry struct {
 type SymbolMap struct {
     fields []fieldEntry
 }
+
+func NewSymbolMap() *SymbolMap { return &SymbolMap{ []fieldEntry{} } }
 
 func EmptySymbolMap() *SymbolMap { return MustSymbolMap() }
 
@@ -890,6 +895,12 @@ func ( m *SymbolMap ) GetById( fld *Identifier ) Value {
 func ( m *SymbolMap ) HasField( fld *Identifier ) bool {
     _, ok := m.getIndexOk( fld )
     return ok
+}
+
+func ( m *SymbolMap ) Set( fld *Identifier, val Value ) {
+    idx, ok := m.getIndexOk( fld )
+    fe := fieldEntry{ id: fld, val: val }
+    if ok { m.fields[ idx ] = fe } else { m.fields = append( m.fields, fe ) }
 }
 
 type MapLiteralError struct {
@@ -1021,6 +1032,10 @@ type Struct struct {
     Fields *SymbolMap
 }
 
+func NewStruct( typ *QualifiedTypeName ) *Struct {
+    return &Struct{ Type: typ, Fields: NewSymbolMap() }
+}
+
 func ( s *Struct ) valImpl() {}
 
 func CreateStruct(
@@ -1047,13 +1062,20 @@ func MustStruct(
     return res
 }
 
-type PointerValue struct { Val Value }
+type PointerId uint64
 
-func NewPointerValue( val Value ) *PointerValue { 
-    return &PointerValue{ Val: val }
+type ValuePointer struct { 
+    Id PointerId
+    Val Value 
 }
 
-func ( pv *PointerValue ) valImpl() {}
+func NewValuePointer( val Value ) *ValuePointer { 
+    res := &ValuePointer{ Val: val }
+    res.Id = PointerId( uint64( uintptr( unsafe.Pointer( res ) ) ) )
+    return res
+}
+
+func ( pv *ValuePointer ) valImpl() {}
 
 type IdentifiedName struct {
     Namespace *Namespace
@@ -1246,7 +1268,7 @@ func IsIntegerType( typ TypeReference ) bool {
            typ.Equals( TypeUint64 )
 }
 
-func typeOfPointerValue( pv *PointerValue ) *PointerTypeReference {
+func typeOfValuePointer( pv *ValuePointer ) *PointerTypeReference {
     return NewPointerTypeReference( TypeOf( pv.Val ) )
 }
 
@@ -1267,7 +1289,7 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Struct: return v.Type.AsAtomicType()
     case *List: return TypeOpaqueList
     case *Null: return TypeNull
-    case *PointerValue: return typeOfPointerValue( v )
+    case *ValuePointer: return typeOfValuePointer( v )
     }
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }

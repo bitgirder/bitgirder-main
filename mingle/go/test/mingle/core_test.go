@@ -85,11 +85,11 @@ func TestValueTypeErrorFormatting( t *testing.T ) {
     assert.Equal( "Blah", (&ValueTypeError{ nil, "Blah" }).Error() )
 }
 
-// if we add more pointer conversions later ( go *int32 --> &PointerValue{
+// if we add more pointer conversions later ( go *int32 --> &ValuePointer{
 // Int32(...) } ) we'll add coverage for those here. for now we just have
-// coverage that *PointerValues are recognized and returned
-func assertAsPointerValues( t *testing.T ) {
-    assert.Equal( NewPointerValue( Int32( 1 ) ), NewPointerValue( Int32( 1 ) ) )
+// coverage that *ValuePointers are recognized and returned
+func assertAsValuePointers( t *testing.T ) {
+    assert.Equal( NewValuePointer( Int32( 1 ) ), NewValuePointer( Int32( 1 ) ) )
 }
 
 func TestAsValue( t *testing.T ) {
@@ -105,7 +105,7 @@ func TestAsValue( t *testing.T ) {
     assertAsNullValues( t )
     assertAsEnumValues( t )
     assertAsListValues( t )
-    assertAsPointerValues( t )
+    assertAsValuePointers( t )
 }
 
 func TestAsValueBadValue( t *testing.T ) {
@@ -398,12 +398,12 @@ func TestTypeOf( t *testing.T ) {
     a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
     a.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
     ptrTyp := NewPointerTypeReference( typ )
-    a.Equal( ptrTyp, TypeOf( NewPointerValue( &Enum{ Type: qn } ) ) )
-    a.Equal( ptrTyp, TypeOf( NewPointerValue( &Struct{ Type: qn } ) ) )
+    a.Equal( ptrTyp, TypeOf( NewValuePointer( &Enum{ Type: qn } ) ) )
+    a.Equal( ptrTyp, TypeOf( NewValuePointer( &Struct{ Type: qn } ) ) )
     a.Equal( NewPointerTypeReference( TypeInt32 ), 
-        TypeOf( NewPointerValue( Int32( 1 ) ) ) )
+        TypeOf( NewValuePointer( Int32( 1 ) ) ) )
     a.Equal( NewPointerTypeReference( TypeOpaqueList ), 
-        TypeOf( NewPointerValue( MustList() ) ) )
+        TypeOf( NewValuePointer( MustList() ) ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
@@ -513,10 +513,10 @@ func TestQuoteValue( t *testing.T ) {
     f( MustSymbolMap(), "{}" )
     f( MustSymbolMap( "k1", 1, "k2", "2" ),
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
-    f( NewPointerValue( Int32( 1 ) ), "&(1)" )
-    f( NewPointerValue( String( "a" ) ), `&("a")` )
-    f( NewPointerValue( MustList( Int32( 1 ) ) ), "&([1])" )
-    f( NewPointerValue( NewPointerValue( Int32( 1 ) ) ), "&(&(1))" )
+    f( NewValuePointer( Int32( 1 ) ), "&(1)" )
+    f( NewValuePointer( String( "a" ) ), `&("a")` )
+    f( NewValuePointer( MustList( Int32( 1 ) ) ), "&([1])" )
+    f( NewValuePointer( NewValuePointer( Int32( 1 ) ) ), "&(&(1))" )
     map1 := MustSymbolMap( "k", 1 )
     expct := `ns1@v1/T1{k:1}`
     f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
