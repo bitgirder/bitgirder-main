@@ -1383,7 +1383,7 @@ func initServiceTests() {
 }
 
 type CastReactorTest struct {
-    In Value
+    In interface{}
     Expect Value
     Type TypeReference
     Path objpath.PathNode
@@ -1589,6 +1589,18 @@ func ( t *crtInit ) addMiscPointerTests() {
     t.addSucc( ptr1, val, "Int32" )
     t.addSucc( ptr2, val, "Int32" )
     t.addSucc( ptr2, ptr1, "&Int32" )
+    t.addVcError( NewValuePointer( Int64( 1 ) ), "&Uint64", "&Int64" )
+    AddStdReactorTests(
+        &CastReactorTest{
+            In: []ReactorEvent{
+                NewValuePointerReferenceEvent( PointerId( uint64( 1 ) ) ),
+            },
+            Type: asTypeReference( "&Int64" ),
+            Path: crtPathDefault,
+            Err: NewValueCastErrorf( crtPathDefault, 
+                "got reference to &Int64 while expecting &Uint64" ),
+        },
+    )
 }
 
 func ( t *crtInit ) addStringTests() {
@@ -1645,7 +1657,7 @@ func ( t *crtInit ) addIdentityNumTests() {
         { val: Float64( 1.0 ), str: "1", typ: TypeFloat64 },
     }
     s1 := MustStruct( "ns1@v1/S1" )
-    for _, numCtx := range numTests {
+    for numCtxIdx, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
         ptrVal := NewValuePointer( numCtx.val )
@@ -1664,11 +1676,18 @@ func ( t *crtInit ) addIdentityNumTests() {
         t.addTcError( s1, numCtx.typ, s1.Type )
         t.addTcError( ptrVal, s1.Type, numCtx.typ )
         t.addTcError( s1, ptrTyp, s1.Type )
-        for _, valCtx := range numTests {
+        for valCtxIdx, valCtx := range numTests {
             t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
             t.addSucc( NewValuePointer( valCtx.val ), numCtx.val, numCtx.typ )
-            t.addSucc( valCtx.val, ptrVal, ptrTyp )
-            t.addSucc( NewValuePointer( valCtx.val ), ptrVal, ptrTyp )
+            if valCtxIdx == numCtxIdx {
+                t.addSucc( valCtx.val, ptrVal, ptrTyp )
+                t.addSucc( NewValuePointer( valCtx.val ), ptrVal, ptrTyp )
+            } else {
+                t.addVcError( valCtx.val, ptrTyp, 
+                    "bad ptr: &in --> &expect (placeholder message)" )
+                t.addVcError( NewValuePointer( valCtx.val ), ptrTyp,
+                    "bad ptr: &in --> &expect (placeholder message)" )
+            }
         }
     }
 }
@@ -2247,6 +2266,4 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
 
 // To test:
 //
-//  - circular references
-//  - unmatched ptr refs (with correct paths in errors)
-//  - duplicate ptr allocs (with correct path of offending alloc)
+//  - ptr ref to type T1 should not be cast to ptr val of type T2

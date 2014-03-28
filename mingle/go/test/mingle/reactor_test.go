@@ -260,7 +260,7 @@ func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     rcts = append( rcts, vb )
     pip := InitReactorPipeline( rcts... )
 //    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
-    if err := VisitValue( ct.In, pip ); err == nil { 
+    if err := VisitValue( ct.In.( Value ), pip ); err == nil { 
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
         }
