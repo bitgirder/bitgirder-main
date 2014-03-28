@@ -118,7 +118,7 @@ func ( va *valueAccumulator ) valueReady( val Value ) {
 
 // Panics if result of val is not ready
 func ( va *valueAccumulator ) getValue() Value {
-    if va.val == nil { panic( rctErrorf( "Value is not yet built" ) ) }
+    if va.val == nil { panic( rctErrorf( nil, "Value is not yet built" ) ) }
     return va.val
 }
 
@@ -144,7 +144,7 @@ func ( va *valueAccumulator ) pointerReferenced(
         va.valueReady( val )
         return nil
     }
-    return rctErrorf( "unhandled value pointer ref: %d", vr.Id )
+    return rctErrorf( vr.GetPath(), "unhandled value pointer ref: %d", vr.Id )
 }
 
 func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {

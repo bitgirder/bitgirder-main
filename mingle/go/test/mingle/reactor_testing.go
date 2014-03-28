@@ -188,8 +188,8 @@ func initStructuralReactorTests() {
     mk1 := func( 
         errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
-            Events: evs,
-            Error: rctError( errMsg ),
+            Events: CopySource( evs ),
+            Error: rctError( nil, errMsg ),
         }
     }
     mk2 := func( 
@@ -253,6 +253,45 @@ func initStructuralReactorTests() {
             evStartField2, evValue1,
             evStartField1,
         ),
+    )
+}
+
+type PointerEventCheckTest struct {
+    Events []ReactorEvent
+    Error error
+}
+
+func initPointerReferenceCheckTests() {
+    id, p := MakeTestId, MakeTestIdPath
+    ptrId := func( i int ) PointerId { return PointerId( uint64( i ) ) }
+    ptrAlloc := func( i int ) *ValuePointerAllocEvent {
+        return NewValuePointerAllocEvent( ptrId( i ) )
+    }
+    ptrRef := func( i int ) *ValuePointerReferenceEvent {
+        return NewValuePointerReferenceEvent( ptrId( i ) )
+    }
+    add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
+        AddStdReactorTests(
+            &PointerEventCheckTest{
+                Events: CopySource( evs ),
+                Error: rctError( path, msg ),
+            },
+        )
+    }
+    add( p( "1" ),
+        "attempt to reallocate already allocated pointer with id: 1",
+        NewListStartEvent(),
+        ptrAlloc( 1 ), 
+        ptrAlloc( 1 ), 
+    )
+    add( nil, "unrecognized reference to pointer with id: 1", ptrAlloc( 1 ) )
+    add( p( 2 ),
+        "unrecognized reference to pointer with id: 2",
+        NewMapStartEvent(),
+        NewFieldStartEvent( id( 1 ) ),
+        ptrAlloc( 1 ),
+        NewFieldStartEvent( id( 2 ) ),
+        ptrRef( 2 ),
     )
 }
 
@@ -1619,6 +1658,9 @@ func ( t *crtInit ) addIdentityNumTests() {
         t.addTcError( EmptySymbolMap(), ptrTyp, TypeSymbolMap )
         t.addTcError( nil, numCtx.typ, TypeNull )
         t.addTcError( EmptyList(), numCtx.typ, TypeOpaqueList )
+        t.addTcError( t.buf1, numCtx.typ, TypeBuffer )
+        t.addTcError( NewValuePointer( t.buf1 ), ptrTyp, 
+            NewPointerTypeReference( TypeBuffer ) )
         t.addTcError( s1, numCtx.typ, s1.Type )
         t.addTcError( ptrVal, s1.Type, numCtx.typ )
         t.addTcError( s1, ptrTyp, s1.Type )

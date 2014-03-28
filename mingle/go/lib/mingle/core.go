@@ -590,6 +590,26 @@ func ( e *ValueTypeError ) Error() string {
     return locStr + ": " + e.msg 
 }
 
+type ValueError interface {
+    Location() objpath.PathNode
+    Message() string 
+    error
+}
+
+type ValueErrorImpl struct {
+    Path idPath
+}
+
+func ( e ValueErrorImpl ) Location() objpath.PathNode { 
+    if e.Path == nil { return nil }
+    return e.Path.( objpath.PathNode )
+}
+
+func ( e ValueErrorImpl ) MakeError( msg string ) string {
+    if e.Path == nil { return msg }
+    return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
+}
+
 type ValueCastError struct {
     ve ValueErrorImpl
     msg string
@@ -1271,26 +1291,6 @@ func TypeOf( mgVal Value ) TypeReference {
     case *ValuePointer: return typeOfValuePointer( v )
     }
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
-}
-
-type ValueError interface {
-    Location() objpath.PathNode
-    Message() string 
-    error
-}
-
-type ValueErrorImpl struct {
-    Path idPath
-}
-
-func ( e ValueErrorImpl ) Location() objpath.PathNode { 
-    if e.Path == nil { return nil }
-    return e.Path.( objpath.PathNode )
-}
-
-func ( e ValueErrorImpl ) MakeError( msg string ) string {
-    if e.Path == nil { return msg }
-    return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
 }
 
 type MissingFieldsError struct {

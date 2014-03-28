@@ -8,14 +8,27 @@ import (
 //    "log"
 )
 
-type ReactorError struct { msg string }
+type ReactorError struct { 
+    ve ValueErrorImpl
+    msg string 
+}
 
-func ( e *ReactorError ) Error() string { return e.msg }
+func ( e *ReactorError ) Error() string { return e.ve.MakeError( e.msg ) }
 
-func rctError( msg string ) *ReactorError { return &ReactorError{ msg } }
+func ( e *ReactorError ) Message() string { return e.msg }
 
-func rctErrorf( tmpl string, args ...interface{} ) *ReactorError {
-    return rctError( fmt.Sprintf( tmpl, args... ) )
+func ( e *ReactorError) Location() objpath.PathNode { return e.ve.Location() }
+
+func rctError( path objpath.PathNode, msg string ) *ReactorError { 
+    res := &ReactorError{ msg: msg, ve: ValueErrorImpl{} } 
+    if path != nil { res.ve.Path = path }
+    return res
+}
+
+func rctErrorf( 
+    path objpath.PathNode, tmpl string, args ...interface{} ) *ReactorError {
+
+    return rctError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 type ReactorEvent interface {
@@ -147,6 +160,9 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     case *StructStartEvent: res = NewStructStartEvent( v.Type )
     case *FieldStartEvent: res = NewFieldStartEvent( v.Field )
     case *EndEvent: res = NewEndEvent()
+    case *ValuePointerAllocEvent: res = NewValuePointerAllocEvent( v.Id )
+    case *ValuePointerReferenceEvent: 
+        res = NewValuePointerReferenceEvent( v.Id )
     default: panic( libErrorf( "unhandled copy target: %T", ev ) )
     }
     if withPath { res.SetPath( ev.GetPath() ) }
