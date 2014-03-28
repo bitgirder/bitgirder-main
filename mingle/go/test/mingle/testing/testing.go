@@ -76,7 +76,7 @@ func ( a *asserter ) equalSymbolMaps( m1 *mg.SymbolMap, act mg.Value ) {
     if m2, ok := act.( *mg.SymbolMap ); ok {
         a.Equal( m1.Len(), m2.Len() )
         m1.EachPair( func( fld *mg.Identifier, val1 mg.Value ) {
-            if val2 := m2.GetById( fld ); val2 == nil {
+            if val2 := m2.Get( fld ); val2 == nil {
                 a.Fatalf( "No value for field %q", fld )
             } else { a.descend( fld ).equal( val1, val2 ) }
         })

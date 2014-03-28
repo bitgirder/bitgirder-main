@@ -516,12 +516,14 @@ func appendQuotedList( buf *bytes.Buffer, l *List ) {
 
 func appendQuotedSymbolMap( buf *bytes.Buffer, m *SymbolMap ) {
     buf.WriteRune( '{' )
-    for i, fe := range m.fields {
-        buf.WriteString( fe.id.Format( LcCamelCapped ) )
+    remain := m.Len() - 1
+    m.EachPair( func( fld *Identifier, val Value ) {
+        buf.WriteString( fld.Format( LcCamelCapped ) )
         buf.WriteRune( ':' )
-        appendQuotedValue( buf, fe.val )
-        if i < len( m.fields ) - 1 { buf.WriteString( ", " ) }
-    }
+        appendQuotedValue( buf, val )
+        if remain > 0 { buf.WriteString( ", " ) }
+        remain--
+    })
     buf.WriteRune( '}' )
 }
 
@@ -850,134 +852,97 @@ func MustList( vals ...interface{} ) *List {
     return res
 }
 
-type fieldEntry struct {
-    id *Identifier
-    val Value
-}
-
 type SymbolMap struct {
-    fields []fieldEntry
+    m *IdentifierMap
 }
 
-func NewSymbolMap() *SymbolMap { return &SymbolMap{ []fieldEntry{} } }
+func NewSymbolMap() *SymbolMap { return &SymbolMap{ NewIdentifierMap() } }
 
-func EmptySymbolMap() *SymbolMap { return MustSymbolMap() }
+// Later if we decide to make read-only variants of *SymbolMap we could return a
+// single instance here
+func EmptySymbolMap() *SymbolMap { return NewSymbolMap() }
 
 func ( m SymbolMap ) valImpl() {}
 
-func ( m *SymbolMap ) Len() int { return len( m.fields ) }
+func ( m *SymbolMap ) Len() int { return m.m.Len() }
 
 func ( m *SymbolMap ) EachPairError ( 
-    v func( *Identifier, Value ) error ) error {
-    for _, e := range m.fields { 
-        if err := v( e.id, e.val ); err != nil { return err }
-    }
-    return nil
-}
+    f func( *Identifier, Value ) error ) error {
 
-func ( m *SymbolMap ) EachPair( v func( *Identifier, Value ) ) {
-    m.EachPairError( func( fld *Identifier, val Value ) error {
-        v( fld, val )
-        return nil
+    return m.m.EachPairError( func( fld *Identifier, val interface{} ) error {
+        return f( fld, val.( Value ) )
     })
 }
 
-func ( m *SymbolMap ) GetKeys() []*Identifier {
-    res := make( []*Identifier, m.Len() )
-    for i, fe := range m.fields { res[ i ] = fe.id }
-    return res
+func ( m *SymbolMap ) EachPair( f func( *Identifier, Value ) ) {
+    m.m.EachPair( func( fld *Identifier, v interface{} ) {
+        f( fld, v.( Value ) )
+    })
 }
 
-// For small maps it may be faster to scan linearly; we can sample and measure
-// this down the line when optimizing that becomes necessary
-func ( m *SymbolMap ) getIndexOk( fld *Identifier ) ( idx int, ok bool ) {
-    f := func( i int ) bool { return m.fields[ i ].id.Compare( fld ) >= 0 }
-    idx = sort.Search( len( m.fields ), f )
-    ok = idx < len( m.fields ) && m.fields[ idx ].id.Equals( fld )
-    return
+func ( m *SymbolMap ) GetKeys() []*Identifier { return m.m.GetKeys() }
+
+func ( m *SymbolMap ) GetOk( fld *Identifier ) ( Value, bool ) {
+    if val, ok := m.m.GetOk( fld ); ok { return val.( Value ), true }
+    return nil, false
 }
-     
-func ( m *SymbolMap ) GetById( fld *Identifier ) Value {
-    if idx, ok := m.getIndexOk( fld ); ok { return m.fields[ idx ].val }
+
+func ( m *SymbolMap ) Get( fld *Identifier ) Value {
+    if val, ok := m.GetOk( fld ); ok { return val }
     return nil
 }
 
-func ( m *SymbolMap ) HasField( fld *Identifier ) bool {
-    _, ok := m.getIndexOk( fld )
-    return ok
+func ( m *SymbolMap ) HasKey( fld *Identifier ) bool {
+    return m.m.HasKey( fld )
 }
 
-func ( m *SymbolMap ) Set( fld *Identifier, val Value ) {
-    idx, ok := m.getIndexOk( fld )
-    fe := fieldEntry{ id: fld, val: val }
-    if ok { m.fields[ idx ] = fe } else { m.fields = append( m.fields, fe ) }
-}
+func ( m *SymbolMap ) Put( fld *Identifier, val Value ) { m.m.Put( fld, val ) }
 
-type MapLiteralError struct {
-    msg string
-}
+type MapLiteralError struct { msg string }
 
 func ( e *MapLiteralError ) Error() string { return e.msg } 
 
-func mapLiteralError( fmtStr string, args ...interface{} ) *MapLiteralError {
+func mapLiteralErrorf( fmtStr string, args ...interface{} ) *MapLiteralError {
     return &MapLiteralError{ fmt.Sprintf( fmtStr, args... ) }
 }
 
 func makePairError( err error, indx int ) error {
-    return mapLiteralError( "Error in map literal pairs at index %d: %s",
+    return mapLiteralErrorf( "error in map literal pairs at index %d: %s",
         indx, err )
 }
 
-func fieldEntryFromPair(
-    pairs []interface{}, indx int ) ( *fieldEntry, error ) {
-    var key *Identifier
-    var val Value
-    var err error
-    keyIndx, valIndx := indx, indx + 1
-    if key, err = asIdentifier( pairs[ keyIndx ] ); err != nil { 
-        return nil, makePairError( err, keyIndx )
+func createSymbolMapEntry( 
+    pairs []interface{}, idx int ) ( fld *Identifier, val Value, err error ) {
+
+    fldIdx, valIdx := idx, idx + 1
+    if fld, err = asIdentifier( pairs[ fldIdx ] ); err != nil { 
+        err = makePairError( err, fldIdx )
+        return
     }
-    if val, err = AsValue( pairs[ valIndx ] ); err != nil { 
-        return nil, makePairError( err, valIndx )
+    if val, err = AsValue( pairs[ valIdx ] ); err != nil { 
+        err = makePairError( err, valIdx )
+        return
     }
-    return &fieldEntry{ id: key, val: val }, nil
-}
-
-type fieldSorter []fieldEntry
-
-func ( fs fieldSorter ) Len() int { return len( fs ) }
-
-func ( fs fieldSorter ) Less( i, j int ) bool {
-    return fs[ i ].id.Compare( fs[ j ].id ) < 0
-}
-
-func ( fs fieldSorter ) Swap( i, j int ) { fs[ i ], fs[ j ] = fs[ j ], fs[ i ] }
-
-func makeSymbolMap( flds []fieldEntry ) ( *SymbolMap, error ) {
-    sort.Sort( fieldSorter( flds ) )
-    var curId *Identifier
-    for _, e := range flds {
-        if curId == nil || curId.Compare( e.id ) < 0 {
-            curId = e.id 
-        } else {
-            return nil, mapLiteralError( "Multiple entries for key: %s", curId )
-        }
-    }
-    return &SymbolMap{ flds }, nil
+    return
 }
 
 func CreateSymbolMap( pairs ...interface{} ) ( m *SymbolMap, err error ) {
     if pLen := len( pairs ); pLen % 2 == 1 { 
-        return nil, mapLiteralError( "Invalid pairs len: %d", pLen )
+        err = mapLiteralErrorf( "invalid pairs len: %d", pLen )
     } else { 
-        flds := make( []fieldEntry, 0, pLen / 2 )
+        m = NewSymbolMap()
+        var fld *Identifier
+        var val Value
         for i := 0; i < pLen; i += 2 {
-            var e *fieldEntry
-            if e, err = fieldEntryFromPair( pairs, i ); err == nil {
-                flds = append( flds, *e )
-            } else { return }
+            fld, val, err = createSymbolMapEntry( pairs, i )
+            if err != nil { return }
+            if m.HasKey( fld ) {
+                tmpl := "duplicate entry for '%s' starting at index %d"
+                err = mapLiteralErrorf( tmpl, fld, i )
+                return
+            }
+            m.Put( fld, val )
         }
-        m, err = makeSymbolMap( flds )
     }
     return
 }
@@ -1008,7 +973,7 @@ func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
 func ( acc *SymbolMapAccessor ) GetValueById( 
     id *Identifier ) ( Value, error ) {
 
-    if val := acc.m.GetById( id ); val != nil { return val, nil }
+    if val := acc.m.Get( id ); val != nil { return val, nil }
     return nil, NewValueCastError( acc.descend( id ), "value is null" )
 }
 
@@ -1418,181 +1383,6 @@ func NewEndpointErrorOperation(
     op *Identifier, p objpath.PathNode ) *EndpointError {
     return newEndpointError( "operation", op, p )
 }
-
-type mapImplKey interface { ExternalForm() string }
-
-type mapImplEntry struct { 
-    key mapImplKey
-    val interface{} 
-}
-
-type mapImpl struct {
-    m map[ string ]mapImplEntry
-}
-
-func newMapImpl() *mapImpl { 
-    return &mapImpl{ make( map[ string ]mapImplEntry ) }
-}
-
-func ( m *mapImpl ) Len() int { return len( m.m ) }
-
-func ( m *mapImpl ) implGetOk( k mapImplKey ) ( interface{}, bool ) {
-    res, ok := m.m[ k.ExternalForm() ]
-    if ok { return res.val, ok }
-    return nil, false
-}
-
-func ( m *mapImpl ) implGet( k mapImplKey ) interface{} {
-    if val, ok := m.implGetOk( k ); ok { return val }
-    return nil
-}
-
-func ( m *mapImpl ) implHasKey( k mapImplKey ) bool {
-    return m.implGet( k ) != nil
-}
-
-func ( m *mapImpl ) implPut( k mapImplKey, v interface{} ) {
-    m.m[ k.ExternalForm() ] = mapImplEntry{ k, v }
-}
-
-func ( m *mapImpl ) implPutSafe( k mapImplKey, v interface{} ) error {
-    kStr := k.ExternalForm()
-    if _, ok := m.m[ kStr ]; ok {
-        tmpl := "mingle: map already contains an entry for key: %s"
-        return fmt.Errorf( tmpl, kStr )
-    } 
-    m.implPut( k, v )
-    return nil
-}
-
-func ( m *mapImpl ) implDelete( k mapImplKey ) {
-    delete( m.m, k.ExternalForm() )
-}
-
-func ( m *mapImpl ) implEachPairError(
-    f func( k mapImplKey, val interface{} ) error ) error {
-    for _, entry := range m.m { 
-        if err := f( entry.key, entry.val ); err != nil { return err }
-    }
-    return nil
-}
-
-func ( m *mapImpl ) implEachPair( f func( k mapImplKey, val interface{} ) ) {
-    m.implEachPairError( func( k mapImplKey, val interface{} ) error {
-        f( k, val )
-        return nil
-    })
-}
-
-type IdentifierMap struct { *mapImpl }
-
-func NewIdentifierMap() *IdentifierMap { return &IdentifierMap{ newMapImpl() } }
-
-func ( m *IdentifierMap ) GetKeys() []*Identifier {
-    res := make( []*Identifier, 0, m.Len() )
-    m.EachPair( func( k *Identifier, _ interface{} ) {
-        res = append( res, k )
-    })
-    return res
-}
-
-func ( m *IdentifierMap ) GetOk( id *Identifier ) ( interface{}, bool ) {
-    return m.implGetOk( id )
-}
-
-func ( m *IdentifierMap ) Get( id *Identifier ) interface{} {
-    return m.implGet( id )
-}
-
-func ( m *IdentifierMap ) HasKey( id *Identifier ) bool {
-    return m.implHasKey( id )
-}
-
-func ( m *IdentifierMap ) Delete( id *Identifier ) { m.implDelete( id ) }
-
-func ( m *IdentifierMap ) Put( id *Identifier, val interface{} ) {
-    m.implPut( id, val )
-}
-
-func ( m *IdentifierMap ) PutSafe( id *Identifier, val interface{} ) error {
-    return m.implPutSafe( id, val )
-}
-
-func ( m *IdentifierMap ) EachPairError( 
-    f func( id *Identifier, val interface{} ) error ) error {
-    return m.implEachPairError(
-        func( k mapImplKey, val interface{} ) error {
-            return f( k.( *Identifier ), val )
-        },
-    )
-}
-
-func ( m *IdentifierMap ) EachPair( 
-    f func( id *Identifier, val interface{} ) ) {
-    m.implEachPair(
-        func( k mapImplKey, val interface{} ) { f( k.( *Identifier ), val ) } )
-}
-
-type QnameMap struct { *mapImpl }
-
-func NewQnameMap() *QnameMap { return &QnameMap{ newMapImpl() } }
-
-func ( m *QnameMap ) GetOk( qn *QualifiedTypeName ) ( interface{}, bool ) {
-    return m.implGetOk( qn )
-}
-
-func ( m *QnameMap ) Get( qn *QualifiedTypeName ) interface{} {
-    return m.implGet( qn )
-}
-
-func ( m *QnameMap ) HasKey( qn *QualifiedTypeName ) bool {
-    return m.implHasKey( qn )
-}
-
-func ( m *QnameMap ) Put( qn *QualifiedTypeName, val interface{} ) {
-    m.implPut( qn, val )
-}
-
-func ( m *QnameMap ) PutSafe( qn *QualifiedTypeName, val interface{} ) error {
-    return m.implPutSafe( qn, val )
-}
-
-func ( m *QnameMap ) Delete( qn *QualifiedTypeName ) { m.implDelete( qn ) }
-
-func ( m *QnameMap ) EachPair( 
-    f func( qn *QualifiedTypeName, val interface{} ) ) {
-    m.implEachPair( 
-        func( k mapImplKey, v interface{} ) {
-            f( k.( *QualifiedTypeName ), v )
-        },
-    )
-}
-
-type NamespaceMap struct { *mapImpl }
-
-func NewNamespaceMap() *NamespaceMap { return &NamespaceMap{ newMapImpl() } }
-
-func ( m *NamespaceMap ) GetOk( ns *Namespace ) ( interface{}, bool ) {
-    return m.implGetOk( ns )
-}
-
-func ( m *NamespaceMap ) Get( ns *Namespace ) interface{} {
-    return m.implGet( ns )
-}
-
-func ( m *NamespaceMap ) HasKey( ns *Namespace ) bool {
-    return m.implHasKey( ns )
-}
-
-func ( m *NamespaceMap ) Put( ns *Namespace, val interface{} ) {
-    m.implPut( ns, val )
-}
-
-func ( m *NamespaceMap ) PutSafe( ns *Namespace, val interface{} ) error {
-    return m.implPutSafe( ns, val )
-}
-
-func ( m *NamespaceMap ) Delete( ns *Namespace ) { m.implDelete( ns ) }
 
 //type svcIdMapKey struct {
 //    ns *Namespace

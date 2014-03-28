@@ -165,7 +165,7 @@ func assertMapLiteralError(
 func TestCreateSymbolMapErrorBadKey( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Error in map literal pairs at index 2: Unhandled id initializer: 1",
+        "error in map literal pairs at index 2: Unhandled id initializer: 1",
         func() ( interface{}, error ) {
             return CreateSymbolMap( "goodKey", "goodVal", 1, "valForBadKey" )
         },
@@ -175,7 +175,7 @@ func TestCreateSymbolMapErrorBadKey( t *testing.T ) {
 func TestCreateSymbolMapErrorBadval( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Error in map literal pairs at index 1: " +
+        "error in map literal pairs at index 1: " +
             "inVal: Unhandled mingle value &{} (*mingle.notAMingleValue)",
         func() ( interface{}, error ) {
             return CreateSymbolMap( "goodKey", &notAMingleValue{} )
@@ -186,7 +186,7 @@ func TestCreateSymbolMapErrorBadval( t *testing.T ) {
 func TestCreateSymbolMapOddPairLen( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Invalid pairs len: 3",
+        "invalid pairs len: 3",
         func() ( interface{}, error ) {
             return CreateSymbolMap( "f1", "v1", "f2" )
         },
@@ -196,7 +196,7 @@ func TestCreateSymbolMapOddPairLen( t *testing.T ) {
 func TestCreateSymbolMapDuplicateKeyError( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Multiple entries for key: f1",
+        "duplicate entry for 'f1' starting at index 4",
         func() ( interface{}, error ) {
             return CreateSymbolMap( "f1", "v1", "f2", 1, "f1", "v2" )
         },
@@ -207,7 +207,7 @@ func TestExpectSymbolMapPanic( t *testing.T ) {
     assert.AssertPanic(
         func() { MustSymbolMap( 1, "bad" ) },
         func( err interface{} ) {
-            msg := "Error in map literal pairs at index 0: Unhandled id " +
+            msg := "error in map literal pairs at index 0: Unhandled id " +
                    "initializer: 1"
             assert.Equal( msg, err.( *MapLiteralError ).Error() )
         },
@@ -269,17 +269,17 @@ func TestExpectListPanic( t *testing.T ) {
 func TestEmptySymbolMap( t *testing.T ) {
     m := MustSymbolMap()
     assert.Equal( 0, m.Len() )
-    assert.Equal( nil, m.GetById( MustIdentifier( "f1" ) ) )
+    assert.Equal( nil, m.Get( MustIdentifier( "f1" ) ) )
 }
 
-// Test base coverage of GetByString, GetById handling of a value that is
+// Test base coverage of GetByString, Get handling of a value that is
 // present and one that is not; more type-specific coverage is in
 // TestSymbolMapTypedAccessors
 func TestSymbolMapGettersBase( t *testing.T ) {
     m := MustSymbolMap( "f1", "val1" )
     assert.Equal( 
-        String( "val1" ), m.GetById( MustIdentifier( "f1" ) ).( String ) )
-    assert.Equal( nil, m.GetById( MustIdentifier( "f2" ) ) )
+        String( "val1" ), m.Get( MustIdentifier( "f1" ) ).( String ) )
+    assert.Equal( nil, m.Get( MustIdentifier( "f2" ) ) )
 }
 
 func TestEmptySymbolMapEachPair( t *testing.T ) {
@@ -331,7 +331,7 @@ func TestSymbolMapEachPairError( t *testing.T ) {
 func TestCreateStructError( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Invalid pairs len: 1",
+        "invalid pairs len: 1",
         func() ( interface{}, error ) {
             return CreateStruct( "ns1@v1/T1", "missingVal" )
         },
@@ -343,7 +343,7 @@ func TestExpectStructError( t *testing.T ) {
         func() { MustStruct( "ns1@v1/T1", "missingVal" ) },
         func( err interface{} ) {
             assert.Equal(
-                "Invalid pairs len: 1", 
+                "invalid pairs len: 1", 
                 err.( *MapLiteralError ).Error(),
             )
         },

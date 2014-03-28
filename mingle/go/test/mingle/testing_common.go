@@ -73,11 +73,11 @@ func checkEqualMaps(
 
     act, ok := actVal.( *SymbolMap )
     a.Truef( ok, "not a map: %T", actVal )
-    expctKeys, actKeys := expct.GetKeys(), act.GetKeys()
+    expctKeys, actKeys := SortIds( expct.GetKeys() ), SortIds( act.GetKeys() )
     a.Equalf( expctKeys, actKeys, "expected fields %s, got %s",
         idSliceToString( expctKeys ), idSliceToString( actKeys ) )
     for _, fld := range expctKeys {
-        fldValExpct, fldValAct := expct.GetById( fld ), act.GetById( fld )
+        fldValExpct, fldValAct := expct.Get( fld ), act.Get( fld )
         checkEqualValues( fldValExpct, fldValAct, a.Descend( fld ), chkMap )
     }
 }
