@@ -56,7 +56,6 @@ type BinIoRoundtripTest struct {
 func ( t *BinIoRoundtripTest ) AssertWriteValue( 
     rd *BinReader, a *assert.PathAsserter ) {
 
-    a.Logf( "asserting write for %s", t.Name )
     assertWriteValue( rd, t.Val, a )
 }
 

@@ -89,7 +89,8 @@ func TestValueTypeErrorFormatting( t *testing.T ) {
 // Int32(...) } ) we'll add coverage for those here. for now we just have
 // coverage that *ValuePointers are recognized and returned
 func assertAsValuePointers( t *testing.T ) {
-    assert.Equal( NewValuePointer( Int32( 1 ) ), NewValuePointer( Int32( 1 ) ) )
+    v1 := NewValuePointer( Int32( 1 ) )
+    assert.Equal( v1, v1 )
 }
 
 func TestAsValue( t *testing.T ) {
@@ -408,13 +409,18 @@ func TestTypeOf( t *testing.T ) {
 
 func TestAtomicTypeIn( t *testing.T ) {
     str := "ns1@v1/T1"
-    typ := MustTypeReference( str )
-    for _, ext := range []string{ "", "?", "*", "+", "**+", "*+?++" } {
-        typ2 := MustTypeReference( str + ext )
-        assert.True( typ.Equals( AtomicTypeIn( typ2 ) ) )
+    at := MustTypeReference( str )
+    chk := func( tmpl string ) {
+        typ := MustTypeReference( fmt.Sprintf( tmpl, str ) )
+        assert.True( at.Equals( AtomicTypeIn( typ ) ) )
         assert.True( 
-            typ.Equals( AtomicTypeIn( NewPointerTypeReference( typ2 ) ) ) )
+            at.Equals( AtomicTypeIn( NewPointerTypeReference( typ ) ) ) )
     }
+    for _, tmpl := range []string{ "%s", "%s*", "%s+", "%s**+", "%s*+?++" } {
+        chk( tmpl )
+    }
+    chk( "&%s" )
+    chk( "&%s?" )
 }
 
 func TestResolveInCore( t *testing.T ) {
@@ -828,12 +834,12 @@ func TestTypeReferenceEquals( t *testing.T ) {
     }
     at1Rng := &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }
     at2 := &AtomicTypeReference{ Name: qn2 }
-    nt1 := MustNullableTypeReference( at1 )
-    nt2 := MustNullableTypeReference( at2 )
     lt1Empty := &ListTypeReference{ ElementType: at1, AllowsEmpty: true }
     lt1NonEmpty := &ListTypeReference{ ElementType: at1, AllowsEmpty: false }
     pt1 := NewPointerTypeReference( at1 )
     pt2 := NewPointerTypeReference( at2 )
+    nt1 := MustNullableTypeReference( pt1 )
+    nt2 := MustNullableTypeReference( pt2 )
     chk( at1, at1, true )
     chk( at1, &AtomicTypeReference{ Name: qn1 }, true )
     chk( at1, at2, false )
@@ -859,10 +865,6 @@ func TestTypeReferenceEquals( t *testing.T ) {
         &ListTypeReference{ ElementType: at2, AllowsEmpty: true }, false )
     chk( lt1Empty, 
         &ListTypeReference{ ElementType: lt1Empty, AllowsEmpty: true }, false )
-    chk( nt1, nt1, true )
-    chk( nt1, MustNullableTypeReference( at1 ), true )
-    chk( nt1, nt2, false )
-    chk( nt1, lt1Empty, false )
     chk( pt1, pt1, true )
     chk( pt1, NewPointerTypeReference( at1 ), true )
     chk( pt1, pt2, false )
@@ -871,4 +873,8 @@ func TestTypeReferenceEquals( t *testing.T ) {
     chk( pt1, NewPointerTypeReference( nt1 ), false )
     chk( NewPointerTypeReference( lt1Empty ), 
         NewPointerTypeReference( lt1Empty ), true )
+    chk( nt1, nt1, true )
+    chk( nt1, MustNullableTypeReference( pt1 ), true )
+    chk( nt1, nt2, false )
+    chk( nt1, lt1Empty, false )
 }

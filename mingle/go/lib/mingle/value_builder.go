@@ -2,7 +2,7 @@ package mingle
 
 import (
     "bitgirder/stack"
-    "log"
+//    "log"
 )
 
 type accImpl interface {
@@ -148,7 +148,6 @@ func ( va *valueAccumulator ) pointerReferenced(
 }
 
 func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
-    log.Printf( "processing %s", EventToString( ev ) )
     switch v := ev.( type ) {
     case *ValueEvent: va.valueReady( v.Val )
     case *ListStartEvent: va.pushAcc( newListAcc() )

@@ -65,6 +65,35 @@ func checkDirectlyEqual( expct, act Value, a *assert.PathAsserter ) {
         QuoteValue( expct ), expct, QuoteValue( act ), act )
 }
 
+func checkEqualMaps(
+    expct *SymbolMap,
+    actVal Value,
+    a *assert.PathAsserter,
+    chkMap valPtrCheckMap ) {
+
+    act, ok := actVal.( *SymbolMap )
+    a.Truef( ok, "not a map: %T", actVal )
+    expctKeys, actKeys := expct.GetKeys(), act.GetKeys()
+    a.Equalf( expctKeys, actKeys, "expected fields %s, got %s",
+        idSliceToString( expctKeys ), idSliceToString( actKeys ) )
+    for _, fld := range expctKeys {
+        fldValExpct, fldValAct := expct.GetById( fld ), act.GetById( fld )
+        checkEqualValues( fldValExpct, fldValAct, a.Descend( fld ), chkMap )
+    }
+}
+
+func checkEqualStructs( 
+    expct *Struct, 
+    actVal Value, 
+    a *assert.PathAsserter, 
+    chkMap valPtrCheckMap ) {
+
+    act, ok := actVal.( *Struct )
+    a.Truef( ok, "not a struct: %T", actVal )
+    a.Descend( "$type" ).Equal( expct.Type, act.Type )
+    checkEqualMaps( expct.Fields, act.Fields, a, chkMap )
+}
+
 func checkEqualValues( 
     expct, act Value, a *assert.PathAsserter, chkMap valPtrCheckMap ) {
 
@@ -72,6 +101,8 @@ func checkEqualValues(
     case Timestamp: checkEqualTimestamps( v, act, a )
     case *ValuePointer: checkEqualValuePointers( v, act, a, chkMap )
     case *List: checkEqualLists( v, act, a, chkMap )
+    case *Struct: checkEqualStructs( v, act, a, chkMap )
+    case *SymbolMap: checkEqualMaps( v, act, a, chkMap )
     default: checkDirectlyEqual( expct, act, a )
     }
 }

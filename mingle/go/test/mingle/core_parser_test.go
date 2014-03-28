@@ -504,12 +504,17 @@ func TestTypeReferenceRestrictionSyntax( t *testing.T ) {
 }
 
 func TestTypeReferenceStringer( t *testing.T ) {
-    for _, quant := range []string{ "", "*", "+", "?", "*++" } {
-        expct := "ns1@v1/T1" + quant
-        ref := MustTypeReference( expct )
-        assert.Equal( expct, ref.String() )
-        assert.Equal( expct, ref.ExternalForm() )
+    chk := func( extForm string ) {
+        ref := MustTypeReference( extForm )
+        assert.Equal( extForm, ref.String() )
+        assert.Equal( extForm, ref.ExternalForm() )
     }
+    for _, quant := range []string{ "", "*", "+", "*++" } {
+        chk( "ns1@v1/T1" + quant )
+    }
+    chk( "&ns1@v1/T1" )
+    chk( "&ns1@v1/T1?" )
+    chk( "&ns1@v1/T1?**+" )
 }
 
 func TestMustTypeReferencePanic( t *testing.T ) {

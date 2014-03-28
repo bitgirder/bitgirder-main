@@ -882,6 +882,12 @@ func ( m *SymbolMap ) EachPair( v func( *Identifier, Value ) ) {
     })
 }
 
+func ( m *SymbolMap ) GetKeys() []*Identifier {
+    res := make( []*Identifier, m.Len() )
+    for i, fe := range m.fields { res[ i ] = fe.id }
+    return res
+}
+
 // For small maps it may be faster to scan linearly; we can sample and measure
 // this down the line when optimizing that becomes necessary
 func ( m *SymbolMap ) getIndexOk( fld *Identifier ) ( idx int, ok bool ) {
@@ -1335,11 +1341,14 @@ func NewMissingFieldsError(
     return &MissingFieldsError{ impl: ValueErrorImpl{ path }, flds: flds2 }
 }
 
+func idSliceToString( flds []*Identifier ) string {
+    strs := make( []string, len( flds ) )
+    for i, fld := range flds { strs[ i ] = fld.ExternalForm() }
+    return strings.Join( strs, ", " )
+}
+
 func ( e *MissingFieldsError ) Message() string {
-    strs := make( []string, len( e.flds ) )
-    for i, fld := range e.flds { strs[ i ] = fld.ExternalForm() }
-    fldsStr := strings.Join( strs, ", " )
-    return fmt.Sprintf( "missing field(s): %s", fldsStr )
+    return fmt.Sprintf( "missing field(s): %s", idSliceToString( e.flds ) )
 }
 
 func ( e *MissingFieldsError ) Error() string {
@@ -1478,6 +1487,14 @@ func ( m *mapImpl ) implEachPair( f func( k mapImplKey, val interface{} ) ) {
 type IdentifierMap struct { *mapImpl }
 
 func NewIdentifierMap() *IdentifierMap { return &IdentifierMap{ newMapImpl() } }
+
+func ( m *IdentifierMap ) GetKeys() []*Identifier {
+    res := make( []*Identifier, 0, m.Len() )
+    m.EachPair( func( k *Identifier, _ interface{} ) {
+        res = append( res, k )
+    })
+    return res
+}
 
 func ( m *IdentifierMap ) GetOk( id *Identifier ) ( interface{}, bool ) {
     return m.implGetOk( id )
