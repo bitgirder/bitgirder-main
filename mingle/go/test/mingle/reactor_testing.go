@@ -73,6 +73,16 @@ func MakeTestIdPath( elts ...interface{} ) objpath.PathNode {
     return res
 }
 
+func ptrId( i int ) PointerId { return PointerId( uint64( i ) ) }
+
+func ptrAlloc( i int ) *ValuePointerAllocEvent {
+    return NewValuePointerAllocEvent( ptrId( i ) )
+}
+
+func ptrRef( i int ) *ValuePointerReferenceEvent {
+    return NewValuePointerReferenceEvent( ptrId( i ) )
+}
+
 type BuiltValueCheck string
 
 const (
@@ -263,13 +273,6 @@ type PointerEventCheckTest struct {
 
 func initPointerReferenceCheckTests() {
     id, p := MakeTestId, MakeTestIdPath
-    ptrId := func( i int ) PointerId { return PointerId( uint64( i ) ) }
-    ptrAlloc := func( i int ) *ValuePointerAllocEvent {
-        return NewValuePointerAllocEvent( ptrId( i ) )
-    }
-    ptrRef := func( i int ) *ValuePointerReferenceEvent {
-        return NewValuePointerReferenceEvent( ptrId( i ) )
-    }
     add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
         AddStdReactorTests(
             &PointerEventCheckTest{
@@ -1567,6 +1570,12 @@ func ( t *crtInit ) addVcError(
     t.addVcError0( val, typ, crtPathDefault, msg )
 }
 
+const (
+    testPtrRefInt64 = iota + 1
+    testPtrRefS1 
+    testPtrRefS2 
+)
+
 func ( t *crtInit ) addMiscVcErrors() {
     t.addVcError( "s", TypeBoolean, `Invalid boolean value: "s"` )
     t.addVcError( nil, TypeString, "Value is null" )
@@ -1580,6 +1589,41 @@ func ( t *crtInit ) addMiscVcErrors() {
     )
 }
 
+func ( t *crtInit ) addPtrRefSucc(
+    typExpct TypeReferenceInitializer, valExpct Value, evs ...ReactorEvent ) {
+
+    AddStdReactorTests(
+        &CastReactorTest{
+            Expect: valExpct,
+            In: CopySource( evs ),
+            Type: asTypeReference( typExpct ),
+        },
+    )
+}
+
+func ( t *crtInit ) addPtrRefFail0(
+    typExpct, typAct TypeReferenceInitializer, 
+    path objpath.PathNode,
+    evs ...ReactorEvent ) {
+    
+    expct, act := asTypeReference( typExpct ), asTypeReference( typAct )
+    AddStdReactorTests(
+        &CastReactorTest{
+            In: CopySource( evs ),
+            Type: expct,
+            Path: path,
+            Err: NewValueCastErrorf( crtPathDefault,
+                "expected %s but got a reference to %s", expct, act ),
+        },
+    )
+}
+
+func ( t *crtInit ) addPtrRefFail( 
+    typExpct, typAct TypeReferenceInitializer, evs ...ReactorEvent ) {
+
+    t.addPtrRefFail0( typExpct, typAct, crtPathDefault, evs... )
+}
+
 func ( t *crtInit ) addMiscPointerTests() {
     val := Int32( 1 )
     ptr1 := NewValuePointer( val )
@@ -1590,17 +1634,31 @@ func ( t *crtInit ) addMiscPointerTests() {
     t.addSucc( ptr2, val, "Int32" )
     t.addSucc( ptr2, ptr1, "&Int32" )
     t.addVcError( NewValuePointer( Int64( 1 ) ), "&Uint64", "&Int64" )
-    AddStdReactorTests(
-        &CastReactorTest{
-            In: []ReactorEvent{
-                NewValuePointerReferenceEvent( PointerId( uint64( 1 ) ) ),
-            },
-            Type: asTypeReference( "&Int64" ),
-            Path: crtPathDefault,
-            Err: NewValueCastErrorf( crtPathDefault, 
-                "got reference to &Int64 while expecting &Uint64" ),
-        },
-    )
+    s1 := MustStruct( "ns1@v1/S1" )
+    s1Ptr := NewValuePointer( s1 )
+    s1Ptr.Id = ptrId( testPtrRefS1 )
+    t.addPtrRefSucc( "ns1@v1/S1", s1Ptr, ptrRef( testPtrRefS1 ) )
+    t.addPtrRefSucc( "&ns1@v1/S1", s1Ptr, ptrRef( testPtrRefS1 ) )
+    listSucc1 := func( typ string, act Value ) {
+        t.addPtrRefSucc( typ, act,
+            NewListStartEvent(),
+                ptrRef( testPtrRefS1 ), ptrRef( testPtrRefS1 ),
+                NewEndEvent(),
+        )
+    }
+    listSucc1( "&ns1@v1/S1*", MustList( s1Ptr, s1Ptr ) )
+    listSucc1( "ns1@v1/S1*", MustList( s1, s1 ) )
+    t.addPtrRefFail( "&Uint64", "&Int64", ptrRef( testPtrRefInt64 ) )
+    t.addPtrRefFail( "&ns1@v1/S1", "&ns1@v1/S2", ptrRef( testPtrRefS2 ) )
+    t.addPtrRefFail( "ns1@v1/S1", "&ns1@v1/S2", ptrRef( testPtrRefS2 ) )
+    listFail1 := func( pref string ) {
+        t.addPtrRefFail0( pref + "ns1@v1/S1*", "&ns1@v1/S2",
+            MakeTestIdPath( "1" ),
+            NewListStartEvent(), ptrRef( testPtrRefS1 ), ptrRef( testPtrRefS2 ),
+        )
+    }
+    listFail1( "" )
+    listFail1( "&" )
 }
 
 func ( t *crtInit ) addStringTests() {
