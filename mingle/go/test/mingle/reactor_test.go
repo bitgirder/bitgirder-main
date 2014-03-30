@@ -35,9 +35,11 @@ func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
 
 func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
     rct := NewValueBuilder()
-    pip := InitReactorPipeline( rct )
+    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
     if err := VisitValue( vb.Val, pip ); err == nil {
-        c.Equal( vb.Val, rct.GetValue() )
+        c.Logf( "vb expct: %s, act: %s", QuoteValue( vb.Val ),
+            QuoteValue( rct.GetValue() ) )
+        EqualWireValues( vb.Val, rct.GetValue(), c.PathAsserter )
         if chks := vb.Checks; chks != nil {
             for _, chk := range chks {
                 c.Fatalf( "unhandled value check: %s", chk )
@@ -407,26 +409,27 @@ func ( c *ReactorTestCall ) callResponse(
 func ( c *ReactorTestCall ) call() {
 //    c.Logf( "Calling reactor test of type %T", c.Test )
     switch s := c.Test.( type ) {
-    case *StructuralReactorErrorTest: c.callStructuralError( s )
+//    case *StructuralReactorErrorTest: c.callStructuralError( s )
     case ValueBuildTest: c.callValueBuild( s )
-    case *EventPathTest: c.callEventPath( s )
-    case *FieldOrderReactorTest: c.callFieldOrderReactor( s )
-    case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
-    case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
-    case *CastReactorTest: c.callCast( s )
-    case *RequestReactorTest: c.callRequest( s )
-    case *ResponseReactorTest: c.callResponse( s )
-    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
+//    case *EventPathTest: c.callEventPath( s )
+//    case *FieldOrderReactorTest: c.callFieldOrderReactor( s )
+//    case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
+//    case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
+//    case *CastReactorTest: c.callCast( s )
+//    case *RequestReactorTest: c.callRequest( s )
+//    case *ResponseReactorTest: c.callResponse( s )
+//    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
+    default: c.Logf( "skipping %T", s )
     }
 }
 
 func TestReactors( t *testing.T ) {
-//    a := assert.NewPathAsserter( t )
-//    la := a.StartList();
-//    for _, rt := range StdReactorTests {
-//        ta := la
-//        if nt, ok := rt.( NamedTest ); ok { ta = a.Descend( nt.TestName() ) }
-//        ( &ReactorTestCall{ PathAsserter: ta, Test: rt } ).call()
-//        la = la.Next()
-//    }
+    a := assert.NewPathAsserter( t )
+    la := a.StartList();
+    for _, rt := range StdReactorTests {
+        ta := la
+        if nt, ok := rt.( NamedTest ); ok { ta = a.Descend( nt.TestName() ) }
+        ( &ReactorTestCall{ PathAsserter: ta, Test: rt } ).call()
+        la = la.Next()
+    }
 }

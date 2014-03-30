@@ -837,24 +837,29 @@ func MustValue( inVal interface{} ) Value {
     return val
 }
 
-type List struct {
-    vals []Value
-}
+type List struct { vals []Value }
 
-var constEmptyList = &List{ []Value{} }
-func EmptyList() *List { return constEmptyList }
+func NewList( vals []Value ) *List { return &List{ vals } }
+
+// returns a list starting with size sz; calls to Add() will grow the list
+func MakeList( sz int ) *List { return NewList( make( []Value, sz ) ) }
+
+// if we allow immutable lists later we can have this return a fixed immutable
+// empty instance
+func EmptyList() *List { return NewList( []Value{} ) }
 
 func ( l *List ) Add( val Value ) { l.vals = append( l.vals, val ) }
 
 func ( l *List ) valImpl() {}
 
+// returned slice is live at least as long as the next call to l.Add()
 func ( l *List ) Values() []Value { return l.vals }
 
 func ( l *List ) Get( idx int ) Value { return l.vals[ idx ] }
 
-func ( l *List ) Len() int { return len( l.vals ) }
+func ( l *List ) Set( v Value, idx int ) { l.vals[ idx ] = v }
 
-func NewList( vals []Value ) *List { return &List{ vals } }
+func ( l *List ) Len() int { return len( l.vals ) }
 
 func CreateList( vals ...interface{} ) ( *List, error ) {
     sz := len( vals )

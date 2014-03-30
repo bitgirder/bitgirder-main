@@ -105,10 +105,17 @@ func initSelfReferenceValueBuildReactorTests() {
         )
     }
     qn := MustQualifiedTypeName
-    s1, s2 := NewStruct( qn( "ns1@v1/S1" ) ), NewStruct( qn( "ns1@v1/S2" ) )
-    s1Ref, s2Ref := NewValuePointer( s1 ), NewValuePointer( s2 )
+    mkStruct := func( i int ) ( *Struct, *ValuePointer ) {
+        res := NewStruct( qn( fmt.Sprintf( "ns1@v1/S%d", i ) ) )
+        resRef := NewValuePointer( res )
+        resRef.Id = ptrId( i )
+        return res, resRef
+    }
+    s1, s1Ref := mkStruct( 1 )
+    s2, s2Ref := mkStruct( 2 )
     s1.Fields.Put( MustIdentifier( "f1" ), s2Ref )
-    s1.Fields.Put( MustIdentifier( "self1" ), s1Ref )
+    s1.Fields.Put( MustIdentifier( "self1Ref" ), s1Ref )
+    s1.Fields.Put( MustIdentifier( "selfRef1Ref" ), NewValuePointer( s1Ref ) )
     s2.Fields.Put( MustIdentifier( "f2" ), s1Ref )
     s2.Fields.Put( MustIdentifier( "l1" ), MustList( s1Ref, s2Ref ) )
     addTest( s1Ref )
@@ -166,7 +173,7 @@ func initValueBuildReactorTests() {
     )
     valPtr1 := NewValuePointer( Int32( 1 ) )
     addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
-    initSelfReferenceValueBuildReactorTests()
+//    initSelfReferenceValueBuildReactorTests()
 }
 
 type StructuralReactorErrorTest struct {

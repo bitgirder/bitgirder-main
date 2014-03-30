@@ -39,7 +39,7 @@ func checkEqualValuePointers(
     chkMap valPtrCheckMap ) {
 
     act, ok := actVal.( *ValuePointer )
-    a.Truef( ok, "not a value pointer: %T", act )
+    a.Truef( ok, "not a value pointer: %T", actVal )
     if chkMap == nil { 
         checkDirectlyEqual( expct, act, a ) 
         return

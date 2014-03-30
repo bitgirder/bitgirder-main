@@ -2,45 +2,31 @@ package mingle
 
 import (
     "bitgirder/stack"
-//    "log"
+    "log"
 )
-
-type accImpl interface {
-    valueReady( val Value ) bool
-    value() Value
-}
 
 type valPtrAcc struct {
     id PointerId
-    val Value
+    val interface{}
+    valPtr *ValuePointer
 }
 
-func newValPtrAcc( id PointerId ) *valPtrAcc { return &valPtrAcc{ id: id } }
-
-func ( vp *valPtrAcc ) valueReady( val Value ) bool {
-    vp.val = val
-    return true
+type mapAccPair struct { 
+    fld *Identifier
+    val interface{}
 }
 
-func ( vp *valPtrAcc ) value() Value { return NewValuePointer( vp.val ) }
+type mapAcc struct { pairs []mapAccPair }
 
-type mapAcc struct {
-    arr []interface{} // alternating key, val to be passed to MustSymbolMap
-}
-
-func newMapAcc() *mapAcc {
-    return &mapAcc{ arr: make( []interface{}, 0, 8 ) }
-}
-
-func ( ma *mapAcc ) value() Value { return MustSymbolMap( ma.arr... ) }
+func newMapAcc() *mapAcc { return &mapAcc{ []mapAccPair{} } }
 
 func ( ma *mapAcc ) startField( fld *Identifier ) {
-    ma.arr = append( ma.arr, fld )
+    ma.pairs = append( ma.pairs, mapAccPair{ fld: fld } )
 }
 
-func ( ma *mapAcc ) valueReady( mv Value ) bool { 
-    ma.arr = append( ma.arr, mv ) 
-    return false
+func ( ma *mapAcc ) setValue( val interface{} ) {
+    pair := &( ma.pairs[ len( ma.pairs ) - 1 ] )
+    pair.val = val
 }
 
 type structAcc struct {
@@ -48,72 +34,132 @@ type structAcc struct {
     flds *mapAcc
 }
 
-func newStructAcc( typ *QualifiedTypeName ) *structAcc {
-    return &structAcc{ typ: typ, flds: newMapAcc() }
-}
+type listAcc struct { vals []interface{} }
 
-func ( sa *structAcc ) value() Value {
-    flds := sa.flds.value().( *SymbolMap )
-    return &Struct{ Type: sa.typ, Fields: flds }
-}
+func newListAcc() *listAcc { return &listAcc{ []interface{}{} } }
 
-func ( sa *structAcc ) valueReady( mv Value ) bool { 
-    return sa.flds.valueReady( mv ) 
-}
-
-type listAcc struct {
-    vals []Value
-}
-
-func newListAcc() *listAcc {
-    return &listAcc{ make( []Value, 0, 4 ) }
-}
-
-func ( la *listAcc ) value() Value { return NewList( la.vals ) }
-
-func ( la *listAcc ) valueReady( mv Value ) bool {
-    la.vals = append( la.vals, mv )
-    return false
+type valueAccFwdRefResolution struct {
+    f func( Value )
+    ref *valPtrAcc 
 }
 
 // Can make this public if needed
 type valueAccumulator struct {
     val Value
     accs *stack.Stack
-    refs map[ PointerId ] Value
+    resolvers []valueAccFwdRefResolution
+    refs map[ PointerId ] *valPtrAcc
 }
 
 func newValueAccumulator() *valueAccumulator {
     return &valueAccumulator{ 
         accs: stack.NewStack(), 
-        refs: make( map[ PointerId ] Value ),
+        refs: make( map[ PointerId ] *valPtrAcc ),
     }
 }
 
-func ( va *valueAccumulator ) pushAcc( acc accImpl ) {
-    va.accs.Push( acc )
+func ( va *valueAccumulator ) pushAcc( acc interface{} ) { va.accs.Push( acc ) }
+
+func ( va *valueAccumulator ) peekAcc() ( interface{}, bool ) {
+    return va.accs.Peek(), ! va.accs.IsEmpty()
 }
 
-func ( va *valueAccumulator ) peekAcc() ( accImpl, bool ) {
-    if va.accs.IsEmpty() { return nil, false }
-    return va.accs.Peek().( accImpl ), true
+func ( va *valueAccumulator ) acceptValue( acc, val interface{} ) bool {
+    log.Printf( "%T accepting %T", acc, val )
+    switch v := acc.( type ) {
+    case *valPtrAcc: v.val = val; return true
+    case *mapAcc: v.setValue( val ); return false
+    case *structAcc: v.flds.setValue( val ); return false
+    case *listAcc: v.vals = append( v.vals, val ); return false
+    }
+    panic( libErrorf( "unhandled acc: %T", acc ) )
 }
 
-func ( va *valueAccumulator ) popAcc() accImpl {
-    return va.accs.Pop().( accImpl )
+func ( va *valueAccumulator ) resolveRef( 
+    ref *valPtrAcc, f func( val Value ) ) {
+
+    res := valueAccFwdRefResolution{ f: f, ref: ref }
+    va.resolvers = append( va.resolvers, res )
+}
+
+func ( va *valueAccumulator ) valueOrFwdRef( 
+    val interface{} ) ( Value, *valPtrAcc ) {
+
+    switch v := val.( type ) {
+    case Value: return v, nil
+    case *valPtrAcc: return nil, v
+    }
+    panic( libErrorf( "not a value or a forward ref: %T", val ) )
+}
+
+func ( va *valueAccumulator ) valueForValuePtrAcc( pa *valPtrAcc ) Value {
+    val, fwdRef := va.valueOrFwdRef( pa.val )
+    pa.valPtr = NewValuePointer( val )
+    if fwdRef != nil {
+        va.resolveRef( fwdRef, func( v Value ) { pa.valPtr.Val = v } )
+    }
+    return pa.valPtr
+}
+
+func ( va *valueAccumulator ) valueForMapAcc( ma *mapAcc ) *SymbolMap {
+    res := NewSymbolMap()
+    for _, pair := range ma.pairs {
+        val, ref := va.valueOrFwdRef( pair.val )
+        if ref == nil {
+            res.Put( pair.fld, val )
+        } else {
+            va.resolveRef( ref, func( v Value ) { res.Put( pair.fld, v ) } )
+        }
+    }
+    return res
+}
+
+func ( va *valueAccumulator ) valueForListAcc( la *listAcc ) Value {
+    res := MakeList( len( la.vals ) )
+    for i, elt := range la.vals {
+        eltVal, eltRef := va.valueOrFwdRef( elt )
+        if eltRef == nil {
+            res.Set( eltVal, i )
+        } else {
+            var idxCapture = i
+            va.resolveRef( eltRef, func( v Value ) { 
+                log.Printf( "setting %v for res[ %d ]", v, idxCapture )
+                res.Set( v, idxCapture ) 
+            })
+        }
+    }
+    return res
+}    
+
+func ( va *valueAccumulator ) valueForAcc( acc interface{} ) Value {
+    switch v := acc.( type ) {
+    case *valPtrAcc: return va.valueForValuePtrAcc( v )
+    case *mapAcc: return va.valueForMapAcc( v )
+    case *structAcc:
+        return &Struct{ Type: v.typ, Fields: va.valueForMapAcc( v.flds ) }
+    case *listAcc: return va.valueForListAcc( v )
+    }
+    panic( libErrorf( "unhandled acc: %T", acc ) )
 }
 
 func ( va *valueAccumulator ) popAccValue() {
-    acc := va.popAcc()
-    val := acc.value()
-    if ptrAcc, ok := acc.( *valPtrAcc ); ok { va.refs[ ptrAcc.id ] = val }
-    va.valueReady( val )
+    va.valueReady( va.valueForAcc( va.accs.Pop() ) )
 }
 
-func ( va *valueAccumulator ) valueReady( val Value ) {
+func ( va *valueAccumulator ) resolveFwdRefs() {
+    for _, rslv := range va.resolvers { 
+        log.Printf( "apply resolver func to ref: %#v", rslv.ref )
+        rslv.f( rslv.ref.valPtr ) 
+    }
+}
+
+func ( va *valueAccumulator ) valueReady( val interface{} ) {
     if acc, ok := va.peekAcc(); ok {
-        if acc.valueReady( val ) { va.popAccValue() }
-    } else { va.val = val }
+        if va.acceptValue( acc, val ) { va.popAccValue() }
+    } else {
+        va.val = val.( Value )
+        va.resolveFwdRefs()
+    }
 }
 
 // Panics if result of val is not ready
@@ -124,24 +170,28 @@ func ( va *valueAccumulator ) getValue() Value {
 
 func ( va *valueAccumulator ) startField( fld *Identifier ) {
     acc, ok := va.peekAcc()
-    if ok {
-        var ma *mapAcc
-        switch v := acc.( type ) {
-        case *mapAcc: ma, ok = v, true
-        case *structAcc: ma, ok = v.flds, true
-        default: ok = false
-        }
-        if ok { ma.startField( fld ) }
+    if ! ok { panic( libErrorf( "got field start %s with empty stack", fld ) ) }
+    switch v := acc.( type ) {
+    case *mapAcc: v.startField( fld )
+    case *structAcc: v.flds.startField( fld )
+    default:
+        panic( libErrorf( "unexpected acc for start of field %s: %T", fld, v ) )
     }
 }
 
 func ( va *valueAccumulator ) end() { va.popAccValue() }
 
+func ( va *valueAccumulator ) pointerAlloced( id PointerId ) {
+    acc := &valPtrAcc{ id: id }
+    va.refs[ id ] = acc
+    va.pushAcc( acc )
+}
+
 func ( va *valueAccumulator ) pointerReferenced(
     vr *ValuePointerReferenceEvent ) error {
 
-    if val, ok := va.refs[ vr.Id ]; ok {
-        va.valueReady( val )
+    if valPtrAcc, ok := va.refs[ vr.Id ]; ok {
+        va.valueReady( valPtrAcc )
         return nil
     }
     return rctErrorf( vr.GetPath(), "unhandled value pointer ref: %d", vr.Id )
@@ -152,10 +202,11 @@ func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     case *ValueEvent: va.valueReady( v.Val )
     case *ListStartEvent: va.pushAcc( newListAcc() )
     case *MapStartEvent: va.pushAcc( newMapAcc() )
-    case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
+    case *StructStartEvent: 
+        va.pushAcc( &structAcc{ typ: v.Type, flds: newMapAcc() } )
     case *FieldStartEvent: va.startField( v.Field )
     case *EndEvent: va.end()
-    case *ValuePointerAllocEvent: va.pushAcc( newValPtrAcc( v.Id ) )
+    case *ValuePointerAllocEvent: va.pointerAlloced( v.Id )
     case *ValuePointerReferenceEvent: return va.pointerReferenced( v )
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
