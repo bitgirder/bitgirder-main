@@ -32,11 +32,11 @@ func typeRefToValue( t mg.TypeReference ) mg.Value {
 func sliceAsValue( s interface{} ) *mg.List {
     v := reflect.ValueOf( s )
     if v.Kind() != reflect.Slice { panic( fmt.Errorf( "not a slice: %T", s ) ) }
-    vals := make( []mg.Value, v.Len() )
+    res := mg.MakeList( v.Len() )
     for i, e := 0, v.Len(); i < e; i++ {
-        vals[ i ] = asValue( v.Index( i ).Interface() )
+        res.Add( asValue( v.Index( i ).Interface() ) )
     }
-    return mg.NewList( vals )
+    return res
 }
 
 type valueError interface {

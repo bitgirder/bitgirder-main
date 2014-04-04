@@ -15,7 +15,7 @@ func ptTyp( nm string ) *mg.QualifiedTypeName {
 func idListAsValue( ids []pt.Identifier ) *mg.List {
     vals := make( []mg.Value, len( ids ) )
     for i, val := range ids { vals[ i ] = asValue( val ) }
-    return mg.NewList( vals )
+    return mg.NewListValues( vals )
 }
 
 func numAsStruct( num *pt.NumericToken ) *mg.Struct {
@@ -33,16 +33,16 @@ func numAsStruct( num *pt.NumericToken ) *mg.Struct {
 }
 
 func idAsStruct( id pt.Identifier ) *mg.Struct {
-    vals := make( []mg.Value, len( id ) )
-    for i, part := range id { vals[ i ] = mg.String( part ) }
-    return mg.MustStruct( ptTyp( "Identifier" ), "parts", mg.NewList( vals ) )
+    l := mg.MakeList( len( id ) )
+    for i, part := range id { l.Add( mg.String( part ) ) }
+    return mg.MustStruct( ptTyp( "Identifier" ), "parts", l )
 }
 
 func nsAsStruct( ns *pt.Namespace ) *mg.Struct {
-    parts := make( []mg.Value, len( ns.Parts ) )
-    for i, part := range ns.Parts { parts[ i ] = asValue( part ) }
+    parts := mg.MakeList( len( ns.Parts ) )
+    for i, part := range ns.Parts { parts.Add( asValue( part ) ) }
     return mg.MustStruct( ptTyp( "Namespace" ),
-        "parts", mg.NewList( parts ),
+        "parts", parts,
         "version", asValue( ns.Version ),
     )
 }

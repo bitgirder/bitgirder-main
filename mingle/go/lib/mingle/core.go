@@ -505,62 +505,70 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
 
 type Value interface{ valImpl() }
 
-func appendQuotedList( buf *bytes.Buffer, l *List ) {
-    buf.WriteRune( '[' )
-    for i, val := range l.vals {
-        appendQuotedValue( buf, val )
-        if i < len( l.vals ) - 1 { buf.WriteString( ", " ) }
-    }
-    buf.WriteRune( ']' )
+type valueQuote struct {
+    buf *bytes.Buffer
+    refs map[ PointerId ] bool
 }
 
-func appendQuotedSymbolMap( buf *bytes.Buffer, m *SymbolMap ) {
-    buf.WriteRune( '{' )
+func ( vq valueQuote ) appendList( l *List ) {
+    vq.buf.WriteRune( '[' )
+    for i, val := range l.vals {
+        vq.appendValue( val )
+        if i < len( l.vals ) - 1 { vq.buf.WriteString( ", " ) }
+    }
+    vq.buf.WriteRune( ']' )
+}
+
+func ( vq valueQuote ) appendSymbolMap( m *SymbolMap ) {
+    vq.buf.WriteRune( '{' )
     remain := m.Len() - 1
     m.EachPair( func( fld *Identifier, val Value ) {
-        buf.WriteString( fld.Format( LcCamelCapped ) )
-        buf.WriteRune( ':' )
-        appendQuotedValue( buf, val )
-        if remain > 0 { buf.WriteString( ", " ) }
+        vq.buf.WriteString( fld.Format( LcCamelCapped ) )
+        vq.buf.WriteRune( ':' )
+        vq.appendValue( val )
+        if remain > 0 { vq.buf.WriteString( ", " ) }
         remain--
     })
-    buf.WriteRune( '}' )
+    vq.buf.WriteRune( '}' )
 }
 
-func appendQuotedStruct( buf *bytes.Buffer, ms *Struct ) {
-    buf.WriteString( ms.Type.ExternalForm() )
-    appendQuotedSymbolMap( buf, ms.Fields )
+func ( vq valueQuote ) appendStruct(  ms *Struct ) {
+    vq.buf.WriteString( ms.Type.ExternalForm() )
+    vq.appendSymbolMap( ms.Fields )
 }
 
-func appendQuotedPointer( buf *bytes.Buffer, pv *ValuePointer ) {
-    buf.WriteString( "&(" )
-    appendQuotedValue( buf, pv.Val )
-    buf.WriteString( ")" )
+func ( vq valueQuote ) appendPointer( pv *ValuePointer ) {
+    vq.buf.WriteString( "&(" )
+    vq.appendValue( pv.Val )
+    vq.buf.WriteString( ")" )
 }
 
-func appendQuotedValue( buf *bytes.Buffer, val Value ) {
+func ( vq valueQuote ) appendValue( val Value ) {
     switch v := val.( type ) {
-    case String: fmt.Fprintf( buf, "%q", string( v ) )
-    case Buffer: fmt.Fprintf( buf, "buf[%x]", []byte( v ) )
-    case Timestamp: fmt.Fprintf( buf, "%s", v.Rfc3339Nano() )
-    case *Null: buf.WriteString( "null" )
+    case String: fmt.Fprintf( vq.buf, "%q", string( v ) )
+    case Buffer: fmt.Fprintf( vq.buf, "buf[%x]", []byte( v ) )
+    case Timestamp: fmt.Fprintf( vq.buf, "%s", v.Rfc3339Nano() )
+    case *Null: vq.buf.WriteString( "null" )
     case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:
-        buf.WriteString( val.( fmt.Stringer ).String() )
+        vq.buf.WriteString( val.( fmt.Stringer ).String() )
     case *Enum: 
-        fmt.Fprintf( buf, "%s.%s", 
+        fmt.Fprintf( vq.buf, "%s.%s", 
             v.Type.ExternalForm(), v.Value.ExternalForm() )
-    case *List: appendQuotedList( buf, v )
-    case *SymbolMap: appendQuotedSymbolMap( buf, v )
-    case *Struct: appendQuotedStruct( buf, v )
-    case *ValuePointer: appendQuotedPointer( buf, v )
-    default: fmt.Fprintf( buf, "(!%T)", val ) // seems better than a panic
+    case *List: vq.appendList( v )
+    case *SymbolMap: vq.appendSymbolMap( v )
+    case *Struct: vq.appendStruct( v )
+    case *ValuePointer: vq.appendPointer( v )
+    default: fmt.Fprintf( vq.buf, "(!%T)", val ) // seems better than a panic
     }
 }
 
 func QuoteValue( val Value ) string { 
-    buf := &bytes.Buffer{}
-    appendQuotedValue( buf, val )
-    return buf.String()
+    vq := valueQuote{ 
+        buf: &bytes.Buffer{}, 
+        refs: make( map[ PointerId ] bool ),
+    }
+    vq.appendValue( val )
+    return vq.buf.String()
 }
 
 type goValPath objpath.PathNode // keys are string
@@ -839,14 +847,16 @@ func MustValue( inVal interface{} ) Value {
 
 type List struct { vals []Value }
 
-func NewList( vals []Value ) *List { return &List{ vals } }
+func NewList() *List { return &List{ []Value{} } }
+
+func NewListValues( vals []Value ) *List { return &List{ vals } }
 
 // returns a list starting with size sz; calls to Add() will grow the list
-func MakeList( sz int ) *List { return NewList( make( []Value, sz ) ) }
+func MakeList( sz int ) *List { return NewListValues( make( []Value, 0, sz ) ) }
 
 // if we allow immutable lists later we can have this return a fixed immutable
 // empty instance
-func EmptyList() *List { return NewList( []Value{} ) }
+func EmptyList() *List { return NewList() }
 
 func ( l *List ) Add( val Value ) { l.vals = append( l.vals, val ) }
 

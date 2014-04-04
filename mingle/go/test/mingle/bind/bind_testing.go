@@ -26,7 +26,7 @@ func rtTestsAddPrimitives( res []interface{} ) []interface{} {
     mgIntList := func( sz int ) *mg.List {
         res := make( []mg.Value, sz )
         for i := 0; i < sz; i++ { res[ i ] = mg.Int32( int32( i ) ) }
-        return mg.NewList( res )
+        return mg.NewListValues( res )
     }
     return append( res,
         &RoundtripTest{
