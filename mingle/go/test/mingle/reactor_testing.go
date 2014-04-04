@@ -85,45 +85,8 @@ func ptrRef( i int ) *ValuePointerReferenceEvent {
 
 type BuiltValueCheck string
 
-const (
-    BuiltValueCheckUniqueRefs = BuiltValueCheck( "unique-refs" )
-)
-
 type ValueBuildTest struct { 
     Val Value 
-    Checks []BuiltValueCheck // may be nil or empty
-}
-
-// coverage of structs also gives us coverage of maps
-func initSelfReferenceValueBuildReactorTests() {
-    addTest := func( val Value ) { 
-        AddStdReactorTests( 
-            ValueBuildTest{ 
-                Val: val,
-                Checks: []BuiltValueCheck{ BuiltValueCheckUniqueRefs },
-            },
-        )
-    }
-    qn := MustQualifiedTypeName
-    mkStruct := func( i int ) ( *Struct, *ValuePointer ) {
-        res := NewStruct( qn( fmt.Sprintf( "ns1@v1/S%d", i ) ) )
-        resRef := NewValuePointer( res )
-        resRef.Id = ptrId( i )
-        return res, resRef
-    }
-    s1, s1Ref := mkStruct( 1 )
-    s2, s2Ref := mkStruct( 2 )
-    s1.Fields.Put( MustIdentifier( "f1" ), s2Ref )
-    s1.Fields.Put( MustIdentifier( "self1Ref" ), s1Ref )
-    s1.Fields.Put( MustIdentifier( "selfRef1Ref" ), NewValuePointer( s1Ref ) )
-    s2.Fields.Put( MustIdentifier( "f2" ), s1Ref )
-    s2.Fields.Put( MustIdentifier( "l1" ), MustList( s1Ref, s2Ref ) )
-    addTest( s1Ref )
-    addTest( s2Ref )
-    addTest( MustList( s1Ref, s2Ref ) )
-    l1 := MustList( Int32( 1 ) )
-    l1.Add( l1 )
-    addTest( l1 )
 }
 
 func initValueBuildReactorTests() {
@@ -173,7 +136,6 @@ func initValueBuildReactorTests() {
     )
     valPtr1 := NewValuePointer( Int32( 1 ) )
     addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
-//    initSelfReferenceValueBuildReactorTests()
 }
 
 type StructuralReactorErrorTest struct {
@@ -280,6 +242,12 @@ type PointerEventCheckTest struct {
 
 func initPointerReferenceCheckTests() {
     id, p := MakeTestId, MakeTestIdPath
+    fld := func( i int ) *FieldStartEvent {
+        return NewFieldStartEvent( id( i ) )
+    }
+    ss := func( i int ) *StructStartEvent {
+        return NewStructStartEvent( qname( fmt.Sprintf( "ns1@v1/S%d", i ) ) )
+    }
     add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
         AddStdReactorTests(
             &PointerEventCheckTest{
@@ -298,10 +266,26 @@ func initPointerReferenceCheckTests() {
     add( p( 2 ),
         "unrecognized reference to pointer with id: 2",
         NewMapStartEvent(),
-        NewFieldStartEvent( id( 1 ) ),
+        fld( 1 ),
         ptrAlloc( 1 ),
-        NewFieldStartEvent( id( 2 ) ),
+        fld( 2 ),
         ptrRef( 2 ),
+    )
+    add( p( 1 ),
+        "cyclical reference",
+        ptrAlloc( 1 ),
+        ss( 1 ),
+        fld( 1 ),
+        ptrRef( 1 ),
+    )
+    add( p( 1, 1 ),
+        "cyclical reference",
+        ptrAlloc( 1 ),
+        ss( 1 ),
+        fld( 1 ),
+            ss( 2 ),
+            fld( 1 ),
+            ptrRef( 1 ),
     )
 }
 

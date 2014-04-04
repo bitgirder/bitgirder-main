@@ -526,6 +526,9 @@ func TestQuoteValue( t *testing.T ) {
     map1 := MustSymbolMap( "k", 1 )
     expct := `ns1@v1/T1{k:1}`
     f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
+    s1 := MustStruct( "ns1@v1/S1" )
+    s1.Fields.Put( MustIdentifier( "f1" ), NewValuePointer( s1 ) )
+    f( s1, "stub" )
 }
 
 func TestIsNull( t *testing.T ) {

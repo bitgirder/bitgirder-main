@@ -40,11 +40,6 @@ func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
         c.Logf( "vb expct: %s, act: %s", QuoteValue( vb.Val ),
             QuoteValue( rct.GetValue() ) )
         EqualWireValues( vb.Val, rct.GetValue(), c.PathAsserter )
-        if chks := vb.Checks; chks != nil {
-            for _, chk := range chks {
-                c.Fatalf( "unhandled value check: %s", chk )
-            }
-        }
     } else { c.Fatal( err ) }
 }
 

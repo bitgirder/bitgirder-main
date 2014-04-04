@@ -2,6 +2,7 @@ package mingle
 
 import (
     "bitgirder/stack"
+    "bitgirder/pipeline"
     "log"
 )
 
@@ -151,6 +152,7 @@ func ( va *valueAccumulator ) resolveFwdRefs() {
         log.Printf( "apply resolver func to ref: %#v", rslv.ref )
         rslv.f( rslv.ref.valPtr ) 
     }
+    log.Printf( "resolved refs" )
 }
 
 func ( va *valueAccumulator ) valueReady( val interface{} ) {
@@ -219,6 +221,10 @@ type ValueBuilder struct {
 
 func NewValueBuilder() *ValueBuilder {
     return &ValueBuilder{ acc: newValueAccumulator() }
+}
+
+func ( vb *ValueBuilder ) InitPipeline( p *pipeline.Pipeline ) {
+    EnsureStructuralReactor( p )
 }
 
 func ( vb *ValueBuilder ) GetValue() Value { return vb.acc.getValue() }
