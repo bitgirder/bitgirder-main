@@ -136,5 +136,54 @@ class CodeLoggers
         { 
             CodeLoggers.codef( tmpl, args ); 
         }
+    
+        public
+        static
+        void
+        codef( Throwable th,
+               String tmpl,
+               Object... msg )
+        {
+            CodeLoggers.codef( th, tmpl, msg );
+        }
+    
+        public
+        static
+        void
+        code( Throwable th,
+              Object... msg )
+        {
+            CodeLoggers.code( th, msg );
+        }
+
+        public static void warn( Object... args ) { CodeLoggers.warn( args ); }
+    
+        public
+        static 
+        void 
+        warnf( String tmpl, 
+               Object... args ) 
+        { 
+            CodeLoggers.warnf( tmpl, args ); 
+        }
+    
+        public
+        static
+        void
+        warnf( Throwable th,
+               String tmpl,
+               Object... msg )
+        {
+            CodeLoggers.warnf( th, tmpl, msg );
+        }
+    
+        public
+        static
+        void
+        warn( Throwable th,
+              Object... msg )
+        {
+            CodeLoggers.warn( th, msg );
+        }
     }
 }
