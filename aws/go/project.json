@@ -9,5 +9,8 @@
         "mingle-json"
     ],
     "packages": [ "aws/s3" ],
-    "commands": { "s3-sync-dir" : {} }
+    "commands": { 
+        "s3-sync-dir" : {},
+        "s3-put-object": {}
+    }
 }

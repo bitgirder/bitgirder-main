@@ -23,6 +23,7 @@ import (
     "io/ioutil"
     "bytes"
     "bufio"
+    "net/http"
 )
 
 const envTestRuntime = "BITGIRDER_TEST_RUNTIME"
@@ -240,6 +241,24 @@ func TestObjectRoundtrips( t *testing.T ) {
     for _, rt := range tests {
         rt.init( t )
         rt.run()
+    }
+}
+
+func TestPutObjectWithPublicAcl( t *testing.T ) {
+    req := &PutObjectRequest{ Route: nextObjectRoute() }
+    req.Acl = AclTypePublicRead
+    buf, _ := nextBodyBuffer( 1024 )
+    req.SetBodyBytes( buf )
+    cli := NewClient( testCreds )
+    if _, err := cli.PutObject( req ); err != nil { t.Fatal( err ) }
+    urlStr := req.Route.getUrlForClient( cli )
+    resp, err := http.Get( urlStr )
+    defer resp.Body.Close()
+    if err != nil { t.Fatal( err ) }
+    if buf2, err := ioutil.ReadAll( resp.Body ); err == nil {
+        assert.Equal( buf, buf2 ) 
+    } else {
+        t.Fatal( err )
     }
 }
 

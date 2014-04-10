@@ -30,6 +30,7 @@ const hdrReqId = "X-Amz-Request-Id"
 const hdrReqId2 = "X-Amz-Id-2"
 const hdrMd5 = "Content-Md5"
 const hdrCtype = "Content-Type"
+const hdrAmzAcl = "X-Amz-Acl"
 
 const metaHdrPrefix = "x-amz-meta-"
 const amzHdrPrefix = "x-amz-"
@@ -128,7 +129,8 @@ func ( r *ObjectRequestRoute ) resourceToSign( httpReq *http.Request ) string {
     return httpReq.URL.RequestURI()
 }
 
-func ( r *ObjectRequestRoute ) getUrl( ep *Endpoint ) string {
+func ( r *ObjectRequestRoute ) getUrlForClient( c *Client ) string {
+    ep := c.asEndpoint( r.Endpoint )
     buf := ep.beginUrl()
     buf.WriteString( "/" )
     buf.WriteString( url.QueryEscape( string( r.Bucket ) ) )
@@ -168,12 +170,19 @@ func ( gr *GetObjectResponse ) GetMetaHeader( key string ) string {
     return gr.metaHeader.Get( key )
 }
 
+type AclType string
+
+const (
+    AclTypePublicRead = AclType( "public-read" )
+)
+
 type PutObjectRequest struct {
     Route *ObjectRequestRoute
     Body io.Reader
     ContentLength int64
     ContentType
     Md5 []byte
+    Acl AclType
     metaHeaders http.Header
 }
 
@@ -226,6 +235,12 @@ func ( r *PutObjectRequest ) setOptCtype( httpReq *http.Request ) {
 func ( r *PutObjectRequest ) setMetaHeaders( httpReq *http.Request ) {
     if r.metaHeaders != nil {
         for k, v := range r.metaHeaders { httpReq.Header[ k ] = v }
+    }
+}
+
+func ( r *PutObjectRequest ) setAmzHeaders( httpReq *http.Request ) {
+    if pol := string( r.Acl ); pol != "" { 
+        httpReq.Header[ hdrAmzAcl ] = []string{ pol }
     }
 }
 
@@ -411,8 +426,7 @@ func asObjectHttpRequest(
     r *ObjectRequestRoute, 
     body io.Reader,
     c *Client ) ( *http.Request, error ) {
-    ep := c.asEndpoint( r.Endpoint )
-    return http.NewRequest( method, r.getUrl( ep ), body )
+    return http.NewRequest( method, r.getUrlForClient( c ), body )
 }
 
 func expectEtagIn( httpResp *http.Response ) ( Etag, error ) {
@@ -442,6 +456,7 @@ func ( c *Client ) PutObject(
     req.setOptMd5( httpReq )
     req.setOptCtype( httpReq )
     req.setMetaHeaders( httpReq )
+    req.setAmzHeaders( httpReq )
     c.signRequest( httpReq, req.Route.resourceToSign( httpReq ) )
     httpResp, err := c.httpDo( httpReq, 200 )
     if err != nil { return nil, err }

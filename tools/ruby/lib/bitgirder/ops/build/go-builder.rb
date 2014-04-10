@@ -350,7 +350,7 @@ class GoBinBuilder < StandardProjTask
     def bin_type
 
         case res = @target[ 3 ] 
-        when nil then raise "No bin type in target"
+        when nil then nil
         when MOD_TEST, MOD_BIN then res
         else raise "Unrecognized bin build target: #{res}"
         end
@@ -381,7 +381,7 @@ class GoBinBuilder < StandardProjTask
         ws_ctx.mod_dir( mod: bin_mod )
     end
 
-    private
+    public
     def bin_build_dir
         ensure_dir( build_bin_dir( bin_mod ) )
     end

@@ -144,7 +144,7 @@ class App < BitGirderClass
         argv << "--verbose" if run_ctx[ :verbose ]
         argv += get_run_opts( run_ctx )
 
-        BitGirder::Io::UnixProcessBuilder.new( cmd: cmd, argv: argv ).system
+        BitGirder::Io::UnixProcessBuilder.exec( cmd: cmd, argv: argv )
     end
 
 end

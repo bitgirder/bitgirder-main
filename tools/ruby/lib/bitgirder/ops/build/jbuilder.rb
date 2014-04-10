@@ -1851,45 +1851,54 @@ class MavenRepoUploader < AbstractJavaDistTask
         TaskTarget.create( :java, :dist, :maven_repo, dist )
     end
 
+    private
+    def aws_bin_build_target
+        TaskTarget.create( :go, :build_bin, :aws )
+    end 
+
     public
     def get_direct_dependencies
-        [ repo_task_target ]
+        [ repo_task_target, aws_bin_build_target ]
     end
 
     private
-    def get_local_files( repo_dir )
-        Dir.glob( "#{repo_dir}/*" )
+    def object_for_file( f )
+        
+        [
+            @run_opts.expect_string( :remote_repo_root ),
+            "com/bitgirder/bitgirder-platform",
+            BuildVersions.get_version( run_opts: @run_opts ),
+            File.basename( f )
+        ].
+        join( "/" )
     end
 
     private
-    def get_remote_root( tsk )
+    def upload_file( f, put_cmd )
         
-        res = @run_opts.expect_string( :remote_prefix )
-        res << "/" << tsk.get_maven_opts.get_repo_path
+        argv = [
+            "-object", object_for_file( f ),
+            "-local-file", f,
+            "-bucket", @run_opts.expect_string( :bucket ),
+            "-aws-account-id", @run_opts.expect_string( :aws_access_key ),
+            "-aws-secret-key", @run_opts.expect_string( :aws_secret_key ),
+            "-amz-acl", "public-read"
+        ]
 
-        "s3://" + res.gsub( %r{/+}, "/" ) + "/"
-    end
-
-    private
-    def exec_upload( tsk )
-        
-        cmd = file_exists( @run_opts.expect_string( :s3cmd ) )
-
-        argv = []
-        argv << "-c" << @run_opts.expect_string( :s3cmd_cfg )
-        argv << "--acl-public"
-        argv << "put" 
-        argv += get_local_files( tsk.repo_dir )
-        argv << get_remote_root( tsk )
-        
-        UnixProcessBuilder.new( cmd: cmd, argv: argv ).system
+        UnixProcessBuilder.system( cmd: put_cmd, argv: argv )
     end
 
     public
     def execute( chain )
         
-        tsk = BuildChains.expect_task( chain, repo_task_target )
-        exec_upload( tsk )
+        repo_tsk = BuildChains.expect_task( chain, repo_task_target )
+
+        aws_tsk = BuildChains.expect_task( chain, aws_bin_build_target )
+        put_cmd = file_exists( "#{aws_tsk.bin_build_dir}/s3-put-object" )
+
+        Dir.glob( "#{repo_tsk.repo_dir}/*" ).each do |f|
+            upload_file( f, put_cmd )
+        end
     end
 end
 
