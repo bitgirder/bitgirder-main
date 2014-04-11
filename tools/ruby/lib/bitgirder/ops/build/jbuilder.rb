@@ -129,8 +129,8 @@ module JavaTaskMixin
     end
 
     def add_javac_version_args( argv )
-        argv << "-source" << "1.6"
-        argv << "-target" << "1.6"
+        argv << "-source" << "1.7"
+        argv << "-target" << "1.7"
     end
 end
 
