@@ -127,6 +127,11 @@ module JavaTaskMixin
     def proj_def_mtime
         File.exist?( f = ws_ctx.proj_def_file ) ? File.mtime( f ) : nil
     end
+
+    def add_javac_version_args( argv )
+        argv << "-source" << "1.6"
+        argv << "-target" << "1.6"
+    end
 end
 
 class AbstractJavaModuleTask < StandardModTask
@@ -477,6 +482,7 @@ class JavaBuilder < AbstractJavaModuleTask
         
             argv = []
             
+            add_javac_version_args( argv )
             argv << "-Xlint:unchecked,deprecation"
             argv << "-classpath" << get_build_classpath( chain ).join( ":" )
             argv << "-d" << ensure_dir( mod_classes )
@@ -793,6 +799,7 @@ class AbstractCodegenTask < AbstractJavaModuleTask
         
         argv = []
 
+        add_javac_version_args( argv )
         argv << "-d" << ensure_wiped( gen_classes_dir )
         
         unless ( cp = get_compile_classpath( chain ) ).empty?
