@@ -504,23 +504,11 @@ func ( a *quoteValueAsserter ) call( v Value, strs ...string ) {
 }
 
 func assertQuoteCycles( a *quoteValueAsserter ) {
-    qn1 := qname( "ns1@v1/S1" )
-    fldK := MustIdentifier( "k" )
-    s1Cyc1Ref := NewHeapValue( NewStruct( qn1 ) )
-    s1Cyc2Ref := NewHeapValue( NewStruct( qn1 ) )
-    s1Cyc1Ref.Dereference().( *Struct ).Fields.Put( fldK, s1Cyc2Ref )
-    s1Cyc2Ref.Dereference().( *Struct ).Fields.Put( fldK, s1Cyc1Ref )
-    a.call( s1Cyc1Ref, "&(ns1@v1/S1{k:&(ns1@v1/S1{k:<!cycle>})})" )
-    l1Cyc := MustList( Int32( 1 ), String( "a" ) )
-    l1Cyc.Add( l1Cyc )
-    l1Cyc.Add( Int32( 4 ) )
-    l1Cyc.Add( MustList( Int32( 5 ), l1Cyc ) )
-    a.call( l1Cyc, `[1, "a", <!cycle>, 4, [5, <!cycle>]]` )
-    m1Cyc := MustSymbolMap()
-    m1Cyc.Put( fldK, m1Cyc )
-    a.call( m1Cyc, "{k:<!cycle>}" )
-    m1Cyc.Put( fldK, MustSymbolMap( fldK, m1Cyc ) )
-    a.call( m1Cyc, "{k:{k:<!cycle>}}" )
+    cyc := NewCyclicValues()
+    a.call( cyc.S1, "&(ns1@v1/S1{k:&(ns1@v1/S1{k:<!cycle>})})" )
+    a.call( cyc.L1, `[1, "a", <!cycle>, 4, [5, <!cycle>]]` )
+    a.call( cyc.M1, "{k:<!cycle>}" )
+    a.call( cyc.M2, "{k:{k:<!cycle>}}" )
 }
 
 func TestQuoteValue( t *testing.T ) {

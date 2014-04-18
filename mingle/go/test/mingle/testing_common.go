@@ -5,6 +5,34 @@ import (
     "bitgirder/objpath"
 )
 
+type CyclicTestValues struct {
+    S1 ValuePointer
+    S2 ValuePointer
+    L1 *List
+    M1 *SymbolMap
+    M2 *SymbolMap
+}
+
+func NewCyclicValues() *CyclicTestValues {
+    res := &CyclicTestValues{}
+    qn1 := qname( "ns1@v1/S1" )
+    fldK := MustIdentifier( "k" )
+    res.S1 = NewHeapValue( NewStruct( qn1 ) )
+    res.S2 = NewHeapValue( NewStruct( qn1 ) )
+    res.S1.Dereference().( *Struct ).Fields.Put( fldK, res.S2 )
+    res.S2.Dereference().( *Struct ).Fields.Put( fldK, res.S1 )
+    res.L1 = MustList( Int32( 1 ), String( "a" ) )
+    res.L1.Add( res.L1 )
+    res.L1.Add( Int32( 4 ) )
+    res.L1.Add( MustList( Int32( 5 ), res.L1 ) )
+    res.M1 = MustSymbolMap()
+    res.M1.Put( fldK, res.M1 )
+    res.M2 = MustSymbolMap()
+    res.M2.Put( fldK, res.M2 )
+    res.M2.Put( fldK, MustSymbolMap( fldK, res.M2 ) )
+    return res
+}
+
 type valPtrCheckMap map[ PointerId ] ValuePointer
 
 func checkEqualTimestamps( 

@@ -143,6 +143,10 @@ func initValueBuildReactorTests() {
     )
     valPtr1 := NewHeapValue( Int32( 1 ) )
     addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
+    cyc := NewCyclicValues()
+    addTest( cyc.S1 )
+    addTest( cyc.L1 )
+    addTest( cyc.M1 )
 }
 
 type StructuralReactorErrorTest struct {
