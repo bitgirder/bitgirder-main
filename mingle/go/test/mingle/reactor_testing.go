@@ -75,15 +75,22 @@ func MakeTestIdPath( elts ...interface{} ) objpath.PathNode {
 
 func ptrId( i int ) PointerId { return PointerId( uint64( i ) ) }
 
-func ptrAlloc( i int ) *ValuePointerAllocEvent {
-    return NewValuePointerAllocEvent( ptrId( i ) )
+func ptrAlloc( i int ) *ValueAllocationEvent {
+    return NewValueAllocationEvent( ptrId( i ) )
 }
 
-func ptrRef( i int ) *ValuePointerReferenceEvent {
-    return NewValuePointerReferenceEvent( ptrId( i ) )
+func ptrRef( i int ) *ValueReferenceEvent {
+    return NewValueReferenceEvent( ptrId( i ) )
 }
 
-type BuiltValueCheck string
+type heapTestValue struct {
+    id PointerId
+    val Value
+}
+
+func ( ht heapTestValue ) valImpl() {}
+func ( ht heapTestValue ) ValueAddress() PointerId { return ht.id }
+func ( ht heapTestValue ) Dereference() Value { return ht.val }
 
 type ValueBuildTest struct { 
     Val Value 
@@ -107,34 +114,34 @@ func initValueBuildReactorTests() {
     addTest( MustSymbolMap( "f1", "v1", "f2", MustList(), "f3", s1 ) )
     addTest( s1 )
     addTest( MustStruct( "ns1@v1/S3" ) )
-    addTest( NewValuePointer( String( "hello" ) ) )
-    addTest( NewValuePointer( MustList() ) )
+    addTest( NewHeapValue( String( "hello" ) ) )
+    addTest( NewHeapValue( MustList() ) )
     addTest( 
-        NewValuePointer( 
+        NewHeapValue( 
             MustList(
-                NewValuePointer( Int32( 0 ) ),
+                NewHeapValue( Int32( 0 ) ),
                 Int32( 1 ),
-                NewValuePointer( MustList( 0, 1 ) ),
+                NewHeapValue( MustList( 0, 1 ) ),
                 String( "s1" ),
-                NewValuePointer( String( "s2" ) ),
+                NewHeapValue( String( "s2" ) ),
             ),
         ),
     )
-    addTest( NewValuePointer( s1 ) )
+    addTest( NewHeapValue( s1 ) )
     addTest( 
-        NewValuePointer(
+        NewHeapValue(
             MustStruct( "ns1@v1/S1",
                 "f1", Int32( 1 ),
-                "f2", NewValuePointer( Int32( 2 ) ),
+                "f2", NewHeapValue( Int32( 2 ) ),
                 "f3", 
-                    NewValuePointer( 
-                        MustList( NewValuePointer( Int32( 1 ) ) ) ),
-                "f4", NewValuePointer( 
+                    NewHeapValue( 
+                        MustList( NewHeapValue( Int32( 1 ) ) ) ),
+                "f4", NewHeapValue( 
                     MustSymbolMap( "g1", NullVal, "g2", Int32( 1 ) ) ),
             ),
         ),
     )
-    valPtr1 := NewValuePointer( Int32( 1 ) )
+    valPtr1 := NewHeapValue( Int32( 1 ) )
     addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
 }
 
@@ -163,7 +170,7 @@ func initStructuralReactorTests() {
     evStartField1 := NewFieldStartEvent( id( 1 ) )
     evStartField2 := NewFieldStartEvent( id( 2 ) )
     evValue1 := NewValueEvent( Int64( int64( 1 ) ) )
-    evValuePtr1 := NewValuePointerAllocEvent( 1 )
+    evValuePtr1 := NewValueAllocationEvent( 1 )
     mk1 := func( 
         errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
@@ -302,11 +309,11 @@ func initEventPathTests() {
     evValue := func( i int64 ) *ValueEvent {
         return NewValueEvent( Int64( i ) )
     }
-    evValuePtr := func( i uint64 ) *ValuePointerAllocEvent { 
-        return NewValuePointerAllocEvent( PointerId( i ) ) 
+    evValuePtr := func( i uint64 ) *ValueAllocationEvent { 
+        return NewValueAllocationEvent( PointerId( i ) ) 
     }
     nextPtrId := uint64( 1 )
-    nextEvValuePtr := func() *ValuePointerAllocEvent {
+    nextEvValuePtr := func() *ValueAllocationEvent {
         defer func() { nextPtrId++ }()
         return evValuePtr( nextPtrId )
     }
@@ -1617,17 +1624,16 @@ func ( t *crtInit ) addPtrRefFail(
 
 func ( t *crtInit ) addMiscPointerTests() {
     val := Int32( 1 )
-    ptr1 := NewValuePointer( val )
-    ptr2 := NewValuePointer( ptr1 )
+    ptr1 := NewHeapValue( val )
+    ptr2 := NewHeapValue( ptr1 )
     t.addSucc( val, ptr1, "&Int32" )
     t.addSucc( val, ptr2, "&&Int32" )
     t.addSucc( ptr1, val, "Int32" )
     t.addSucc( ptr2, val, "Int32" )
     t.addSucc( ptr2, ptr1, "&Int32" )
-    t.addVcError( NewValuePointer( Int64( 1 ) ), "&Uint64", "&Int64" )
+    t.addVcError( NewHeapValue( Int64( 1 ) ), "&Uint64", "&Int64" )
     s1 := MustStruct( "ns1@v1/S1" )
-    s1Ptr := NewValuePointer( s1 )
-    s1Ptr.Id = ptrId( testPtrRefS1 )
+    s1Ptr := heapTestValue{ id: testPtrRefS1, val: s1 }
     t.addPtrRefSucc( "ns1@v1/S1", s1Ptr, ptrRef( testPtrRefS1 ) )
     t.addPtrRefSucc( "&ns1@v1/S1", s1Ptr, ptrRef( testPtrRefS1 ) )
     listSucc1 := func( typ string, act Value ) {
@@ -1709,7 +1715,7 @@ func ( t *crtInit ) addIdentityNumTests() {
     for numCtxIdx, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
-        ptrVal := NewValuePointer( numCtx.val )
+        ptrVal := NewHeapValue( numCtx.val )
         ptrTyp := NewPointerTypeReference( numCtx.typ )
         t.addSucc( numCtx.val, ptrVal, ptrTyp )
         t.addSucc( numCtx.str, ptrVal, ptrTyp )
@@ -1720,21 +1726,21 @@ func ( t *crtInit ) addIdentityNumTests() {
         t.addTcError( nil, numCtx.typ, TypeNull )
         t.addTcError( EmptyList(), numCtx.typ, TypeOpaqueList )
         t.addTcError( t.buf1, numCtx.typ, TypeBuffer )
-        t.addTcError( NewValuePointer( t.buf1 ), ptrTyp, 
+        t.addTcError( NewHeapValue( t.buf1 ), ptrTyp, 
             NewPointerTypeReference( TypeBuffer ) )
         t.addTcError( s1, numCtx.typ, s1.Type )
         t.addTcError( ptrVal, s1.Type, numCtx.typ )
         t.addTcError( s1, ptrTyp, s1.Type )
         for valCtxIdx, valCtx := range numTests {
             t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
-            t.addSucc( NewValuePointer( valCtx.val ), numCtx.val, numCtx.typ )
+            t.addSucc( NewHeapValue( valCtx.val ), numCtx.val, numCtx.typ )
             if valCtxIdx == numCtxIdx {
                 t.addSucc( valCtx.val, ptrVal, ptrTyp )
-                t.addSucc( NewValuePointer( valCtx.val ), ptrVal, ptrTyp )
+                t.addSucc( NewHeapValue( valCtx.val ), ptrVal, ptrTyp )
             } else {
                 t.addVcError( valCtx.val, ptrTyp, 
                     "bad ptr: &in --> &expect (placeholder message)" )
-                t.addVcError( NewValuePointer( valCtx.val ), ptrTyp,
+                t.addVcError( NewHeapValue( valCtx.val ), ptrTyp,
                     "bad ptr: &in --> &expect (placeholder message)" )
             }
         }
@@ -1789,12 +1795,12 @@ func ( t *crtInit ) addNumTests() {
 func ( t *crtInit ) addBufferTests() {
     buf1B64 := String( base64.StdEncoding.EncodeToString( t.buf1 ) )
     t.addSucc( t.buf1, buf1B64, TypeString )
-    t.addSucc( NewValuePointer( t.buf1 ), buf1B64, TypeString )
-    t.addSucc( NewValuePointer( t.buf1 ), NewValuePointer( buf1B64 ),
+    t.addSucc( NewHeapValue( t.buf1 ), buf1B64, TypeString )
+    t.addSucc( NewHeapValue( t.buf1 ), NewHeapValue( buf1B64 ),
         NewPointerTypeReference( TypeString ) )
     t.addSucc( buf1B64, t.buf1, TypeBuffer  )
-    t.addSucc( NewValuePointer( buf1B64 ), t.buf1, TypeBuffer )
-    t.addSucc( NewValuePointer( buf1B64 ), NewValuePointer( t.buf1 ),
+    t.addSucc( NewHeapValue( buf1B64 ), t.buf1, TypeBuffer )
+    t.addSucc( NewHeapValue( buf1B64 ), NewHeapValue( t.buf1 ),
         NewPointerTypeReference( TypeBuffer ) )
     t.addVcError( "abc$/@", TypeBuffer, 
         "Invalid base64 string: illegal base64 data at input byte 3" )
@@ -1817,17 +1823,17 @@ func ( t *crtInit ) addTimeTests() {
 func ( t *crtInit ) addEnumTests() {
     ptrTyp :=
         NewPointerTypeReference( &AtomicTypeReference{ Name: t.en1.Type } )
-    t.addSucc( NewValuePointer( t.en1 ), NewValuePointer( t.en1 ), ptrTyp )
-    t.addSucc( t.en1, NewValuePointer( t.en1 ), ptrTyp )
+    t.addSucc( NewHeapValue( t.en1 ), NewHeapValue( t.en1 ), ptrTyp )
+    t.addSucc( t.en1, NewHeapValue( t.en1 ), ptrTyp )
     t.addSucc( t.en1, "en-val1", TypeString  )
-    t.addSucc( t.en1, NewValuePointer( MustValue( "en-val1" ) ), 
+    t.addSucc( t.en1, NewHeapValue( MustValue( "en-val1" ) ), 
         NewPointerTypeReference( TypeString ) )
     t.addTcError( EmptySymbolMap(), t.en1.Type, TypeSymbolMap )
     t.addTcError( nil, t.en1.Type, TypeNull )
     t.addTcError( t.en1, "ns1@v1/E2", t.en1.Type )
-    t.addTcError( NewValuePointer( t.en1 ), "ns1@v1/E2", t.en1.Type )
+    t.addTcError( NewHeapValue( t.en1 ), "ns1@v1/E2", t.en1.Type )
     t.addTcError( t.en1, "&ns1@v1/E2", t.en1.Type )
-    t.addTcError( NewValuePointer( t.en1 ), "&ns1@v1/E2", t.en1.Type )
+    t.addTcError( NewHeapValue( t.en1 ), "&ns1@v1/E2", t.en1.Type )
 }
 
 func ( t *crtInit ) addNullableTests() {
@@ -1883,8 +1889,8 @@ func ( t *crtInit ) addListTests() {
     )
     s1 := MustStruct( "ns1@v1/S1" )
     t.addSucc(
-        []interface{}{ s1, NewValuePointer( s1 ), nil },
-        MustList( NewValuePointer( s1 ), NewValuePointer( s1 ), NullVal ),
+        []interface{}{ s1, NewHeapValue( s1 ), nil },
+        MustList( NewHeapValue( s1 ), NewHeapValue( s1 ), NullVal ),
         "&ns1@v1/S1?*",
     )
     t.addTcError0(
@@ -1911,11 +1917,11 @@ func ( t *crtInit ) addListTests() {
             nil,
         },
         MustList(
-            NewValuePointer( Int32( 1 ) ),
-            NewValuePointer( MustList() ),
-            NewValuePointer( MustList( 1, 2, 3 ) ),
-            NewValuePointer( String( "s1" ) ),
-            NewValuePointer( s1 ),
+            NewHeapValue( Int32( 1 ) ),
+            NewHeapValue( MustList() ),
+            NewHeapValue( MustList( 1, 2, 3 ) ),
+            NewHeapValue( String( "s1" ) ),
+            NewHeapValue( s1 ),
             NullVal,
         ),
         "&Null*",
@@ -1925,18 +1931,18 @@ func ( t *crtInit ) addListTests() {
     t.addSucc( intList1, intList1, TypeValue )
     t.addSucc( intList1, intList1, TypeOpaqueList )
     t.addSucc( intList1, intList1, "Int32*?" )
-    t.addSucc( MustList(), NewValuePointer( MustList() ), "&Int32*" )
-    t.addSucc( NewValuePointer( MustList() ), NewValuePointer( MustList() ),
+    t.addSucc( MustList(), NewHeapValue( MustList() ), "&Int32*" )
+    t.addSucc( NewHeapValue( MustList() ), NewHeapValue( MustList() ),
         "&Int32*" )
-    t.addSucc( NewValuePointer( MustList() ), MustList(), "&Int32*" )
+    t.addSucc( NewHeapValue( MustList() ), MustList(), "&Int32*" )
     t.addSucc( nil, NullVal, "Int32*?" )
     t.addVcError( nil, "Int32*", "expected list got null" )
     t.addVcError( nil, "Int32+", "expected list got null" )
-    t.addVcError( NewValuePointer( NullVal ), "Int32+", 
+    t.addVcError( NewHeapValue( NullVal ), "Int32+", 
         "expected list got null" )
-    t.addVcError( NewValuePointer( MustList() ), "&Int32+", "empty list" )
+    t.addVcError( NewHeapValue( MustList() ), "&Int32+", "empty list" )
     t.addSucc( nil, NullVal, "&Int32*?" )
-    t.addSucc( NewValuePointer( NullVal ), NewValuePointer( NullVal ),
+    t.addSucc( NewHeapValue( NullVal ), NewHeapValue( NullVal ),
         "&Int32*?" )
 }
 
@@ -1971,15 +1977,15 @@ func ( t *crtInit ) addMapTests() {
     )
     nester := MustSymbolMap( "f1", MustSymbolMap( "f2", int32( 1 ) ) )
     t.addSucc( nester, nester, TypeSymbolMap )
-    t.addSucc( m1, NewValuePointer( m1 ), "&SymbolMap" )
-    t.addSucc( NewValuePointer( m1 ), NewValuePointer( m1 ), "&SymbolMap" )
-    t.addSucc( NewValuePointer( m1 ), m1, "SymbolMap" )
+    t.addSucc( m1, NewHeapValue( m1 ), "&SymbolMap" )
+    t.addSucc( NewHeapValue( m1 ), NewHeapValue( m1 ), "&SymbolMap" )
+    t.addSucc( NewHeapValue( m1 ), m1, "SymbolMap" )
     t.addSucc( nil, NullVal, "SymbolMap?" )
-    t.addSucc( NewValuePointer( NullVal ), NewValuePointer( NullVal ),
+    t.addSucc( NewHeapValue( NullVal ), NewHeapValue( NullVal ),
         "&SymbolMap?" )
     t.addVcError( nil, "SymbolMap", "expected map but got null" )
     t.addVcError( nil, "&SymbolMap", "expected &map but got null" )
-    t.addVcError( NewValuePointer( NullVal ), "&SymbolMap", 
+    t.addVcError( NewHeapValue( NullVal ), "&SymbolMap", 
         "expected &map but got null" )
 }
 
@@ -2017,17 +2023,17 @@ func ( t *crtInit ) addStructTests() {
     }
     f1( s3, t2 )
     f1( int32( 1 ), "Int32" )
-    t.addSucc( NewValuePointer( s1 ), NewValuePointer( s1 ), "&ns1@v1/S1" )
-    t.addSucc( s1, NewValuePointer( s1 ), "&ns1@v1/S1" )
-    t.addSucc( NewValuePointer( s1 ), s1, "ns1@v1/S1" )
+    t.addSucc( NewHeapValue( s1 ), NewHeapValue( s1 ), "&ns1@v1/S1" )
+    t.addSucc( s1, NewHeapValue( s1 ), "&ns1@v1/S1" )
+    t.addSucc( NewHeapValue( s1 ), s1, "ns1@v1/S1" )
     t.addSucc( nil, NullVal, "&ns1@v1/S1?" )
     t.addVcError( nil, "&ns1@v1/S1", "expected ns1@v1/S1 but got null" )
-    t.addVcError( NewValuePointer( NullVal ), "&ns1@v1/S1", 
+    t.addVcError( NewHeapValue( NullVal ), "&ns1@v1/S1", 
         "expected S1 but got null" )
     t.addTcError( s1, "ns1@v1/S2", "ns1@v1/S1" )
-    t.addTcError( NewValuePointer( s1 ), "ns1@v1/S2", "&ns1@v1/S1" )
+    t.addTcError( NewHeapValue( s1 ), "ns1@v1/S2", "&ns1@v1/S1" )
     t.addTcError( s1, "&ns1@v1/S2", "ns1@v1/S1" )
-    t.addTcError( NewValuePointer( s1 ), "&ns1@v1/S2", "&ns1@v1/S1" )
+    t.addTcError( NewHeapValue( s1 ), "&ns1@v1/S2", "&ns1@v1/S1" )
 }
 
 func ( t *crtInit ) addInterfaceImplTests() {
@@ -2312,7 +2318,3 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
         EqualValues( expct, vb.GetValue(), a ) 
     }
 }
-
-// To test:
-//
-//  - ptr ref to type T1 should not be cast to ptr val of type T2

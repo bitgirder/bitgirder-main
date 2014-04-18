@@ -122,16 +122,16 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "time-val1", MustTimestamp( "2013-10-19T02:47:00-08:00" ) )
     b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
     b.setVal( "symmap-empty", MustSymbolMap() )
-    b.setVal( "val-ptr", NewValuePointer( Int32( 1 ) ) )
+    b.setVal( "val-ptr", NewHeapValue( Int32( 1 ) ) )
 
-    val1Ptr := NewValuePointer( Int32( 1 ) )
+    val1Ptr := NewHeapValue( Int32( 1 ) )
     b.setVal( "val-ptr-with-refs", MustList( val1Ptr, val1Ptr, val1Ptr ) )
 
     b.setVal( "symmap-flat", 
         MustSymbolMap( 
             "k1", int32( 1 ), 
             "k2", int32( 2 ),
-            "k3", NewValuePointer( Int32( int32( 1 ) ) ),
+            "k3", NewHeapValue( Int32( int32( 1 ) ) ),
         ),
     )
 
@@ -157,10 +157,10 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "list-pointers",
         MustList(
             int32( 1 ),
-            NewValuePointer( Int32( int32( 1 ) ) ),
-            NewValuePointer(
-                MustList( NewValuePointer( Int32( int32( 1 ) ) ) ) ),
-            MustList( NewValuePointer( Int32( int32( 1 ) ) ) ),
+            NewHeapValue( Int32( int32( 1 ) ) ),
+            NewHeapValue(
+                MustList( NewHeapValue( Int32( int32( 1 ) ) ) ) ),
+            MustList( NewHeapValue( Int32( int32( 1 ) ) ) ),
         ),
     )
 }

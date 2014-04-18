@@ -89,7 +89,7 @@ func TestValueTypeErrorFormatting( t *testing.T ) {
 // Int32(...) } ) we'll add coverage for those here. for now we just have
 // coverage that *ValuePointers are recognized and returned
 func assertAsValuePointers( t *testing.T ) {
-    v1 := NewValuePointer( Int32( 1 ) )
+    v1 := NewHeapValue( Int32( 1 ) )
     assert.Equal( v1, v1 )
 }
 
@@ -399,12 +399,12 @@ func TestTypeOf( t *testing.T ) {
     a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
     a.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
     ptrTyp := NewPointerTypeReference( typ )
-    a.Equal( ptrTyp, TypeOf( NewValuePointer( &Enum{ Type: qn } ) ) )
-    a.Equal( ptrTyp, TypeOf( NewValuePointer( &Struct{ Type: qn } ) ) )
+    a.Equal( ptrTyp, TypeOf( NewHeapValue( &Enum{ Type: qn } ) ) )
+    a.Equal( ptrTyp, TypeOf( NewHeapValue( &Struct{ Type: qn } ) ) )
     a.Equal( NewPointerTypeReference( TypeInt32 ), 
-        TypeOf( NewValuePointer( Int32( 1 ) ) ) )
+        TypeOf( NewHeapValue( Int32( 1 ) ) ) )
     a.Equal( NewPointerTypeReference( TypeOpaqueList ), 
-        TypeOf( NewValuePointer( MustList() ) ) )
+        TypeOf( NewHeapValue( MustList() ) ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
@@ -493,42 +493,70 @@ func TestRestrictionAccept( t *testing.T ) {
     f( String( "aaaaa" ), vr2, false )
 }
 
+type quoteValueAsserter struct {
+    *assert.Asserter
+}
+
+func ( a *quoteValueAsserter ) call( v Value, strs ...string ) {
+    q := QuoteValue( v )
+    for _, str := range strs { if str == q { return } }
+    a.Fatalf( "No vals in %#v matched quoted val %q", strs, q )
+}
+
+func assertQuoteCycles( a *quoteValueAsserter ) {
+    qn1 := qname( "ns1@v1/S1" )
+    fldK := MustIdentifier( "k" )
+    s1Cyc1Ref := NewHeapValue( NewStruct( qn1 ) )
+    s1Cyc2Ref := NewHeapValue( NewStruct( qn1 ) )
+    s1Cyc1Ref.Dereference().( *Struct ).Fields.Put( fldK, s1Cyc2Ref )
+    s1Cyc2Ref.Dereference().( *Struct ).Fields.Put( fldK, s1Cyc1Ref )
+    a.call( s1Cyc1Ref, "&(ns1@v1/S1{k:&(ns1@v1/S1{k:<!cycle>})})" )
+    l1Cyc := MustList( Int32( 1 ), String( "a" ) )
+    l1Cyc.Add( l1Cyc )
+    l1Cyc.Add( Int32( 4 ) )
+    l1Cyc.Add( MustList( Int32( 5 ), l1Cyc ) )
+    a.call( l1Cyc, `[1, "a", <!cycle>, 4, [5, <!cycle>]]` )
+    m1Cyc := MustSymbolMap()
+    m1Cyc.Put( fldK, m1Cyc )
+    a.call( m1Cyc, "{k:<!cycle>}" )
+    m1Cyc.Put( fldK, MustSymbolMap( fldK, m1Cyc ) )
+    a.call( m1Cyc, "{k:{k:<!cycle>}}" )
+}
+
 func TestQuoteValue( t *testing.T ) {
-    f := func( v Value, strs ...string ) {
-        q := QuoteValue( v )
-        for _, str := range strs { if str == q { return } }
-        t.Fatalf( "No vals in %#v matched quoted val %q", strs, q )
-    }
-    f( Boolean( true ), "true" )
-    f( Boolean( false ), "false" )
-    f( Buffer( []byte{ 0, 1, 2 } ), "buf[000102]" )
-    f( String( "s" ), `"s"` )
-    f( Int32( 1 ), "1" )
-    f( Int64( 1 ), "1" )
-    f( Uint32( 1 ), "1" )
-    f( Uint64( 1 ), "1" )
-    f( Float32( 1.1 ), "1.1" )
-    f( Float64( 1.1 ), "1.1" )
+    a := &quoteValueAsserter{ &assert.Asserter{ t } }
+    a.call( Boolean( true ), "true" )
+    a.call( Boolean( false ), "false" )
+    a.call( Buffer( []byte{ 0, 1, 2 } ), "buf[000102]" )
+    a.call( String( "s" ), `"s"` )
+    a.call( Int32( 1 ), "1" )
+    a.call( Int64( 1 ), "1" )
+    a.call( Uint32( 1 ), "1" )
+    a.call( Uint64( 1 ), "1" )
+    a.call( Float32( 1.1 ), "1.1" )
+    a.call( Float64( 1.1 ), "1.1" )
     tm := "2012-01-01T12:00:00Z"
-    f( MustTimestamp( tm ), tm )
+    a.call( MustTimestamp( tm ), tm )
     en := MustEnum( "ns1@v1/E1", "v" )
-    f( en, "ns1@v1/E1.v" )
-    f( NullVal, "null" )
-    f( MustList(), "[]" )
-    f( MustList( String( "s" ), Int32( 1 ) ), `["s", 1]` )
-    f( MustSymbolMap(), "{}" )
-    f( MustSymbolMap( "k1", 1, "k2", "2" ),
+    a.call( en, "ns1@v1/E1.v" )
+    a.call( NullVal, "null" )
+    a.call( MustList(), "[]" )
+    a.call( MustList( String( "s" ), Int32( 1 ) ), `["s", 1]` )
+    a.call( MustSymbolMap(), "{}" )
+    a.call( MustSymbolMap( "k1", 1, "k2", "2" ),
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
-    f( NewValuePointer( Int32( 1 ) ), "&(1)" )
-    f( NewValuePointer( String( "a" ) ), `&("a")` )
-    f( NewValuePointer( MustList( Int32( 1 ) ) ), "&([1])" )
-    f( NewValuePointer( NewValuePointer( Int32( 1 ) ) ), "&(&(1))" )
-    map1 := MustSymbolMap( "k", 1 )
-    expct := `ns1@v1/T1{k:1}`
-    f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
-    s1 := MustStruct( "ns1@v1/S1" )
-    s1.Fields.Put( MustIdentifier( "f1" ), NewValuePointer( s1 ) )
-    f( s1, "stub" )
+    a.call( NewHeapValue( Int32( 1 ) ), "&(1)" )
+    a.call( NewHeapValue( String( "a" ) ), `&("a")` )
+    a.call( NewHeapValue( MustList( Int32( 1 ) ) ), "&([1])" )
+    a.call( NewHeapValue( NewHeapValue( Int32( 1 ) ) ), "&(&(1))" )
+    fldK := MustIdentifier( "k" )
+    map1 := MustSymbolMap( fldK, 1 )
+    qn1 := qname( "ns1@v1/S1" )
+    s1 := &Struct{ Type: qn1, Fields: map1 }
+    s1Str := `ns1@v1/S1{k:1}`
+    a.call( s1, s1Str )
+    a.call( NewHeapValue( s1 ), fmt.Sprintf( "&(%s)", s1Str ) )
+    assertQuoteCycles( a )
 }
 
 func TestIsNull( t *testing.T ) {

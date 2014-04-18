@@ -222,13 +222,13 @@ func ( w writeReactor ) writePointerEvent( tc uint8, id PointerId ) error {
 }
 
 func ( w writeReactor ) writeValuePointerAlloc( 
-    vp *ValuePointerAllocEvent ) error {
+    vp *ValueAllocationEvent ) error {
 
     return w.writePointerEvent( tcValPtrAlloc, vp.Id )
 }
 
 func ( w writeReactor ) writeValuePointerReference( 
-    v *ValuePointerReferenceEvent ) error {
+    v *ValueReferenceEvent ) error {
 
     return w.writePointerEvent( tcValPtrRef, v.Id )
 }
@@ -241,8 +241,8 @@ func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     case *ListStartEvent: return w.startList()
     case *FieldStartEvent: return w.startField( v.Field )
     case *EndEvent: return w.WriteTypeCode( tcEnd )
-    case *ValuePointerAllocEvent: return w.writeValuePointerAlloc( v )
-    case *ValuePointerReferenceEvent: return w.writeValuePointerReference( v )
+    case *ValueAllocationEvent: return w.writeValuePointerAlloc( v )
+    case *ValueReferenceEvent: return w.writeValuePointerReference( v )
     }
     panic( libErrorf( "Unhandled event type: %T", ev ) )
 }
@@ -588,7 +588,7 @@ func ( r *BinReader ) readPointerId() ( PointerId, error ) {
 
 func ( r *BinReader ) readValuePointerAlloc( rep ReactorEventProcessor ) error {
     id, err := r.readPointerId()
-    ev := NewValuePointerAllocEvent( id )
+    ev := NewValueAllocationEvent( id )
     if err = rep.ProcessEvent( ev ); err != nil { return err }
     return r.implReadValue( rep )
 }
@@ -598,7 +598,7 @@ func ( r *BinReader ) readValuePointerReference(
 
     id, err := r.readPointerId()
     if err != nil { return err }
-    return rep.ProcessEvent( NewValuePointerReferenceEvent( id ) )
+    return rep.ProcessEvent( NewValueReferenceEvent( id ) )
 }
 
 func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {

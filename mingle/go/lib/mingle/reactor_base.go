@@ -58,25 +58,25 @@ func NewValueEvent( val Value ) *ValueEvent {
     return &ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
 }
 
-type ValuePointerAllocEvent struct {
+type ValueAllocationEvent struct {
     *reactorEventImpl
     Id PointerId
 }
 
-func NewValuePointerAllocEvent( id PointerId ) *ValuePointerAllocEvent {
-    return &ValuePointerAllocEvent{ 
+func NewValueAllocationEvent( id PointerId ) *ValueAllocationEvent {
+    return &ValueAllocationEvent{ 
         Id: id, 
         reactorEventImpl: &reactorEventImpl{},
     }
 }
 
-type ValuePointerReferenceEvent struct {
+type ValueReferenceEvent struct {
     *reactorEventImpl
     Id PointerId
 }
 
-func NewValuePointerReferenceEvent( id PointerId ) *ValuePointerReferenceEvent {
-    return &ValuePointerReferenceEvent{ 
+func NewValueReferenceEvent( id PointerId ) *ValueReferenceEvent {
+    return &ValueReferenceEvent{
         Id: id,
         reactorEventImpl: &reactorEventImpl{},
     }
@@ -138,9 +138,9 @@ func EventToString( ev ReactorEvent ) string {
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
-    case *ValuePointerAllocEvent:
+    case *ValueAllocationEvent:
         pairs = append( pairs, []string{ "id", v.Id.String() } )
-    case *ValuePointerReferenceEvent:
+    case *ValueReferenceEvent:
         pairs = append( pairs, []string{ "id", v.Id.String() } )
     }
     if p := ev.GetPath(); p != nil {
@@ -160,9 +160,8 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     case *StructStartEvent: res = NewStructStartEvent( v.Type )
     case *FieldStartEvent: res = NewFieldStartEvent( v.Field )
     case *EndEvent: res = NewEndEvent()
-    case *ValuePointerAllocEvent: res = NewValuePointerAllocEvent( v.Id )
-    case *ValuePointerReferenceEvent: 
-        res = NewValuePointerReferenceEvent( v.Id )
+    case *ValueAllocationEvent: res = NewValueAllocationEvent( v.Id )
+    case *ValueReferenceEvent: res = NewValueReferenceEvent( v.Id )
     default: panic( libErrorf( "unhandled copy target: %T", ev ) )
     }
     if withPath { res.SetPath( ev.GetPath() ) }
@@ -268,15 +267,16 @@ func ( vv valueVisit ) visitList( ml *List ) error {
     return vv.rep.ProcessEvent( NewEndEvent() )
 }
 
-func ( vv valueVisit ) visitValuePointer( vp *ValuePointer ) error {
-    if _, ok := vv.visitMap[ vp.Id ]; ok {
-        ev := NewValuePointerReferenceEvent( vp.Id )
+func ( vv valueVisit ) visitValuePointer( vp ValuePointer ) error {
+    addr := vp.ValueAddress()
+    if _, ok := vv.visitMap[ addr ]; ok {
+        ev := NewValueReferenceEvent( addr )
         return vv.rep.ProcessEvent( ev )
     }
-    ev := NewValuePointerAllocEvent( vp.Id ) 
+    ev := NewValueAllocationEvent( addr ) 
     if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
-    vv.visitMap[ vp.Id ] = true
-    return vv.visitValue( vp.Val )
+    vv.visitMap[ addr ] = true
+    return vv.visitValue( vp.Dereference() )
 }
 
 func ( vv valueVisit ) visitValue( mv Value ) error {
@@ -284,7 +284,7 @@ func ( vv valueVisit ) visitValue( mv Value ) error {
     case *Struct: return vv.visitStruct( v )
     case *SymbolMap: return vv.visitSymbolMap( v, true )
     case *List: return vv.visitList( v )
-    case *ValuePointer: return vv.visitValuePointer( v )
+    case ValuePointer: return vv.visitValuePointer( v )
     }
     return vv.rep.ProcessEvent( NewValueEvent( mv ) )
 }

@@ -5,7 +5,7 @@ import (
     "bitgirder/objpath"
 )
 
-type valPtrCheckMap map[ PointerId ] *ValuePointer
+type valPtrCheckMap map[ PointerId ] ValuePointer
 
 func checkEqualTimestamps( 
     expct Timestamp, act Value, a *assert.PathAsserter ) {
@@ -19,26 +19,28 @@ func checkEqualTimestamps(
 }
 
 func checkEqualMappedValuePointers( 
-    expct, act *ValuePointer, a *assert.PathAsserter, chkMap valPtrCheckMap ) {
+    expct, act ValuePointer, a *assert.PathAsserter, chkMap valPtrCheckMap ) {
 
-    if prev, ok := chkMap[ expct.Id ]; ok {
-        a.Equalf( prev.Id, act.Id, 
+    expctAddr, actAddr := expct.ValueAddress(), act.ValueAddress()
+    if prev, ok := chkMap[ expctAddr ]; ok {
+        prevAddr := prev.ValueAddress()
+        a.Equalf( prevAddr, actAddr,
             "expect value with id %d maps to %d, " +
             "but actual value has id %d: %s",
-            expct.Id, prev.Id, act.Id, QuoteValue( act ) )
+            expctAddr, prevAddr, actAddr, QuoteValue( act ) )
     } else {
-        chkMap[ expct.Id ] = act
-        checkEqualValues( expct.Val, act.Val, a, chkMap )
+        chkMap[ expctAddr ] = act
+        checkEqualValues( expct.Dereference(), act.Dereference(), a, chkMap )
     }
 }
 
 func checkEqualValuePointers( 
-    expct *ValuePointer,
+    expct ValuePointer,
     actVal Value,
     a *assert.PathAsserter,
     chkMap valPtrCheckMap ) {
 
-    act, ok := actVal.( *ValuePointer )
+    act, ok := actVal.( ValuePointer )
     a.Truef( ok, "not a value pointer: %T", actVal )
     if chkMap == nil { 
         checkDirectlyEqual( expct, act, a ) 
@@ -99,7 +101,7 @@ func checkEqualValues(
 
     switch v := expct.( type ) {
     case Timestamp: checkEqualTimestamps( v, act, a )
-    case *ValuePointer: checkEqualValuePointers( v, act, a, chkMap )
+    case ValuePointer: checkEqualValuePointers( v, act, a, chkMap )
     case *List: checkEqualLists( v, act, a, chkMap )
     case *Struct: checkEqualStructs( v, act, a, chkMap )
     case *SymbolMap: checkEqualMaps( v, act, a, chkMap )
@@ -113,7 +115,7 @@ func equalValues( expct, act Value, f assert.Failer, chkMap valPtrCheckMap ) {
 }
 
 func EqualWireValues( expct, act Value, f assert.Failer ) {
-    equalValues( expct, act, f, map[ PointerId ] *ValuePointer{} )
+    equalValues( expct, act, f, make( map[ PointerId ] ValuePointer ) )
 }
 
 func EqualValues( expct, act Value, f assert.Failer ) {

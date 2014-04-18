@@ -503,72 +503,24 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     panic( fmt.Errorf( "No atomic type in %s (%T)", ref, ref ) )
 }
 
+type PointerId uint64
+
+func UnsafeToPointerId( p unsafe.Pointer ) PointerId {
+    return PointerId( uint64( uintptr( p ) ) )
+}
+
+func ( id PointerId ) String() string { 
+    return strconv.FormatUint( uint64( id ), 10 ) 
+}
+
+type Addressed interface { Address() PointerId }
+
 type Value interface{ valImpl() }
 
-type valueQuote struct {
-    buf *bytes.Buffer
-    refs map[ PointerId ] bool
-}
-
-func ( vq valueQuote ) appendList( l *List ) {
-    vq.buf.WriteRune( '[' )
-    for i, val := range l.vals {
-        vq.appendValue( val )
-        if i < len( l.vals ) - 1 { vq.buf.WriteString( ", " ) }
-    }
-    vq.buf.WriteRune( ']' )
-}
-
-func ( vq valueQuote ) appendSymbolMap( m *SymbolMap ) {
-    vq.buf.WriteRune( '{' )
-    remain := m.Len() - 1
-    m.EachPair( func( fld *Identifier, val Value ) {
-        vq.buf.WriteString( fld.Format( LcCamelCapped ) )
-        vq.buf.WriteRune( ':' )
-        vq.appendValue( val )
-        if remain > 0 { vq.buf.WriteString( ", " ) }
-        remain--
-    })
-    vq.buf.WriteRune( '}' )
-}
-
-func ( vq valueQuote ) appendStruct(  ms *Struct ) {
-    vq.buf.WriteString( ms.Type.ExternalForm() )
-    vq.appendSymbolMap( ms.Fields )
-}
-
-func ( vq valueQuote ) appendPointer( pv *ValuePointer ) {
-    vq.buf.WriteString( "&(" )
-    vq.appendValue( pv.Val )
-    vq.buf.WriteString( ")" )
-}
-
-func ( vq valueQuote ) appendValue( val Value ) {
-    switch v := val.( type ) {
-    case String: fmt.Fprintf( vq.buf, "%q", string( v ) )
-    case Buffer: fmt.Fprintf( vq.buf, "buf[%x]", []byte( v ) )
-    case Timestamp: fmt.Fprintf( vq.buf, "%s", v.Rfc3339Nano() )
-    case *Null: vq.buf.WriteString( "null" )
-    case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:
-        vq.buf.WriteString( val.( fmt.Stringer ).String() )
-    case *Enum: 
-        fmt.Fprintf( vq.buf, "%s.%s", 
-            v.Type.ExternalForm(), v.Value.ExternalForm() )
-    case *List: vq.appendList( v )
-    case *SymbolMap: vq.appendSymbolMap( v )
-    case *Struct: vq.appendStruct( v )
-    case *ValuePointer: vq.appendPointer( v )
-    default: fmt.Fprintf( vq.buf, "(!%T)", val ) // seems better than a panic
-    }
-}
-
-func QuoteValue( val Value ) string { 
-    vq := valueQuote{ 
-        buf: &bytes.Buffer{}, 
-        refs: make( map[ PointerId ] bool ),
-    }
-    vq.appendValue( val )
-    return vq.buf.String()
+type ValuePointer interface {
+    Value
+    ValueAddress() PointerId
+    Dereference() Value
 }
 
 type goValPath objpath.PathNode // keys are string
@@ -694,6 +646,7 @@ func ( i Int64 ) Compare( val interface{} ) int {
 }
 
 type Int32 int32
+
 func ( i Int32 ) valImpl() {}
 func ( i Int32 ) String() string { return fmt.Sprint( int32( i ) ) }
 
@@ -775,6 +728,18 @@ func ( t Timestamp ) Compare( val interface{} ) int {
     return 0
 }
 
+type HeapValue struct { val Value }
+
+func NewHeapValue( val Value ) *HeapValue { return &HeapValue{ val: val } }
+
+func ( hv *HeapValue ) valImpl() {}
+
+func ( hv *HeapValue ) Dereference() Value { return hv.val }
+
+func ( hv *HeapValue ) ValueAddress() PointerId { 
+    return UnsafeToPointerId( unsafe.Pointer( hv ) )
+}
+
 func asListValue( inVals []interface{}, path goValPath ) ( *List, error ) {
     vals := make( []Value, len( inVals ) )
     lp := path.StartList()
@@ -820,7 +785,7 @@ func asAtomicValue(
     case *Enum: val = v
     case *Struct: val = v
     case *Null: val = v
-    case *ValuePointer: val = v
+    case ValuePointer: val = v
     default:
         msg := "Unhandled mingle value %v (%T)"
         err = &ValueTypeError{ path, fmt.Sprintf( msg, inVal, inVal ) }
@@ -857,6 +822,10 @@ func MakeList( sz int ) *List { return NewListValues( make( []Value, 0, sz ) ) }
 // if we allow immutable lists later we can have this return a fixed immutable
 // empty instance
 func EmptyList() *List { return NewList() }
+
+func ( l *List ) Address() PointerId { 
+    return UnsafeToPointerId( unsafe.Pointer( l ) ) 
+}
 
 func ( l *List ) Add( val Value ) { l.vals = append( l.vals, val ) }
 
@@ -897,7 +866,11 @@ func NewSymbolMap() *SymbolMap { return &SymbolMap{ NewIdentifierMap() } }
 // single instance here
 func EmptySymbolMap() *SymbolMap { return NewSymbolMap() }
 
-func ( m SymbolMap ) valImpl() {}
+func ( m *SymbolMap ) Address() PointerId {
+    return UnsafeToPointerId( unsafe.Pointer( m ) ) 
+}
+
+func ( m *SymbolMap ) valImpl() {}
 
 func ( m *SymbolMap ) Len() int { return m.m.Len() }
 
@@ -1037,6 +1010,8 @@ func MustEnum( typ, val string ) *Enum {
     return &Enum{ MustQualifiedTypeName( typ ), MustIdentifier( val ) }
 }
 
+// In the go code we deal with *Struct, but even though these are go pointers,
+// they correspond to struct values in the mingle runtime. 
 type Struct struct {
     Type *QualifiedTypeName
     Fields *SymbolMap
@@ -1071,25 +1046,6 @@ func MustStruct(
     if err != nil { panic( err ) }
     return res
 }
-
-type PointerId uint64
-
-func ( id PointerId ) String() string { 
-    return strconv.FormatUint( uint64( id ), 10 ) 
-}
-
-type ValuePointer struct { 
-    Id PointerId
-    Val Value 
-}
-
-func NewValuePointer( val Value ) *ValuePointer { 
-    res := &ValuePointer{ Val: val }
-    res.Id = PointerId( uint64( uintptr( unsafe.Pointer( res ) ) ) )
-    return res
-}
-
-func ( pv *ValuePointer ) valImpl() {}
 
 type IdentifiedName struct {
     Namespace *Namespace
@@ -1282,8 +1238,8 @@ func IsIntegerType( typ TypeReference ) bool {
            typ.Equals( TypeUint64 )
 }
 
-func typeOfValuePointer( pv *ValuePointer ) *PointerTypeReference {
-    return NewPointerTypeReference( TypeOf( pv.Val ) )
+func typeOfValuePointer( vp ValuePointer ) *PointerTypeReference {
+    return NewPointerTypeReference( TypeOf( vp.Dereference() ) )
 }
 
 func TypeOf( mgVal Value ) TypeReference {
@@ -1303,7 +1259,7 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Struct: return v.Type.AsAtomicType()
     case *List: return TypeOpaqueList
     case *Null: return TypeNull
-    case *ValuePointer: return typeOfValuePointer( v )
+    case ValuePointer: return typeOfValuePointer( v )
     }
     panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }

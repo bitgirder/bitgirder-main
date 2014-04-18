@@ -35,10 +35,9 @@ func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
 
 func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
     rct := NewValueBuilder()
-    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
+//    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
+    pip := InitReactorPipeline( rct )
     if err := VisitValue( vb.Val, pip ); err == nil {
-        c.Logf( "vb expct: %s, act: %s", QuoteValue( vb.Val ),
-            QuoteValue( rct.GetValue() ) )
         EqualWireValues( vb.Val, rct.GetValue(), c.PathAsserter )
     } else { c.Fatal( err ) }
 }
@@ -414,7 +413,7 @@ func ( c *ReactorTestCall ) call() {
 //    case *RequestReactorTest: c.callRequest( s )
 //    case *ResponseReactorTest: c.callResponse( s )
 //    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
-    default: c.Logf( "skipping %T", s )
+//    default: c.Logf( "skipping %T", s )
     }
 }
 
