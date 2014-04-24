@@ -115,10 +115,11 @@ func NewFieldStartEvent( fld *Identifier ) *FieldStartEvent {
 
 type ListStartEvent struct {
     *reactorEventImpl
+    Id PointerId
 }
 
-func NewListStartEvent() *ListStartEvent {
-    return &ListStartEvent{ reactorEventImpl: &reactorEventImpl{} }
+func NewListStartEvent( id PointerId ) *ListStartEvent {
+    return &ListStartEvent{ reactorEventImpl: &reactorEventImpl{}, Id: id }
 }
 
 type EndEvent struct {
@@ -136,6 +137,8 @@ func EventToString( ev ReactorEvent ) string {
         pairs = append( pairs, []string{ "value", QuoteValue( v.Val ) } )
     case *StructStartEvent:
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
+    case *ListStartEvent:
+        pairs = append( pairs, []string{ "id", v.Id.String() } )
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
     case *ValueAllocationEvent:
@@ -155,7 +158,7 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     var res ReactorEvent
     switch v := ev.( type ) {
     case *ValueEvent: res = NewValueEvent( v.Val )
-    case *ListStartEvent: res = NewListStartEvent()
+    case *ListStartEvent: res = NewListStartEvent( v.Id )
     case *MapStartEvent: res = NewMapStartEvent()
     case *StructStartEvent: res = NewStructStartEvent( v.Type )
     case *FieldStartEvent: res = NewFieldStartEvent( v.Field )
@@ -268,8 +271,9 @@ func ( vv valueVisit ) visitStruct( ms *Struct ) error {
 
 func ( vv valueVisit ) visitList( ml *List ) error {
     if err, ok := vv.visitAddressed( ml ); ok { return err }
-    vv.visitMap[ ml.Address() ] = true
-    if err := vv.rep.ProcessEvent( NewListStartEvent() ); err != nil { 
+    addr := ml.Address()
+    vv.visitMap[ addr ] = true
+    if err := vv.rep.ProcessEvent( NewListStartEvent( addr ) ); err != nil { 
         return err 
     }
     for _, val := range ml.Values() {
@@ -279,7 +283,7 @@ func ( vv valueVisit ) visitList( ml *List ) error {
 }
 
 func ( vv valueVisit ) visitValuePointer( vp ValuePointer ) error {
-    addr := vp.ValueAddress()
+    addr := vp.Address()
     if _, ok := vv.visitMap[ addr ]; ok {
         ev := NewValueReferenceEvent( addr )
         return vv.rep.ProcessEvent( ev )

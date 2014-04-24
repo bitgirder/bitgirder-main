@@ -73,7 +73,7 @@ func ( vq valueQuote ) appendStruct( ms *Struct ) {
 // list/map cycles are handled in their respective code paths.
 func ( vq valueQuote ) appendValuePointer( vp ValuePointer ) {
     if _, ok := vp.Dereference().( *Struct ); ok {
-        if vq.handledCycle( vp.ValueAddress() ) { return }
+        if vq.handledCycle( vp.Address() ) { return }
     }
     vq.buf.WriteString( "&(" )
     vq.appendValue( vp.Dereference() )

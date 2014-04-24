@@ -263,6 +263,7 @@ func appendInput( data interface{}, w *BinWriter ) {
         if err := w.WriteValue( String( v ) ); err != nil { panic( err ) }
     case uint8: if err := w.WriteUint8( v ); err != nil { panic( err ) }
     case int32: if err := w.WriteInt32( v ); err != nil { panic( err ) }
+    case uint64: if err := w.WriteUint64( v ); err != nil { panic( err ) }
     case *QualifiedTypeName: 
         if err := w.WriteQualifiedTypeName( v ); err != nil { panic( err ) }
     default: panic( libErrorf( "Unrecognized input elt: %T", v ) )
@@ -293,11 +294,11 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-list-val-type-code",
-            ErrMsg: `[offset 49]: Unrecognized value code: 0x64`,
+            ErrMsg: `[offset 57]: Unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
                 tcStruct, int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
                 tcField, MustIdentifier( "f1" ),
-                tcList, int32( -1 ),
+                tcList, int32( -1 ), uint64( 1 ),
                 tcInt32, int32( 10 ), // an okay list val
                 binIoInvalidTypeCode,
             ),

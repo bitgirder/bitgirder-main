@@ -25,6 +25,13 @@ type valPtrAcc struct {
     val *HeapValue
 }
 
+func ( vp *valPtrAcc ) mustValue() *HeapValue {
+    if vp.val == nil {
+        panic( libErrorf( "no val for ptr acc with id %s", vp.id ) )
+    }
+    return vp.val
+}
+
 type mapAcc struct { 
     m *SymbolMap
     curFld *Identifier
@@ -50,13 +57,24 @@ func ( ma *mapAcc ) startField( fld *Identifier ) {
 }
 
 type structAcc struct {
-    typ *QualifiedTypeName
     flds *mapAcc
+    s *Struct
 }
 
-type listAcc struct { l *List }
+func newStructAcc( typ *QualifiedTypeName ) *structAcc {
+    res := &structAcc{ flds: newMapAcc() }
+    res.s = &Struct{ Type: typ, Fields: res.flds.m }
+    return res
+}    
 
-func newListAcc() *listAcc { return &listAcc{ NewList() } }
+type listAcc struct { 
+    id PointerId
+    l *List 
+}
+
+func newListAcc( id PointerId ) *listAcc { 
+    return &listAcc{ id: id, l: NewList() } 
+}
 
 type valueBuildResolution struct {
     id PointerId
@@ -67,14 +85,14 @@ type valueBuildResolution struct {
 type valueAccumulator struct {
     val Value
     accs *stack.Stack
-    refs map[ PointerId ] *valPtrAcc
+    refs map[ PointerId ] interface{}
     resolutions []valueBuildResolution
 }
 
 func newValueAccumulator() *valueAccumulator {
     return &valueAccumulator{ 
         accs: stack.NewStack(), 
-        refs: make( map[ PointerId ] *valPtrAcc ),
+        refs: make( map[ PointerId ] interface{} ),
         resolutions: make( []valueBuildResolution, 0, 4 ),
     }
 }
@@ -85,6 +103,19 @@ func ( va *valueAccumulator ) addResolver( id PointerId, f func( Value ) ) {
 }
 
 func ( va *valueAccumulator ) pushAcc( acc interface{} ) { va.accs.Push( acc ) }
+
+func ( va *valueAccumulator ) idForAcc( acc interface{} ) PointerId {
+    switch v := acc.( type ) {
+    case *valPtrAcc: return v.id
+    case *listAcc: return v.id
+    }
+    panic( libErrorf( "not a addressable acc: %T", acc ) )
+}
+
+func ( va *valueAccumulator ) pushReferenceAcc( acc interface{} ) {
+    va.refs[ va.idForAcc( acc ) ] = acc
+    va.pushAcc( acc )
+}
 
 func ( va *valueAccumulator ) peekAcc() ( interface{}, bool ) {
     return va.accs.Peek(), ! va.accs.IsEmpty()
@@ -120,14 +151,9 @@ func ( va *valueAccumulator ) acceptValue( acc interface{}, val Value ) bool {
 
 func ( va *valueAccumulator ) valueForAcc( acc interface{} ) Value {
     switch v := acc.( type ) {
-    case *valPtrAcc: 
-        if v.val == nil {
-            panic( libErrorf( "no val for ptr acc with id %s", v.id ) )
-        } else {
-            return v.val
-        }
+    case *valPtrAcc: return v.mustValue()
     case *mapAcc: return v.m
-    case *structAcc: return &Struct{ Type: v.typ, Fields: v.flds.m }
+    case *structAcc: return v.s
     case *listAcc: return v.l
     }
     panic( libErrorf( "unhandled acc: %T", acc ) )
@@ -139,8 +165,8 @@ func ( va *valueAccumulator ) popAccValue() {
 
 func ( va *valueAccumulator ) resolve() {
     for _, rs := range va.resolutions {
-        valPtrAcc := va.refs[ rs.id ]
-        rs.f( valPtrAcc.val )
+        acc := va.refs[ rs.id ]
+        rs.f( va.valueForAcc( acc ) )
     }
 }
 
@@ -172,18 +198,17 @@ func ( va *valueAccumulator ) startField( fld *Identifier ) {
 
 func ( va *valueAccumulator ) end() { va.popAccValue() }
 
-func ( va *valueAccumulator ) allocValue( id PointerId ) {
-    acc := &valPtrAcc{ id: id }
-    va.refs[ id ] = acc
-    va.pushAcc( acc )
+func ( va *valueAccumulator ) isForwardRef( acc interface{} ) bool {
+    if vp, ok := acc.( *valPtrAcc ); ok { return vp.val == nil }
+    return false
 }
 
 func ( va *valueAccumulator ) valueReferenced( vr *ValueReferenceEvent ) error {
-    if valPtrAcc, ok := va.refs[ vr.Id ]; ok {
-        if valPtrAcc.val == nil {
+    if acc, ok := va.refs[ vr.Id ]; ok {
+        if va.isForwardRef( acc ) {
             va.forwardValueReferenced( vr.Id )
         } else { 
-            va.valueReady( valPtrAcc.val ) 
+            va.valueReady( va.valueForAcc( acc ) ) 
         }
         return nil
     }
@@ -193,13 +218,12 @@ func ( va *valueAccumulator ) valueReferenced( vr *ValueReferenceEvent ) error {
 func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
     case *ValueEvent: va.valueReady( v.Val )
-    case *ListStartEvent: va.pushAcc( newListAcc() )
+    case *ListStartEvent: va.pushReferenceAcc( newListAcc( v.Id ) )
     case *MapStartEvent: va.pushAcc( newMapAcc() )
-    case *StructStartEvent: 
-        va.pushAcc( &structAcc{ typ: v.Type, flds: newMapAcc() } )
+    case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
     case *FieldStartEvent: va.startField( v.Field )
     case *EndEvent: va.end()
-    case *ValueAllocationEvent: va.allocValue( v.Id )
+    case *ValueAllocationEvent: va.pushReferenceAcc( &valPtrAcc{ id: v.Id } )
     case *ValueReferenceEvent: return va.valueReferenced( v )
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }

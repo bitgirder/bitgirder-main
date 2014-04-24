@@ -33,7 +33,7 @@ func NewCyclicValues() *CyclicTestValues {
     return res
 }
 
-type valPtrCheckMap map[ PointerId ] ValuePointer
+type valPtrCheckMap map[ PointerId ] Addressed
 
 func checkEqualTimestamps( 
     expct Timestamp, act Value, a *assert.PathAsserter ) {
@@ -46,18 +46,30 @@ func checkEqualTimestamps(
     }
 }
 
-func checkEqualMappedValuePointers( 
-    expct, act ValuePointer, a *assert.PathAsserter, chkMap valPtrCheckMap ) {
+// fails if expct has previously mapped to a value with an address other than
+// act.Address(); returns true if this is the first encounter of
+// expct.Address(), and false if this is a repeat but correct mapping of expct
+// --> act
+func checkEqualAddressedValues(
+    expct, act Addressed, a *assert.PathAsserter, chkMap valPtrCheckMap ) bool {
 
-    expctAddr, actAddr := expct.ValueAddress(), act.ValueAddress()
+    expctAddr, actAddr := expct.Address(), act.Address()
     if prev, ok := chkMap[ expctAddr ]; ok {
-        prevAddr := prev.ValueAddress()
+        prevAddr := prev.Address()
         a.Equalf( prevAddr, actAddr,
             "expect value with id %d maps to %d, " +
             "but actual value has id %d: %s",
-            expctAddr, prevAddr, actAddr, QuoteValue( act ) )
-    } else {
-        chkMap[ expctAddr ] = act
+            expctAddr, prevAddr, actAddr, QuoteValue( act.( Value ) ) )
+        return false
+    } 
+    chkMap[ expctAddr ] = act
+    return true
+}
+
+func checkEqualMappedValuePointers( 
+    expct, act ValuePointer, a *assert.PathAsserter, chkMap valPtrCheckMap ) {
+
+    if checkEqualAddressedValues( expct, act, a, chkMap ) {
         checkEqualValues( expct.Dereference(), act.Dereference(), a, chkMap )
     }
 }
@@ -82,11 +94,13 @@ func checkEqualLists(
 
     act, ok := actVal.( *List )
     a.Truef( ok, "not a list: %T", act )
-    a.Descend( "(ListLen)" ).Equal( expct.Len(), act.Len() )
-    la := a.StartList()
-    for i, e := 0, expct.Len(); i < e; i++ {
-        checkEqualValues( expct.Get( i ), act.Get( i ), la, chkMap )
-        la = la.Next()
+    if chkMap == nil || checkEqualAddressedValues( expct, act, a, chkMap ) {
+        a.Descend( "(ListLen)" ).Equal( expct.Len(), act.Len() )
+        la := a.StartList()
+        for i, e := 0, expct.Len(); i < e; i++ {
+            checkEqualValues( expct.Get( i ), act.Get( i ), la, chkMap )
+            la = la.Next()
+        }
     }
 }
 
@@ -143,7 +157,7 @@ func equalValues( expct, act Value, f assert.Failer, chkMap valPtrCheckMap ) {
 }
 
 func EqualWireValues( expct, act Value, f assert.Failer ) {
-    equalValues( expct, act, f, make( map[ PointerId ] ValuePointer ) )
+    equalValues( expct, act, f, make( map[ PointerId ] Addressed ) )
 }
 
 func EqualValues( expct, act Value, f assert.Failer ) {

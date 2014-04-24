@@ -519,7 +519,7 @@ type Value interface{ valImpl() }
 
 type ValuePointer interface {
     Value
-    ValueAddress() PointerId
+    Address() PointerId
     Dereference() Value
 }
 
@@ -736,7 +736,7 @@ func ( hv *HeapValue ) valImpl() {}
 
 func ( hv *HeapValue ) Dereference() Value { return hv.val }
 
-func ( hv *HeapValue ) ValueAddress() PointerId { 
+func ( hv *HeapValue ) Address() PointerId { 
     return UnsafeToPointerId( unsafe.Pointer( hv ) )
 }
 

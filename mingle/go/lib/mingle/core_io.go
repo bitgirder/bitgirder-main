@@ -166,8 +166,9 @@ func ( w writeReactor ) startField( fld *Identifier ) error {
     return w.WriteIdentifier( fld )
 }
 
-func ( w writeReactor ) startList() error { 
+func ( w writeReactor ) startList( id PointerId ) error { 
     if err := w.WriteTypeCode( tcList ); err != nil { return err }
+    if err := w.writePointerId( id ); err != nil { return err }
     return w.WriteInt32( -1 )
 }
 
@@ -215,10 +216,14 @@ func ( w writeReactor ) value( val Value ) error {
     panic( libErrorf( "%T: Unhandled value: %T", w, val ) )
 }
 
+func ( w writeReactor ) writePointerId( id PointerId ) error {
+    return w.WriteUint64( uint64( id ) )
+}
+
 func ( w writeReactor ) writePointerEvent( tc uint8, id PointerId ) error {
     
     if err := w.WriteTypeCode( tc ); err != nil { return err }
-    return w.WriteUint64( uint64( id ) )
+    return w.writePointerId( id )
 }
 
 func ( w writeReactor ) writeValuePointerAlloc( 
@@ -238,7 +243,7 @@ func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     case *ValueEvent: return w.value( v.Val )
     case *MapStartEvent: return w.startMap()
     case *StructStartEvent: return w.startStruct( v.Type )
-    case *ListStartEvent: return w.startList()
+    case *ListStartEvent: return w.startList( v.Id )
     case *FieldStartEvent: return w.startField( v.Field )
     case *EndEvent: return w.WriteTypeCode( tcEnd )
     case *ValueAllocationEvent: return w.writeValuePointerAlloc( v )
@@ -635,7 +640,11 @@ func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
 
 func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err } // skip size
-    if err := rep.ProcessEvent( NewListStartEvent() ); err != nil { return err }
+    if id, err := r.readPointerId(); err == nil {
+        if err = rep.ProcessEvent( NewListStartEvent( id ) ); err != nil {
+            return err
+        }
+    } else { return err }
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
