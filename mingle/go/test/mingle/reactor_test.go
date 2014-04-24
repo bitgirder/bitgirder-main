@@ -37,7 +37,12 @@ func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
     rct := NewValueBuilder()
     pip := InitReactorPipeline( NewDebugReactor( c ), rct )
 //    pip := InitReactorPipeline( rct )
-    if err := VisitValue( vb.Val, pip ); err == nil {
+    var err error
+    if vb.Source == nil {
+        c.Logf( "visiting %s", QuoteValue( vb.Val ) )
+        err = VisitValue( vb.Val, pip )
+    } else { err = FeedSource( vb.Source, pip ) }
+    if err == nil {
         EqualWireValues( vb.Val, rct.GetValue(), c.PathAsserter )
     } else { c.Fatal( err ) }
 }

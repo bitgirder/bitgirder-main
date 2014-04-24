@@ -236,6 +236,15 @@ type valueVisit struct {
     visitMap map[ PointerId ] bool
 }
 
+func ( vv valueVisit ) visitAddressed( a Addressed ) ( error, bool ) {
+    addr := a.Address()
+    if _, ok := vv.visitMap[ addr ]; ok {
+        ev := NewValueReferenceEvent( addr )
+        return vv.rep.ProcessEvent( ev ), true
+    }
+    return nil, false
+}
+
 func ( vv valueVisit ) visitSymbolMap( m *SymbolMap, callStart bool ) error {
     if callStart {
         if err := vv.rep.ProcessEvent( NewMapStartEvent() ); err != nil { 
@@ -258,6 +267,8 @@ func ( vv valueVisit ) visitStruct( ms *Struct ) error {
 }
 
 func ( vv valueVisit ) visitList( ml *List ) error {
+    if err, ok := vv.visitAddressed( ml ); ok { return err }
+    vv.visitMap[ ml.Address() ] = true
     if err := vv.rep.ProcessEvent( NewListStartEvent() ); err != nil { 
         return err 
     }

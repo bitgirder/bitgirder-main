@@ -94,6 +94,51 @@ func ( ht heapTestValue ) Dereference() Value { return ht.val }
 
 type ValueBuildTest struct { 
     Val Value 
+    Source []ReactorEvent
+}
+
+func initValueBuildReactorCycleTests() {
+    cyc := NewCyclicValues()
+    AddStdReactorTests(
+        ValueBuildTest{ Val: cyc.S1 },
+        ValueBuildTest{ Val: cyc.L1 },
+        ValueBuildTest{ Val: cyc.M1 },
+    )
+    qn1 := MustQualifiedTypeName( "ns1@v1/S1" )
+    fld := MakeTestId
+    // we create s1 pointing to s2 pointing to s1, but where s2 has non-cyclic
+    // fields as well, and then feed s2 field events in various orders in order
+    // to uncover errors related to clearing field state after encountering
+    // forward references
+    s1, s2 := NewHeapValue( NewStruct( qn1 ) ), NewHeapValue( NewStruct( qn1 ) )
+    s1.Dereference().( *Struct ).Fields.Put( fld( 1 ), s2 )
+    i1Val := Int32( int32( 1 ) )
+    s2.Dereference().( *Struct ).Fields.Put( fld( 1 ), i1Val )
+    s2.Dereference().( *Struct ).Fields.Put( fld( 2 ), s1 )
+    s2.Dereference().( *Struct ).Fields.Put( fld( 3 ), s1 )
+    s2.Dereference().( *Struct ).Fields.Put( fld( 4 ), i1Val )
+    AddStdReactorTests(
+        ValueBuildTest{
+            Val: s1,
+            Source: []ReactorEvent{
+                NewValueAllocationEvent( s1.ValueAddress() ),
+                NewStructStartEvent( qn1 ),
+                    NewFieldStartEvent( fld( 1 ) ),
+                        NewValueAllocationEvent( s2.ValueAddress() ),
+                        NewStructStartEvent( qn1 ),
+                            NewFieldStartEvent( fld( 1 ) ),
+                                NewValueEvent( i1Val ),
+                            NewFieldStartEvent( fld( 2 ) ),
+                                NewValueReferenceEvent( s1.ValueAddress() ),
+                            NewFieldStartEvent( fld( 3 ) ),
+                                NewValueReferenceEvent( s1.ValueAddress() ),
+                            NewFieldStartEvent( fld( 4 ) ),
+                                NewValueEvent( i1Val ),
+                            NewEndEvent(),
+                    NewEndEvent(),
+            },
+        },
+    )
 }
 
 func initValueBuildReactorTests() {
@@ -143,10 +188,7 @@ func initValueBuildReactorTests() {
     )
     valPtr1 := NewHeapValue( Int32( 1 ) )
     addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
-    cyc := NewCyclicValues()
-    addTest( cyc.S1 )
-    addTest( cyc.L1 )
-    addTest( cyc.M1 )
+    initValueBuildReactorCycleTests()
 }
 
 type StructuralReactorErrorTest struct {
@@ -2151,6 +2193,7 @@ func init() {
     StdReactorTests = []interface{}{}
     initValueBuildReactorTests()
     initStructuralReactorTests()
+    initPointerReferenceCheckTests()
     initEventPathTests()
     initFieldOrderReactorTests()
     initServiceTests()

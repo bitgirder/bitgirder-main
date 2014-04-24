@@ -6,33 +6,47 @@ import (
 //    "log"
 )
 
+type ValueBuilder struct {
+    acc *valueAccumulator
+}
+
+func NewValueBuilder() *ValueBuilder {
+    return &ValueBuilder{ acc: newValueAccumulator() }
+}
+
+func ( vb *ValueBuilder ) InitPipeline( p *pipeline.Pipeline ) {
+    EnsureStructuralReactor( p )
+}
+
+func ( vb *ValueBuilder ) GetValue() Value { return vb.acc.getValue() }
+
 type valPtrAcc struct {
     id PointerId
     val *HeapValue
 }
 
-type mapAccPair struct { 
-    fld *Identifier
-    val Value
+type mapAcc struct { 
+    m *SymbolMap
+    curFld *Identifier
 }
 
-type mapAcc struct { pairs []mapAccPair }
+func newMapAcc() *mapAcc { return &mapAcc{ m: NewSymbolMap() } }
 
-func newMapAcc() *mapAcc { return &mapAcc{ []mapAccPair{} } }
+// asserts that ma.curFld is non-nil, clears it, and returns it
+func ( ma *mapAcc ) clearField() *Identifier {
+    if ma.curFld == nil { panic( libError( "no current field" ) ) }
+    res := ma.curFld
+    ma.curFld = nil
+    return res
+}
+
+func ( ma *mapAcc ) setValue( val Value ) { ma.m.Put( ma.clearField(), val ) }
 
 func ( ma *mapAcc ) startField( fld *Identifier ) {
-    ma.pairs = append( ma.pairs, mapAccPair{ fld: fld } )
-}
-
-func ( ma *mapAcc ) setValue( val Value ) {
-    pairPtr := &( ma.pairs[ len( ma.pairs ) - 1 ] )
-    pairPtr.val = val
-}
-
-func ( ma *mapAcc ) makeMap() *SymbolMap {
-    res := NewSymbolMap()
-    for _, pair := range ma.pairs { res.Put( pair.fld, pair.val ) }
-    return res
+    if cur := ma.curFld; cur != nil {
+        panic( libErrorf( "saw start of field %s while cur is %s", fld, cur ) )
+    }
+    ma.curFld = fld
 }
 
 type structAcc struct {
@@ -44,24 +58,54 @@ type listAcc struct { l *List }
 
 func newListAcc() *listAcc { return &listAcc{ NewList() } }
 
+type valueBuildResolution struct {
+    id PointerId
+    f func( Value )
+}
+
 // Can make this public if needed
 type valueAccumulator struct {
     val Value
     accs *stack.Stack
     refs map[ PointerId ] *valPtrAcc
+    resolutions []valueBuildResolution
 }
 
 func newValueAccumulator() *valueAccumulator {
     return &valueAccumulator{ 
         accs: stack.NewStack(), 
         refs: make( map[ PointerId ] *valPtrAcc ),
+        resolutions: make( []valueBuildResolution, 0, 4 ),
     }
+}
+
+func ( va *valueAccumulator ) addResolver( id PointerId, f func( Value ) ) {
+    res := valueBuildResolution{ id: id, f: f }
+    va.resolutions = append( va.resolutions, res )
 }
 
 func ( va *valueAccumulator ) pushAcc( acc interface{} ) { va.accs.Push( acc ) }
 
 func ( va *valueAccumulator ) peekAcc() ( interface{}, bool ) {
     return va.accs.Peek(), ! va.accs.IsEmpty()
+}
+
+func ( va *valueAccumulator ) mustPeekAcc() interface{} {
+    if res, ok := va.peekAcc(); ok { return res }
+    panic( libError( "acc stack is empty" ) )
+}
+
+func ( va *valueAccumulator ) setForwardFieldValue( ma *mapAcc, id PointerId ) {
+    fld := ma.clearField()
+    va.addResolver( id, func( val Value ) { ma.m.Put( fld, val ) } )
+}
+
+func ( va *valueAccumulator ) forwardValueReferenced( id PointerId ) {
+    switch v := va.mustPeekAcc().( type ) {
+    case *structAcc: va.setForwardFieldValue( v.flds, id )
+    case *mapAcc: va.setForwardFieldValue( v, id )
+    default: panic( libErrorf( "unhandled acc: %T", v ) )
+    }
 }
 
 func ( va *valueAccumulator ) acceptValue( acc interface{}, val Value ) bool {
@@ -76,9 +120,14 @@ func ( va *valueAccumulator ) acceptValue( acc interface{}, val Value ) bool {
 
 func ( va *valueAccumulator ) valueForAcc( acc interface{} ) Value {
     switch v := acc.( type ) {
-    case *valPtrAcc: return v.val
-    case *mapAcc: return v.makeMap()
-    case *structAcc: return &Struct{ Type: v.typ, Fields: v.flds.makeMap() }
+    case *valPtrAcc: 
+        if v.val == nil {
+            panic( libErrorf( "no val for ptr acc with id %s", v.id ) )
+        } else {
+            return v.val
+        }
+    case *mapAcc: return v.m
+    case *structAcc: return &Struct{ Type: v.typ, Fields: v.flds.m }
     case *listAcc: return v.l
     }
     panic( libErrorf( "unhandled acc: %T", acc ) )
@@ -88,10 +137,18 @@ func ( va *valueAccumulator ) popAccValue() {
     va.valueReady( va.valueForAcc( va.accs.Pop() ) )
 }
 
+func ( va *valueAccumulator ) resolve() {
+    for _, rs := range va.resolutions {
+        valPtrAcc := va.refs[ rs.id ]
+        rs.f( valPtrAcc.val )
+    }
+}
+
 func ( va *valueAccumulator ) valueReady( val Value ) {
     if acc, ok := va.peekAcc(); ok {
         if va.acceptValue( acc, val ) { va.popAccValue() }
     } else {
+        va.resolve()
         va.val = val
     }
 }
@@ -123,7 +180,11 @@ func ( va *valueAccumulator ) allocValue( id PointerId ) {
 
 func ( va *valueAccumulator ) valueReferenced( vr *ValueReferenceEvent ) error {
     if valPtrAcc, ok := va.refs[ vr.Id ]; ok {
-        va.valueReady( valPtrAcc.val )
+        if valPtrAcc.val == nil {
+            va.forwardValueReferenced( vr.Id )
+        } else { 
+            va.valueReady( valPtrAcc.val ) 
+        }
         return nil
     }
     return rctErrorf( vr.GetPath(), "unhandled value pointer ref: %s", vr.Id )
@@ -139,27 +200,12 @@ func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     case *FieldStartEvent: va.startField( v.Field )
     case *EndEvent: va.end()
     case *ValueAllocationEvent: va.allocValue( v.Id )
-    case *ValueReferenceEvent: va.valueReferenced( v )
+    case *ValueReferenceEvent: return va.valueReferenced( v )
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return nil
 }
 
-type ValueBuilder struct {
-    acc *valueAccumulator
-}
-
-func NewValueBuilder() *ValueBuilder {
-    return &ValueBuilder{ acc: newValueAccumulator() }
-}
-
-func ( vb *ValueBuilder ) InitPipeline( p *pipeline.Pipeline ) {
-    EnsureStructuralReactor( p )
-}
-
-func ( vb *ValueBuilder ) GetValue() Value { return vb.acc.getValue() }
-
 func ( vb *ValueBuilder ) ProcessEvent( ev ReactorEvent ) error {
-    if err := vb.acc.ProcessEvent( ev ); err != nil { return err }
-    return nil
+    return vb.acc.ProcessEvent( ev )
 }
