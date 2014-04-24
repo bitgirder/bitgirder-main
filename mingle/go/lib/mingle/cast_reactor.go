@@ -307,7 +307,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     next ReactorEventProcessor ) error {
 
     if at.Equals( TypeSymbolMap ) {
-        me := NewMapStartEvent()
+        me := NewMapStartEvent( PointerId( uint64( 0 ) ) )
         me.SetPath( ss.GetPath() )
         return cr.processMapStartWithAtomicType( me, at, callTyp, next )
     }

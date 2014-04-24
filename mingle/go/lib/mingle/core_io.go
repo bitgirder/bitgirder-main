@@ -172,7 +172,10 @@ func ( w writeReactor ) startList( id PointerId ) error {
     return w.WriteInt32( -1 )
 }
 
-func ( w writeReactor ) startMap() error { return w.WriteTypeCode( tcSymMap ) }
+func ( w writeReactor ) startMap( id PointerId ) error { 
+    if err := w.WriteTypeCode( tcSymMap ); err != nil { return err }
+    return w.writePointerId( id )
+}
 
 func ( w writeReactor ) value( val Value ) error {
     switch v := val.( type ) {
@@ -241,7 +244,7 @@ func ( w writeReactor ) writeValuePointerReference(
 func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
     case *ValueEvent: return w.value( v.Val )
-    case *MapStartEvent: return w.startMap()
+    case *MapStartEvent: return w.startMap( v.Id )
     case *StructStartEvent: return w.startStruct( v.Type )
     case *ListStartEvent: return w.startList( v.Id )
     case *FieldStartEvent: return w.startField( v.Field )
@@ -624,7 +627,11 @@ func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readSymbolMap( rep ReactorEventProcessor ) error {
-    if err := rep.ProcessEvent( NewMapStartEvent() ); err != nil { return err }
+    if id, err := r.readPointerId(); err == nil {
+        if err := rep.ProcessEvent( NewMapStartEvent( id ) ); err != nil { 
+            return err 
+        }
+    } else { return err }
     return r.readMapFields( rep )
 }
 

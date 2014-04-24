@@ -8,9 +8,8 @@ import (
 )
 
 func assertBinIoInvalidData( 
-    idt *BinIoInvalidDataTest, 
-    a *assert.PathAsserter,
-) {
+    idt *BinIoInvalidDataTest, a *assert.PathAsserter ) {
+
     a = a.Descend( idt.Name )
     rd := NewReader( bytes.NewBuffer( idt.Input ) )
     if val, err := rd.ReadValue(); err == nil {

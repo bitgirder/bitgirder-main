@@ -33,11 +33,18 @@ func ( vp *valPtrAcc ) mustValue() *HeapValue {
 }
 
 type mapAcc struct { 
+    id PointerId
     m *SymbolMap
     curFld *Identifier
 }
 
 func newMapAcc() *mapAcc { return &mapAcc{ m: NewSymbolMap() } }
+
+func newMapAccWithId( id PointerId ) *mapAcc {
+    res := newMapAcc()
+    res.id = id
+    return res
+}
 
 // asserts that ma.curFld is non-nil, clears it, and returns it
 func ( ma *mapAcc ) clearField() *Identifier {
@@ -108,6 +115,7 @@ func ( va *valueAccumulator ) idForAcc( acc interface{} ) PointerId {
     switch v := acc.( type ) {
     case *valPtrAcc: return v.id
     case *listAcc: return v.id
+    case *mapAcc: return v.id
     }
     panic( libErrorf( "not a addressable acc: %T", acc ) )
 }
@@ -219,7 +227,7 @@ func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
     case *ValueEvent: va.valueReady( v.Val )
     case *ListStartEvent: va.pushReferenceAcc( newListAcc( v.Id ) )
-    case *MapStartEvent: va.pushAcc( newMapAcc() )
+    case *MapStartEvent: va.pushReferenceAcc( newMapAccWithId( v.Id ) )
     case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
     case *FieldStartEvent: va.startField( v.Field )
     case *EndEvent: va.end()

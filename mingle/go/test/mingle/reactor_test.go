@@ -35,11 +35,11 @@ func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
 
 func ( c *ReactorTestCall ) callValueBuild( vb ValueBuildTest ) {
     rct := NewValueBuilder()
-    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
-//    pip := InitReactorPipeline( rct )
+//    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
+    pip := InitReactorPipeline( rct )
     var err error
     if vb.Source == nil {
-        c.Logf( "visiting %s", QuoteValue( vb.Val ) )
+//        c.Logf( "visiting %s", QuoteValue( vb.Val ) )
         err = VisitValue( vb.Val, pip )
     } else { err = FeedSource( vb.Source, pip ) }
     if err == nil {
