@@ -324,9 +324,8 @@ func initPointerReferenceCheckTests() {
     fld := func( i int ) *FieldStartEvent {
         return NewFieldStartEvent( id( i ) )
     }
-    ss := func( i int ) *StructStartEvent {
-        return NewStructStartEvent( qname( fmt.Sprintf( "ns1@v1/S%d", i ) ) )
-    }
+    ival := NewValueEvent( Int32( 1 ) )
+    qn := MustQualifiedTypeName( "ns1@v1/S1" )
     add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
         AddStdReactorTests(
             &PointerEventCheckTest{
@@ -335,12 +334,19 @@ func initPointerReferenceCheckTests() {
             },
         )
     }
-    add( p( "1" ),
-        "attempt to reallocate already allocated pointer with id: 1",
-        NewListStartEvent( ptrId( 2 ) ),
-        ptrAlloc( 1 ), 
-        ptrAlloc( 1 ), 
-    )
+    addReallocCheck := func( errEv ReactorEvent ) {
+        msg := "attempt to redefine reference: 1"
+        add( p( "1" ), msg,
+            NewListStartEvent( ptrId( 2 ) ), ptrAlloc( 1 ), errEv,
+        )
+        add( p( 1 ), msg, NewListStartEvent( ptrId( 1 ) ), ival, errEv )
+        add( p( 1 ), msg, NewMapStartEvent( ptrId( 1 ) ), fld( 1 ), errEv )
+        add( p( 1 ), msg,
+            ptrAlloc( 1 ), NewStructStartEvent( qn ), fld( 1 ), errEv )
+    }
+    addReallocCheck( ptrAlloc( 1 ) )
+    addReallocCheck( NewListStartEvent( ptrId( 1 ) ) )
+    addReallocCheck( NewMapStartEvent( ptrId( 1 ) ) )
     add( nil, "unrecognized reference to pointer with id: 1", ptrAlloc( 1 ) )
     add( p( 2 ),
         "unrecognized reference to pointer with id: 2",
@@ -349,22 +355,6 @@ func initPointerReferenceCheckTests() {
         ptrAlloc( 1 ),
         fld( 2 ),
         ptrRef( 2 ),
-    )
-    add( p( 1 ),
-        "cyclical reference",
-        ptrAlloc( 1 ),
-        ss( 1 ),
-        fld( 1 ),
-        ptrRef( 1 ),
-    )
-    add( p( 1, 1 ),
-        "cyclical reference",
-        ptrAlloc( 1 ),
-        ss( 1 ),
-        fld( 1 ),
-            ss( 2 ),
-            fld( 1 ),
-            ptrRef( 1 ),
     )
 }
 
