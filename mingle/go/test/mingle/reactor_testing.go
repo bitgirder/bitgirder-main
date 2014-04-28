@@ -112,6 +112,10 @@ func ( f *TestPointerIdFactory ) NextMapStart() *MapStartEvent {
     return NewMapStartEvent( f.NextPointerId() )
 }
 
+func ( f *TestPointerIdFactory ) NextValueAllocation() *ValueAllocationEvent {
+    return NewValueAllocationEvent( f.NextPointerId() )
+}
+
 func ( f *TestPointerIdFactory ) nextHeapTestValue( val Value ) heapTestValue {
     return heapTestValue{ val: val, id: f.NextPointerId() }
 }
@@ -119,6 +123,40 @@ func ( f *TestPointerIdFactory ) nextHeapTestValue( val Value ) heapTestValue {
 type ValueBuildTest struct { 
     Val Value 
     Source []ReactorEvent
+}
+
+func initValueBuildZeroRefTests() {
+    qn := MustQualifiedTypeName( "ns1@v1/S1" )
+    AddStdReactorTests(
+        ValueBuildTest{
+            Val: MustList(
+                int32( 1 ),
+                MustSymbolMap( 
+                    "f1", int32( 1 ),
+                    "f2", MustList( "hello" ),
+                ),
+                NewHeapValue( Int32( int32( 1 ) ) ),
+                NewHeapValue( MustStruct( "ns1@v1/S1" ) ),
+            ),
+            Source: CopySource(
+                []ReactorEvent{
+                    NewListStartEvent( PointerIdNull ),
+                        NewValueEvent( Int32( int32( 1 ) ) ),
+                        NewMapStartEvent( PointerIdNull ),
+                            NewFieldStartEvent( MakeTestId( 1 ) ),
+                                NewValueEvent( Int32( int32( 1 ) ) ),
+                            NewFieldStartEvent( MakeTestId( 2 ) ),
+                                NewListStartEvent( PointerIdNull ),
+                                    NewValueEvent( String( "hello" ) ),
+                                NewEndEvent(),
+                        NewEndEvent(),
+                        ptrAlloc( 0 ), NewValueEvent( Int32( int32( 1 ) ) ),
+                        ptrAlloc( 0 ), NewStructStartEvent( qn ), NewEndEvent(),
+                    NewEndEvent(),
+                },
+            ),
+        },
+    )
 }
 
 func initValueBuildReactorCycleTests() {
@@ -212,6 +250,7 @@ func initValueBuildReactorTests() {
     )
     valPtr1 := NewHeapValue( Int32( 1 ) )
     addTest( MustList( valPtr1, valPtr1, valPtr1 ) )
+    initValueBuildZeroRefTests()
     initValueBuildReactorCycleTests()
 }
 
@@ -234,6 +273,9 @@ type EventPathTest struct {
 
 func ( ept EventPathTest ) TestName() string { return ept.Name }
 
+// we only add here error tests; we assume that a value build reactor sits
+// behind a structural reactor and so let ValueBuildTest successes imply correct
+// behavior of the structural check reactor for valid inputs
 func initStructuralReactorTests() {
     evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
     id := MakeTestId
@@ -274,6 +316,9 @@ func initStructuralReactorTests() {
         ),
         mk1( "Expected field name or end of fields but got &value",
             evStartStruct1, evValuePtr1,
+        ),
+        mk1( "Expected field name or end of fields but got &reference",
+            evStartStruct1, ptrRef( 2 ),
         ),
         mk1( "Expected field name or end of fields but got list start",
             evStartStruct1, evListStart,
@@ -316,7 +361,7 @@ func initStructuralReactorTests() {
 
 type PointerEventCheckTest struct {
     Events []ReactorEvent
-    Error error
+    Error error // if nil then Events should be fed through without error
 }
 
 func initPointerReferenceCheckTests() {
@@ -334,12 +379,20 @@ func initPointerReferenceCheckTests() {
             },
         )
     }
+    add0 := func( path objpath.PathNode, evs ...ReactorEvent ) {
+        add( path, "attempt to reference null pointer", evs... )
+    }
+    add0( p( "0" ), NewListStartEvent( 0 ), ptrRef( 0 ) )
+    add0( p( "1" ), NewListStartEvent( 0 ), ival, ptrRef( 0 ) )
+    add0( p( 1, 2 ),
+        NewMapStartEvent( 0 ), fld( 1 ), 
+            NewMapStartEvent( 0 ), fld( 2 ), ptrRef( 0 ) )
     addReallocCheck := func( errEv ReactorEvent ) {
         msg := "attempt to redefine reference: 1"
         add( p( "1" ), msg,
-            NewListStartEvent( ptrId( 2 ) ), ptrAlloc( 1 ), errEv,
+            NewListStartEvent( ptrId( 2 ) ), ptrAlloc( 1 ), ival, errEv,
         )
-        add( p( 1 ), msg, NewListStartEvent( ptrId( 1 ) ), ival, errEv )
+        add( p( "1" ), msg, NewListStartEvent( ptrId( 1 ) ), ival, errEv )
         add( p( 1 ), msg, NewMapStartEvent( ptrId( 1 ) ), fld( 1 ), errEv )
         add( p( 1 ), msg,
             ptrAlloc( 1 ), NewStructStartEvent( qn ), fld( 1 ), errEv )
@@ -347,14 +400,28 @@ func initPointerReferenceCheckTests() {
     addReallocCheck( ptrAlloc( 1 ) )
     addReallocCheck( NewListStartEvent( ptrId( 1 ) ) )
     addReallocCheck( NewMapStartEvent( ptrId( 1 ) ) )
-    add( nil, "unrecognized reference to pointer with id: 1", ptrAlloc( 1 ) )
+    add( p( "0" ), "unrecognized reference: 1",
+        NewListStartEvent( ptrId( 2 ) ), ptrRef( 1 ) )
     add( p( 2 ),
-        "unrecognized reference to pointer with id: 2",
+        "unrecognized reference: 2",
         NewMapStartEvent( ptrId( 3 ) ),
         fld( 1 ),
-        ptrAlloc( 1 ),
+        ptrAlloc( 1 ), ival,
         fld( 2 ),
         ptrRef( 2 ),
+    )
+    AddStdReactorTests(
+        &PointerEventCheckTest{
+            Events: CopySource( 
+                []ReactorEvent{
+                    NewStructStartEvent( qn ),
+                    fld( 1 ), ptrAlloc( 0 ), ival,
+                    fld( 2 ), NewListStartEvent( PointerIdNull ), NewEndEvent(),
+                    fld( 3 ), NewMapStartEvent( PointerIdNull ), NewEndEvent(),
+                    NewEndEvent(),
+                },
+            ),
+        },
     )
 }
 
@@ -372,12 +439,9 @@ func initEventPathTests() {
         return NewValueEvent( Int64( i ) )
     }
     idFact := NewTestPointerIdFactory()
-    nextEvValuePtr := func() *ValueAllocationEvent {
-        return NewValueAllocationEvent( idFact.NextPointerId() )
-    }
     evEnd := NewEndEvent()
     addTest := func( name string, evs ...EventExpectation ) {
-        ptrStart := ee( nextEvValuePtr(), nil )
+        ptrStart := ee( idFact.NextValueAllocation(), nil )
         evsWithPtr := append( []EventExpectation{ ptrStart }, evs... )
         AddStdReactorTests(
             &EventPathTest{ Name: name, Events: evs },
@@ -401,7 +465,7 @@ func initEventPathTests() {
         ee( evStartField( 1 ), p( 1 ) ),
             ee( evValue( 1 ), p( 1 ) ),
         ee( evStartField( 2 ), p( 2 ) ),
-            ee( nextEvValuePtr(), p( 2 ) ),
+            ee( idFact.NextValueAllocation(), p( 2 ) ),
                 ee( evValue( 2 ), p( 2 ) ),
         ee( evEnd, nil ),
     )
@@ -413,14 +477,31 @@ func initEventPathTests() {
         ee( idFact.NextListStart(), nil ),
             ee( evValue( 1 ), p( "0" ) ),
             ee( evValue( 1 ), p( "1" ) ),
-            ee( nextEvValuePtr(), p( "2" ) ),
+            ee( idFact.NextValueAllocation(), p( "2" ) ),
                 ee( evValue( 2 ), p( "2" ) ),
+            ee( ptrRef( 2 ), p( "3" ) ),
+            ee( evValue( 4 ), p( "4" ) ),
         ee( NewEndEvent(), nil ),
     )
     addTest( "nested-list1",
         ee( idFact.NextListStart(), nil ),
             ee( idFact.NextMapStart(), p( "0" ) ),
-            ee( NewEndEvent(), p( "0" ) ),
+                ee( evStartField( 1 ), p( "0", 1 ) ),
+                ee( evValue( 1 ), p( "0", 1 ) ),
+                ee( NewEndEvent(), p( "0" ) ),
+            ee( idFact.NextListStart(), p( "1" ) ),
+                ee( evValue( 1 ), p( "1", "0" ) ),
+                ee( NewEndEvent(), p( "1" ) ),
+            ee( idFact.NextValueAllocation(), p( "2" ) ),
+                ee( idFact.NextMapStart(), p( "2" ) ),
+                    ee( evStartField( 1 ), p( "2", 1 ) ),
+                    ee( evValue( 1 ), p( "2", 1 ) ),
+                    ee( NewEndEvent(), p( "2" ) ),
+            ee( idFact.NextValueAllocation(), p( "3" ) ),
+                ee( idFact.NextListStart(), p( "3" ) ),
+                    ee( evValue( 1 ), p( "3", "0" ) ),
+                    ee( NewEndEvent(), p( "3" ) ),
+            ee( evValue( 4 ), p( "4" ) ),
         ee( NewEndEvent(), nil ),
     )
     addTest( "nested-list2",
@@ -437,10 +518,10 @@ func initEventPathTests() {
                 ee( evStartField( 1 ), p( "1", 1 ) ),
                     ee( evValue( 1 ), p( "1", 1 ) ),
                 ee( NewEndEvent(), p( "1" ) ),
-            ee( nextEvValuePtr(), p( "2" ) ),
+            ee( idFact.NextValueAllocation(), p( "2" ) ),
                 ee( idFact.NextListStart(), p( "2" ) ),
                     ee( evValue( 1 ), p( "2", "0" ) ),
-                    ee( nextEvValuePtr(), p( "2", "1" ) ),
+                    ee( idFact.NextValueAllocation(), p( "2", "1" ) ),
                         ee( idFact.NextListStart(), p( "2", "1" ) ),
                             ee( evValue( 1 ), p( "2", "1", "0" ) ),
                             ee( evValue( 2 ), p( "2", "1", "1" ) ),
@@ -471,13 +552,13 @@ func initEventPathTests() {
                 ee( evValue( 1 ), p( 1, "1" ) ),
             ee( NewEndEvent(), p( 1 ) ),
         ee( evStartField( 2 ), p( 2 ) ),
-            ee( nextEvValuePtr(), p( 2 ) ),
+            ee( idFact.NextValueAllocation(), p( 2 ) ),
                 ee( evValue( 1 ), p( 2 ) ),
         ee( evStartField( 3 ), p( 3 ) ),
             ee( idFact.NextListStart(), p( 3 ) ),
-                ee( nextEvValuePtr(), p( 3, "0" ) ),
+                ee( idFact.NextValueAllocation(), p( 3, "0" ) ),
                     ee( evValue( 0 ), p( 3, "0" ) ),
-                ee( nextEvValuePtr(), p( 3, "1" ) ),
+                ee( idFact.NextValueAllocation(), p( 3, "1" ) ),
                     ee( evValue( 0 ), p( 3, "1" ) ),
             ee( NewEndEvent(), p( 3 ) ),
         ee( NewEndEvent(), nil ),
@@ -496,7 +577,8 @@ func initEventPathTests() {
                         ee( evStartField( 1 ), p( 1, 2, "2", "1", 1 ) ),
                             ee( evValue( 1 ), p( 1, 2, "2", "1", 1 ) ),
                         ee( evStartField( 2 ), p( 1, 2, "2", "1", 2 ) ),
-                            ee( nextEvValuePtr(), p( 1, 2, "2", "1", 2 ) ),
+                            ee( idFact.NextValueAllocation(), 
+                                p( 1, 2, "2", "1", 2 ) ),
                             ee( evValue( 2 ), p( 1, 2, "2", "1", 2 ) ),
                         ee( NewEndEvent(), p( 1, 2, "2", "1" ) ),
                     ee( NewEndEvent(), p( 1, 2, "2" ) ),
@@ -760,7 +842,8 @@ type FieldOrderPathTest struct {
 }
 
 func initFieldOrderPathTests() {
-    idFact := NewTestPointerIdFactory()
+    mapStart := NewMapStartEvent( PointerIdNull )
+    listStart := NewListStartEvent( PointerIdNull )
     i1 := Int32( int32( 1 ) )
     val1 := NewValueEvent( i1 )
     id := MakeTestId
@@ -779,14 +862,14 @@ func initFieldOrderPathTests() {
             { fld( 0 ), p( 0 ) },
             { val1, p( 0 ) },
             { fld( 1 ), p( 1 ) },
-            { idFact.NextMapStart(), p( 1 ) },
+            { mapStart, p( 1 ) },
                 { fld( 1 ), p( 1, 1 ) },
                 { val1, p( 1, 1 ) },
                 { fld( 0 ), p( 1, 0 ) },
                 { val1, p( 1, 0 ) },
             { NewEndEvent(), p( 1 ) },
             { fld( 2 ), p( 2 ) },
-            { idFact.NextListStart(), p( 2 ) },
+            { listStart, p( 2 ) },
                 { val1, p( 2, "0" ) },
                 { val1, p( 2, "1" ) },
             { NewEndEvent(), p( 2 ) },
@@ -795,7 +878,7 @@ func initFieldOrderPathTests() {
                 { fld( 0 ), p( 3, 0 ) },
                 { val1, p( 3, 0 ) },
                 { fld( 1 ), p( 3, 1 ) },
-                { idFact.NextListStart(), p( 3, 1 ) },
+                { listStart, p( 3, 1 ) },
                     { val1, p( 3, 1, "0" ) },
                     { val1, p( 3, 1, "1" ) },
                 { NewEndEvent(), p( 3, 1 ) },
@@ -819,7 +902,7 @@ func initFieldOrderPathTests() {
                     { val1, p( 4, 2, 1 ) },
                 { NewEndEvent(), p( 4, 2 ) },
                 { fld( 3 ), p( 4, 3 ) },
-                { idFact.NextMapStart(), p( 4, 3 ) },
+                { mapStart, p( 4, 3 ) },
                     { fld( 0 ), p( 4, 3, 0 ) },
                     { ss( 3 ), p( 4, 3, 0 ) },
                         { fld( 0 ), p( 4, 3, 0, 0 ) },
@@ -836,7 +919,7 @@ func initFieldOrderPathTests() {
                     { NewEndEvent(), p( 4, 3, 1 ) },
                 { NewEndEvent(), p( 4, 3 ) },
                 { fld( 4 ), p( 4, 4 ) },
-                { idFact.NextListStart(), p( 4, 4 ) },
+                { listStart, p( 4, 4 ) },
                     { ss( 3 ), p( 4, 4, "0" ) },
                         { fld( 0 ), p( 4, 4, "0", 0 ) },
                         { val1, p( 4, 4, "0", 0 ) },
@@ -862,12 +945,13 @@ func initFieldOrderPathTests() {
     evs := [][]ReactorEvent{
         []ReactorEvent{ val1 },
         []ReactorEvent{ 
-            idFact.NextMapStart(), fld( 1 ), val1, fld( 0 ), val1, NewEndEvent() },
-        []ReactorEvent{ idFact.NextListStart(), val1, val1, NewEndEvent() },
+            mapStart, 
+                fld( 1 ), val1, fld( 0 ), val1, NewEndEvent() },
+        []ReactorEvent{ listStart, val1, val1, NewEndEvent() },
         []ReactorEvent{ 
             ss( 2 ), 
                 fld( 0 ), val1, 
-                fld( 1 ), idFact.NextListStart(), val1, val1, NewEndEvent(),
+                fld( 1 ), listStart, val1, val1, NewEndEvent(),
             NewEndEvent(),
         },
         // val for f4 is nested and has nested ss2 instances that are in varying
@@ -875,7 +959,7 @@ func initFieldOrderPathTests() {
         []ReactorEvent{ 
             ss( 1 ),
                 fld( 0 ), val1,
-                fld( 4 ), idFact.NextListStart(),
+                fld( 4 ), listStart,
                     ss( 3 ),
                         fld( 0 ), val1,
                         fld( 1 ), val1,
@@ -889,7 +973,7 @@ func initFieldOrderPathTests() {
                     fld( 1 ), val1,
                     fld( 0 ), val1,
                 NewEndEvent(),
-                fld( 3 ), idFact.NextMapStart(),
+                fld( 3 ), mapStart,
                     fld( 0 ), ss( 3 ),
                         fld( 1 ), val1,
                         fld( 0 ), val1,

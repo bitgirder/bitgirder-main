@@ -19,6 +19,17 @@ func ( c *ReactorTestCall ) callStructuralError(
     } else { c.Equal( ss.Error, err ) }
 }
 
+func ( c *ReactorTestCall ) callPointerEventCheck( pc *PointerEventCheckTest ) {
+    rct := InitReactorPipeline( 
+        NewPathSettingProcessor(), NewPointerCheckReactor() )
+    if err := FeedSource( pc.Events, rct ); err == nil {
+        c.Truef( pc.Error == nil, 
+            "expected error (%T): %s", pc.Error, pc.Error )
+    } else {
+        c.EqualErrors( pc.Error, err )
+    }
+}
+
 func ( c *ReactorTestCall ) callEventPath( pt *EventPathTest ) {
     
     rct := NewPathSettingProcessor();
@@ -408,12 +419,13 @@ func ( c *ReactorTestCall ) callResponse(
 func ( c *ReactorTestCall ) call() {
 //    c.Logf( "Calling reactor test of type %T", c.Test )
     switch s := c.Test.( type ) {
-//    case *StructuralReactorErrorTest: c.callStructuralError( s )
+    case *StructuralReactorErrorTest: c.callStructuralError( s )
+    case *PointerEventCheckTest: c.callPointerEventCheck( s )
     case ValueBuildTest: c.callValueBuild( s )
-//    case *EventPathTest: c.callEventPath( s )
-//    case *FieldOrderReactorTest: c.callFieldOrderReactor( s )
-//    case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
-//    case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
+    case *EventPathTest: c.callEventPath( s )
+    case *FieldOrderReactorTest: c.callFieldOrderReactor( s )
+    case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
+    case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
 //    case *CastReactorTest: c.callCast( s )
 //    case *RequestReactorTest: c.callRequest( s )
 //    case *ResponseReactorTest: c.callResponse( s )

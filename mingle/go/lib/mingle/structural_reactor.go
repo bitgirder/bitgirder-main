@@ -42,6 +42,8 @@ func ( sr *StructuralReactor ) descForEvent( ev ReactorEvent ) string {
     case *MapStartEvent: return "map start"
     case *EndEvent: return "end"
     case *ValueEvent: return "value"
+    case *ValueAllocationEvent: return "&value"
+    case *ValueReferenceEvent: return "&reference"
     case *FieldStartEvent: return sr.sawDescFor( v.Field )
     case *StructStartEvent: return sr.sawDescFor( v.Type )
     }
@@ -84,7 +86,7 @@ func ( sr *StructuralReactor ) failTopType( ev ReactorEvent ) error {
 func ( sr *StructuralReactor ) couldStartWithEvent( ev ReactorEvent ) bool {
     topIsVal := sr.topTyp == ReactorTopTypeValue
     switch ev.( type ) {
-    case *ValueEvent: return topIsVal
+    case *ValueEvent, *ValueAllocationEvent: return topIsVal
     case *ListStartEvent: return sr.topTyp == ReactorTopTypeList || topIsVal
     case *MapStartEvent: return sr.topTyp == ReactorTopTypeMap || topIsVal
     case *StructStartEvent: return sr.topTyp == ReactorTopTypeStruct || topIsVal
@@ -127,6 +129,7 @@ func ( sr *StructuralReactor ) completeValue() {
     sr.done = sr.stack.IsEmpty()
 }
 
+// used for ValueEvent and ValueReferenceEvent
 func ( sr *StructuralReactor ) checkValue( ev ReactorEvent ) error {
     if err := sr.execValueCheck( ev, nil ); err != nil { return err }
     sr.completeValue()
@@ -170,7 +173,8 @@ func ( sr *StructuralReactor ) checkEnd( ee *EndEvent ) error {
 func ( sr *StructuralReactor ) ProcessEvent( ev ReactorEvent ) error {
     if err := sr.checkNotDone( ev ); err != nil { return err }
     switch v := ev.( type ) {
-    case *ValueEvent: return sr.checkValue( v )
+    case *ValueEvent, *ValueReferenceEvent: return sr.checkValue( v )
+    case *ValueAllocationEvent: return sr.execValueCheck( v, nil )
     case *StructStartEvent, *MapStartEvent: return sr.checkStructureStart( ev )
     case *FieldStartEvent: return sr.checkFieldStart( v )
     case *EndEvent: return sr.checkEnd( v )

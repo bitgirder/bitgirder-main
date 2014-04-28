@@ -14,8 +14,9 @@ func NewValueBuilder() *ValueBuilder {
     return &ValueBuilder{ acc: newValueAccumulator() }
 }
 
-func ( vb *ValueBuilder ) InitPipeline( p *pipeline.Pipeline ) {
+func ( vb *ValueBuilder ) InitializePipeline( p *pipeline.Pipeline ) {
     EnsureStructuralReactor( p )
+    EnsurePointerCheckReactor( p )
 }
 
 func ( vb *ValueBuilder ) GetValue() Value { return vb.acc.getValue() }
@@ -121,7 +122,7 @@ func ( va *valueAccumulator ) idForAcc( acc interface{} ) PointerId {
 }
 
 func ( va *valueAccumulator ) pushReferenceAcc( acc interface{} ) {
-    va.refs[ va.idForAcc( acc ) ] = acc
+    if id := va.idForAcc( acc ); id != PointerIdNull { va.refs[ id ] = acc }
     va.pushAcc( acc )
 }
 

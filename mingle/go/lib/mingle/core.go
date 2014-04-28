@@ -505,6 +505,8 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
 
 type PointerId uint64
 
+const PointerIdNull = PointerId( uint64( 0 ) )
+
 func UnsafeToPointerId( p unsafe.Pointer ) PointerId {
     return PointerId( uint64( uintptr( p ) ) )
 }

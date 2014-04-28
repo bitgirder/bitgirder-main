@@ -20,26 +20,12 @@ type psFieldContext struct { path objpath.PathNode }
 
 type psMapContext struct { path objpath.PathNode }
 
+type psValueAllocContext struct { path objpath.PathNode }
+
 type psListContext struct {
     basePath objpath.PathNode
     path *objpath.ListNode
 }
-
-//type endType int
-//
-//const (
-//    endTypeList = endType( iota )
-//    endTypeMap
-//    endTypeStruct
-//    endTypeField
-//)
-//
-//type psStackElt struct {
-//    et endType
-//    awaitingList0 bool
-//    basePath objpath.PathNode
-//    path objpath.PathNode
-//}
 
 type PathSettingProcessor struct {
     stack *stack.Stack
@@ -55,10 +41,6 @@ func inspectPath( path objpath.PathNode ) string {
     if path == nil { return "<nil>" }
     return FormatIdPath( path )
 }
-
-//func ( proc *PathSettingProcessor ) inspect() string {
-//    return fmt.Sprintf( "<%T path: %s>", proc, proc.inspectPath() )
-//}
 
 func ( proc *PathSettingProcessor ) SetStartPath( p objpath.PathNode ) {
     if p == nil { return }
@@ -80,6 +62,9 @@ func ( proc *PathSettingProcessor ) InitializePipeline(
 func ( proc *PathSettingProcessor ) topPath() objpath.PathNode {
     if proc.stack.IsEmpty() { return proc.startPath }
     switch v := proc.stack.Peek().( type ) {
+    case psValueAllocContext:
+        if v.path == nil { return nil }
+        return v.path
     case psFieldContext: 
         if v.path == nil { return nil }
         return v.path
@@ -93,10 +78,6 @@ func ( proc *PathSettingProcessor ) topPath() objpath.PathNode {
     }
     panic( libErrorf( "unhandled stack element: %T", proc.stack.Peek() ) )
 }
-
-//func ( proc *PathSettingProcessor ) pathPop() {
-//    if proc.path != nil { proc.path = proc.path.Parent() }
-//}
 
 func ( proc *PathSettingProcessor ) updateList() {
     if proc.stack.IsEmpty() { return }
@@ -115,6 +96,11 @@ func ( proc *PathSettingProcessor ) updateList() {
 
 func ( proc *PathSettingProcessor ) prepareValue() { proc.updateList() }
 
+func ( proc *PathSettingProcessor ) prepareValueAllocation() {
+    proc.updateList()
+    proc.stack.Push( psValueAllocContext{ path: proc.topPath() } )
+}
+
 func ( proc *PathSettingProcessor ) prepareListStart() {
     proc.prepareValue() // this list may be itself be a value in another list
     proc.stack.Push( &psListContext{ basePath: proc.topPath() } )
@@ -123,11 +109,9 @@ func ( proc *PathSettingProcessor ) prepareListStart() {
 func ( proc *PathSettingProcessor ) prepareStructure() {
     proc.prepareValue()
     proc.stack.Push( psMapContext{ path: proc.topPath() } )
-//    proc.stack.Push( &psFieldContext{ basePath: proc.topPath() } )
 }
 
 func ( proc *PathSettingProcessor ) prepareStartField( f *Identifier ) {
-//    fldCtx := proc.stack.Peek().( *psFieldContext )
     fldPath := objpath.Descend( proc.topPath(), f )
     proc.stack.Push( psFieldContext{ path: fldPath } )
 }
@@ -139,7 +123,8 @@ func ( proc *PathSettingProcessor ) prepareEnd() {
 
 func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
     switch v := ev.( type ) {
-    case *ValueEvent: proc.prepareValue()
+    case *ValueEvent, *ValueReferenceEvent: proc.prepareValue()
+    case *ValueAllocationEvent: proc.prepareValueAllocation()
     case *ListStartEvent: proc.prepareListStart()
     case *MapStartEvent, *StructStartEvent: proc.prepareStructure()
     case *FieldStartEvent: proc.prepareStartField( v.Field )
@@ -148,14 +133,22 @@ func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
     if path := proc.topPath(); path != nil { ev.SetPath( path ) }
 }
 
+func ( proc *PathSettingProcessor ) optCompleteAllocation() {
+    if _, ok := proc.stack.Peek().( psValueAllocContext ); ok { 
+        proc.stack.Pop() 
+    }
+}
+
 func ( proc *PathSettingProcessor ) processedValue() {
     if proc.stack.IsEmpty() { return }
+    proc.optCompleteAllocation()
     if _, ok := proc.stack.Peek().( psFieldContext ); ok { proc.stack.Pop() }
 }
 
 func ( proc *PathSettingProcessor ) processedEnd() {
     if proc.stack.IsEmpty() { return }
     if _, ok := proc.stack.Peek().( psMapContext ); ok { proc.stack.Pop() }
+    proc.optCompleteAllocation()
     proc.processedValue()
 }
 
