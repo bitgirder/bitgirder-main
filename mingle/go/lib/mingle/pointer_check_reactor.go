@@ -2,6 +2,7 @@ package mingle
 
 import (
     "bitgirder/pipeline"
+//    "log"
 )
 
 type PointerCheckReactor struct {
@@ -25,7 +26,7 @@ func ( r *PointerCheckReactor ) checkReference(
 func ( r *PointerCheckReactor ) checkAlloc( 
     ev ReactorEvent, id PointerId ) error {
 
-    if id == 0 { return nil }
+    if id == PointerIdNull { return nil }
     if _, ok := r.m[ id ]; ok {
         tmpl := "attempt to redefine reference: %s"
         return rctErrorf( ev.GetPath(), tmpl, id )

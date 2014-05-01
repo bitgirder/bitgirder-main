@@ -294,11 +294,14 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-list-val-type-code",
-            ErrMsg: `[offset 57]: Unrecognized value code: 0x64`,
+            ErrMsg: `[offset 102]: Unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
                 tcStruct, int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
                 tcField, MustIdentifier( "f1" ),
-                tcList, int32( -1 ), uint64( 1 ),
+                tcList, 
+                    uint64( 1 ), // pointer id
+                    tcAtomTyp, QnameInt32, tcNull, // list type: Int32
+                    int32( -1 ), // size
                 tcInt32, int32( 10 ), // an okay list val
                 binIoInvalidTypeCode,
             ),

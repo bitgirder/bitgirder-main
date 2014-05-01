@@ -166,9 +166,10 @@ func ( w writeReactor ) startField( fld *Identifier ) error {
     return w.WriteIdentifier( fld )
 }
 
-func ( w writeReactor ) startList( id PointerId ) error { 
+func ( w writeReactor ) startList( lse *ListStartEvent ) error { 
     if err := w.WriteTypeCode( tcList ); err != nil { return err }
-    if err := w.writePointerId( id ); err != nil { return err }
+    if err := w.writePointerId( lse.Id ); err != nil { return err }
+    if err := w.WriteTypeReference( lse.Type ); err != nil { return err }
     return w.WriteInt32( -1 )
 }
 
@@ -223,22 +224,19 @@ func ( w writeReactor ) writePointerId( id PointerId ) error {
     return w.WriteUint64( uint64( id ) )
 }
 
-func ( w writeReactor ) writePointerEvent( tc uint8, id PointerId ) error {
-    
-    if err := w.WriteTypeCode( tc ); err != nil { return err }
-    return w.writePointerId( id )
-}
-
 func ( w writeReactor ) writeValuePointerAlloc( 
     vp *ValueAllocationEvent ) error {
 
-    return w.writePointerEvent( tcValPtrAlloc, vp.Id )
+    if err := w.WriteTypeCode( tcValPtrAlloc ); err != nil { return err }
+    if err := w.WriteTypeReference( vp.Type ); err != nil { return err }
+    return w.writePointerId( vp.Id )
 }
 
 func ( w writeReactor ) writeValuePointerReference( 
     v *ValueReferenceEvent ) error {
 
-    return w.writePointerEvent( tcValPtrRef, v.Id )
+    if err := w.WriteTypeCode( tcValPtrRef ); err != nil { return err }
+    return w.writePointerId( v.Id )
 }
 
 func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
@@ -246,7 +244,7 @@ func ( w writeReactor ) ProcessEvent( ev ReactorEvent ) error {
     case *ValueEvent: return w.value( v.Val )
     case *MapStartEvent: return w.startMap( v.Id )
     case *StructStartEvent: return w.startStruct( v.Type )
-    case *ListStartEvent: return w.startList( v.Id )
+    case *ListStartEvent: return w.startList( v )
     case *FieldStartEvent: return w.startField( v.Field )
     case *EndEvent: return w.WriteTypeCode( tcEnd )
     case *ValueAllocationEvent: return w.writeValuePointerAlloc( v )
@@ -283,6 +281,7 @@ func ( w *BinWriter ) writeRangeRestriction(
 
 func ( w *BinWriter ) WriteAtomicTypeReference( 
     at *AtomicTypeReference ) ( err error ) {
+
     if err = w.WriteTypeCode( tcAtomTyp ); err != nil { return }
     if err = w.WriteTypeName( at.Name ); err != nil { return }
     switch r := at.Restriction.( type ) {
@@ -595,9 +594,12 @@ func ( r *BinReader ) readPointerId() ( PointerId, error ) {
 }
 
 func ( r *BinReader ) readValuePointerAlloc( rep ReactorEventProcessor ) error {
-    id, err := r.readPointerId()
-    ev := NewValueAllocationEvent( id )
-    if err = rep.ProcessEvent( ev ); err != nil { return err }
+    if typ, err := r.ReadTypeReference(); err == nil {
+        if id, err := r.readPointerId(); err == nil {
+            ev := NewValueAllocationEvent( typ, id )
+            if err := rep.ProcessEvent( ev ); err != nil { return err }
+        } else { return err }
+    } else { return err }
     return r.implReadValue( rep )
 }
 
@@ -645,13 +647,18 @@ func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
     return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
-    if _, err := r.ReadInt32(); err != nil { return err } // skip size
+func ( r *BinReader ) readListHeader( rep ReactorEventProcessor ) error {
     if id, err := r.readPointerId(); err == nil {
-        if err = rep.ProcessEvent( NewListStartEvent( id ) ); err != nil {
-            return err
-        }
+        if typ, err := r.ReadTypeReference(); err == nil {
+            lse := NewListStartEvent( typ, id )
+            if err = rep.ProcessEvent( lse ); err != nil { return err }
+        } else { return err }
     } else { return err }
+    return nil
+}
+
+func ( r *BinReader ) readListValues( rep ReactorEventProcessor ) error {
+    if _, err := r.ReadInt32(); err != nil { return err } // skip size
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
@@ -663,6 +670,11 @@ func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
         }
     }
     panic( libErrorf( "Unreachable" ) )
+}
+
+func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
+    if err := r.readListHeader( rep ); err != nil { return err }
+    return r.readListValues( rep )
 }
 
 func ( r *BinReader ) implReadValue( rep ReactorEventProcessor ) error {

@@ -137,9 +137,12 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
         stack: stack.NewStack(),
     }
     ordRct := NewFieldOrderReactor( fogImpl( fo.Orders ) )
-    pip := InitReactorPipeline( ordRct, chk, vb )
+    pip := InitReactorPipeline( ordRct, NewDebugReactor( c ), chk, vb )
+//    pip := InitReactorPipeline( ordRct, chk, vb )
     AssertFeedEventSource( eventSliceSource( fo.Source ), pip, c )
-    assert.Equal( fo.Expect, vb.GetValue() )
+    c.Logf( "expecting %s, got %s", QuoteValue( fo.Expect ),
+        QuoteValue( vb.GetValue() ) )
+    EqualWireValues( fo.Expect, vb.GetValue(), c.PathAsserter )
 }
 
 func ( c *ReactorTestCall ) callFieldOrderPathTest( fo *FieldOrderPathTest ) {
@@ -266,17 +269,19 @@ func ( c *ReactorTestCall ) addCastReactors(
 
 func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     rcts := []interface{}{}
-//    rcts = append( rcts, NewDebugReactor( c ) )
+    rcts = append( rcts, NewDebugReactor( c ) )
     rcts = c.addCastReactors( ct, rcts )
     vb := NewValueBuilder()
     rcts = append( rcts, vb )
     pip := InitReactorPipeline( rcts... )
-//    c.Logf( "Casting %s as %s", QuoteValue( ct.In ), ct.Type )
+    if valIn, ok := ct.In.( Value ); ok {
+        c.Logf( "Casting %s as %s", QuoteValue( valIn ), ct.Type )
+    }
     if err := VisitValue( ct.In.( Value ), pip ); err == nil { 
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
         }
-        c.Equal( ct.Expect, vb.GetValue() )
+        EqualWireValues( ct.Expect, vb.GetValue(), c.PathAsserter )
     } else { AssertCastError( ct.Err, err, c.PathAsserter ) }
 }
 
@@ -426,7 +431,7 @@ func ( c *ReactorTestCall ) call() {
     case *FieldOrderReactorTest: c.callFieldOrderReactor( s )
     case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
     case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
-//    case *CastReactorTest: c.callCast( s )
+    case *CastReactorTest: c.callCast( s )
 //    case *RequestReactorTest: c.callRequest( s )
 //    case *ResponseReactorTest: c.callResponse( s )
 //    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )

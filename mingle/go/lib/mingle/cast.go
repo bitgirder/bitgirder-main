@@ -305,6 +305,7 @@ func castAtomicUnrestricted(
         return nil, NewValueCastErrorf( path, "Value is null" )
     }
     switch nm := at.Name; {
+    case nm.Equals( QnameValue ): return mgVal, nil
     case nm.Equals( QnameBoolean ): 
         return castBoolean( mgVal, at, callTyp, path )
     case nm.Equals( QnameBuffer ): return castBuffer( mgVal, at, callTyp, path )

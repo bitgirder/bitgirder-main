@@ -1,5 +1,9 @@
 - make Timestamp a numeric type
 
+- add structure reactor checks that enforce that the value following an
+  allocation have the type specified, and that list values are of the correct
+  type
+
 - ensure that Buffer.String() prints at most N leading/trailing hex chars, but
   does not attempt to hexify an enormous buffer (can always add
   Buffer.HexString() for callers that actually want that).

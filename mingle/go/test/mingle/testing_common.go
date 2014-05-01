@@ -144,7 +144,7 @@ func checkEqualStructs(
     act, ok := actVal.( *Struct )
     a.Truef( ok, "not a struct: %T", actVal )
     a.Descend( "$type" ).Equal( expct.Type, act.Type )
-    checkEqualMaps( expct.Fields, act.Fields, a, chkMap )
+    checkEqualMapPairs( expct.Fields, act.Fields, a, chkMap )
 }
 
 func checkEqualValues( 

@@ -81,7 +81,7 @@ type listAcc struct {
 }
 
 func newListAcc( id PointerId ) *listAcc { 
-    return &listAcc{ id: id, l: NewList() } 
+    return &listAcc{ id: id, l: NewList( TypeOpaqueList ) } 
 }
 
 type valueBuildResolution struct {

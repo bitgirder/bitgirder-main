@@ -49,8 +49,7 @@ func ( vq valueQuote ) appendList( l *List ) {
     vq.buf.WriteRune( ']' )
 }
 
-func ( vq valueQuote ) appendSymbolMap( m *SymbolMap ) {
-    if vq.appendedCycle( m ) { return }
+func ( vq valueQuote ) appendSymbolMapFields( m *SymbolMap ) {
     vq.buf.WriteRune( '{' )
     remain := m.Len() - 1
     m.EachPair( func( fld *Identifier, val Value ) {
@@ -63,9 +62,14 @@ func ( vq valueQuote ) appendSymbolMap( m *SymbolMap ) {
     vq.buf.WriteRune( '}' )
 }
 
+func ( vq valueQuote ) appendSymbolMap( m *SymbolMap ) {
+    if vq.appendedCycle( m ) { return }
+    vq.appendSymbolMapFields( m )
+}
+
 func ( vq valueQuote ) appendStruct( ms *Struct ) {
     vq.buf.WriteString( ms.Type.ExternalForm() )
-    vq.appendSymbolMap( ms.Fields )
+    vq.appendSymbolMapFields( ms.Fields )
 }
 
 // we only check for cycles when the value pointer points to a struct value,

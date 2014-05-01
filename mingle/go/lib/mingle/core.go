@@ -752,7 +752,7 @@ func asListValue( inVals []interface{}, path goValPath ) ( *List, error ) {
         }
         lp = lp.Next()
     }
-    return &List{ vals }, nil
+    return &List{ vals: vals, Type: TypeOpaqueList }, nil
 }
 
 func asAtomicValue( 
@@ -812,18 +812,25 @@ func MustValue( inVal interface{} ) Value {
     return val
 }
 
-type List struct { vals []Value }
+type List struct { 
+    Type *ListTypeReference
+    vals []Value 
+}
 
-func NewList() *List { return &List{ []Value{} } }
+func NewList( typ *ListTypeReference ) *List { 
+    return &List{ vals: []Value{}, Type: typ } 
+}
 
-func NewListValues( vals []Value ) *List { return &List{ vals } }
+func NewListValues( vals []Value ) *List { 
+    return &List{ vals: vals, Type: TypeOpaqueList }
+}
 
 // returns a list starting with size sz; calls to Add() will grow the list
 func MakeList( sz int ) *List { return NewListValues( make( []Value, 0, sz ) ) }
 
 // if we allow immutable lists later we can have this return a fixed immutable
 // empty instance
-func EmptyList() *List { return NewList() }
+func EmptyList() *List { return NewList( TypeOpaqueList ) }
 
 func ( l *List ) Address() PointerId { 
     return UnsafeToPointerId( unsafe.Pointer( l ) ) 
@@ -844,7 +851,7 @@ func ( l *List ) Len() int { return len( l.vals ) }
 
 func CreateList( vals ...interface{} ) ( *List, error ) {
     sz := len( vals )
-    res := &List{ vals: make( []Value, sz ) }
+    res := &List{ vals: make( []Value, sz ), Type: TypeOpaqueList }
     for i, val := range vals {
         var err error
         if res.vals[ i ], err = AsValue( val ); err != nil { return nil, err }
@@ -1124,7 +1131,8 @@ var (
     TypeRequest *AtomicTypeReference
     QnameResponse *QualifiedTypeName
     TypeResponse *AtomicTypeReference
-    TypeValue *PointerTypeReference
+    QnameValue *QualifiedTypeName
+    TypeValue *AtomicTypeReference
     TypeNullableValue *NullableTypeReference
     TypeOpaqueList *ListTypeReference
     IdNamespace *Identifier
@@ -1173,6 +1181,7 @@ func init() {
     QnameFloat32, TypeFloat32 = f1( "Float32" )
     QnameFloat64, TypeFloat64 = f1( "Float64" )
     QnameTimestamp, TypeTimestamp = f1( "Timestamp" )
+    QnameValue, TypeValue = f1( "Value" )
     QnameSymbolMap, TypeSymbolMap = f1( "SymbolMap" )
     QnameNull, TypeNull = f1( "Null" )
     PrimitiveTypes = []*AtomicTypeReference{
@@ -1189,7 +1198,6 @@ func init() {
         TypeBuffer,
         TypeSymbolMap,
     }
-    TypeValue = &PointerTypeReference{ TypeNull }
     TypeNullableValue = &NullableTypeReference{ TypeValue }
     TypeOpaqueList = &ListTypeReference{ TypeNullableValue, true }
     NumericTypes = []*AtomicTypeReference{
@@ -1259,11 +1267,11 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Enum: return v.Type.AsAtomicType()
     case *SymbolMap: return TypeSymbolMap
     case *Struct: return v.Type.AsAtomicType()
-    case *List: return TypeOpaqueList
+    case *List: return v.Type
     case *Null: return TypeNull
     case ValuePointer: return typeOfValuePointer( v )
     }
-    panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
+    panic( libErrorf( "unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }
 
 type MissingFieldsError struct {

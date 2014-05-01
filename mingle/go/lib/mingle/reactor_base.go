@@ -60,12 +60,16 @@ func NewValueEvent( val Value ) *ValueEvent {
 
 type ValueAllocationEvent struct {
     *reactorEventImpl
+    Type TypeReference
     Id PointerId
 }
 
-func NewValueAllocationEvent( id PointerId ) *ValueAllocationEvent {
+func NewValueAllocationEvent( 
+    typ TypeReference, id PointerId ) *ValueAllocationEvent {
+
     return &ValueAllocationEvent{ 
         Id: id, 
+        Type: typ,
         reactorEventImpl: &reactorEventImpl{},
     }
 }
@@ -116,11 +120,16 @@ func NewFieldStartEvent( fld *Identifier ) *FieldStartEvent {
 
 type ListStartEvent struct {
     *reactorEventImpl
+    Type TypeReference // the element type
     Id PointerId
 }
 
-func NewListStartEvent( id PointerId ) *ListStartEvent {
-    return &ListStartEvent{ reactorEventImpl: &reactorEventImpl{}, Id: id }
+func NewListStartEvent( typ TypeReference, id PointerId ) *ListStartEvent {
+    return &ListStartEvent{ 
+        reactorEventImpl: &reactorEventImpl{}, 
+        Type: typ,
+        Id: id,
+    }
 }
 
 type EndEvent struct {
@@ -139,13 +148,19 @@ func EventToString( ev ReactorEvent ) string {
     case *StructStartEvent:
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
     case *ListStartEvent:
-        pairs = append( pairs, []string{ "id", v.Id.String() } )
+        pairs = append( pairs, 
+            []string{ "id", v.Id.String() },
+            []string{ "type", v.Type.ExternalForm() },
+        )
     case *MapStartEvent:
         pairs = append( pairs, []string{ "id", v.Id.String() } )
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
     case *ValueAllocationEvent:
-        pairs = append( pairs, []string{ "id", v.Id.String() } )
+        pairs = append( pairs, 
+            []string{ "id", v.Id.String() }, 
+            []string{ "type", v.Type.ExternalForm() },
+        )
     case *ValueReferenceEvent:
         pairs = append( pairs, []string{ "id", v.Id.String() } )
     }
@@ -161,12 +176,12 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     var res ReactorEvent
     switch v := ev.( type ) {
     case *ValueEvent: res = NewValueEvent( v.Val )
-    case *ListStartEvent: res = NewListStartEvent( v.Id )
+    case *ListStartEvent: res = NewListStartEvent( v.Type, v.Id )
     case *MapStartEvent: res = NewMapStartEvent( v.Id )
     case *StructStartEvent: res = NewStructStartEvent( v.Type )
     case *FieldStartEvent: res = NewFieldStartEvent( v.Field )
     case *EndEvent: res = NewEndEvent()
-    case *ValueAllocationEvent: res = NewValueAllocationEvent( v.Id )
+    case *ValueAllocationEvent: res = NewValueAllocationEvent( v.Type, v.Id )
     case *ValueReferenceEvent: res = NewValueReferenceEvent( v.Id )
     default: panic( libErrorf( "unhandled copy target: %T", ev ) )
     }
@@ -273,7 +288,7 @@ func ( vv valueVisit ) visitStruct( ms *Struct ) error {
 
 func ( vv valueVisit ) visitList( ml *List ) error {
     if err, ok := vv.visitReference( ml ); ok { return err }
-    ev := NewListStartEvent( ml.Address() )
+    ev := NewListStartEvent( ml.Type, ml.Address() )
     if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
     for _, val := range ml.Values() {
         if err := vv.visitValue( val ); err != nil { return err }
@@ -290,7 +305,8 @@ func ( vv valueVisit ) visitSymbolMap( sm *SymbolMap ) error {
 
 func ( vv valueVisit ) visitValuePointer( vp ValuePointer ) error {
     if err, ok := vv.visitReference( vp ); ok { return err }
-    ev := NewValueAllocationEvent( vp.Address() ) 
+    typ := TypeOf( vp.Dereference() )
+    ev := NewValueAllocationEvent( typ, vp.Address() ) 
     if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
     return vv.visitValue( vp.Dereference() )
 }
