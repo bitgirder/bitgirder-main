@@ -4,7 +4,7 @@ import (
     "bitgirder/objpath"
     "bitgirder/pipeline"
     "bitgirder/stack"
-//    "log"
+    "log"
 )
 
 type FieldTyper interface {
@@ -231,31 +231,40 @@ func ( cr *CastReactor ) processValueAllocationWithPointerType(
     ev *ValueAllocationEvent,
     next ReactorEventProcessor ) error {
 
-//    log.Printf( "pt: %s, ev: %s", pt, EventToString( ev ) )
-//    if pt.Type.Equals( ev.Type ) { 
-//        cr.stack.Push( pt.Type )
-//        return next.ProcessEvent( ev ) 
-//    }
-//    ptAct := NewPointerTypeReference( ev.Type )
-//    return NewTypeCastError( pt, ptAct, ev.GetPath() )
     ev2 := CopyEvent( ev, true ).( *ValueAllocationEvent )
     ev2.Type = pt.Type
     cr.stack.Push( pt.Type )
     return next.ProcessEvent( ev2 )
 }
 
+func ( cr *CastReactor ) processValueAllocationWithoutPointerType(
+    ev *ValueAllocationEvent,
+    typ TypeReference,
+    next ReactorEventProcessor ) error {
+
+    return nil
+}
+
 func ( cr *CastReactor ) processValueAllocation(
     ev *ValueAllocationEvent, next ReactorEventProcessor ) error {
 
+    log.Printf( "processing value alloc, top: %T", cr.stack.Peek() )
     switch v := cr.stack.Peek().( type ) {
     case *PointerTypeReference: 
         return cr.processValueAllocationWithPointerType( v, ev, next )
-    case TypeReference: return nil
+    case TypeReference: 
+        return cr.processValueAllocationWithoutPointerType( ev, v, next )
     case *listCast:
-        pt := NewPointerTypeReference( ev.Type )
-        return NewTypeCastError( v.lt, pt, ev.GetPath() )
+        typ := v.lt.ElementType
+        return cr.processValueAllocationWithoutPointerType( ev, typ, next )
     }
     panic( cr.errStackUnrecognized() )
+}
+
+func ( cr *CastReactor ) processValueReference(
+    ev *ValueReferenceEvent, next ReactorEventProcessor ) error {
+
+    return next.ProcessEvent( ev )
 }
 
 func ( cr *CastReactor ) implMapStart(
@@ -460,6 +469,7 @@ func ( cr *CastReactor ) processListStartWithType(
 func ( cr *CastReactor ) processListStart( 
     le *ListStartEvent, next ReactorEventProcessor ) error {
 
+    log.Printf( "processing list start, stack top: %T", cr.stack.Peek() )
     switch v := cr.stack.Peek().( type ) {
     case TypeReference:
         cr.stack.Pop()
@@ -477,6 +487,7 @@ func ( cr *CastReactor ) ProcessEvent(
     switch v := ev.( type ) {
     case *ValueEvent: return cr.processValue( v, next )
     case *ValueAllocationEvent: return cr.processValueAllocation( v, next )
+    case *ValueReferenceEvent: return cr.processValueReference( v, next )
     case *MapStartEvent: return cr.processMapStart( v, next )
     case *FieldStartEvent: return cr.processFieldStart( v, next )
     case *StructStartEvent: return cr.processStructStart( v, next )

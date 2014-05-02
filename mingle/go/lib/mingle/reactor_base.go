@@ -120,11 +120,11 @@ func NewFieldStartEvent( fld *Identifier ) *FieldStartEvent {
 
 type ListStartEvent struct {
     *reactorEventImpl
-    Type TypeReference // the element type
+    Type *ListTypeReference // the element type
     Id PointerId
 }
 
-func NewListStartEvent( typ TypeReference, id PointerId ) *ListStartEvent {
+func NewListStartEvent( typ *ListTypeReference, id PointerId ) *ListStartEvent {
     return &ListStartEvent{ 
         reactorEventImpl: &reactorEventImpl{}, 
         Type: typ,

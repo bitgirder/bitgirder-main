@@ -169,7 +169,7 @@ func ( w writeReactor ) startField( fld *Identifier ) error {
 func ( w writeReactor ) startList( lse *ListStartEvent ) error { 
     if err := w.WriteTypeCode( tcList ); err != nil { return err }
     if err := w.writePointerId( lse.Id ); err != nil { return err }
-    if err := w.WriteTypeReference( lse.Type ); err != nil { return err }
+    if err := w.WriteListTypeReference( lse.Type ); err != nil { return err }
     return w.WriteInt32( -1 )
 }
 
@@ -649,7 +649,7 @@ func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
 
 func ( r *BinReader ) readListHeader( rep ReactorEventProcessor ) error {
     if id, err := r.readPointerId(); err == nil {
-        if typ, err := r.ReadTypeReference(); err == nil {
+        if typ, err := r.ReadListTypeReference(); err == nil {
             lse := NewListStartEvent( typ, id )
             if err = rep.ProcessEvent( lse ); err != nil { return err }
         } else { return err }

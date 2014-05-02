@@ -6,6 +6,7 @@ import (
     "bitgirder/objpath"
     "bitgirder/stack"
     "fmt"
+    "bytes"
 )
 
 func ( c *ReactorTestCall ) callStructuralError(
@@ -274,10 +275,16 @@ func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     vb := NewValueBuilder()
     rcts = append( rcts, vb )
     pip := InitReactorPipeline( rcts... )
+    logMsg := &bytes.Buffer{}
+    fmt.Fprintf( logMsg, "casting to %s", ct.Type )
     if valIn, ok := ct.In.( Value ); ok {
-        c.Logf( "Casting %s as %s", QuoteValue( valIn ), ct.Type )
+        fmt.Fprintf( logMsg, ", in val: %s", QuoteValue( valIn ) )
     }
-    if err := VisitValue( ct.In.( Value ), pip ); err == nil { 
+    if ct.Expect != nil {
+        fmt.Fprintf( logMsg, ", expect: %s", QuoteValue( ct.Expect ) )
+    }
+    c.Log( logMsg.String() )
+    if err := FeedSource( ct.In, pip ); err == nil { 
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
         }
