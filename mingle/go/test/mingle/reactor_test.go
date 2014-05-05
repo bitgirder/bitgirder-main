@@ -141,8 +141,6 @@ func ( c *ReactorTestCall ) callFieldOrderReactor( fo *FieldOrderReactorTest ) {
     pip := InitReactorPipeline( ordRct, NewDebugReactor( c ), chk, vb )
 //    pip := InitReactorPipeline( ordRct, chk, vb )
     AssertFeedEventSource( eventSliceSource( fo.Source ), pip, c )
-    c.Logf( "expecting %s, got %s", QuoteValue( fo.Expect ),
-        QuoteValue( vb.GetValue() ) )
     EqualWireValues( fo.Expect, vb.GetValue(), c.PathAsserter )
 }
 
@@ -299,6 +297,7 @@ func valueCheckReactor(
 
     if evs == nil { return base }
     evChk := NewEventPathCheckReactor( evs, a )
+    evChk.ignorePointerIds = true
     return InitReactorPipeline( evChk, base )
 }
 
@@ -383,6 +382,14 @@ func ( c *ReactorTestCall ) callRequest(
         reqFldMin: reqFieldNs,
     }
     rct := InitReactorPipeline( NewRequestReactor( reqChk ) )
+    bb := &bytes.Buffer{}
+    fmt.Fprintf( bb, "feeding " )
+    if val, ok := st.Source.( Value ); ok {
+        fmt.Fprint( bb, QuoteValue( val ) )
+    } else { 
+        fmt.Fprintf( bb, "%T", st.Source )
+    }
+    c.Log( bb.String() )
     if err := FeedSource( st.Source, rct ); err == nil {
         c.CheckNoError( st.Error )
         reqChk.checkRequest()
@@ -439,10 +446,9 @@ func ( c *ReactorTestCall ) call() {
     case *FieldOrderPathTest: c.callFieldOrderPathTest( s )
     case *FieldOrderMissingFieldsTest: c.callFieldOrderMissingFields( s )
     case *CastReactorTest: c.callCast( s )
-//    case *RequestReactorTest: c.callRequest( s )
-//    case *ResponseReactorTest: c.callResponse( s )
-//    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
-//    default: c.Logf( "skipping %T", s )
+    case *RequestReactorTest: c.callRequest( s )
+    case *ResponseReactorTest: c.callResponse( s )
+    default: panic( libErrorf( "Unhandled test source: %T", c.Test ) )
     }
 }
 

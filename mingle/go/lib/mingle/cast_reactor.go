@@ -4,7 +4,7 @@ import (
     "bitgirder/objpath"
     "bitgirder/pipeline"
     "bitgirder/stack"
-    "log"
+//    "log"
 )
 
 type FieldTyper interface {
@@ -401,7 +401,6 @@ func ( cr *CastReactor ) processStructStartWithPointerType(
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
-    log.Printf( "structStart with ptr type: %s", pt )
     if err := cr.sendSynthAllocEvent( pt.Type, ss, next ); err != nil { 
         return err 
     }
@@ -446,7 +445,6 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
-    log.Printf( "processListStartWithAtomicType: %s", at )
     if at.Equals( TypeValue ) {
         return cr.processListStartWithType( le, TypeOpaqueList, callTyp, next )
     }
@@ -472,7 +470,6 @@ func ( cr *CastReactor ) processListStartWithType(
     callTyp TypeReference,
     next ReactorEventProcessor ) error {
 
-    log.Printf( "processing list start with type %s", typ )
     switch v := typ.( type ) {
     case *AtomicTypeReference:
         return cr.processListStartWithAtomicType( le, v, callTyp, next )

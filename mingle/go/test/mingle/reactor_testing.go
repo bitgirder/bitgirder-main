@@ -1324,7 +1324,7 @@ func initRequestTests() {
     addReqVcErr(
         MustSymbolMap( IdNamespace, MustList() ),
         objpath.RootedAt( IdNamespace ),
-        "invalid value: mingle:core@v1/Value*",
+        "invalid value: mingle:core@v1/Value?*",
     )
     func() {
         test := createReqVcErr(
@@ -2449,7 +2449,24 @@ func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
     ca.Call()
 }
 
-func EqualEvents( expct, act ReactorEvent, a *assert.PathAsserter ) {
+func eventForEqualityCheck( 
+    ev ReactorEvent, ignorePointerIds bool ) ReactorEvent {
+
+    ev = CopyEvent( ev, true )
+    switch v := ev.( type ) {
+    case *ValueAllocationEvent: v.Id = PointerIdNull
+    case *ValueReferenceEvent: v.Id = PointerIdNull
+    case *MapStartEvent: v.Id = PointerIdNull
+    case *ListStartEvent: v.Id = PointerIdNull
+    }
+    return ev
+}
+
+func EqualEvents( 
+    expct, act ReactorEvent, ignorePointerIds bool, a *assert.PathAsserter ) {
+
+    expct = eventForEqualityCheck( expct, ignorePointerIds )
+    act = eventForEqualityCheck( act, ignorePointerIds )
     a.Equalf( expct, act, "events are not equal: %s != %s",
         EventToString( expct ), EventToString( act ) )
 }
@@ -2508,6 +2525,7 @@ type eventPathCheckReactor struct {
     eeAssert *assert.PathAsserter
     expct []EventExpectation
     idx int
+    ignorePointerIds bool
 }
 
 func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
@@ -2515,7 +2533,7 @@ func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
     ee := r.expct[ r.idx ]
     r.idx++
     ee.Event.SetPath( ee.Path )
-    EqualEvents( ee.Event, ev, r.eeAssert )
+    EqualEvents( ee.Event, ev, r.ignorePointerIds, r.eeAssert )
     r.eeAssert = r.eeAssert.Next()
     return nil
 }
@@ -2557,6 +2575,6 @@ func CheckBuiltValue( expct Value, vb *ValueBuilder, a *assert.PathAsserter ) {
     } else { 
         a.Falsef( vb == nil, 
             "expecting value %s but value builder is nil", QuoteValue( expct ) )
-        EqualValues( expct, vb.GetValue(), a ) 
+        EqualWireValues( expct, vb.GetValue(), a ) 
     }
 }

@@ -393,7 +393,7 @@ func TestTypeOf( t *testing.T ) {
     a.Equal( TypeFloat64, TypeOf( Float64( 1.0 ) ) )
     a.Equal( TypeTimestamp, TypeOf( Now() ) )
     a.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
-    a.Equal( typeRef( "&mingle:core@v1/Null?*" ), TypeOf( MustList() ) )
+    a.Equal( typeRef( "mingle:core@v1/Value?*" ), TypeOf( MustList() ) )
     qn := qname( "ns1@v1/T1" )
     typ := &AtomicTypeReference{ Name: qn }
     a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
