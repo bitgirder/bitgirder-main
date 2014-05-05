@@ -1780,73 +1780,6 @@ func ( t *crtInit ) addPtrRefFail(
     t.addPtrRefFail0( typExpct, typAct, crtPathDefault, evs... )
 }
 
-func ( t *crtInit ) addMiscPointerTests() {
-    testPtrRefInt64 := ptrRef( 1 )
-    testPtrRefS1 := ptrRef( 2 )
-    testPtrRefS2 := ptrRef( 3 )
-    listEvs := func( 
-        typ TypeReferenceInitializer, evs ...ReactorEvent ) []ReactorEvent {
-        lt := &ListTypeReference{ 
-            ElementType: asTypeReference( typ ),
-            AllowsEmpty: true,
-        }
-        res := []ReactorEvent{ NewListStartEvent( lt, PointerIdNull ) }
-        res = append( res, evs... )
-        res = append( res, NewEndEvent() )
-        return res
-    }
-    idFact := NewTestPointerIdFactory()
-    val := Int32( 1 )
-    ptr1 := idFact.nextHeapTestValue( val )
-    ptr2 := idFact.nextHeapTestValue( ptr1 )
-    t.addSucc( val, ptr1, "&Int32" )
-    t.addSucc( val, ptr2, "&&Int32" )
-    t.addSucc( ptr1, val, "Int32" )
-    t.addSucc( ptr2, val, "Int32" )
-    t.addSucc( ptr2, ptr1, "&Int32" )
-    s1 := MustStruct( "ns1@v1/S1" )
-    s1Ptr := heapTestValue{ id: testPtrRefS1.Id, val: s1 }
-    t.addPtrRefSucc( 
-        "&ns1@v1/S1*", 
-        MustList( s1, s1 ), 
-        listEvs( "&ns1@v1/S1", 
-            ptrAlloc( s1.Type, 1 ), 
-            NewStructStartEvent( s1.Type ), NewEndEvent(),
-            ptrRef( 1 ),
-        )...,
-    )
-    t.addPtrRefSucc(
-        TypeOpaqueList,
-        MustList( NewHeapValue( s1 ), NewHeapValue( s1 ), s1 ),
-        listEvs( TypeOpaqueList.ElementType,
-            ptrAlloc( s1.Type, 1 ), 
-            NewStructStartEvent( s1.Type ), NewEndEvent(),
-            ptrRef( 1 ),
-            ptrRef( 1 ),
-        )...,
-    )
-    listSucc1 := func( typ string, act Value ) {
-        t.addPtrRefSucc( typ, act,
-            idFact.NextValueListStart(),
-                testPtrRefS1, testPtrRefS1,
-                NewEndEvent(),
-        )
-    }
-    listSucc1( "&ns1@v1/S1*", MustList( s1Ptr, s1Ptr ) )
-    listSucc1( "ns1@v1/S1*", MustList( s1, s1 ) )
-    t.addPtrRefFail( "&Uint64", "&Int64", testPtrRefInt64 )
-    t.addPtrRefFail( "&ns1@v1/S1", "&ns1@v1/S2", testPtrRefS2 )
-    t.addPtrRefFail( "ns1@v1/S1", "&ns1@v1/S2", testPtrRefS2 )
-    listFail1 := func( pref string ) {
-        t.addPtrRefFail0( pref + "ns1@v1/S1*", "&ns1@v1/S2",
-            MakeTestIdPath( "1" ),
-            idFact.NextValueListStart(), testPtrRefS1, testPtrRefS2,
-        )
-    }
-    listFail1( "" )
-    listFail1( "&" )
-}
-
 func ( t *crtInit ) addStringTests() {
     t.addIdent( "s", "String?" )
     t.addIdent( "abbbc", `String~"^ab+c$"` )
@@ -2317,17 +2250,25 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
 //  struct S1 {
 //      f0 Int32
 //      f1 &Int32
-//      f2 &Int64
-//      f3 Int64
-//      f4 Int64*
-//      f5 Int32*
-//      f6 String*
-//      f7 &Int32*
+//      f2 &Int32
+//      f3 &Int64
+//      f4 Int64
+//      f5 Int64*
+//      f6 Int32*
+//      f7 String*
+//      f8 &Int32*
+//      f9 S2
+//      f10 S2
+//      f11 &S2
 //  }
 //
 func ( t *crtInit ) addInterfacePointerHandlingTests() {
-    qn := MustQualifiedTypeName( "ns1@v1/S1" )
-    typ := &AtomicTypeReference{ Name: qn }
+    qn := func( i int ) *QualifiedTypeName {
+        return MustQualifiedTypeName( fmt.Sprintf( "ns1@v1/S%d", i ) )
+    }
+    typ := func( i int ) *AtomicTypeReference {
+        return &AtomicTypeReference{ Name: qn( i ) }
+    }
     fldEv := func( i int ) *FieldStartEvent {
         return NewFieldStartEvent( MakeTestId( i ) )
     }
@@ -2340,16 +2281,17 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
         &CastReactorTest{
             In: CopySource(
                 []ReactorEvent{
-                    NewStructStartEvent( qn ),
+                    NewStructStartEvent( qn( 1 ) ),
                         fldEv( 0 ),
                             ptrAlloc( TypeInt64, 1 ), 
                                 NewValueEvent( Int64( int64( 1 ) ) ),
-                        fldEv( 1 ),
+                        fldEv( 1 ), ptrRef( 1 ),
+                        fldEv( 2 ),
                             ptrAlloc( TypeInt64, 2 ), 
                                 NewValueEvent( Int64( int64( 2 ) ) ),
-                        fldEv( 2 ), ptrRef( 2 ),
                         fldEv( 3 ), ptrRef( 2 ),
-                        fldEv( 4 ), 
+                        fldEv( 4 ), ptrRef( 2 ),
+                        fldEv( 5 ), 
                             NewListStartEvent( 
                                 &ListTypeReference{ ElementType: TypeInt32 },
                                 PointerId( 3 ),
@@ -2357,26 +2299,35 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
                                 NewValueEvent( Int32( int32( 0 ) ) ),
                                 NewValueEvent( Int32( int32( 1 ) ) ),
                                 NewEndEvent(),
-                        fldEv( 5 ), ptrRef( 3 ),
                         fldEv( 6 ), ptrRef( 3 ),
                         fldEv( 7 ), ptrRef( 3 ),
+                        fldEv( 8 ), ptrRef( 3 ),
+                        fldEv( 9 ), 
+                            ptrAlloc( typ( 2 ), 4 ),
+                                NewStructStartEvent( qn( 2 ) ), NewEndEvent(),
+                        fldEv( 10 ), ptrRef( 4 ),
+                        fldEv( 11 ), ptrRef( 4 ),
                     NewEndEvent(),
                 },
             ),
-            Expect: MustStruct( qn,
+            Expect: MustStruct( qn( 1 ),
                 "f0", Int32( int32( 1 ) ),
-                "f1", NewHeapValue( Int32( int32( 2 ) ) ),
-                "f2", NewHeapValue( Int64( int64( 2 ) ) ),
-                "f3", Int64( int64( 2 ) ),
-                "f4", list( TypeInt64, int64( 0 ), int64( 1 ) ),
-                "f5", list( TypeInt32, int32( 0 ), int32( 1 ) ),
-                "f6", list( TypeString, "0", "1" ),
-                "f7", list( NewPointerTypeReference( TypeInt32 ),
+                "f1", NewHeapValue( Int32( int32( 1 ) ) ),
+                "f2", NewHeapValue( Int32( int32( 2 ) ) ),
+                "f3", NewHeapValue( Int64( int64( 2 ) ) ),
+                "f4", Int64( int64( 2 ) ),
+                "f5", list( TypeInt64, int64( 0 ), int64( 1 ) ),
+                "f6", list( TypeInt32, int32( 0 ), int32( 1 ) ),
+                "f7", list( TypeString, "0", "1" ),
+                "f8", list( NewPointerTypeReference( TypeInt32 ),
                     NewHeapValue( Int32( int32( 0 ) ) ),
                     NewHeapValue( Int32( int32( 1 ) ) ),
                 ),
+                "f9", MustStruct( qn( 2 ) ),
+                "f10", MustStruct( qn( 2 ) ),
+                "f11", NewHeapValue( MustStruct( qn( 2 ) ) ),
             ),
-            Type: typ,
+            Type: typ( 1 ),
             Profile: "interface-pointer-handling",
         },
     )
@@ -2392,7 +2343,6 @@ func ( t *crtInit ) call() {
     t.addBaseTypeTests()
     t.addMiscTcErrors()
     t.addMiscVcErrors()
-    t.addMiscPointerTests()
     t.addNumTests()
     t.addStringTests()
     t.addBufferTests()
