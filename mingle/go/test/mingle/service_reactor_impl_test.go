@@ -77,35 +77,33 @@ func ( t serviceReactorImplTest ) callWith( rct ReactorEventProcessor ) {
 }
 
 func TestRequestReactorImplErrors( t *testing.T ) {
-    t.Error( "unimplemented" )
-//    a := assert.NewPathAsserter( t )
-//    in := MustStruct( QnameRequest,
-//        "namespace", "ns1@v1",
-//        "service", "svc1",
-//        "operation", "op1",
-//        "parameters", MustSymbolMap( "p1", 1 ),
-//        "authentication", 1,
-//    )
-//    for _, failOn := range []*Identifier{ IdAuthentication, IdParameters } {
-//        test := serviceReactorImplTest{ 
-//            PathAsserter: a.Descend( failOn ), 
-//            failOn: failOn,
-//            in: in,
-//        }
-//        test.callWith( NewRequestReactor( test ) )
-//    }
+    a := assert.NewPathAsserter( t )
+    in := MustStruct( QnameRequest,
+        "namespace", "ns1@v1",
+        "service", "svc1",
+        "operation", "op1",
+        "parameters", MustSymbolMap( "p1", 1 ),
+        "authentication", 1,
+    )
+    for _, failOn := range []*Identifier{ IdAuthentication, IdParameters } {
+        test := serviceReactorImplTest{ 
+            PathAsserter: a.Descend( failOn ), 
+            failOn: failOn,
+            in: in,
+        }
+        test.callWith( NewRequestReactor( test ) )
+    }
 }
 
 func TestResponseReactorImplErrors( t *testing.T ) {
-    t.Error( "unimplemented" )
-//    chk := func( failOn *Identifier, in Value ) {
-//        test := serviceReactorImplTest{
-//            PathAsserter: assert.NewPathAsserter( t ).Descend( failOn ),
-//            failOn: failOn,
-//            in: in,
-//        }
-//        test.callWith( NewResponseReactor( test ) )
-//    }
-//    chk( IdResult, MustSymbolMap( "result", 1 ) )
-//    chk( IdError, MustSymbolMap( "error", 1 ) )
+    chk := func( failOn *Identifier, in Value ) {
+        test := serviceReactorImplTest{
+            PathAsserter: assert.NewPathAsserter( t ).Descend( failOn ),
+            failOn: failOn,
+            in: in,
+        }
+        test.callWith( NewResponseReactor( test ) )
+    }
+    chk( IdResult, MustSymbolMap( "result", 1 ) )
+    chk( IdError, MustSymbolMap( "error", 1 ) )
 }

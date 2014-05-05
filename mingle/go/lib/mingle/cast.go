@@ -291,6 +291,10 @@ func castSymbolMap(
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
 
+func newNullValueCastError( path objpath.PathNode ) *ValueCastError {
+    return NewValueCastErrorf( path, "Value is null" )
+}
+
 // switch compares based on qname not at itself since we may be dealing with
 // restriction types, meaning that if at is mingle:core@v1/String~"a", it is a
 // string (has qname mingle:core@v1/String) but will not equal TypeString itself
@@ -302,7 +306,7 @@ func castAtomicUnrestricted(
 
     if _, ok := mgVal.( *Null ); ok {
         if at.Equals( TypeNull ) { return mgVal, nil }
-        return nil, NewValueCastErrorf( path, "Value is null" )
+        return nil, newNullValueCastError( path )
     }
     switch nm := at.Name; {
     case nm.Equals( QnameValue ): return mgVal, nil

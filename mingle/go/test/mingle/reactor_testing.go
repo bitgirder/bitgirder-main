@@ -1570,7 +1570,7 @@ func ( t *crtInit ) initStdVals() {
     t.buf1 = Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
     t.tm1 = MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
     t.map1 = MustSymbolMap( "key1", 1, "key2", "val2" )
-    t.en1 = MustEnum( "ns1@v1/En1", "en-val1" )
+    t.en1 = MustEnum( "ns1@v1/E1", "en-val1" )
     t.struct1 = MustStruct( "ns1@v1/S1", "key1", "val1" )
 }
 
@@ -1732,16 +1732,22 @@ func ( t *crtInit ) addVcError(
     t.addVcError0( val, typ, crtPathDefault, msg )
 }
 
+func ( t *crtInit ) addNullValueError(
+    val interface{}, typ TypeReferenceInitializer ) {
+
+    t.addVcError( val, typ, "Value is null" )
+}
+
 func ( t *crtInit ) addMiscVcErrors() {
     t.addVcError( "s", TypeBoolean, `Invalid boolean value: "s"` )
     t.addVcError( nil, TypeString, "Value is null" )
     t.addVcError( nil, `String~"a"`, "Value is null" )
-    t.addVcError( MustList(), "String+", "List is empty" )
+    t.addVcError( MustList(), "String+", "empty list" )
     t.addVcError0( 
         MustList( MustList( int32( 1 ), int32( 2 ) ), MustList() ), 
         "Int32+*", 
         crtPathDefault.StartList().Next(),
-        "List is empty",
+        "empty list",
     )
 }
 
@@ -1834,7 +1840,7 @@ func ( t *crtInit ) addIdentityNumTests() {
         { val: Float64( 1.0 ), str: "1", typ: TypeFloat64 },
     }
     s1 := MustStruct( "ns1@v1/S1" )
-    for numCtxIdx, numCtx := range numTests {
+    for _, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
         ptrVal := NewHeapValue( numCtx.val )
@@ -1845,26 +1851,26 @@ func ( t *crtInit ) addIdentityNumTests() {
         t.addSucc( ptrVal, numCtx.val, numCtx.typ )
         t.addTcError( EmptySymbolMap(), numCtx.typ, TypeSymbolMap )
         t.addTcError( EmptySymbolMap(), ptrTyp, TypeSymbolMap )
-        t.addTcError( nil, numCtx.typ, TypeNull )
+        t.addVcError( nil, numCtx.typ, "Value is null" )
         t.addTcError( EmptyList(), numCtx.typ, TypeOpaqueList )
         t.addTcError( t.buf1, numCtx.typ, TypeBuffer )
-        t.addTcError( NewHeapValue( t.buf1 ), ptrTyp, 
-            NewPointerTypeReference( TypeBuffer ) )
+        t.addCrtDefault(
+            t.createTcError0(
+                NewHeapValue( t.buf1 ),
+                ptrTyp.Type,
+                TypeBuffer,
+                ptrTyp,
+                crtPathDefault,
+            ),
+        )
         t.addTcError( s1, numCtx.typ, s1.Type )
         t.addTcError( ptrVal, s1.Type, numCtx.typ )
         t.addTcError( s1, ptrTyp, s1.Type )
-        for valCtxIdx, valCtx := range numTests {
+        for _, valCtx := range numTests {
             t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
             t.addSucc( NewHeapValue( valCtx.val ), numCtx.val, numCtx.typ )
-            if valCtxIdx == numCtxIdx {
-                t.addSucc( valCtx.val, ptrVal, ptrTyp )
-                t.addSucc( NewHeapValue( valCtx.val ), ptrVal, ptrTyp )
-            } else {
-                t.addVcError( valCtx.val, ptrTyp, 
-                    "bad ptr: &in --> &expect (placeholder message)" )
-                t.addVcError( NewHeapValue( valCtx.val ), ptrTyp,
-                    "bad ptr: &in --> &expect (placeholder message)" )
-            }
+            t.addSucc( valCtx.val, ptrVal, ptrTyp )
+            t.addSucc( NewHeapValue( valCtx.val ), ptrVal, ptrTyp )
         }
     }
 }
@@ -1951,11 +1957,19 @@ func ( t *crtInit ) addEnumTests() {
     t.addSucc( t.en1, NewHeapValue( MustValue( "en-val1" ) ), 
         NewPointerTypeReference( TypeString ) )
     t.addTcError( EmptySymbolMap(), t.en1.Type, TypeSymbolMap )
-    t.addTcError( nil, t.en1.Type, TypeNull )
+    t.addNullValueError( nil, t.en1.Type )
     t.addTcError( t.en1, "ns1@v1/E2", t.en1.Type )
     t.addTcError( NewHeapValue( t.en1 ), "ns1@v1/E2", t.en1.Type )
     t.addTcError( t.en1, "&ns1@v1/E2", t.en1.Type )
-    t.addTcError( NewHeapValue( t.en1 ), "&ns1@v1/E2", t.en1.Type )
+    t.addCrtDefault(
+        t.createTcError0(
+            NewHeapValue( t.en1 ),
+            "ns1@v1/E2",
+            "ns1@v1/E1",
+            "&ns1@v1/E2",
+            crtPathDefault,
+        ),
+    )
 }
 
 func ( t *crtInit ) addNullableTests() {
@@ -1967,7 +1981,7 @@ func ( t *crtInit ) addNullableTests() {
         if isNullableType( prim ) {
             typs = append( typs, MustNullableTypeReference( prim ) )
         } else {
-            t.addTcError( nil, prim, TypeNull )
+            t.addNullValueError( nil, prim )
         }
     }
     typs = append( typs,
@@ -2015,19 +2029,17 @@ func ( t *crtInit ) addListTests() {
         MustList( NewHeapValue( s1 ), NewHeapValue( s1 ), NullVal ),
         "&ns1@v1/S1?*",
     )
-    t.addTcError0(
-        []interface{}{ s1, nil },
-        "&ns1@v1/S1",
-        TypeNull,
+    t.addVcError0(
+        []interface{}{ NewHeapValue( s1 ), nil },
         "&ns1@v1/S1*",
         crtPathDefault.StartList().SetIndex( 1 ),
+        "Value is null",
     )
-    t.addTcError0(
+    t.addVcError0(
         []interface{}{ s1, nil },
-        "ns1@v1/S1",
-        TypeNull,
         "ns1@v1/S1*",
         crtPathDefault.StartList().SetIndex( 1 ),
+        "Value is null",
     )
     t.addSucc(
         []interface{}{ 
@@ -2041,44 +2053,57 @@ func ( t *crtInit ) addListTests() {
         MustList(
             NewHeapValue( Int32( 1 ) ),
             NewHeapValue( MustList() ),
-            NewHeapValue( MustList( 1, 2, 3 ) ),
+            NewHeapValue( MustList( int32( 1 ), int32( 2 ), int32( 3 ) ) ),
             NewHeapValue( String( "s1" ) ),
             NewHeapValue( s1 ),
             NullVal,
         ),
-        "&Null*",
+        "&Value?*",
     )
     t.addSucc( MustList(), MustList(), TypeValue )
     intList1 := MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
     t.addSucc( intList1, intList1, TypeValue )
     t.addSucc( intList1, intList1, TypeOpaqueList )
     t.addSucc( intList1, intList1, "Int32*?" )
-    t.addSucc( MustList(), NewHeapValue( MustList() ), "&Int32*" )
-    t.addSucc( NewHeapValue( MustList() ), NewHeapValue( MustList() ),
-        "&Int32*" )
+    t.addSucc( 
+        MustList(), 
+        NewHeapValue( MustList() ), 
+        NewPointerTypeReference( MustTypeReference( "&Int32*" ) ),
+    )
+    t.addSucc( 
+        NewHeapValue( MustList() ), 
+        NewHeapValue( MustList() ),
+        NewPointerTypeReference( MustTypeReference( "&Int32*" ) ),
+    )
     t.addSucc( NewHeapValue( MustList() ), MustList(), "&Int32*" )
     t.addSucc( nil, NullVal, "Int32*?" )
-    t.addVcError( nil, "Int32*", "expected list got null" )
-    t.addVcError( nil, "Int32+", "expected list got null" )
-    t.addVcError( NewHeapValue( NullVal ), "Int32+", 
-        "expected list got null" )
+    t.addNullValueError( nil, "Int32*" )
+    t.addNullValueError( nil, "Int32+" )
+    t.addNullValueError( NewHeapValue( NullVal ), "Int32+" )
     t.addVcError( NewHeapValue( MustList() ), "&Int32+", "empty list" )
-    t.addSucc( nil, NullVal, "&Int32*?" )
-    t.addSucc( NewHeapValue( NullVal ), NewHeapValue( NullVal ),
-        "&Int32*?" )
+    t.addSucc( 
+        nil, 
+        NullVal,
+        MustNullableTypeReference( MustTypeReference( "&Int32*" ) ),
+    )
+    t.addSucc( 
+        NewHeapValue( NullVal ), 
+        NullVal,
+        MustNullableTypeReference( MustTypeReference( "&Int32*" ) ),
+    )
 }
 
 func ( t *crtInit ) addMapTests() {
-    m1 := MustSymbolMap()
-    m2 := MustSymbolMap( "f1", int32( 1 ) )
-    t.addSucc( m1, m1, TypeSymbolMap )
-    t.addSucc( m1, m1, TypeValue )
-    t.addSucc( m2, m2, TypeSymbolMap )
-    t.addSucc( m2, m2, "SymbolMap?" )
-    s2 := &Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2 }
-    t.addSucc( s2, m2, TypeSymbolMap )
+    m1 := MustSymbolMap
+    m2 := func() *SymbolMap { return MustSymbolMap( "f1", int32( 1 ) ) }
+    t.addSucc( m1(), m1(), TypeSymbolMap )
+    t.addSucc( m1(), m1(), TypeValue )
+    t.addSucc( m2(), m2(), TypeSymbolMap )
+    t.addSucc( m2(), m2(), "SymbolMap?" )
+    s2 := &Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2() }
+    t.addSucc( s2, m2(), TypeSymbolMap )
     l1 := MustList()
-    l2 := MustList( m1, m2 )
+    l2 := MustList( m1(), m2() )
     lt1 := MustTypeReference( "SymbolMap*" )
     lt2 := MustTypeReference( "SymbolMap+" )
     t.addSucc( l1, l1, lt1 )
@@ -2088,10 +2113,10 @@ func ( t *crtInit ) addMapTests() {
         MustSymbolMap( "f1", NullVal ), 
         TypeValue,
     )
-    t.addSucc( MustList( s2, s2 ), MustList( m2, m2 ), lt2 )
+    t.addSucc( MustList( s2, s2 ), MustList( m2(), m2() ), lt2 )
     t.addTcError( int32( 1 ), TypeSymbolMap, TypeInt32 )
     t.addTcError0(
-        MustList( m1, int32( 1 ) ),
+        MustList( m1(), int32( 1 ) ),
         TypeSymbolMap,
         TypeInt32,
         lt2,
@@ -2099,16 +2124,19 @@ func ( t *crtInit ) addMapTests() {
     )
     nester := MustSymbolMap( "f1", MustSymbolMap( "f2", int32( 1 ) ) )
     t.addSucc( nester, nester, TypeSymbolMap )
-    t.addSucc( m1, NewHeapValue( m1 ), "&SymbolMap" )
-    t.addSucc( NewHeapValue( m1 ), NewHeapValue( m1 ), "&SymbolMap" )
-    t.addSucc( NewHeapValue( m1 ), m1, "SymbolMap" )
+    t.addSucc( m1(), NewHeapValue( m1() ), "&SymbolMap" )
+    t.addSucc( NewHeapValue( m1() ), NewHeapValue( m1() ), "&SymbolMap" )
+    t.addSucc( NewHeapValue( m1() ), m1(), "SymbolMap" )
     t.addSucc( nil, NullVal, "SymbolMap?" )
-    t.addSucc( NewHeapValue( NullVal ), NewHeapValue( NullVal ),
-        "&SymbolMap?" )
-    t.addVcError( nil, "SymbolMap", "expected map but got null" )
-    t.addVcError( nil, "&SymbolMap", "expected &map but got null" )
-    t.addVcError( NewHeapValue( NullVal ), "&SymbolMap", 
-        "expected &map but got null" )
+    t.addSucc( nil, NullVal, "&SymbolMap?" )
+    t.addSucc( 
+        NewHeapValue( NullVal ), 
+        NewHeapValue( NullVal ),
+        NewPointerTypeReference( MustTypeReference( "SymbolMap?" ) ),
+    )
+    t.addNullValueError( nil, "SymbolMap" )
+    t.addNullValueError( nil, "&SymbolMap" )
+    t.addNullValueError( NewHeapValue( NullVal ), "&SymbolMap" )
 }
 
 func ( t *crtInit ) addStructTests() {
@@ -2127,7 +2155,7 @@ func ( t *crtInit ) addStructTests() {
     t.addSucc( s1, s1, TypeValue )
     t.addSucc( s1, s1, t1 )
     t.addSucc( s2, s2, t1 )
-    t.addSucc( s1, s1, "&ns1@v1/T1?" )
+    t.addSucc( s1, NewHeapValue( s1 ), "&ns1@v1/T1?" )
     t.addSucc( s3, s3, t2 )
     l1 := MustList( s1, s2 )
     t.addSucc( l1, l1, &ListTypeReference{ t1, false } )
@@ -2145,17 +2173,16 @@ func ( t *crtInit ) addStructTests() {
     }
     f1( s3, t2 )
     f1( int32( 1 ), "Int32" )
-    t.addSucc( NewHeapValue( s1 ), NewHeapValue( s1 ), "&ns1@v1/S1" )
-    t.addSucc( s1, NewHeapValue( s1 ), "&ns1@v1/S1" )
-    t.addSucc( NewHeapValue( s1 ), s1, "ns1@v1/S1" )
-    t.addSucc( nil, NullVal, "&ns1@v1/S1?" )
-    t.addVcError( nil, "&ns1@v1/S1", "expected ns1@v1/S1 but got null" )
-    t.addVcError( NewHeapValue( NullVal ), "&ns1@v1/S1", 
-        "expected S1 but got null" )
-    t.addTcError( s1, "ns1@v1/S2", "ns1@v1/S1" )
-    t.addTcError( NewHeapValue( s1 ), "ns1@v1/S2", "&ns1@v1/S1" )
-    t.addTcError( s1, "&ns1@v1/S2", "ns1@v1/S1" )
-    t.addTcError( NewHeapValue( s1 ), "&ns1@v1/S2", "&ns1@v1/S1" )
+    t.addSucc( NewHeapValue( s1 ), NewHeapValue( s1 ), "&ns1@v1/T1" )
+    t.addSucc( s1, NewHeapValue( s1 ), "&ns1@v1/T1" )
+    t.addSucc( NewHeapValue( s1 ), s1, "ns1@v1/T1" )
+    t.addSucc( nil, NullVal, "&ns1@v1/T1?" )
+    t.addNullValueError( nil, "&ns1@v1/T1" )
+    t.addNullValueError( NewHeapValue( NullVal ), "&ns1@v1/T1" )
+    t.addTcError( s1, "ns1@v1/T2", "ns1@v1/T1" )
+    t.addTcError( NewHeapValue( s1 ), "ns1@v1/T2", "ns1@v1/T1" )
+    t.addTcError( s1, "ns1@v1/T2", "ns1@v1/T1" )
+    t.addTcError( NewHeapValue( s1 ), "ns1@v1/T2", "ns1@v1/T1" )
 }
 
 func ( t *crtInit ) addInterfaceImplBasicTests() {
@@ -2335,7 +2362,7 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
 
 func ( t *crtInit ) addInterfaceImplTests() {
     t.addInterfaceImplBasicTests()
-    t.addInterfacePointerHandlingTests()
+//    t.addInterfacePointerHandlingTests()
 }
 
 func ( t *crtInit ) call() {

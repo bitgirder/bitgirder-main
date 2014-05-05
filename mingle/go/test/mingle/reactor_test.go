@@ -260,7 +260,7 @@ func ( c *ReactorTestCall ) addCastReactors(
 
     switch ct.Profile {
     case "": rcts = append( rcts, ps, NewDefaultCastReactor( ct.Type ) )
-    case "interface-impl": 
+    case "interface-impl-basic": 
         cr := NewCastReactor( ct.Type, newCastInterfaceImpl( c ) )
         rcts = append( rcts, ps, cr )
     default: panic( libErrorf( "Unhandled profile: %s", ct.Profile ) )
