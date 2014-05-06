@@ -104,8 +104,14 @@ func ( f *TestPointerIdFactory ) NextPointerId() PointerId {
     return res
 }
 
+func ( f *TestPointerIdFactory ) NextListStart( 
+    lt *ListTypeReference ) *ListStartEvent {
+
+    return NewListStartEvent( lt, f.NextPointerId() )
+}
+
 func ( f *TestPointerIdFactory ) NextValueListStart() *ListStartEvent {
-    return NewListStartEvent( TypeOpaqueList, f.NextPointerId() )
+    return f.NextListStart( TypeOpaqueList )
 }
 
 func ( f *TestPointerIdFactory ) NextMapStart() *MapStartEvent {

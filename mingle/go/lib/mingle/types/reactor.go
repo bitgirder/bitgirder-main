@@ -302,6 +302,7 @@ func ( cr *castReactor ) prepareProcessEvent(
     case *mg.ValueEvent: return cr.valueEvent( v )
     case *mg.EndEvent: return cr.end( v, next )
     case *mg.ListStartEvent, *mg.MapStartEvent: return cr.startContainer()
+    case *mg.ValueAllocationEvent, *mg.ValueReferenceEvent: return nil
     }
     panic( libErrorf( "unhandled event: %T", ev ) )
 }
@@ -467,7 +468,7 @@ func ( pr parametersReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
     ev2 := ev
     if ss, ok := ev.( *mg.StructStartEvent ); ok {
         if ss.Type.Equals( qnTypedParameterMap ) { 
-            ev2 = mg.NewMapStartEvent() 
+            ev2 = mg.NewMapStartEvent( mg.PointerIdNull ) 
             ev2.SetPath( ev.GetPath() )
         }
     }

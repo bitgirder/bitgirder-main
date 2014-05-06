@@ -7,6 +7,10 @@ import (
 
 var newVcErr = mg.NewValueCastError
 
+func mustHeapVal( v interface{} ) *mg.HeapValue {
+    return mg.NewHeapValue( mg.MustValue( v ) )
+}
+
 func asType( val interface{} ) mg.TypeReference {
     switch v := val.( type ) {
     case mg.TypeReference: return v
@@ -83,12 +87,13 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     sm1 := mg.MustSymbolMap( "f1", int32( 1 ) )
     s1F1Succ( sm1, sm1, "SymbolMap" )
     s1F1Succ( sm1, sm1, "Value" )
-    s1F1Succ( int32( 1 ), int32( 1 ), "Int32?" )
-    s1F1Succ( nil, int32( 0 ), "Int32?" )
+    s1F1Succ( int32( 1 ), mustHeapVal( int32( 1 ) ), "&Int32?" )
+    s1F1Succ( mg.NullVal, mg.NullVal, "&Int32?" )
     s1F1Succ(
         mg.MustList( "1", nil, int64( 1 ) ),
-        mg.MustList( int32( 1 ), int32( 0 ), int32( 1 ) ),
-        "Int32?*",
+        mg.MustList( 
+            mustHeapVal( int32( 1 ) ), mg.NullVal, mustHeapVal( int32( 1 ) ) ),
+        "&Int32?*",
     )
     s1F1Fail( []byte{}, "Int32", tcErr1( mg.TypeInt32, mg.TypeBuffer ) )
     s1F1Fail( 
@@ -98,7 +103,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     )
     s1F1Fail( nil, "Int32", newVcErr( p( 1 ), "Value is null" ) )
     s1F1Fail( int32( 1 ), "Int32+", tcErr1( "Int32+", "Int32" ) )
-    s1F1Fail( mg.MustList(), "Int32+", newVcErr( p( 1 ), "List is empty" ) )
+    s1F1Fail( mg.MustList(), "Int32+", newVcErr( p( 1 ), "empty list" ) )
     s1F1Fail( 
         mg.MustList( []byte{} ), 
         "Int32*", 
@@ -126,12 +131,12 @@ func ( rti *rtInit ) addFieldSetCastTests() {
         MakeStructDef(
             "ns1@v1/S3",
             "",
-            []*FieldDefinition{ MakeFieldDef( "f1", "Int32?", nil ) },
+            []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) },
         ),
         MakeStructDef(
             "ns1@v1/S4",
             "",
-            []*FieldDefinition{ MakeFieldDef( "f1", "ns1@v1/S1?", nil ) },
+            []*FieldDefinition{ MakeFieldDef( "f1", "&ns1@v1/S1?", nil ) },
         ),
     )
     addTest := func( in, expct *mg.Struct, err error ) {
@@ -145,10 +150,11 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     addSucc( mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
     addSucc( mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
     addSucc( mg.MustStruct( "ns1@v1/S3" ) )
-    addSucc( mg.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
-    s1Inst1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
+    addSucc( mg.MustStruct( "ns1@v1/S3", "f1", mustHeapVal( int32( 1 ) ) ) )
+    s1Inst1 := mustHeapVal( mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
     addSucc( mg.MustStruct( "ns1@v1/S4", "f1", s1Inst1 ) )
-    s2Inst1 := mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) )
+    s2Inst1 := mustHeapVal(
+        mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
     addSucc( mg.MustStruct( "ns1@v1/S4", "f1", s2Inst1 ) )
     addFail(
         mg.MustStruct( "ns1@v1/S1" ),
@@ -215,8 +221,8 @@ func ( rti *rtInit ) addInferredStructCastTests() {
             "ns1@v1/S1",
             "",
             []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32?", nil ),
-                MakeFieldDef( "f2", "ns1@v1/S2?", nil ),
+                MakeFieldDef( "f1", "&Int32?", nil ),
+                MakeFieldDef( "f2", "&ns1@v1/S2?", nil ),
             },
         ),
         MakeStructDef(
@@ -235,14 +241,15 @@ func ( rti *rtInit ) addInferredStructCastTests() {
             },
         )
     }
+    i1HeapVal := mustHeapVal( int32( 1 ) )
     addSucc( 
         mg.MustSymbolMap( "f1", int32( 1 ) ),
-        mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        mg.MustStruct( "ns1@v1/S1", "f1", i1HeapVal ),
     )
+    s2HeapVal := mustHeapVal( mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ) )
     addSucc( 
-        mg.MustSymbolMap( "f2", mg.MustSymbolMap( "f1", int32( 1 ) ) ),
-        mg.MustStruct( "ns1@v1/S1",
-            "f2", mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ) ),
+        mg.MustSymbolMap( "f2", mg.MustSymbolMap( "f1", i1HeapVal ) ),
+        mg.MustStruct( "ns1@v1/S1", "f2", s2HeapVal ),
     )
 }
 
@@ -269,18 +276,20 @@ func ( rti *rtInit ) addEnumValCastTests() {
         addTest( in, nil, typ, err ) 
     }
     e1 := mg.MustEnum( "ns1@v1/E1", "c1" )
-    for _, quant := range []string{ "", "?" } {
-        typStr := "ns1@v1/E1" + quant
-        addSucc( e1, e1, typStr )
-        addSucc( "c1", e1, typStr )
+    for _, t := range []struct{ typStr string; expct mg.Value }{
+        { typStr: "ns1@v1/E1", expct: e1 },
+        { typStr: "&ns1@v1/E1?", expct: mustHeapVal( e1 ) },
+    } {
+        addSucc( e1, t.expct, t.typStr )
+        addSucc( "c1", t.expct, t.typStr )
         addFail( 
             int32( 1 ), 
-            typStr, 
+            t.typStr, 
             newTcErr( "ns1@v1/E1", mg.TypeInt32, nil ),
         )
     }
     addSucc( mg.MustList( e1, "c1" ), mg.MustList( e1, e1 ), "ns1@v1/E1*" )
-    addSucc( mg.NullVal, mg.NullVal, "ns1@v1/E1?" )
+    addSucc( mg.NullVal, mg.NullVal, "&ns1@v1/E1?" )
     vcErr := func( msg string ) error { return newVcErr( nil, msg ) }
     for _, in := range []interface{} { 
         "c3", mg.MustEnum( "ns1@v1/E1", "c3" ),
@@ -539,6 +548,7 @@ func ( rti *rtInit ) addDefaultPathTests() {
         ),
     )
     p := mg.MakeTestIdPath
+    idFact := mg.NewTestPointerIdFactory()
     mkTestId := mg.MakeTestId
     qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
     t1 := qn1.AsAtomicType()
@@ -556,12 +566,13 @@ func ( rti *rtInit ) addDefaultPathTests() {
     apnd( fse( 1 ), p( 1 ), false )
     apnd( iv1, p( 1 ), false )
     apnd( fse( 2 ), p( 2 ), false )
-    apnd( mg.NewListStartEvent(), p( 2 ), false )
+    fld2Typ := mg.MustTypeReference( "Int32*" ).( *mg.ListTypeReference )
+    apnd( idFact.NextListStart( fld2Typ ), p( 2 ), false )
     apnd( iv1, p( 2, "0" ), false )
     apnd( iv1, p( 2, "1" ), false )
     apnd( mg.NewEndEvent(), p( 2 ), false )
     apnd( fse( 3 ), p( 3 ), false )
-    apnd( mg.NewMapStartEvent(), p( 3 ), false )
+    apnd( idFact.NextMapStart(), p( 3 ), false )
     apnd( fse( 1 ), p( 3, 1 ), false )
     apnd( iv1, p( 3, 1 ), false )
     apnd( mg.NewEndEvent(), p( 3 ), false )
@@ -628,7 +639,7 @@ func ( rti *rtInit ) addServiceRequestTests() {
             "ns1@v1/Service1", "", "",
             MakeOpDef( "op1",
                 MakeCallSig(
-                    []*FieldDefinition{ MakeFieldDef( "p1", "Int32?", nil ) },
+                    []*FieldDefinition{ MakeFieldDef( "p1", "&Int32?", nil ) },
                     "Null",
                     []string{},
                 ),
@@ -666,7 +677,7 @@ func ( rti *rtInit ) addServiceRequestTests() {
                             "ns1@v1/E1", 
                             mg.MustEnum( "ns1@v1/E1", "e2" ),
                         ),
-                        MakeFieldDef( "p3", "ns1@v1/S1?", nil ),
+                        MakeFieldDef( "p3", "&ns1@v1/S1?", nil ),
                         MakeFieldDef(
                             "p4",
                             "Int32+",
@@ -718,7 +729,7 @@ func ( rti *rtInit ) addServiceRequestTests() {
     }
     addSucc( 
         mkReq( "ns1@v1", "svc1", "op1", mg.MustSymbolMap( "p1", "1" ), "1" ),
-        mg.MustSymbolMap( "p1", int32( 1 ) ),
+        mg.MustSymbolMap( "p1", mustHeapVal( int32( 1 ) ) ),
         nil,
     )
     addSucc(
@@ -729,7 +740,7 @@ func ( rti *rtInit ) addServiceRequestTests() {
     svc2Op1Params1 := mg.MustSymbolMap(
         "p1", int32( 1 ),
         "p2", mg.MustEnum( "ns1@v1/E1", "e1" ),
-        "p3", mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        "p3", mustHeapVal( mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
         "p4", mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) ),
     )
     svc2Op1ParamsDefl := func( extra ...interface{} ) *mg.SymbolMap {
@@ -767,7 +778,9 @@ func ( rti *rtInit ) addServiceRequestTests() {
             auth1Val1,
         ),
         svc2Op1ParamsDefl( 
-            "p3", mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
+            "p3", 
+            mustHeapVal( mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
+        ),
         auth1Val1,
     )
     addSucc(
@@ -880,37 +893,37 @@ func ( rti *rtInit ) addServiceResponseTests() {
                 "ns1@v1/S1", 
                 "", 
                 []*FieldDefinition{ 
-                    MakeFieldDef( "f1", "Int32?", nil ),
-                    MakeFieldDef( "f2", "ns1@v1/S1?", nil ),
+                    MakeFieldDef( "f1", "&Int32?", nil ),
+                    MakeFieldDef( "f2", "&ns1@v1/S1?", nil ),
                 },
             ),
             MakeStructDef(
                 "ns1@v1/S2",
                 "ns1@v1/S1",
-                []*FieldDefinition{ MakeFieldDef( "f3", "Int32?", nil ) },
+                []*FieldDefinition{ MakeFieldDef( "f3", "&Int32?", nil ) },
             ),
             MakeStructDef(
                 "ns1@v1/Err1",
                 "",
                 []*FieldDefinition{
-                    MakeFieldDef( "f1", "Int32?", nil ),
-                    MakeFieldDef( "f2", "ns1@v1/S1?", nil ),
+                    MakeFieldDef( "f1", "&Int32?", nil ),
+                    MakeFieldDef( "f2", "&ns1@v1/S1?", nil ),
                 },
             ),
             MakeStructDef(
                 "ns1@v1/Err2",
                 "ns1@v1/Err1",
-                []*FieldDefinition{ MakeFieldDef( "f3", "Int32?", nil ) },
+                []*FieldDefinition{ MakeFieldDef( "f3", "&Int32?", nil ) },
             ),
             MakeStructDef(
                 "ns1@v1/SecErr1",
                 "",
-                []*FieldDefinition{ MakeFieldDef( "f1", "Int32?", nil ) },
+                []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) },
             ),
             MakeStructDef(
                 "ns1@v1/SecErr2",
                 "ns1@v1/SecErr1",
-                []*FieldDefinition{ MakeFieldDef( "f2", "Int32?", nil ) },
+                []*FieldDefinition{ MakeFieldDef( "f2", "&Int32?", nil ) },
             ),
             MakeEnumDef( "ns1@v1/E1", "e1" ),
             &PrototypeDefinition{
@@ -959,23 +972,24 @@ func ( rti *rtInit ) addServiceResponseTests() {
     addResSucc( nil, nil, "Null" )
     addResSucc( int32( 1 ), int32( 1 ), "Int32" )
     addResSucc( "1", int32( 1 ), "Int32" )
-    addResSucc( nil, int32( 0 ), "Int32?" )
+    addResSucc( nil, nil, "&Int32?" )
     en1 := mg.MustEnum( "ns1@v1/E1", "e1" )
     addResSucc( en1, en1, "ns1@v1/E1" )
     addResSucc( "e1", en1, "ns1@v1/E1" )
-    s1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
+    i1HeapVal := func() *mg.HeapValue { return mustHeapVal( int32( 1 ) ) }
+    s1 := mg.MustStruct( "ns1@v1/S1", "f1", i1HeapVal() )
     addResSucc( s1, s1, "ns1@v1/S1" )
-    s2 := mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f3", int32( 1 ) )
+    s2 := mg.MustStruct( "ns1@v1/S2", "f1", i1HeapVal(), "f3", i1HeapVal() )
     addResSucc( s2, s2, "ns1@v1/S1" )
-    err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
+    err1 := mg.MustStruct( "ns1@v1/Err1", "f1", i1HeapVal() )
     addErrSucc( err1, err1, "ns1@v1/Err1" )
     addErrSucc( err1, err1, "ns1@v1/Err1", "ns1@v1/SomeOtherErr" )
-    err2 := mg.MustStruct( "ns1@v1/Err2", "f3", int32( 1 ) )
+    err2 := mg.MustStruct( "ns1@v1/Err2", "f3", i1HeapVal() )
     addErrSucc( err2, err2, "ns1@v1/Err1" )
-    secErr1 := mg.MustStruct( "ns1@v1/SecErr1", "f1", int32( 1 ) )
+    secErr1 := mg.MustStruct( "ns1@v1/SecErr1", "f1", i1HeapVal() )
     addErrSucc( secErr1, secErr1 )
     addErrSucc( secErr1, secErr1, "ns1@v1/Err1" )
-    secErr2 := mg.MustStruct( "ns1@v1/SecErr2", "f2", int32( 1 ) )
+    secErr2 := mg.MustStruct( "ns1@v1/SecErr2", "f2", i1HeapVal() )
     addErrSucc( secErr2, secErr2 )
     addErrSucc( secErr2, secErr2, "ns1@v1/Err1" )
     // We're not really checking here that the error values are correct as
@@ -1034,7 +1048,7 @@ func ( rti *rtInit ) addServiceResponseTests() {
             "f2", mg.MustStruct( "ns1@v1/S1", "f1", []byte{} ) ),
         "ns1@v1/S1",
         newTcErr( 
-            "Int32?", 
+            "&Int32?", 
             "Buffer", 
             pathRes.Descend( id( "f2" ) ).Descend( id( "f1" ) ),
         ),

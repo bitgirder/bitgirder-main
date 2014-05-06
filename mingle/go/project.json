@@ -3,6 +3,7 @@
     "direct-deps": [ "testing", "core", "io" ],
     "packages": [ 
         "mingle", 
+        "mingle/types",
         "mingle/parser/lexer", 
         "mingle/parser/loc",
         "mingle/parser/syntax"

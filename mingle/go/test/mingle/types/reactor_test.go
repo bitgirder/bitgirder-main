@@ -13,8 +13,11 @@ func ( tc *ReactorTestCall ) callCast( ct *CastReactorTest ) {
     rct := NewCastReactorDefinitionMap( ct.Type, ct.Map )
     vb := mg.NewValueBuilder()
     pip := mg.InitReactorPipeline( rct, vb )
+    tc.Logf( "casting %s as %s", mg.QuoteValue( ct.In ), ct.Type )
     if err := mg.VisitValue( ct.In, pip ); err == nil {
         tc.CheckNoError( ct.Err )
+        tc.Logf( "expecting %s, got %s", mg.QuoteValue( ct.Expect ),
+            mg.QuoteValue( vb.GetValue() ) )
         mg.EqualValues( ct.Expect, vb.GetValue(), tc )
     } else { 
         cae := mg.CastErrorAssert{ 
@@ -117,7 +120,7 @@ func ( tc *ReactorTestCall ) callServiceResponse( st *ServiceResponseTest ) {
 }
 
 func ( tc *ReactorTestCall ) call() {
-//    tc.Logf( "Calling test of type %T", tc.Test )
+    tc.Logf( "Calling test of type %T", tc.Test )
     switch v := tc.Test.( type ) {
     case *CastReactorTest: tc.callCast( v )
     case *EventPathTest: tc.callEventPath( v )
