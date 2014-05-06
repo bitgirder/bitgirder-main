@@ -21,3 +21,9 @@ func ( s *Stack ) Pop() interface {} {
 }
 
 func ( s *Stack ) Push( val interface{} ) { s.l.PushFront( val ) }
+
+func ( s *Stack ) VisitTop( f func( val interface{} ) ) {
+    for e := s.l.Front(); e != nil; e = e.Next() {
+        f( e.Value )
+    }
+}

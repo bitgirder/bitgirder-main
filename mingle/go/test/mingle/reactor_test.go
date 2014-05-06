@@ -250,17 +250,223 @@ func ( ci *castInterfaceImpl ) AllowAssignment(
        act.Equals( qname( "ns1@v1/T1Sub1" ) )
 }
 
+type eventAccContext struct {
+    event ReactorEvent
+    evs []ReactorEvent
+    id PointerId
+}
+
+func newEventAccContext( ev ReactorEvent ) *eventAccContext {
+    return &eventAccContext{ 
+        event: ev, 
+        evs: make( []ReactorEvent, 0, 4 ),
+        id: PointerIdNull,
+    }
+}
+
+func ( ctx *eventAccContext ) saveEvent( ev ReactorEvent ) {
+    ctx.evs = append( ctx.evs, CopyEvent( ev, false ) )
+}
+
+type pointerEventAccumulator struct {
+    *assert.PathAsserter
+    evs map[ PointerId ] []ReactorEvent
+    accs *stack.Stack
+    autoSave bool
+}
+
+func newPointerEventAccumulator( 
+    a *assert.PathAsserter ) *pointerEventAccumulator {
+
+    return &pointerEventAccumulator{
+        PathAsserter: a,
+        evs: make( map[ PointerId ] []ReactorEvent ),
+        accs: stack.NewStack(),
+    }
+}
+
+func ( pe *pointerEventAccumulator ) saveEvent( ev ReactorEvent ) {
+    pe.accs.VisitTop( func( v interface{} ) {
+        ctx := v.( *eventAccContext )
+        if ctx.id != PointerIdNull { ctx.saveEvent( ev ) }
+    })
+}
+
+func ( pe *pointerEventAccumulator ) startSave( 
+    ev ReactorEvent, id PointerId ) {
+
+    ctx := pe.accs.Peek().( *eventAccContext )
+    pe.Equal( ev, ctx.event )
+    ctx.id = id
+    ctx.saveEvent( ev )
+}
+
+func ( pe *pointerEventAccumulator ) popAcc() {
+    ctx := pe.accs.Pop().( *eventAccContext )
+    if ctx.id != PointerIdNull { pe.evs[ ctx.id ] = ctx.evs }
+    pe.processValue()
+}
+
+func ( pe *pointerEventAccumulator ) processValue() {
+    if pe.accs.IsEmpty() { return }
+    ctx := pe.accs.Peek().( *eventAccContext )
+    if _, ok := ctx.event.( *ValueAllocationEvent ); ok { pe.popAcc() }
+}
+
+func ( pe *pointerEventAccumulator ) processEnd() { pe.popAcc() }
+
+func ( pe *pointerEventAccumulator ) optAutoSave( ev ReactorEvent ) {
+    switch v := ev.( type ) {
+    case *ValueAllocationEvent: pe.startSave( v, v.Id )
+    case *ListStartEvent: pe.startSave( v, v.Id )
+    case *MapStartEvent: pe.startSave( v, v.Id )
+    }
+}
+
+func ( pe *pointerEventAccumulator ) ProcessEvent( ev ReactorEvent ) error {
+    pe.saveEvent( ev )
+    switch ev.( type ) {
+    case *ListStartEvent, *MapStartEvent, *ValueAllocationEvent,
+         *StructStartEvent:
+        pe.accs.Push( newEventAccContext( ev ) )
+    case *EndEvent: pe.processEnd()
+    case *ValueEvent, *ValueReferenceEvent: pe.processValue()
+    }
+    if pe.autoSave { pe.optAutoSave( ev ) }
+    return nil
+}
+
+type castTestPointerHandling struct {
+
+    // only source events signaled by the cast reactor as involving a suppressed
+    // or changed ref
+    saves *pointerEventAccumulator 
+
+    refs *pointerEventAccumulator // a copy of all source events with an id
+}
+
+func ( c *castTestPointerHandling ) AllowAssignment( 
+    expct, act *QualifiedTypeName ) bool {
+
+    return false
+}
+
+func ( c *castTestPointerHandling ) CastAtomic(
+    in Value,
+    at *AtomicTypeReference,
+    path objpath.PathNode ) ( Value, error, bool ) {
+
+    return nil, nil, false
+}
+
+func ( c *castTestPointerHandling ) FieldTypeFor(
+    fld *Identifier, path objpath.PathNode ) ( TypeReference, error ) {
+
+    t := MustTypeReference
+    switch s := fld.ExternalForm(); s {
+    case "f0": return t( "Int32" ), nil
+    case "f1": return t( "&Int32" ), nil
+    case "f2": return t( "&Int32" ), nil
+    case "f3": return t( "&Int64" ), nil
+    case "f4": return t( "Int64" ), nil
+    case "f5": return t( "Int64*" ), nil
+    case "f6": return t( "Int32*" ), nil
+    case "f7": return t( "String*" ), nil
+    case "f8": return t( "&Int32*" ), nil
+    case "f9": return t( "ns1@v1/S2" ), nil
+    case "f10": return t( "ns1@v1/S2" ), nil
+    case "f11": return t( "&ns1@v1/S2" ), nil
+    case "f12": return t( "&Int64" ), nil
+    case "f13": return t( "&Int64" ), nil
+    case "f14": return t( "Int64" ), nil
+    }
+    return nil, rctErrorf( path, "unhandled field: %s", fld )
+}
+
+func ( c *castTestPointerHandling ) FieldTyperFor( 
+    qn *QualifiedTypeName,
+    path objpath.PathNode ) ( FieldTyper, error ) { 
+
+    return c, nil
+}
+
+func ( c *castTestPointerHandling ) InferStructFor(
+    qn *QualifiedTypeName ) bool {
+
+    return false
+}
+
+func ( c *castTestPointerHandling ) sendEvents(
+    evs []ReactorEvent, 
+    typ TypeReference,
+    cr *CastReactor, 
+    next ReactorEventProcessor ) error {
+ 
+    cr.stack.Push( typ )
+    for _, ev := range evs {
+        ev = CopyEvent( ev, false )
+        switch v := ev.( type ) {
+        case *ListStartEvent: v.Id = PointerIdNull
+        case *MapStartEvent: v.Id = PointerIdNull
+        case *ValueAllocationEvent: v.Id = PointerIdNull
+        }
+        if err := cr.ProcessEvent( ev, next ); err != nil { return err }
+    }
+    return nil
+}
+
+func ( c *castTestPointerHandling ) processValueReference(
+    cr *CastReactor,
+    ve *ValueReferenceEvent,
+    typ TypeReference,
+    next ReactorEventProcessor ) error {
+ 
+    if evs, ok := c.saves.evs[ ve.Id ]; ok {
+        return c.sendEvents( evs, typ, cr, next )
+    }
+    if evs, ok := c.refs.evs[ ve.Id ]; ok {
+        return c.sendEvents( evs, typ, cr, next )
+    }
+    return next.ProcessEvent( ve )
+}
+
+func ( c *castTestPointerHandling ) addDelegatesFor( cr *CastReactor ) {
+    cr.AllocationSuppressed = func( ve *ValueAllocationEvent ) error {
+        c.saves.startSave( ve, ve.Id )
+        return nil
+    }
+    cr.CastingList = func( le *ListStartEvent, lt *ListTypeReference ) error {
+        c.saves.startSave( le, le.Id )
+        return nil
+    }
+    cr.ProcessValueReference = func( 
+        ve *ValueReferenceEvent, 
+        typ TypeReference, 
+        next ReactorEventProcessor ) error {
+
+        return c.processValueReference( cr, ve, typ, next )
+    }
+}
+
 func ( c *ReactorTestCall ) addCastReactors( 
     ct *CastReactorTest, rcts []interface{} ) []interface{} {
 
     ps := NewPathSettingProcessor()
     ps.SetStartPath( ct.Path )
-
+    c.Logf( "profile: %s", ct.Profile )
     switch ct.Profile {
     case "": rcts = append( rcts, ps, NewDefaultCastReactor( ct.Type ) )
     case "interface-impl-basic": 
         cr := NewCastReactor( ct.Type, newCastInterfaceImpl( c ) )
         rcts = append( rcts, ps, cr )
+    case "interface-pointer-handling":
+        cph := &castTestPointerHandling{}
+        cph.saves = newPointerEventAccumulator( c.PathAsserter )
+        cph.refs = newPointerEventAccumulator( c.PathAsserter )
+        cph.refs.autoSave = true
+        cr := NewCastReactor( ct.Type, cph )
+        cph.addDelegatesFor( cr )
+        rcts = append( rcts, ps, cph.saves, cph.refs, cr )
     default: panic( libErrorf( "Unhandled profile: %s", ct.Profile ) )
     }
     return rcts
@@ -286,7 +492,9 @@ func ( c *ReactorTestCall ) callCast( ct *CastReactorTest ) {
         if errExpct := ct.Err; errExpct != nil {
             c.Fatalf( "Expected error (%T): %s", errExpct, errExpct )
         }
-        EqualWireValues( ct.Expect, vb.GetValue(), c.PathAsserter )
+        c.Logf( "got val: %s", QuoteValue( vb.GetValue() ) )
+//        EqualWireValues( ct.Expect, vb.GetValue(), c.PathAsserter )
+        EqualValues( ct.Expect, vb.GetValue(), c.PathAsserter )
     } else { AssertCastError( ct.Err, err, c.PathAsserter ) }
 }
 

@@ -2287,6 +2287,9 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
 //      f9 S2
 //      f10 S2
 //      f11 &S2
+//      f12 &Int64
+//      f13 &Int64
+//      f14 Int64
 //  }
 //
 func ( t *crtInit ) addInterfacePointerHandlingTests() {
@@ -2304,6 +2307,7 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
         res.Type = &ListTypeReference{ ElementType: typ }
         return res
     }
+    hv12 := NewHeapValue( Int64( int64( 12 ) ) )
     AddStdReactorTests(
         &CastReactorTest{
             In: CopySource(
@@ -2321,7 +2325,7 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
                         fldEv( 5 ), 
                             NewListStartEvent( 
                                 &ListTypeReference{ ElementType: TypeInt32 },
-                                PointerId( 3 ),
+                                ptrId( 3 ),
                             ),
                                 NewValueEvent( Int32( int32( 0 ) ) ),
                                 NewValueEvent( Int32( int32( 1 ) ) ),
@@ -2334,6 +2338,11 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
                                 NewStructStartEvent( qn( 2 ) ), NewEndEvent(),
                         fldEv( 10 ), ptrRef( 4 ),
                         fldEv( 11 ), ptrRef( 4 ),
+                        fldEv( 12 ), 
+                            ptrAlloc( TypeInt64, 5 ),
+                                NewValueEvent( Int64( int64( 12 ) ) ),
+                        fldEv( 13 ), ptrRef( 5 ),
+                        fldEv( 14 ), ptrRef( 5 ),
                     NewEndEvent(),
                 },
             ),
@@ -2353,6 +2362,9 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
                 "f9", MustStruct( qn( 2 ) ),
                 "f10", MustStruct( qn( 2 ) ),
                 "f11", NewHeapValue( MustStruct( qn( 2 ) ) ),
+                "f12", hv12,
+                "f13", hv12,
+                "f14", Int64( int64( 12 ) ),
             ),
             Type: typ( 1 ),
             Profile: "interface-pointer-handling",
@@ -2362,7 +2374,7 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
 
 func ( t *crtInit ) addInterfaceImplTests() {
     t.addInterfaceImplBasicTests()
-//    t.addInterfacePointerHandlingTests()
+    t.addInterfacePointerHandlingTests()
 }
 
 func ( t *crtInit ) call() {

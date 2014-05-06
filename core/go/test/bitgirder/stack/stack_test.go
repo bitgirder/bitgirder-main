@@ -2,6 +2,7 @@ package stack
 
 import (
     "testing"
+    "fmt"
 )
 
 func assert( pass bool, msg string, t *testing.T ) {
@@ -34,4 +35,24 @@ func TestStackBasic( t *testing.T ) {
     assert( s.Pop().( int ) == 1, "result of pop is not 1", t )
     assert( s.IsEmpty(), "stack not empty", t )
     assertPanicOnPopEmpty( s, t )
+}
+
+func TestStackVisit( t *testing.T ) {
+    s := NewStack()
+    s.Push( 0 )
+    s.Push( 1 )
+    s.Push( 2 )
+    type checkCtx struct { acc, incr int }
+    makeCheck := func( ctx *checkCtx ) func( interface{} ) {
+        return func( v interface{} ) {
+            i := v.( int ) 
+            msg := fmt.Sprintf( "%d != %d", ctx.acc, i )
+            assert( ctx.acc == i, msg, t )
+            ctx.acc += ctx.incr
+        }
+    }
+    topChk := &checkCtx{ acc: 2, incr: -1 }
+    s.VisitTop( makeCheck( topChk ) )
+    topMsg := fmt.Sprintf( "top visit acc is %d", topChk.acc )
+    assert( topChk.acc == -1, topMsg, t )
 }
