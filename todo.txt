@@ -4,6 +4,8 @@
   allocation have the type specified, and that list values are of the correct
   type
 
+- reactors should reject cyclic inputs (and visit should fail when visiting one)
+
 - ensure that Buffer.String() prints at most N leading/trailing hex chars, but
   does not attempt to hexify an enormous buffer (can always add
   Buffer.HexString() for callers that actually want that).
