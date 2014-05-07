@@ -291,7 +291,7 @@ func castSymbolMap(
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
 
-func newNullValueCastError( path objpath.PathNode ) *ValueCastError {
+func NewNullValueCastError( path objpath.PathNode ) *ValueCastError {
     return NewValueCastErrorf( path, "Value is null" )
 }
 
@@ -306,7 +306,7 @@ func castAtomicUnrestricted(
 
     if _, ok := mgVal.( *Null ); ok {
         if at.Equals( TypeNull ) { return mgVal, nil }
-        return nil, newNullValueCastError( path )
+        return nil, NewNullValueCastError( path )
     }
     switch nm := at.Name; {
     case nm.Equals( QnameValue ): return mgVal, nil
@@ -344,7 +344,7 @@ func checkRestriction(
         QuoteValue( val ), at.Restriction.ExternalForm() )
 }
 
-func castAtomicWithCallType(
+func CastAtomicWithCallType(
     mgVal Value,
     at *AtomicTypeReference,
     callTyp TypeReference,
@@ -361,5 +361,5 @@ func CastAtomic(
     mgVal Value, 
     at *AtomicTypeReference,
     path objpath.PathNode ) ( val Value, err error ) {
-    return castAtomicWithCallType( mgVal, at, at, path )
+    return CastAtomicWithCallType( mgVal, at, at, path )
 }
