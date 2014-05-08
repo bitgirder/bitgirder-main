@@ -2,6 +2,7 @@ package types
 
 import (
     mg "mingle"
+    mgRct "mingle/reactor"
     "testing"
     "bitgirder/assert"
 )
@@ -18,4 +19,8 @@ func TestFieldGetDefault( t *testing.T ) {
         chk( "Int32" + quant, l, l )
     }
     chk( "Int32*", nil, mg.EmptyList() )
+}
+
+func TestReactors( t *testing.T ) {
+    mgRct.RunReactorTestsInNamespace( reactorTestNs, t )
 }

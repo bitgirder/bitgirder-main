@@ -2,6 +2,7 @@ package types
 
 import (
     mg "mingle"
+    mgRct "mingle/reactor"
     "bitgirder/objpath"
 //    "log"
     "bitgirder/stack"
@@ -60,7 +61,8 @@ func ( ft fieldTyper ) FieldTypeFor(
 }
 
 func ( ci defMapCastIface ) FieldTyperFor(
-    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( mg.FieldTyper, error ) {
+    qn *mg.QualifiedTypeName, 
+    path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
 
     flds := make( []*FieldSet, 0, 2 )
     for nm := qn; nm != nil; {
@@ -159,7 +161,7 @@ func ( fsg defMapFieldSetGetter ) getFieldSets(
 
 type castReactor struct {
     typ mg.TypeReference
-    iface mg.CastInterface
+    iface mgRct.CastInterface
     dm *DefinitionMap
     fsg fieldSetGetter
     stack *stack.Stack
@@ -167,7 +169,7 @@ type castReactor struct {
 }
 
 func ( cr *castReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    mgCastRct := mg.NewCastReactor( cr.typ, cr.iface )
+    mgCastRct := mgRct.NewCastReactor( cr.typ, cr.iface )
     mgCastRct.SkipPathSetter = cr.skipPathSetter
     pip.Add( mgCastRct )
 }
@@ -198,7 +200,7 @@ func ( cr *castReactor ) newFieldCtx( flds []*FieldSet ) *fieldCtx {
     return res
 }
 
-func ( cr *castReactor ) startStruct( ss *mg.StructStartEvent ) error {
+func ( cr *castReactor ) startStruct( ss *mgRct.StructStartEvent ) error {
     flds, err := cr.fsg.getFieldSets( ss.Type, ss.GetPath() )
     if err != nil { return err }
     if flds != nil { cr.stack.Push( cr.newFieldCtx( flds ) ) }
@@ -207,7 +209,7 @@ func ( cr *castReactor ) startStruct( ss *mg.StructStartEvent ) error {
 
 // We don't re-check here that fld is actually part of the defined field set or
 // since the upstream defMapCastIface will have validated that already
-func ( cr *castReactor ) startField( fs *mg.FieldStartEvent ) error {
+func ( cr *castReactor ) startField( fs *mgRct.FieldStartEvent ) error {
     if cr.stack.IsEmpty() { return nil }
     cr.stack.Peek().( *fieldCtx ).await.Delete( fs.Field )
     return nil
@@ -217,22 +219,22 @@ func feedDefault(
     fld *mg.Identifier, 
     defl mg.Value, 
     p objpath.PathNode,
-    next mg.ReactorEventProcessor ) error {
+    next mgRct.ReactorEventProcessor ) error {
 
     fldPath := objpath.Descend( p, fld )
-    fs := mg.NewFieldStartEvent( fld )
+    fs := mgRct.NewFieldStartEvent( fld )
     fs.SetPath( fldPath )
     if err := next.ProcessEvent( fs ); err != nil { return err }
-    ps := mg.NewPathSettingProcessorPath( fldPath )
+    ps := mgRct.NewPathSettingProcessorPath( fldPath )
     ps.SkipStructureCheck = true
-    pip := mg.InitReactorPipeline( ps, next )
-    return mg.VisitValue( defl, pip )
+    pip := mgRct.InitReactorPipeline( ps, next )
+    return mgRct.VisitValue( defl, pip )
 }
 
 func processDefaults(
     fldCtx *fieldCtx, 
     p objpath.PathNode, 
-    next mg.ReactorEventProcessor ) error {
+    next mgRct.ReactorEventProcessor ) error {
 
     vis := func( fld *mg.Identifier, val interface{} ) error {
         fd := val.( *FieldDefinition )
@@ -256,7 +258,7 @@ func createMissingFieldsError( p objpath.PathNode, fldCtx *fieldCtx ) error {
 }
 
 func ( cr *castReactor ) end( 
-    ev *mg.EndEvent, next mg.ReactorEventProcessor ) error {
+    ev *mgRct.EndEvent, next mgRct.ReactorEventProcessor ) error {
     if cr.stack.IsEmpty() { return nil }
     fldCtx := cr.stack.Peek().( *fieldCtx )
     if fldCtx.depth > 0 {
@@ -281,7 +283,7 @@ func ( cr *castReactor ) startContainer() error {
 // and that the type is actually an enum. We don't actually check the enum value
 // here though, and leave that for CastAtomic. Any other values aren't checked
 // here and are left to CastAtomic or to the upstream processor.
-func ( cr *castReactor ) valueEvent( ve *mg.ValueEvent ) error {
+func ( cr *castReactor ) valueEvent( ve *mgRct.ValueEvent ) error {
     if en, ok := ve.Val.( *mg.Enum ); ok {
         if def, ok := cr.dm.GetOk( en.Type ); ok {
             if _, ok := def.( *EnumDefinition ); ok { return nil }
@@ -294,28 +296,28 @@ func ( cr *castReactor ) valueEvent( ve *mg.ValueEvent ) error {
 }
 
 func ( cr *castReactor ) prepareProcessEvent(
-    ev mg.ReactorEvent, next mg.ReactorEventProcessor ) error {
+    ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) error {
     
     switch v := ev.( type ) {
-    case *mg.StructStartEvent: return cr.startStruct( v )
-    case *mg.FieldStartEvent: return cr.startField( v )
-    case *mg.ValueEvent: return cr.valueEvent( v )
-    case *mg.EndEvent: return cr.end( v, next )
-    case *mg.ListStartEvent, *mg.MapStartEvent: return cr.startContainer()
-    case *mg.ValueAllocationEvent, *mg.ValueReferenceEvent: return nil
+    case *mgRct.StructStartEvent: return cr.startStruct( v )
+    case *mgRct.FieldStartEvent: return cr.startField( v )
+    case *mgRct.ValueEvent: return cr.valueEvent( v )
+    case *mgRct.EndEvent: return cr.end( v, next )
+    case *mgRct.ListStartEvent, *mgRct.MapStartEvent: return cr.startContainer()
+    case *mgRct.ValueAllocationEvent, *mgRct.ValueReferenceEvent: return nil
     }
     panic( libErrorf( "unhandled event: %T", ev ) )
 }
 
 func ( cr *castReactor ) ProcessEvent( 
-    ev mg.ReactorEvent, next mg.ReactorEventProcessor ) error {
+    ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) error {
     if err := cr.prepareProcessEvent( ev, next ); err != nil { return err }
     return next.ProcessEvent( ev )
 }
 
 func newCastReactorBase(
     typ mg.TypeReference, 
-    iface mg.CastInterface,
+    iface mgRct.CastInterface,
     dm *DefinitionMap, 
     fsg fieldSetGetter ) *castReactor {
 
@@ -339,7 +341,7 @@ func newCastReactorDefinitionMap(
 // other than our internal *castReactor type; we could combine this with
 // newCastReactorDefinitionMap if we end up making *castReactor public
 func NewCastReactorDefinitionMap(
-    typ mg.TypeReference, dm *DefinitionMap ) mg.PipelineProcessor {
+    typ mg.TypeReference, dm *DefinitionMap ) mgRct.PipelineProcessor {
     
     return newCastReactorDefinitionMap( typ, dm )
 }
@@ -347,10 +349,10 @@ func NewCastReactorDefinitionMap(
 type RequestReactorInterface interface {
 
     GetAuthenticationReactor( 
-        path objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+        path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error )
 
     GetParametersReactor(
-        path objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+        path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error )
 }
 
 type mgReqImpl struct {
@@ -402,7 +404,7 @@ func ( impl *mgReqImpl ) Operation(
 func ( impl *mgReqImpl ) needsAuth() bool { return impl.sd.Security != nil }
 
 func ( impl *mgReqImpl ) GetAuthenticationReactor( 
-    path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
     impl.sawAuth = true
     if secQn := impl.sd.Security; secQn != nil { 
@@ -410,9 +412,9 @@ func ( impl *mgReqImpl ) GetAuthenticationReactor(
         cr := NewCastReactorDefinitionMap( authTyp, impl.defMap() )
         authRct, err := impl.iface.GetAuthenticationReactor( path )
         if err != nil { return nil, err }
-        return mg.InitReactorPipeline( cr, authRct ), nil
+        return mgRct.InitReactorPipeline( cr, authRct ), nil
     }
-    return mg.DiscardProcessor, nil
+    return mgRct.DiscardProcessor, nil
 }
 
 type parametersCastIface struct {
@@ -433,7 +435,8 @@ func ( pi parametersCastIface ) fieldSets() []*FieldSet {
 }
 
 func ( pi parametersCastIface ) FieldTyperFor(
-    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( mg.FieldTyper, error ) {
+    qn *mg.QualifiedTypeName, 
+    path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
 
     if qn.Equals( qnTypedParameterMap ) { 
         return fieldTyper{ flds: pi.fieldSets(), dm: pi.defs }, nil
@@ -462,13 +465,13 @@ func ( pi parametersCastIface ) getFieldSets(
     return fieldSetsForTypeInDefMap( qn, pi.defs, path )
 }
 
-type parametersReactor struct { rep mg.ReactorEventProcessor }
+type parametersReactor struct { rep mgRct.ReactorEventProcessor }
 
-func ( pr parametersReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
+func ( pr parametersReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     ev2 := ev
-    if ss, ok := ev.( *mg.StructStartEvent ); ok {
+    if ss, ok := ev.( *mgRct.StructStartEvent ); ok {
         if ss.Type.Equals( qnTypedParameterMap ) { 
-            ev2 = mg.NewMapStartEvent( mg.PointerIdNull ) 
+            ev2 = mgRct.NewMapStartEvent( mg.PointerIdNull ) 
             ev2.SetPath( ev.GetPath() )
         }
     }
@@ -485,7 +488,7 @@ func ( impl *mgReqImpl ) checkGotAuth( path objpath.PathNode ) error {
 }
 
 func ( impl *mgReqImpl ) GetParametersReactor(
-    path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
     if err := impl.checkGotAuth( path ); err != nil { return nil, err }
     typ := typTypedParameterMap
@@ -497,15 +500,15 @@ func ( impl *mgReqImpl ) GetParametersReactor(
     proc, err := impl.iface.GetParametersReactor( path )
     if err != nil { return nil, err }
     paramsRct := parametersReactor{ proc }
-    return mg.InitReactorPipeline( cr, paramsRct ), nil
+    return mgRct.InitReactorPipeline( cr, paramsRct ), nil
 }
 
 func NewRequestReactor( 
     svcDefs *ServiceDefinitionMap, 
-    iface RequestReactorInterface ) *mg.RequestReactor {
+    iface RequestReactorInterface ) *mgRct.RequestReactor {
 
     reqImpl := &mgReqImpl{ svcDefs: svcDefs, iface: iface }
-    return mg.NewRequestReactor( reqImpl )
+    return mgRct.NewRequestReactor( reqImpl )
 }
 
 func errorForUnexpectedErrorType( 
@@ -515,20 +518,23 @@ func errorForUnexpectedErrorType(
         "error type is not a declared thrown type: %s", typ )
 }
 
-func errorForUnexpectedErrorValue( ev mg.ReactorEvent ) error {
+func errorForUnexpectedErrorValue( ev mgRct.ReactorEvent ) error {
     var typ mg.TypeReference
     switch v := ev.( type ) {
-    case *mg.ValueEvent: typ = mg.TypeOf( v.Val )
-    case *mg.ListStartEvent: typ = mg.TypeOpaqueList
-    case *mg.MapStartEvent: typ = mg.TypeSymbolMap
+    case *mgRct.ValueEvent: typ = mg.TypeOf( v.Val )
+    case *mgRct.ListStartEvent: typ = mg.TypeOpaqueList
+    case *mgRct.MapStartEvent: typ = mg.TypeSymbolMap
     }
     if ( typ == nil ) { panic( libErrorf( "unhandled event type: %T", ev ) ) }
     return errorForUnexpectedErrorType( ev.GetPath(), typ )
 }
 
 type ResponseReactorInterface interface {
-    GetResultReactor( p objpath.PathNode ) ( mg.ReactorEventProcessor, error )
-    GetErrorReactor( p objpath.PathNode ) ( mg.ReactorEventProcessor, error )
+
+    GetResultReactor( 
+        p objpath.PathNode ) ( mgRct.ReactorEventProcessor, error )
+
+    GetErrorReactor( p objpath.PathNode ) ( mgRct.ReactorEventProcessor, error )
 }
 
 type mgRespImpl struct {
@@ -539,20 +545,20 @@ type mgRespImpl struct {
 }
 
 func ( impl *mgRespImpl ) GetResultReactor( 
-    path objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
     resTyp := impl.opDef.Signature.Return
     rct, err := impl.iface.GetResultReactor( path )
     if err != nil { return nil, err }
     cr := newCastReactorDefinitionMap( resTyp, impl.defs )
     cr.skipPathSetter = true
-    return mg.InitReactorPipeline( cr, rct ), nil
+    return mgRct.InitReactorPipeline( cr, rct ), nil
 }
 
 type errorProcReactor struct {
     impl *mgRespImpl
-    rct mg.ReactorEventProcessor
-    proc mg.ReactorEventProcessor
+    rct mgRct.ReactorEventProcessor
+    proc mgRct.ReactorEventProcessor
 }
 
 func ( epr *errorProcReactor ) errorTypeForStruct( 
@@ -573,12 +579,12 @@ func ( epr *errorProcReactor ) errorTypeForStruct(
     return nil, false
 }
 
-func ( epr *errorProcReactor ) initProc( ev mg.ReactorEvent ) error {
-    if ss, ok := ev.( *mg.StructStartEvent ); ok {
+func ( epr *errorProcReactor ) initProc( ev mgRct.ReactorEvent ) error {
+    if ss, ok := ev.( *mgRct.StructStartEvent ); ok {
         if typ, ok := epr.errorTypeForStruct( ss.Type ); ok {
             cr := newCastReactorDefinitionMap( typ, epr.impl.defs )
             cr.skipPathSetter = true
-            epr.proc = mg.InitReactorPipeline( cr, epr.rct )
+            epr.proc = mgRct.InitReactorPipeline( cr, epr.rct )
             return nil
         }
         typ := ss.Type.AsAtomicType()
@@ -587,7 +593,7 @@ func ( epr *errorProcReactor ) initProc( ev mg.ReactorEvent ) error {
     return errorForUnexpectedErrorValue( ev )
 }
 
-func ( epr *errorProcReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
+func ( epr *errorProcReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     if ( epr.proc == nil ) { 
         if err := epr.initProc( ev ); err != nil { return err }
     }
@@ -595,7 +601,7 @@ func ( epr *errorProcReactor ) ProcessEvent( ev mg.ReactorEvent ) error {
 }
 
 func ( impl *mgRespImpl ) GetErrorReactor( 
-    p objpath.PathNode ) ( mg.ReactorEventProcessor, error ) {
+    p objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
     rct, err := impl.iface.GetErrorReactor( p )
     if err != nil { return nil, err }
@@ -606,7 +612,7 @@ func NewResponseReactor(
     defs *DefinitionMap,
     svcDef *ServiceDefinition,
     opDef *OperationDefinition,
-    iface ResponseReactorInterface ) *mg.ResponseReactor {
+    iface ResponseReactorInterface ) *mgRct.ResponseReactor {
 
     resTyp := opDef.Signature.Return
     qn := mg.TypeNameIn( resTyp ).( *mg.QualifiedTypeName )
@@ -616,5 +622,5 @@ func NewResponseReactor(
     }
     mgIface := 
         &mgRespImpl{ iface: iface, defs: defs, svcDef: svcDef, opDef: opDef }
-    return mg.NewResponseReactor( mgIface )
+    return mgRct.NewResponseReactor( mgIface )
 }

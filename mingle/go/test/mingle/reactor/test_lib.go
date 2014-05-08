@@ -3,6 +3,7 @@ package reactor
 import (
     mg "mingle"
     "bitgirder/assert"
+    "testing"
 //    "log"
 )
 
@@ -26,21 +27,41 @@ func ( b *ReactorTestSetBuilder ) AddTests( t ...ReactorTest ) {
 
 type ReactorTestSetInitializer func( b *ReactorTestSetBuilder ) 
 
-var testInits []ReactorTestSetInitializer
+type testInitContext struct {
+    ns *mg.Namespace
+    ti ReactorTestSetInitializer
+}
+
+var testInits []testInitContext
 
 //func init() { testInits = make( []ReactorTestSetInitializer, 0, 4 ) }
 
-func AddTestInitializer( ti ReactorTestSetInitializer ) {
-    if testInits == nil { 
-        testInits = make( []ReactorTestSetInitializer, 0, 1024 ) 
-    }
-    testInits = append( testInits, ti )
+func AddTestInitializer( ns *mg.Namespace, ti ReactorTestSetInitializer ) {
+    if testInits == nil { testInits = make( []testInitContext, 0, 4 ) }
+    testInits = append( testInits, testInitContext{ ns: ns, ti: ti } )
 }
 
-func getReactorTests() []ReactorTest {
+func getReactorTestsInNamespace( ns *mg.Namespace ) []ReactorTest {
     b := &ReactorTestSetBuilder{ tests: make( []ReactorTest, 0, 1024 ) }
-    for _, ti := range testInits { ti( b ) }
+    for _, ctx := range testInits { 
+        if ctx.ns.Equals( ns ) { ctx.ti( b ) }
+    }
     return b.tests
+}
+
+func RunReactorTestsInNamespace( ns *mg.Namespace, t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    la := a.StartList();
+    for _, rt := range getReactorTestsInNamespace( ns ) {
+        ta := la
+        if nt, ok := rt.( NamedReactorTest ); ok { 
+            ta = a.Descend( nt.TestName() ) 
+        }
+        c := &ReactorTestCall{ PathAsserter: ta }
+//        c.Logf( "calling %T", rt )
+        rt.Call( c )
+        la = la.Next()
+    }
 }
 
 func eventForEqualityCheck( 
@@ -130,11 +151,11 @@ func FeedSource( src interface{}, rct ReactorEventProcessor ) error {
     panic( libErrorf( "unhandled source: %T", src ) )
 }
 
-//func AssertFeedSource( 
-//    src interface{}, rct ReactorEventProcessor, a assert.Failer ) {
-//
-//    if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
-//}
+func AssertFeedSource( 
+    src interface{}, rct ReactorEventProcessor, a assert.Failer ) {
+
+    if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
+}
 
 type eventPathCheckReactor struct {
     a *assert.PathAsserter
@@ -215,7 +236,7 @@ func ( f *TestPointerIdFactory ) nextHeapTestValue(
     return heapTestValue{ val: val, id: f.NextPointerId() }
 }
 
-func checkNoError( err error, c *ReactorTestCall ) {
+func CheckNoError( err error, c *ReactorTestCall ) {
     if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
 }
 

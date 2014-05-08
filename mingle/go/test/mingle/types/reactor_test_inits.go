@@ -2,8 +2,11 @@ package types
 
 import (
     mg "mingle"
+    mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
+
+var reactorTestNs *mg.Namespace
 
 var newVcErr = mg.NewValueCastError
 
@@ -29,20 +32,10 @@ func makeIdList( strs ...string ) []*mg.Identifier {
     return res
 }
 
-type CastReactorTest struct {
-    Map *DefinitionMap
-    Type mg.TypeReference
-    In mg.Value
-    Expect mg.Value
-    Err error
-}
+type rtInit struct { b *mgRct.ReactorTestSetBuilder }
 
-type rtInit struct {
-    tests []interface{}
-}
-
-func ( rti *rtInit ) addTests( t ...interface{} ) {
-    rti.tests = append( rti.tests, t... )
+func ( rti *rtInit ) addTests( tests ...mgRct.ReactorTest ) {
+    rti.b.AddTests( tests... )
 }
 
 func ( rti *rtInit ) addBaseFieldCastTests() {
@@ -529,13 +522,6 @@ func ( rti *rtInit ) addDefaultCastTests() {
     )
 }
 
-type EventPathTest struct {
-    Source []mg.ReactorEvent
-    Expect []mg.EventExpectation
-    Type mg.TypeReference
-    Map *DefinitionMap
-}
-
 func ( rti *rtInit ) addDefaultPathTests() {
     dm := MakeV1DefMap(
         MakeStructDef( "ns1@v1/S1", "",
@@ -548,19 +534,19 @@ func ( rti *rtInit ) addDefaultPathTests() {
         ),
     )
     p := mg.MakeTestIdPath
-    idFact := mg.NewTestPointerIdFactory()
+    idFact := mgRct.NewTestPointerIdFactory()
     mkTestId := mg.MakeTestId
     qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
     t1 := qn1.AsAtomicType()
-    ss1 := mg.NewStructStartEvent( qn1 )
-    fse := func( i int ) *mg.FieldStartEvent {
-        return mg.NewFieldStartEvent( mkTestId( i ) )
+    ss1 := mgRct.NewStructStartEvent( qn1 )
+    fse := func( i int ) *mgRct.FieldStartEvent {
+        return mgRct.NewFieldStartEvent( mkTestId( i ) )
     }
-    iv1 := mg.NewValueEvent( mg.Int32( 1 ) )
-    src, expct := []mg.ReactorEvent{}, []mg.EventExpectation{}
-    apnd := func( ev mg.ReactorEvent, p objpath.PathNode, synth bool ) {
+    iv1 := mgRct.NewValueEvent( mg.Int32( 1 ) )
+    src, expct := []mgRct.ReactorEvent{}, []mgRct.EventExpectation{}
+    apnd := func( ev mgRct.ReactorEvent, p objpath.PathNode, synth bool ) {
         if ! synth { src = append( src, ev ) }
-        expct = append( expct, mg.EventExpectation{ Event: ev, Path: p } )
+        expct = append( expct, mgRct.EventExpectation{ Event: ev, Path: p } )
     }
     apnd( ss1, nil, false )
     apnd( fse( 1 ), p( 1 ), false )
@@ -570,28 +556,23 @@ func ( rti *rtInit ) addDefaultPathTests() {
     apnd( idFact.NextListStart( fld2Typ ), p( 2 ), false )
     apnd( iv1, p( 2, "0" ), false )
     apnd( iv1, p( 2, "1" ), false )
-    apnd( mg.NewEndEvent(), p( 2 ), false )
+    apnd( mgRct.NewEndEvent(), p( 2 ), false )
     apnd( fse( 3 ), p( 3 ), false )
     apnd( idFact.NextMapStart(), p( 3 ), false )
     apnd( fse( 1 ), p( 3, 1 ), false )
     apnd( iv1, p( 3, 1 ), false )
-    apnd( mg.NewEndEvent(), p( 3 ), false )
+    apnd( mgRct.NewEndEvent(), p( 3 ), false )
     apnd( fse( 4 ), p( 4 ), true )
     apnd( iv1, p( 4 ), true )
-    apnd( mg.NewEndEvent(), nil, false )
+    apnd( mgRct.NewEndEvent(), nil, false )
     rti.addTests(
         &EventPathTest{ 
-            Source: mg.CopySource( src ), 
+            Source: mgRct.CopySource( src ), 
             Expect: expct, 
             Type: t1, 
             Map: dm,
         },
     )
-}
-
-type ServiceMaps struct {
-    Definitions *DefinitionMap
-    ServiceIds *mg.IdentifierMap
 }
 
 func ( sm *ServiceMaps ) BuildOpMap() *ServiceDefinitionMap {
@@ -601,14 +582,6 @@ func ( sm *ServiceMaps ) BuildOpMap() *ServiceDefinitionMap {
         res.MustPut( qn.Namespace, svcId, qn )
     })
     return res
-}
-
-type ServiceRequestTest struct {
-    In mg.Value
-    Maps *ServiceMaps 
-    Parameters *mg.SymbolMap
-    Authentication mg.Value
-    Error error
 }
 
 func ( rti *rtInit ) addServiceRequestTests() {
@@ -871,16 +844,6 @@ func ( rti *rtInit ) addServiceRequestTests() {
     )
 }
 
-type ServiceResponseTest struct {
-    Definitions *DefinitionMap
-    ServiceType *mg.QualifiedTypeName
-    Operation *mg.Identifier
-    In mg.Value
-    ResultValue mg.Value
-    ErrorValue mg.Value
-    Error error
-}
-
 func ( rti *rtInit ) addServiceResponseTests() {
     opIdStr := "op1"
     id := mg.MustIdentifier
@@ -1102,7 +1065,7 @@ func ( rti *rtInit ) addServiceResponseTests() {
     )
 }
 
-func ( rti *rtInit ) init() {
+func ( rti *rtInit ) call() {
     rti.addBaseFieldCastTests()
     rti.addFieldSetCastTests()
     rti.addStructValCastTests() 
@@ -1115,16 +1078,8 @@ func ( rti *rtInit ) init() {
     rti.addServiceResponseTests()
 }
 
-// The tests returned might normally be created during an init() block, but
-// creating them benefits from using methods, like NewV1DefinitionMap(), which
-// themselves are not safe to call until after package init.
-func GetStdReactorTests() []interface{} {
-    rti := &rtInit{ tests: []interface{}{} }
-    rti.init()
-    return rti.tests
+func init() {
+    reactorTestNs = mg.MustNamespace( "mingle:types@v1" )
+    f := func( b *mgRct.ReactorTestSetBuilder ) { ( &rtInit{ b: b } ).call() }
+    mgRct.AddTestInitializer( reactorTestNs, f )
 }
-
-// To add:
-//
-//  - subclass assignment at top level, in field value, as svc param, svc
-//  result, thrown error, and thrown error from auth

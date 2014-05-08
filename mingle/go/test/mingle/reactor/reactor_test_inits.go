@@ -8,6 +8,8 @@ import (
     "bytes"
 )
 
+var reactorTestNs *mg.Namespace
+
 var qname = mg.MustQualifiedTypeName
 
 func typeRef( val interface{} ) mg.TypeReference {
@@ -2262,4 +2264,7 @@ func initReactorTests( b *ReactorTestSetBuilder ) {
     initCastReactorTests( b )
 }
 
-func init() { AddTestInitializer( initReactorTests ) }
+func init() { 
+    reactorTestNs = mg.MustNamespace( "mingle:reactor@v1" )
+    AddTestInitializer( reactorTestNs, initReactorTests ) 
+}

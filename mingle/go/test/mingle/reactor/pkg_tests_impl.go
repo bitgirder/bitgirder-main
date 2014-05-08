@@ -602,7 +602,7 @@ func ( t *RequestReactorTest ) Call( c *ReactorTestCall ) {
     }
     rct := InitReactorPipeline( NewRequestReactor( reqChk ) )
     if err := FeedSource( t.Source, rct ); err == nil {
-        checkNoError( t.Error, c )
+        CheckNoError( t.Error, c )
         reqChk.checkRequest()
     } else { c.EqualErrors( t.Error, err ) }
 }
@@ -639,7 +639,7 @@ func ( t *ResponseReactorTest ) Call( c *ReactorTestCall ) {
     chk := &responseCheck{ PathAsserter: c.PathAsserter, st: t }
     rct := InitReactorPipeline( NewResponseReactor( chk ) )
     if err := VisitValue( t.In, rct ); err == nil {
-        checkNoError( t.Error, c )
+        CheckNoError( t.Error, c )
         chk.check()
     } else { c.EqualErrors( t.Error, err ) }
 }
