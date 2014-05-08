@@ -515,6 +515,8 @@ func ( id PointerId ) String() string {
     return strconv.FormatUint( uint64( id ), 10 ) 
 }
 
+func ( id PointerId ) ExternalForm() string { return id.String() }
+
 type Addressed interface { Address() PointerId }
 
 type Value interface{ valImpl() }

@@ -1,83 +1,112 @@
 package mingle
-//
-//import (
-//    "testing"
-//    "bitgirder/assert"
-//    "bytes"
-//    "fmt"
-//)
-//
-//func assertBinIoInvalidData( 
-//    idt *BinIoInvalidDataTest, a *assert.PathAsserter ) {
-//
-//    a = a.Descend( idt.Name )
-//    rd := NewReader( bytes.NewBuffer( idt.Input ) )
-//    if val, err := rd.ReadValue(); err == nil {
-//        a.Fatalf( "Got val: %s", QuoteValue( val ) )
-//    } else {
-//        if ioe, ok := err.( *BinIoError ); ok {
-//            a.Equal( idt.ErrMsg, ioe.Error() )
-//        } else { a.Fatal( err ) }
-//    }
-//}
-//
-//func assertBinIoRoundtripWrite(
-//    wr *BinWriter, obj interface{}, a *assert.PathAsserter ) {
-//
-//    if err := WriteBinIoTestValue( obj, wr ); err != nil { a.Fatal( err ) }
-//}
-//
-//func assertBinIoRoundtrip( rt *BinIoRoundtripTest, a *assert.PathAsserter ) {
-//    a = a.Descend( rt.Name )
-//    bb := &bytes.Buffer{}
-//    assertBinIoRoundtripWrite( NewWriter( bb ), rt.Val, a )
-//    rt.AssertWriteValue( NewReader( bb ), a )
-//}
-//
-//func assertBinIoSequenceRoundtrip( 
-//    rt *BinIoSequenceRoundtripTest, a *assert.PathAsserter ) {
-//
-//    a = a.Descend( rt.Name )
-//    bb := &bytes.Buffer{}
-//    wr := NewWriter( bb )
-//    la := a.StartList()
-//    for _, val := range rt.Seq {
-//        assertBinIoRoundtripWrite( wr, val, la )
-//        la = la.Next()
-//    }
-//    rt.AssertWriteValue( NewReader( bb ), a )
-//}
-//
-//func TestCoreIo( t *testing.T ) {
-//    a := assert.NewPathAsserter( t )
-//    for _, test := range CreateCoreIoTests() { 
-//        ta := a.Descend( fmt.Sprintf( "%T", test ) )
-//        switch v := test.( type ) {
-//        case *BinIoInvalidDataTest: assertBinIoInvalidData( v, ta )
-//        case *BinIoRoundtripTest: assertBinIoRoundtrip( v, ta )
-//        case *BinIoSequenceRoundtripTest: assertBinIoSequenceRoundtrip( v, ta )
-//        default: a.Fatalf( "unhandled test type: %T", test )
-//        }
-//    }
-//}
-//
-//func TestAsAndFromBytes( t *testing.T ) {
-//    a := assert.NewPathAsserter( t )
-//    qn := MustQualifiedTypeName( "ns1@v1/T1" )
-//    qn2, err := QualifiedTypeNameFromBytes( QualifiedTypeNameAsBytes( qn ) )
-//    if err == nil { a.True( qn.Equals( qn2 ) ) } else { a.Fatal( err ) }
-//    typ := MustTypeReference( "ns1@v1/L*" )
-//    typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
-//    if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }
-//    p := idPathRootVal.Descend( id( "id1" ) )
-//    p2, err := IdPathFromBytes( IdPathAsBytes( p ) )
-//    if err == nil { 
-//        a.Equal( FormatIdPath( p ), FormatIdPath( p2 ) ) 
-//    } else { a.Fatal( err ) }
-//    id := MustIdentifier( "id1" )
-//    id2, err := IdentifierFromBytes( IdentifierAsBytes( id ) )
-//    if err == nil { a.True( id.Equals( id2 ) ) } else { a.Fatal( err ) }
-//    ns := MustNamespace( "ns1@v1" )
-//    ns2, err := NamespaceFromBytes( NamespaceAsBytes( ns ) )
-//    if err == nil { a.True( ns.Equals( ns2 ) ) } else { a.Fatal( err ) }
-//}
+
+import (
+    "testing"
+    "bitgirder/assert"
+    "bitgirder/objpath"
+    "bytes"
+)
+
+func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
+    switch v := val.( type ) {
+    case Value: return w.writeScalarValue( v )
+    case *Identifier: return w.WriteIdentifier( v )
+    case PointerId: return w.WritePointerId( v )
+    case objpath.PathNode: return w.WriteIdPath( v )
+    case *Namespace: return w.WriteNamespace( v )
+    case TypeName: return w.WriteTypeName( v )
+    case TypeReference: return w.WriteTypeReference( v )
+    }
+    panic( libErrorf( "Unhandled expct obj: %T", val ) )
+}
+
+func assertReadScalar( expct Value, rd *BinReader, a *assert.PathAsserter ) {
+    if tc, err := rd.ReadTypeCode(); err == nil {
+        if act, err := rd.readScalarValue( tc ); err == nil {
+            EqualValues( expct, act, a )
+        } else {
+            a.Fatalf( "couldn't read act: %s", err )
+        }
+    } else {
+        a.Fatalf( "couldn't get type code: %s", err )
+    }
+}
+
+func assertBinIoRoundtripRead(
+    expct interface{}, rd *BinReader, a *assert.PathAsserter ) {
+
+    switch v := expct.( type ) {
+    case Value: assertReadScalar( v, rd, a )
+    case *Identifier:
+        if id, err := rd.ReadIdentifier(); err == nil { 
+            a.True( v.Equals( id ) )
+        } else { a.Fatal( err ) }
+    case PointerId:
+        if id, err := rd.ReadPointerId(); err == nil {
+            a.Equal( v, id )
+        } else { a.Fatal( err ) }
+    case objpath.PathNode:
+        if n, err := rd.ReadIdPath(); err == nil {
+            a.Equal( v, n ) 
+        } else { a.Fatal( err ) }
+    case *Namespace:
+        if ns, err := rd.ReadNamespace(); err == nil {
+            a.True( v.Equals( ns ) )
+        } else { a.Fatal( err ) }
+    case TypeName:
+        if nm, err := rd.ReadTypeName(); err == nil {
+            a.True( v.Equals( nm ) )
+        } else { a.Fatal( err ) }
+    case TypeReference:
+        if typ, err := rd.ReadTypeReference(); err == nil {
+            a.Truef( v.Equals( typ ), "expct (%v) != act (%v)", v, typ )
+        } else { a.Fatal( err ) }
+    default: a.Fatalf( "Unhandled expct expct: %T", expct )
+    }
+}
+
+func assertBinIoRoundtrip( val interface{}, a *assert.PathAsserter ) {
+    bb := &bytes.Buffer{}
+    if err := writeBinIoTestValue( val, NewWriter( bb ) ); err != nil { 
+        a.Fatal( err ) 
+    }
+    assertBinIoRoundtripRead( val, NewReader( bb ), a )
+}
+
+func TestCoreIo( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    for _, test := range CreateCoreIoTests() { 
+        if rt, ok := test.( *BinIoRoundtripTest ); ok {
+            switch v := rt.Val.( type ) {
+            case *Null, Boolean, Buffer, String, *Enum, Int32, Uint32, Int64,
+                 Uint64, Float32, Float64, Timestamp, *Identifier, *Namespace,
+                 *QualifiedTypeName, TypeReference, *DeclaredTypeName, 
+                 PointerId, objpath.PathNode:
+                assertBinIoRoundtrip( v, a.Descend( rt.Name ) )
+            case *SymbolMap, *HeapValue, *List, *Struct: ; // okay but skip
+            default: a.Fatalf( "unhandled rt val: %T", rt.Val )
+            }
+        }
+    }
+}
+
+func TestAsAndFromBytes( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    qn := MustQualifiedTypeName( "ns1@v1/T1" )
+    qn2, err := QualifiedTypeNameFromBytes( QualifiedTypeNameAsBytes( qn ) )
+    if err == nil { a.True( qn.Equals( qn2 ) ) } else { a.Fatal( err ) }
+    typ := MustTypeReference( "ns1@v1/L*" )
+    typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
+    if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }
+    p := idPathRootVal.Descend( id( "id1" ) )
+    p2, err := IdPathFromBytes( IdPathAsBytes( p ) )
+    if err == nil { 
+        a.Equal( FormatIdPath( p ), FormatIdPath( p2 ) ) 
+    } else { a.Fatal( err ) }
+    id := MustIdentifier( "id1" )
+    id2, err := IdentifierFromBytes( IdentifierAsBytes( id ) )
+    if err == nil { a.True( id.Equals( id2 ) ) } else { a.Fatal( err ) }
+    ns := MustNamespace( "ns1@v1" )
+    ns2, err := NamespaceFromBytes( NamespaceAsBytes( ns ) )
+    if err == nil { a.True( ns.Equals( ns2 ) ) } else { a.Fatal( err ) }
+}
