@@ -3,7 +3,6 @@ package reactor
 import (
     mg "mingle"
     "bitgirder/assert"
-    "bitgirder/objpath"
 //    "log"
 )
 
@@ -44,14 +43,39 @@ func getReactorTests() []ReactorTest {
     return b.tests
 }
 
-func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
+func eventForEqualityCheck( 
+    ev ReactorEvent, ignorePointerIds bool ) ReactorEvent {
 
-func ptrAlloc( typ mg.TypeReference, i int ) *ValueAllocationEvent {
-    return NewValueAllocationEvent( typ, ptrId( i ) )
+    ev = CopyEvent( ev, true )
+    switch v := ev.( type ) {
+    case *ValueAllocationEvent: v.Id = mg.PointerIdNull
+    case *ValueReferenceEvent: v.Id = mg.PointerIdNull
+    case *MapStartEvent: v.Id = mg.PointerIdNull
+    case *ListStartEvent: v.Id = mg.PointerIdNull
+    }
+    return ev
 }
 
-func ptrRef( i int ) *ValueReferenceEvent {
-    return NewValueReferenceEvent( ptrId( i ) )
+func EqualEvents( 
+    expct, act ReactorEvent, ignorePointerIds bool, a *assert.PathAsserter ) {
+
+    expct = eventForEqualityCheck( expct, ignorePointerIds )
+    act = eventForEqualityCheck( act, ignorePointerIds )
+    a.Equalf( expct, act, "events are not equal: %s != %s",
+        EventToString( expct ), EventToString( act ) )
+}
+
+func flattenEvs( vals ...interface{} ) []ReactorEvent {
+    res := make( []ReactorEvent, 0, len( vals ) )
+    for _, val := range vals {
+        switch v := val.( type ) {
+        case ReactorEvent: res = append( res, v )
+        case []ReactorEvent: res = append( res, v... )
+        case []interface{}: res = append( res, flattenEvs( v... )... )
+        default: panic( libErrorf( "Uhandled ev type for flatten: %T", v ) )
+        }
+    }
+    return res
 }
 
 // to simplify test creation, we reuse event instances when constructing input
@@ -79,15 +103,10 @@ func FeedEventSource(
     return nil
 }
 
-//func AssertFeedEventSource(
-//    src reactorEventSource, proc ReactorEventProcessor, a assert.Failer ) {
-//    
-//    if err := FeedEventSource( src, proc ); err != nil { a.Fatal( err ) }
-//}
-
-type EventExpectation struct {
-    Event ReactorEvent
-    Path objpath.PathNode
+func AssertFeedEventSource(
+    src reactorEventSource, proc ReactorEventProcessor, a assert.Failer ) {
+    
+    if err := FeedEventSource( src, proc ); err != nil { a.Fatal( err ) }
 }
 
 type eventSliceSource []ReactorEvent
@@ -116,3 +135,86 @@ func FeedSource( src interface{}, rct ReactorEventProcessor ) error {
 //
 //    if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
 //}
+
+type eventPathCheckReactor struct {
+    a *assert.PathAsserter
+    eeAssert *assert.PathAsserter
+    expct []EventExpectation
+    idx int
+    ignorePointerIds bool
+}
+
+func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
+    r.a.Truef( r.idx < len( r.expct ), "unexpected event: %v", ev )
+    ee := r.expct[ r.idx ]
+    r.idx++
+    ee.Event.SetPath( ee.Path )
+    EqualEvents( ee.Event, ev, r.ignorePointerIds, r.eeAssert )
+    r.eeAssert = r.eeAssert.Next()
+    return nil
+}
+
+func ( r *eventPathCheckReactor ) Complete() {
+    r.a.Equalf( r.idx, len( r.expct ), "not all events were seen" )
+}
+
+func NewEventPathCheckReactor( 
+    expct []EventExpectation, a *assert.PathAsserter ) *eventPathCheckReactor {
+
+    return &eventPathCheckReactor{ 
+        expct: expct, 
+        a: a,
+        eeAssert: a.Descend( "expct" ).StartList(),
+    }
+}
+
+type heapTestValue struct {
+    id mg.PointerId
+    val mg.Value
+}
+
+func ( ht heapTestValue ) valImpl() {}
+func ( ht heapTestValue ) Address() mg.PointerId { return ht.id }
+func ( ht heapTestValue ) Dereference() mg.Value { return ht.val }
+
+type TestPointerIdFactory struct { id mg.PointerId }
+
+func NewTestPointerIdFactory() *TestPointerIdFactory {
+    return &TestPointerIdFactory{ id: mg.PointerId( 1 ) }
+}
+
+func ( f *TestPointerIdFactory ) NextPointerId() mg.PointerId {
+    res := f.id
+    f.id++
+    return res
+}
+
+func ( f *TestPointerIdFactory ) NextListStart( 
+    lt *mg.ListTypeReference ) *ListStartEvent {
+
+    return NewListStartEvent( lt, f.NextPointerId() )
+}
+
+func ( f *TestPointerIdFactory ) NextValueListStart() *ListStartEvent {
+    return f.NextListStart( mg.TypeOpaqueList )
+}
+
+func ( f *TestPointerIdFactory ) NextMapStart() *MapStartEvent {
+    return NewMapStartEvent( f.NextPointerId() )
+}
+
+func ( f *TestPointerIdFactory ) NextValueAllocation( 
+    typ mg.TypeReference ) *ValueAllocationEvent {
+
+    return NewValueAllocationEvent( typ, f.NextPointerId() )
+}
+
+func ( f *TestPointerIdFactory ) nextHeapTestValue( 
+    val mg.Value ) heapTestValue {
+
+    return heapTestValue{ val: val, id: f.NextPointerId() }
+}
+
+func checkNoError( err error, c *ReactorTestCall ) {
+    if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
+}

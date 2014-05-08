@@ -2,150 +2,33 @@ package reactor
 
 import (
     mg "mingle"
-//    "bitgirder/objpath"
+    "bitgirder/objpath"
 //    "bitgirder/assert"
-//    "fmt"
+    "fmt"
 //    "encoding/base64"
-//    "bytes"
+    "bytes"
 //    "strconv"
 //    "log"
 )
 
-//var StdReactorTests []interface{}
-//
-//func init() { StdReactorTests = []interface{}{} }
-//
-//func AddStdReactorTests( t ...interface{} ) {
-//    StdReactorTests = append( StdReactorTests, t... )
-//}
-//
-//type NamedTest interface { TestName() string }
-//
-//func MakeTestId( i int ) *mg.Identifier {
-//    return MustIdentifier( fmt.Sprintf( "f%d", i ) )
-//}
-//
-//func mustInt( s string ) int {
-//    res, err := strconv.Atoi( s )
-//    if ( err != nil ) { panic( err ) }
-//    return res
-//}
-//
-//func flattenEvs( vals ...interface{} ) []ReactorEvent {
-//    res := make( []ReactorEvent, 0, len( vals ) )
-//    for _, val := range vals {
-//        switch v := val.( type ) {
-//        case ReactorEvent: res = append( res, v )
-//        case []ReactorEvent: res = append( res, v... )
-//        case []interface{}: res = append( res, flattenEvs( v... )... )
-//        default: panic( libErrorf( "Uhandled ev type for flatten: %T", v ) )
-//        }
-//    }
-//    return res
-//}
-//
-//// to simplify test creation, we reuse event instances when constructing input
-//// event sequences, and send them to this method only at the end to ensure that
-//// we get a distinct sequence of event values for each test
-//func CopySource( evs []ReactorEvent ) []ReactorEvent {
-//    res := make( []ReactorEvent, len( evs ) )
-//    for i, ev := range evs { res[ i ] = CopyEvent( ev, false ) }
-//    return res
-//}
-//
-//func startTestIdPath( elt interface{} ) objpath.PathNode {
-//    switch v := elt.( type ) {
-//    case int: return objpath.RootedAt( mg.MakeTestId( v ) )
-//    case string: return objpath.RootedAtList().SetIndex( mustInt( v ) )
-//    }
-//    panic( libErrorf( "unhandled elt: %T", elt ) )
-//}
-//
-//func MakeTestIdPath( elts ...interface{} ) objpath.PathNode { 
-//    if len( elts ) == 0 { return nil }
-//    res := startTestIdPath( elts[ 0 ] )
-//    for i, e := 1, len( elts ); i < e; i++ {
-//        switch v := elts[ i ].( type ) {
-//        case int: res = res.Descend( mg.MakeTestId( v ) ) 
-//        case string: res = res.StartList().SetIndex( mustInt( v ) )
-//        default: panic( libErrorf( "unhandled elt: %T", v ) )
-//        }
-//    }
-//    return res
-//}
-//
-//func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
-//
-//func ptrAlloc( typ TypeReferenceInitializer, i int ) *ValueAllocationEvent {
-//    return NewValueAllocationEvent( asTypeReference( typ ), ptrId( i ) )
-//}
-//
-//func ptrRef( i int ) *ValueReferenceEvent {
-//    return NewValueReferenceEvent( ptrId( i ) )
-//}
-//
-//type heapTestValue struct {
-//    id mg.PointerId
-//    val mg.Value
-//}
-//
-//func ( ht heapTestValue ) valImpl() {}
-//func ( ht heapTestValue ) Address() mg.PointerId { return ht.id }
-//func ( ht heapTestValue ) Dereference() mg.Value { return ht.val }
-//
-//type TestPointerIdFactory struct { id mg.PointerId }
-//
-//func NewTestPointerIdFactory() *TestPointerIdFactory {
-//    return &TestPointerIdFactory{ id: mg.PointerId( 1 ) }
-//}
-//
-//func ( f *TestPointerIdFactory ) NextPointerId() mg.PointerId {
-//    res := f.id
-//    f.id++
-//    return res
-//}
-//
-//func ( f *TestPointerIdFactory ) NextListStart( 
-//    lt *mg.ListTypeReference ) *ListStartEvent {
-//
-//    return NewListStartEvent( lt, f.NextPointerId() )
-//}
-//
-//func ( f *TestPointerIdFactory ) NextValueListStart() *ListStartEvent {
-//    return f.NextListStart( mg.TypeOpaqueList )
-//}
-//
-//func ( f *TestPointerIdFactory ) NextMapStart() *MapStartEvent {
-//    return NewMapStartEvent( f.NextPointerId() )
-//}
-//
-//func ( f *TestPointerIdFactory ) NextValueAllocation( 
-//    typ TypeReferenceInitializer ) *ValueAllocationEvent {
-//
-//    return NewValueAllocationEvent( asTypeReference( typ ), f.NextPointerId() )
-//}
-//
-//func ( f *TestPointerIdFactory ) nextHeapTestValue( val mg.Value ) heapTestValue {
-//    return heapTestValue{ val: val, id: f.NextPointerId() }
-//}
+var qname = mg.MustQualifiedTypeName
 
-type ValueBuildTest struct { 
-    Val mg.Value 
-    Source []ReactorEvent
+func typeRef( val interface{} ) mg.TypeReference {
+    switch v := val.( type ) {
+    case mg.TypeReference: return v
+    case string: return mg.MustTypeReference( v )
+    }
+    panic( libErrorf( "unhandled type ref input: %T", val ) )
 }
 
-func ( vb *ValueBuildTest ) Call( c *ReactorTestCall ) {
-    rct := NewValueBuilder()
-//    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
-    pip := InitReactorPipeline( rct )
-    var err error
-    if vb.Source == nil {
-//        c.Logf( "visiting %s", QuoteValue( vb.Val ) )
-        err = VisitValue( vb.Val, pip )
-    } else { err = FeedSource( vb.Source, pip ) }
-    if err == nil {
-        mg.EqualWireValues( vb.Val, rct.GetValue(), c.PathAsserter )
-    } else { c.Fatal( err ) }
+func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
+
+func ptrAlloc( typ mg.TypeReference, i int ) *ValueAllocationEvent {
+    return NewValueAllocationEvent( typ, ptrId( i ) )
+}
+
+func ptrRef( i int ) *ValueReferenceEvent {
+    return NewValueReferenceEvent( ptrId( i ) )
 }
 
 func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
@@ -284,1202 +167,1157 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
     initValueBuildReactorCycleTests( b )
 }
 
-//type StructuralReactorErrorTest struct {
-//    Events []ReactorEvent
-//    Error *ReactorError
-//    TopType ReactorTopType
-//}
-//
-//type EventExpectation struct {
-//    Event ReactorEvent
-//    Path objpath.PathNode
-//}
-//
-//type EventPathTest struct {
-//    Name string
-//    Events []EventExpectation
-//    StartPath objpath.PathNode
-//}
-//
-//func ( ept EventPathTest ) TestName() string { return ept.Name }
-//
-//// we only add here error tests; we assume that a value build reactor sits
-//// behind a structural reactor and so let ValueBuildTest successes imply correct
-//// behavior of the structural check reactor for valid inputs
-//func initStructuralReactorTests() {
-//    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
-//    id := mg.MakeTestId
-//    evStartField1 := NewFieldStartEvent( id( 1 ) )
-//    evStartField2 := NewFieldStartEvent( id( 2 ) )
-//    evValue1 := NewValueEvent( mg.Int64( int64( 1 ) ) )
-//    evValuePtr1 := NewValueAllocationEvent( mg.TypeInt64, 1 )
-//    evListStart := NewListStartEvent( mg.TypeOpaqueList, ptrId( 1 ) )
-//    evMapStart := NewMapStartEvent( ptrId( 2 ) )
-//    mk1 := func( 
-//        errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
-//        return &StructuralReactorErrorTest{
-//            Events: mg.CopySource( evs ),
-//            Error: rctError( nil, errMsg ),
-//        }
-//    }
-//    mk2 := func( 
-//        errMsg string, 
-//        tt ReactorTopType, 
-//        evs ...ReactorEvent ) *StructuralReactorErrorTest {
-//        res := mk1( errMsg, evs... )
-//        res.TopType = tt
-//        return res
-//    }
-//    AddStdReactorTests(
-//        mk1( "Saw start of field 'f2' while expecting a value for field 'f1'",
-//            evStartStruct1, evStartField1, evStartField2,
-//        ),
-//        mk1( "Saw start of field 'f2' while expecting a value for field 'f1'",
-//            evStartStruct1, evStartField1, evMapStart, evStartField1,
-//            evStartField2,
-//        ),
-//        mk1( "Saw start of field 'f1' after value was built",
-//            evStartStruct1, NewEndEvent(), evStartField1,
-//        ),
-//        mk1( "Expected field name or end of fields but got value",
-//            evStartStruct1, evValue1,
-//        ),
-//        mk1( "Expected field name or end of fields but got &value",
-//            evStartStruct1, evValuePtr1,
-//        ),
-//        mk1( "Expected field name or end of fields but got &reference",
-//            evStartStruct1, ptrRef( 2 ),
-//        ),
-//        mk1( "Expected field name or end of fields but got list start",
-//            evStartStruct1, evListStart,
-//        ),
-//        mk1( "Expected field name or end of fields but got map start",
-//            evStartStruct1, evMapStart,
-//        ),
-//        mk1( "Expected field name or end of fields but got start of struct " +
-//                evStartStruct1.Type.ExternalForm(),
-//            evStartStruct1, evStartStruct1,
-//        ),
-//        mk1( "Saw end while expecting a value for field 'f1'",
-//            evStartStruct1, evStartField1, NewEndEvent(),
-//        ),
-//        mk1( "Saw start of field 'f1' while expecting a list value",
-//            evStartStruct1, evStartField1, evListStart, evStartField1,
-//        ),
-//        mk2( "Expected struct but got value", ReactorTopTypeStruct, evValue1 ),
-//        mk2( "Expected struct but got &value", ReactorTopTypeStruct, 
-//            evValuePtr1 ),
-//        mk2( "Expected struct but got list start", ReactorTopTypeStruct,
-//            evListStart,
-//        ),
-//        mk2( "Expected struct but got map start", ReactorTopTypeStruct,
-//            evMapStart,
-//        ),
-//        mk2( "Expected struct but got start of field 'f1'", 
-//            ReactorTopTypeStruct, evStartField1,
-//        ),
-//        mk2( "Expected struct but got end", 
-//            ReactorTopTypeStruct, NewEndEvent() ),
-//        mk1( "Multiple entries for field: f1",
-//            evStartStruct1, 
-//            evStartField1, evValue1,
-//            evStartField2, evValue1,
-//            evStartField1,
-//        ),
-//    )
-//}
-//
-//type PointerEventCheckTest struct {
-//    Events []ReactorEvent
-//    Error error // if nil then Events should be fed through without error
-//}
-//
-//func initPointerReferenceCheckTests() {
-//    id, p := mg.MakeTestId, MakeTestIdPath
-//    fld := func( i int ) *FieldStartEvent {
-//        return NewFieldStartEvent( id( i ) )
-//    }
-//    ival := NewValueEvent( mg.Int32( 1 ) )
-//    qn := mg.MustQualifiedTypeName( "ns1@v1/S1" )
-//    add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
-//        AddStdReactorTests(
-//            &PointerEventCheckTest{
-//                Events: mg.CopySource( evs ),
-//                Error: rctError( path, msg ),
-//            },
-//        )
-//    }
-//    add0 := func( path objpath.PathNode, evs ...ReactorEvent ) {
-//        add( path, "attempt to reference null pointer", evs... )
-//    }
-//    listStart := func( id mg.PointerId ) *ListStartEvent {
-//        return NewListStartEvent( mg.TypeOpaqueList, id )
-//    }
-//    add0( p( "0" ), listStart( mg.PointerIdNull ), ptrRef( 0 ) )
-//    add0( p( "1" ), listStart( mg.PointerIdNull ), ival, ptrRef( 0 ) )
-//    add0( p( 1, 2 ),
-//        NewMapStartEvent( 0 ), fld( 1 ), 
-//            NewMapStartEvent( 0 ), fld( 2 ), ptrRef( 0 ) )
-//    addReallocCheck := func( errEv ReactorEvent ) {
-//        msg := "attempt to redefine reference: 1"
-//        add( p( "1" ), msg,
-//            listStart( ptrId( 2 ) ), 
-//                ptrAlloc( mg.TypeInt32, 1 ), ival, errEv,
-//        )
-//        add( p( "1" ), msg, listStart( ptrId( 1 ) ), ival, errEv )
-//        add( p( 1 ), msg, NewMapStartEvent( ptrId( 1 ) ), fld( 1 ), errEv )
-//        add( p( 1 ), msg,
-//            ptrAlloc( mg.TypeInt32, 1 ), 
-//            NewStructStartEvent( qn ), fld( 1 ), errEv )
-//    }
-//    addReallocCheck( ptrAlloc( mg.TypeInt32, 1 ) )
-//    addReallocCheck( listStart( ptrId( 1 ) ) )
-//    addReallocCheck( NewMapStartEvent( ptrId( 1 ) ) )
-//    add( p( "0" ), "unrecognized reference: 1",
-//        listStart( ptrId( 2 ) ), ptrRef( 1 ) )
-//    add( p( 2 ),
-//        "unrecognized reference: 2",
-//        NewMapStartEvent( ptrId( 3 ) ),
-//        fld( 1 ),
-//        ptrAlloc( mg.TypeInt32, 1 ), ival,
-//        fld( 2 ),
-//        ptrRef( 2 ),
-//    )
-//    AddStdReactorTests(
-//        &PointerEventCheckTest{
-//            Events: mg.CopySource( 
-//                []ReactorEvent{
-//                    NewStructStartEvent( qn ),
-//                    fld( 1 ), ptrAlloc( mg.TypeInt32, 0 ), ival,
-//                    fld( 2 ), listStart( mg.PointerIdNull ), NewEndEvent(),
-//                    fld( 3 ), NewMapStartEvent( mg.PointerIdNull ), NewEndEvent(),
-//                    NewEndEvent(),
-//                },
-//            ),
-//        },
-//    )
-//}
-//
-//func initEventPathTests() {
-//    p := MakeTestIdPath
-//    ee := func( ev ReactorEvent, p objpath.PathNode ) EventExpectation {
-//        return EventExpectation{ Event: ev, Path: p }
-//    }
-//    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
-//    id := mg.MakeTestId
-//    evStartField := func( i int ) *FieldStartEvent {
-//        return NewFieldStartEvent( id( i ) )
-//    }
-//    evValue := func( i int64 ) *ValueEvent {
-//        return NewValueEvent( mg.Int64( i ) )
-//    }
-//    idFact := NewTestPointerIdFactory()
-//    evEnd := NewEndEvent()
-//    addTest := func( name string, evs ...EventExpectation ) {
-//        ptrStart := ee( idFact.NextValueAllocation( mg.TypeValue ), nil )
-//        evsWithPtr := append( []EventExpectation{ ptrStart }, evs... )
-//        AddStdReactorTests(
-//            &EventPathTest{ Name: name, Events: evs },
-//            &EventPathTest{ Name: name + "-pointer", Events: evsWithPtr },
-//        )
-//    }
-//    addTest( "empty" )
-//    addTest( "top-value", ee( evValue( 1 ), nil ) )
-//    addTest( "empty-struct",
-//        ee( evStartStruct1, nil ),
-//        ee( evEnd, nil ),
-//    )
-//    addTest( "empty-map",
-//        ee( idFact.NextMapStart(), nil ),
-//        ee( evStartField( 1 ), p( 1 ) ),
-//            ee( evValue( 1 ), p( 1 ) ),
-//        ee( evEnd, nil ),
-//    )
-//    addTest( "flat-struct",
-//        ee( evStartStruct1, nil ),
-//        ee( evStartField( 1 ), p( 1 ) ),
-//            ee( evValue( 1 ), p( 1 ) ),
-//        ee( evStartField( 2 ), p( 2 ) ),
-//            ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 2 ) ),
-//                ee( evValue( 2 ), p( 2 ) ),
-//        ee( evEnd, nil ),
-//    )
-//    addTest( "empty-list",
-//        ee( idFact.NextValueListStart(), nil ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "flat-list",
-//        ee( idFact.NextValueListStart(), nil ),
-//            ee( evValue( 1 ), p( "0" ) ),
-//            ee( evValue( 1 ), p( "1" ) ),
-//            ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( "2" ) ),
-//                ee( evValue( 2 ), p( "2" ) ),
-//            ee( ptrRef( 2 ), p( "3" ) ),
-//            ee( evValue( 4 ), p( "4" ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "nested-list1",
-//        ee( idFact.NextValueListStart(), nil ),
-//            ee( idFact.NextMapStart(), p( "0" ) ),
-//                ee( evStartField( 1 ), p( "0", 1 ) ),
-//                ee( evValue( 1 ), p( "0", 1 ) ),
-//                ee( NewEndEvent(), p( "0" ) ),
-//            ee( idFact.NextValueListStart(), p( "1" ) ),
-//                ee( evValue( 1 ), p( "1", "0" ) ),
-//                ee( NewEndEvent(), p( "1" ) ),
-//            ee( idFact.NextValueAllocation( mg.TypeSymbolMap ), p( "2" ) ),
-//                ee( idFact.NextMapStart(), p( "2" ) ),
-//                    ee( evStartField( 1 ), p( "2", 1 ) ),
-//                    ee( evValue( 1 ), p( "2", 1 ) ),
-//                    ee( NewEndEvent(), p( "2" ) ),
-//            ee( idFact.NextValueAllocation( "Int64*" ), p( "3" ) ),
-//                ee( idFact.NextValueListStart(), p( "3" ) ),
-//                    ee( evValue( 1 ), p( "3", "0" ) ),
-//                    ee( NewEndEvent(), p( "3" ) ),
-//            ee( evValue( 4 ), p( "4" ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "nested-list2",
-//        ee( idFact.NextValueListStart(), nil ),
-//            ee( idFact.NextMapStart(), p( "0" ) ),
-//            ee( NewEndEvent(), p( "0" ) ),
-//            ee( evValue( 1 ), p( "1" ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "nested-list3",
-//        ee( idFact.NextValueListStart(), nil ),
-//            ee( evValue( 1 ), p( "0" ) ),
-//            ee( idFact.NextMapStart(), p( "1" ) ),
-//                ee( evStartField( 1 ), p( "1", 1 ) ),
-//                    ee( evValue( 1 ), p( "1", 1 ) ),
-//                ee( NewEndEvent(), p( "1" ) ),
-//            ee( idFact.NextValueAllocation( mg.TypeOpaqueList ), p( "2" ) ),
-//                ee( idFact.NextValueListStart(), p( "2" ) ),
-//                    ee( evValue( 1 ), p( "2", "0" ) ),
-//                    ee( idFact.NextValueAllocation( mg.TypeOpaqueList ), 
-//                            p( "2", "1" ) ),
-//                        ee( idFact.NextValueListStart(), p( "2", "1" ) ),
-//                            ee( evValue( 1 ), p( "2", "1", "0" ) ),
-//                            ee( evValue( 2 ), p( "2", "1", "1" ) ),
-//                        ee( NewEndEvent(), p( "2", "1" ) ),
-//                    ee( evValue( 3 ), p( "2", "2" ) ),
-//                ee( NewEndEvent(), p( "2" ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "list-regress1",
-//        ee( idFact.NextValueListStart(), nil ),
-//            ee( idFact.NextValueListStart(), p( "0" ) ),
-//            ee( NewEndEvent(), p( "0" ) ),
-//            ee( evValue( 1 ), p( "1" ) ),
-//            ee( evValue( 1 ), p( "2" ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "flat-map",
-//        ee( idFact.NextMapStart(), nil ),
-//        ee( evStartField( 1 ), p( 1 ) ),
-//            ee( evValue( 1 ), p( 1 ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "struct-with-containers1",
-//        ee( evStartStruct1, nil ),
-//        ee( evStartField( 1 ), p( 1 ) ),
-//            ee( idFact.NextValueListStart(), p( 1 ) ),
-//                ee( evValue( 1 ), p( 1, "0" ) ),
-//                ee( evValue( 1 ), p( 1, "1" ) ),
-//            ee( NewEndEvent(), p( 1 ) ),
-//        ee( evStartField( 2 ), p( 2 ) ),
-//            ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 2 ) ),
-//                ee( evValue( 1 ), p( 2 ) ),
-//        ee( evStartField( 3 ), p( 3 ) ),
-//            ee( idFact.NextValueListStart(), p( 3 ) ),
-//                ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 3, "0" ) ),
-//                    ee( evValue( 0 ), p( 3, "0" ) ),
-//                ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 3, "1" ) ),
-//                    ee( evValue( 0 ), p( 3, "1" ) ),
-//            ee( NewEndEvent(), p( 3 ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    addTest( "struct-with-containers2",
-//        ee( evStartStruct1, nil ),
-//        ee( evStartField( 1 ), p( 1 ) ),
-//            ee( idFact.NextMapStart(), p( 1 ) ),
-//            ee( evStartField( 2 ), p( 1, 2 ) ),
-//                ee( idFact.NextValueListStart(), p( 1, 2 ) ),
-//                    ee( evValue( 1 ), p( 1, 2, "0" ) ),
-//                    ee( evValue( 1 ), p( 1, 2, "1" ) ),
-//                    ee( idFact.NextValueListStart(), p( 1, 2, "2" ) ),
-//                        ee( evValue( 1 ), p( 1, 2, "2", "0" ) ),
-//                        ee( idFact.NextMapStart(), p( 1, 2, "2", "1" ) ),
-//                        ee( evStartField( 1 ), p( 1, 2, "2", "1", 1 ) ),
-//                            ee( evValue( 1 ), p( 1, 2, "2", "1", 1 ) ),
-//                        ee( evStartField( 2 ), p( 1, 2, "2", "1", 2 ) ),
-//                            ee( idFact.NextValueAllocation( mg.TypeInt64 ), 
-//                                p( 1, 2, "2", "1", 2 ) ),
-//                            ee( evValue( 2 ), p( 1, 2, "2", "1", 2 ) ),
-//                        ee( NewEndEvent(), p( 1, 2, "2", "1" ) ),
-//                    ee( NewEndEvent(), p( 1, 2, "2" ) ),
-//                ee( NewEndEvent(), p( 1, 2 ) ),
-//            ee( NewEndEvent(), p( 1 ) ),
-//        ee( NewEndEvent(), nil ),
-//    )
-//    AddStdReactorTests(
-//        &EventPathTest{
-//            Name: "non-empty-dict-start-path",
-//            Events: []EventExpectation{
-//                { idFact.NextMapStart(), p( 2 ) },
-//                { evStartField( 1 ), p( 2, 1 ) },
-//                { evValue( 1 ), p( 2, 1 ) },
-//                { NewEndEvent(), p( 2 ) },
-//            },
-//            StartPath: p( 2 ),
-//        },
-//        &EventPathTest{
-//            Name: "non-empty-list-start-path",
-//            Events: []EventExpectation{ 
-//                { idFact.NextMapStart(), p( 2, "3" ) },
-//                { evStartField( 1 ), p( 2, "3", 1 ) },
-//                { evValue( 1 ), p( 2, "3", 1 ) },
-//                { NewEndEvent(), p( 2, "3" ) },
-//            },
-//            StartPath: p( 2, "3" ),
-//        },
-//    )
-//}
-//
-//type FieldOrderReactorTestOrder struct {
-//    Order FieldOrder
-//    Type *mg.QualifiedTypeName
-//}
-//
-//func testOrderWithIds( 
-//    typ *mg.QualifiedTypeName, ids ...*Identifier ) FieldOrderReactorTestOrder {
-//    ord := make( []FieldOrderSpecification, len( ids ) )
-//    for i, id := range ids { 
-//        ord[ i ] = FieldOrderSpecification{ Field: id, Required: false }
-//    }
-//    return FieldOrderReactorTestOrder{ Type: typ, Order: ord }
-//}
-//
-//type FieldOrderReactorTest struct {
-//    Source []ReactorEvent
-//    Expect mg.Value
-//    Orders []FieldOrderReactorTestOrder
-//}
-//
-//func initFieldOrderValueTests() {
-//    idFact := NewTestPointerIdFactory()
-//    flds := make( []ReactorEvent, 5 )
-//    ids := make( []*mg.Identifier, len( flds ) )
-//    for i := 0; i < len( flds ); i++ {
-//        ids[ i ] = id( fmt.Sprintf( "f%d", i ) )
-//        flds[ i ] = NewFieldStartEvent( ids[ i ] )
-//    }
-//    i1 := mg.Int32( int32( 1 ) )
-//    val1 := NewValueEvent( i1 )
-//    t1, t2 := qname( "ns1@v1/S1" ), qname( "ns1@v1/S2" )
-//    ss1, ss2 := NewStructStartEvent( t1 ), NewStructStartEvent( t2 )
-//    ss2Val1 := mg.MustStruct( t2, ids[ 0 ], i1 )
-//    // expct sequences for instance of ns1@v1/S1 by field f0 ...
-//    fldVals := []mg.Value{
-//        i1,
-//        mg.MustSymbolMap( ids[ 0 ], i1, ids[ 1 ], ss2Val1 ),
-//        mg.MustList( i1, i1 ),
-//        ss2Val1,
-//        i1,
-//    }
-//    mkExpct := func( ord ...int ) *mg.Struct {
-//        pairs := []interface{}{}
-//        for _, fldNum := range ord {
-//            pairs = append( pairs, ids[ fldNum ], fldVals[ fldNum ] )
-//        }
-//        return mg.MustStruct( t1, pairs... )
-//    }
-//    // val sequences for fields f0 ...
-//    fldEvs := [][]ReactorEvent {
-//        []ReactorEvent{ val1 },
-//        []ReactorEvent{
-//            idFact.NextMapStart(), 
-//                flds[ 0 ], val1, 
-//                flds[ 1 ], ss2, flds[ 0 ], val1, NewEndEvent(),
-//            NewEndEvent(),
-//        },
-//        []ReactorEvent{ 
-//            idFact.NextValueListStart(), val1, val1, NewEndEvent() },
-//        []ReactorEvent{ ss2, flds[ 0 ], val1, NewEndEvent() },
-//        []ReactorEvent{ val1 },
-//    }
-//    mkSrc := func( ord ...int ) []ReactorEvent {
-//        res := []ReactorEvent{ ss1 }
-//        for _, fldNum := range ord {
-//            res = append( res, flds[ fldNum ] )
-//            res = append( res, fldEvs[ fldNum ]... )
-//        }
-//        return append( res, NewEndEvent() )
-//    }
-//    addTest1 := func( src []ReactorEvent, expct mg.Value ) {
-//        AddStdReactorTests(
-//            &FieldOrderReactorTest{ 
-//                Source: mg.CopySource( src ), 
-//                Expect: expct, 
-//                Orders: []FieldOrderReactorTestOrder{
-//                    testOrderWithIds( t1,
-//                        ids[ 0 ], ids[ 1 ], ids[ 2 ], ids[ 3 ] ),
-//                },
-//            },
-//        )
-//    }
-//    for _, ord := range [][]int {
-//        []int{ 0, 1, 2, 3 }, // first one should be straight passthrough
-//        []int{ 3, 2, 1, 0 },
-//        []int{ 0, 3, 2, 1 }, 
-//        []int{ 0, 2, 3, 1 },
-//        []int{ 0, 1 },
-//        []int{ 0, 2 },
-//        []int{ 0, 3 },
-//        []int{ 2, 0 },
-//        []int{ 2, 1 },
-//        []int{ 4, 3, 0, 1, 2 },
-//        []int{ 4, 3, 2, 1, 0 },
-//        []int{ 1, 4, 3, 0, 2 },
-//        []int{ 1, 4, 3, 2, 0 },
-//        []int{ 0, 4, 3, 2, 1 },
-//        []int{ 0, 4, 3, 1, 2 },
-//        []int{ 0, 1, 3, 2, 4 },
-//    } {
-//        addTest1( mkSrc( ord... ), mkExpct( ord... ) )
-//    }
-//    // Test nested orderings
-//    AddStdReactorTests(
-//        &FieldOrderReactorTest{
-//            Source: mg.CopySource( 
-//                []ReactorEvent{
-//                    ss1, 
-//                        flds[ 0 ], val1,
-//                        flds[ 1 ], ss1,
-//                            flds[ 2 ], 
-//                                idFact.NextValueListStart(), 
-//                                    val1, NewEndEvent(),
-//                            flds[ 1 ], val1,
-//                        NewEndEvent(),
-//                    NewEndEvent(),
-//                },
-//            ),
-//            Orders: []FieldOrderReactorTestOrder{
-//                testOrderWithIds( t1, ids[ 1 ], ids[ 0 ], ids[ 2 ] ),
-//            },
-//            Expect: mg.MustStruct( t1,
-//                ids[ 0 ], i1,
-//                ids[ 1 ], mg.MustStruct( t1,
-//                    ids[ 2 ], mg.MustList( i1 ),
-//                    ids[ 1 ], i1,
-//                ),
-//            ),
-//        },
-//    )
-//    // Test generic un-field-ordered values at the top-level as well
-//    for i := 0; i < 4; i++ { addTest1( fldEvs[ i ], fldVals[ i ] ) }
-//    // Test arbitrary values with no orders in play
-//    addTest2 := func( expct mg.Value, src ...ReactorEvent ) {
-//        AddStdReactorTests(
-//            &FieldOrderReactorTest{
-//                Source: mg.CopySource( src ),
-//                Expect: expct,
-//                Orders: []FieldOrderReactorTestOrder{},
-//            },
-//        )
-//    }
-//    addTest2( i1, val1 )
-//    addTest2( mg.MustList(), idFact.NextValueListStart(), NewEndEvent() )
-//    addTest2( mg.MustList( i1 ), idFact.NextValueListStart(), val1, NewEndEvent() )
-//    addTest2( mg.MustSymbolMap(), idFact.NextMapStart(), NewEndEvent() )
-//    addTest2( 
-//        mg.MustSymbolMap( ids[ 0 ], i1 ), 
-//        idFact.NextMapStart(), flds[ 0 ], val1, NewEndEvent(),
-//    )
-//    addTest2( mg.MustStruct( ss1.Type ), ss1, NewEndEvent() )
-//    addTest2( 
-//        mg.MustStruct( ss1.Type, ids[ 0 ], i1 ),
-//        ss1, flds[ 0 ], val1, NewEndEvent(),
-//    )
-//}
-//
-//type FieldOrderMissingFieldsTest struct {
-//    Orders []FieldOrderReactorTestOrder
-//    Source []ReactorEvent
-//    Expect mg.Value
-//    Error *MissingFieldsError
-//}
-//
-//func initFieldOrderMissingFieldTests() {
-//    fldId := func( i int ) *mg.Identifier { return id( fmt.Sprintf( "f%d", i ) ) }
-//    ord := FieldOrder( 
-//        []FieldOrderSpecification{
-//            { fldId( 0 ), true },
-//            { fldId( 1 ), true },
-//            { fldId( 2 ), false },
-//            { fldId( 3 ), false },
-//            { fldId( 4 ), true },
-//        },
-//    )
-//    t1 := qname( "ns1@v1/S1" )
-//    ords := []FieldOrderReactorTestOrder{ { Order: ord, Type: t1 } }
-//    mkSrc := func( flds []int ) []ReactorEvent {
-//        evs := []interface{}{ NewStructStartEvent( t1 ) }
-//        for _, fld := range flds {
-//            evs = append( evs, NewFieldStartEvent( fldId( fld ) ) )
-//            evs = append( evs, NewValueEvent( mg.Int32( fld ) ) )
-//        }
-//        return flattenEvs( append( evs, NewEndEvent() ) )
-//    }
-//    mkVal := func( flds []int ) *mg.Struct {
-//        pairs := make( []interface{}, 0, 2 * len( flds ) )
-//        for _, fld := range flds {
-//            pairs = append( pairs, fldId( fld ), mg.Int32( fld ) )
-//        }
-//        return mg.MustStruct( t1, pairs... )
-//    }
-//    addSucc := func( flds ...int ) {
-//        AddStdReactorTests(
-//            &FieldOrderMissingFieldsTest{
-//                Orders: ords,
-//                Source: mg.CopySource( mkSrc( flds ) ),
-//                Expect: mkVal( flds ),
-//            },
-//        )
-//    }
-//    addSucc( 0, 1, 4 )
-//    addSucc( 4, 0, 1 )
-//    addSucc( 0, 1, 3, 4 )
-//    addSucc( 0, 3, 1, 4 )
-//    addSucc( 0, 1, 4, 3, 2 )
-//    addErr := func( missIds []int, flds ...int ) {
-//        miss := make( []*mg.Identifier, len( missIds ) )
-//        for i, missId := range missIds { miss[ i ] = fldId( missId ) }
-//        AddStdReactorTests(
-//            &FieldOrderMissingFieldsTest{
-//                Orders: ords,
-//                Source: mg.CopySource( mkSrc( flds ) ),
-//                Error: mg.NewMissingFieldsError( nil, miss ),
-//            },
-//        )
-//    }
-//    addErr( []int{ 0 }, 1, 2, 3, 4 )
-//    addErr( []int{ 1 }, 0, 4, 3, 2 )
-//    addErr( []int{ 4 }, 3, 2, 1, 0 )
-//    addErr( []int{ 0, 1 }, 4 )
-//    addErr( []int{ 1, 4 }, 0 )
-//    addErr( []int{ 0, 4 }, 1 )
-//    addErr( []int{ 4 }, 1, 0 )
-//    addErr( []int{ 1 }, 4, 3, 0, 2 )
-//}
-//
-//type FieldOrderPathTest struct {
-//    Source []ReactorEvent
-//    Expect []EventExpectation
-//    Orders []FieldOrderReactorTestOrder
-//}
-//
-//func initFieldOrderPathTests() {
-//    mapStart := NewMapStartEvent( mg.PointerIdNull )
-//    listStart := NewListStartEvent( mg.TypeOpaqueList, mg.PointerIdNull )
-//    i1 := mg.Int32( int32( 1 ) )
-//    val1 := NewValueEvent( i1 )
-//    id := mg.MakeTestId
-//    typ := func( i int ) *mg.QualifiedTypeName {
-//        return qname( fmt.Sprintf( "ns1@v1/S%d", i ) )
-//    }
-//    ss := func( i int ) *StructStartEvent { 
-//        return NewStructStartEvent( typ( i ) ) 
-//    }
-//    fld := func( i int ) *FieldStartEvent { 
-//        return NewFieldStartEvent( id( i ) ) 
-//    }
-//    p := MakeTestIdPath
-//    expct1 := []EventExpectation{
-//        { ss( 1 ), nil },
-//            { fld( 0 ), p( 0 ) },
-//            { val1, p( 0 ) },
-//            { fld( 1 ), p( 1 ) },
-//            { mapStart, p( 1 ) },
-//                { fld( 1 ), p( 1, 1 ) },
-//                { val1, p( 1, 1 ) },
-//                { fld( 0 ), p( 1, 0 ) },
-//                { val1, p( 1, 0 ) },
-//            { NewEndEvent(), p( 1 ) },
-//            { fld( 2 ), p( 2 ) },
-//            { listStart, p( 2 ) },
-//                { val1, p( 2, "0" ) },
-//                { val1, p( 2, "1" ) },
-//            { NewEndEvent(), p( 2 ) },
-//            { fld( 3 ), p( 3 ) },
-//            { ss( 2 ), p( 3 ) },
-//                { fld( 0 ), p( 3, 0 ) },
-//                { val1, p( 3, 0 ) },
-//                { fld( 1 ), p( 3, 1 ) },
-//                { listStart, p( 3, 1 ) },
-//                    { val1, p( 3, 1, "0" ) },
-//                    { val1, p( 3, 1, "1" ) },
-//                { NewEndEvent(), p( 3, 1 ) },
-//            { NewEndEvent(), p( 3 ) },
-//            { fld( 4 ), p( 4 ) },
-//            { ss( 1 ), p( 4 ) },
-//                { fld( 0 ), p( 4, 0 ) },
-//                { val1, p( 4, 0 ) },
-//                { fld( 1 ), p( 4, 1 ) },
-//                { ss( 3 ), p( 4, 1 ) },
-//                    { fld( 0 ), p( 4, 1, 0 ) },
-//                    { val1, p( 4, 1, 0 ) },
-//                    { fld( 1 ), p( 4, 1, 1 ) },
-//                    { val1, p( 4, 1, 1 ) },
-//                { NewEndEvent(), p( 4, 1 ) },
-//                { fld( 2 ), p( 4, 2 ) },
-//                { ss( 3 ), p( 4, 2 ) },
-//                    { fld( 0 ), p( 4, 2, 0 ) },
-//                    { val1, p( 4, 2, 0 ) },
-//                    { fld( 1 ), p( 4, 2, 1 ) },
-//                    { val1, p( 4, 2, 1 ) },
-//                { NewEndEvent(), p( 4, 2 ) },
-//                { fld( 3 ), p( 4, 3 ) },
-//                { mapStart, p( 4, 3 ) },
-//                    { fld( 0 ), p( 4, 3, 0 ) },
-//                    { ss( 3 ), p( 4, 3, 0 ) },
-//                        { fld( 0 ), p( 4, 3, 0, 0 ) },
-//                        { val1, p( 4, 3, 0, 0 ) },
-//                        { fld( 1 ), p( 4, 3, 0, 1 ) },
-//                        { val1, p( 4, 3, 0, 1 ) },
-//                    { NewEndEvent(), p( 4, 3, 0 ) },
-//                    { fld( 1 ), p( 4, 3, 1 ) },
-//                    { ss( 3 ), p( 4, 3, 1 ) },
-//                        { fld( 0 ), p( 4, 3, 1, 0 ) },
-//                        { val1, p( 4, 3, 1, 0 ) },
-//                        { fld( 1 ), p( 4, 3, 1, 1 ) },
-//                        { val1, p( 4, 3, 1, 1 ) },
-//                    { NewEndEvent(), p( 4, 3, 1 ) },
-//                { NewEndEvent(), p( 4, 3 ) },
-//                { fld( 4 ), p( 4, 4 ) },
-//                { listStart, p( 4, 4 ) },
-//                    { ss( 3 ), p( 4, 4, "0" ) },
-//                        { fld( 0 ), p( 4, 4, "0", 0 ) },
-//                        { val1, p( 4, 4, "0", 0 ) },
-//                        { fld( 1 ), p( 4, 4, "0", 1 ) },
-//                        { val1, p( 4, 4, "0", 1 ) },
-//                    { NewEndEvent(), p( 4, 4, "0" ) },
-//                    { ss( 3 ), p( 4, 4, "1" ) },
-//                        { fld( 0 ), p( 4, 4, "1", 0 ) },
-//                        { val1, p( 4, 4, "1", 0 ) },
-//                        { fld( 1 ), p( 4, 4, "1", 1 ) },
-//                        { val1, p( 4, 4, "1", 1 ) },
-//                    { NewEndEvent(), p( 4, 4, "1" ) },
-//                { NewEndEvent(), p( 4, 4 ) },
-//            { NewEndEvent(), p( 4 ) },
-//        { NewEndEvent(), nil },
-//    }
-//    ords1 := []FieldOrderReactorTestOrder{
-//        testOrderWithIds( ss( 1 ).Type,
-//            id( 0 ), id( 1 ), id( 2 ), id( 3 ), id( 4 ) ),
-//        testOrderWithIds( ss( 2 ).Type, id( 0 ), id( 1 ) ),
-//        testOrderWithIds( ss( 3 ).Type, id( 0 ), id( 1 ) ),
-//    }
-//    evs := [][]ReactorEvent{
-//        []ReactorEvent{ val1 },
-//        []ReactorEvent{ 
-//            mapStart, 
-//                fld( 1 ), val1, fld( 0 ), val1, NewEndEvent() },
-//        []ReactorEvent{ listStart, val1, val1, NewEndEvent() },
-//        []ReactorEvent{ 
-//            ss( 2 ), 
-//                fld( 0 ), val1, 
-//                fld( 1 ), listStart, val1, val1, NewEndEvent(),
-//            NewEndEvent(),
-//        },
-//        // val for f4 is nested and has nested ss2 instances that are in varying
-//        // need of reordering
-//        []ReactorEvent{ 
-//            ss( 1 ),
-//                fld( 0 ), val1,
-//                fld( 4 ), listStart,
-//                    ss( 3 ),
-//                        fld( 0 ), val1,
-//                        fld( 1 ), val1,
-//                    NewEndEvent(),
-//                    ss( 3 ),
-//                        fld( 1 ), val1,
-//                        fld( 0 ), val1,
-//                    NewEndEvent(),
-//                NewEndEvent(),
-//                fld( 2 ), ss( 3 ),
-//                    fld( 1 ), val1,
-//                    fld( 0 ), val1,
-//                NewEndEvent(),
-//                fld( 3 ), mapStart,
-//                    fld( 0 ), ss( 3 ),
-//                        fld( 1 ), val1,
-//                        fld( 0 ), val1,
-//                    NewEndEvent(),
-//                    fld( 1 ), ss( 3 ),
-//                        fld( 0 ), val1,
-//                        fld( 1 ), val1,
-//                    NewEndEvent(),
-//                NewEndEvent(),
-//                fld( 1 ), ss( 3 ),
-//                    fld( 0 ), val1,
-//                    fld( 1 ), val1,
-//                NewEndEvent(),
-//            NewEndEvent(),
-//        },
-//    }
-//    mkSrc := func( ord ...int ) []ReactorEvent {
-//        res := []ReactorEvent{ ss( 1 ) }
-//        for _, i := range ord {
-//            res = append( res, fld( i ) )
-//            res = append( res, evs[ i ]... )
-//        }
-//        return append( res, NewEndEvent() )
-//    }
-//    for _, ord := range [][]int{
-//        []int{ 0, 1, 2, 3, 4 },
-//        []int{ 4, 3, 2, 1, 0 },
-//        []int{ 2, 4, 0, 3, 1 },
-//    } {
-//        AddStdReactorTests(
-//            &FieldOrderPathTest{
-//                Source: mg.CopySource( mkSrc( ord... ) ),
-//                Expect: expct1,
-//                Orders: ords1,
-//            },
-//        )
-//    }
-//    AddStdReactorTests(
-//        &FieldOrderPathTest{
-//            Source: mg.CopySource(
-//                []ReactorEvent{
-//                    ss( 1 ),
-//                        fld( 0 ), val1,
-//                        fld( 7 ), val1,
-//                        fld( 2 ), val1,
-//                        fld( 1 ), val1,
-//                    NewEndEvent(),
-//                },
-//            ),
-//            Expect: []EventExpectation{
-//                { ss( 1 ), nil },
-//                { fld( 0 ), p( 0 ) },
-//                { val1, p( 0 ) },
-//                { fld( 7 ), p( 7 ) },
-//                { val1, p( 7 ) },
-//                { fld( 1 ), p( 1 ) },
-//                { val1, p( 1 ) },
-//                { fld( 2 ), p( 2 ) },
-//                { val1, p( 2 ) },
-//                { NewEndEvent(), nil },
-//            },
-//            Orders: []FieldOrderReactorTestOrder{
-//                testOrderWithIds( ss( 1 ).Type, id( 0 ), id( 1 ), id( 2 ) ),
-//            },
-//        },
-//    )
-//    // Regression for bug fixed in previous commit (f7fa84122047)
-//    AddStdReactorTests(
-//        &FieldOrderPathTest{
-//            Source: mg.CopySource(
-//                []ReactorEvent{ ss( 1 ), fld( 1 ), val1, NewEndEvent() } ),
-//            Expect: []EventExpectation{
-//                { ss( 1 ), nil },
-//                { fld( 1 ), p( 1 ) },
-//                { val1, p( 1 ) },
-//                { NewEndEvent(), nil },
-//            },
-//            Orders: []FieldOrderReactorTestOrder{
-//                testOrderWithIds( ss( 1 ).Type, id( 0 ), id( 1 ), id( 2 ) ),
-//            },
-//        },
-//    )
-//}
-//
-//func initFieldOrderReactorTests() {
-//    initFieldOrderValueTests()
-//    initFieldOrderMissingFieldTests()
-//    initFieldOrderPathTests()
-//}
-//
-//type RequestReactorTest struct {
-//    Source interface{}
-//    Namespace *Namespace
-//    Service *mg.Identifier
-//    Operation *mg.Identifier
-//    Parameters *mg.SymbolMap
-//    ParameterEvents []EventExpectation
-//    Authentication mg.Value
-//    AuthenticationEvents []EventExpectation
-//    Error error
-//}
-//
-//func initRequestTests() {
-//    idFact := NewTestPointerIdFactory()
-//    ns1 := MustNamespace( "ns1@v1" )
-//    svc1 := id( "service1" )
-//    op1 := id( "op1" )
-//    params1 := mg.MustSymbolMap( "f1", int32( 1 ) )
-//    authQn := qname( "ns1@v1/Auth1" )
-//    auth1 := mg.MustStruct( authQn, "f1", int32( 1 ) )
-//    evFldNs := NewFieldStartEvent( IdNamespace )
-//    evFldSvc := NewFieldStartEvent( IdService )
-//    evFldOp := NewFieldStartEvent( IdOperation )
-//    evFldParams := NewFieldStartEvent( IdParameters )
-//    evFldAuth := NewFieldStartEvent( IdAuthentication )
-//    evFldF1 := NewFieldStartEvent( id( "f1" ) )
-//    evReqTyp := NewStructStartEvent( QnameRequest )
-//    evNs1 := NewValueEvent( mg.String( ns1.ExternalForm() ) )
-//    evSvc1 := NewValueEvent( mg.String( svc1.ExternalForm() ) )
-//    evOp1 := NewValueEvent( mg.String( op1.ExternalForm() ) )
-//    i32Val1 := NewValueEvent( mg.Int32( 1 ) )
-//    evParams1 := []ReactorEvent{ 
-//        idFact.NextMapStart(), evFldF1, i32Val1, NewEndEvent() }
-//    evAuth1 := []ReactorEvent{ 
-//        NewStructStartEvent( authQn ), evFldF1, i32Val1, NewEndEvent() }
-//    addSucc1 := func( evs ...interface{} ) {
-//        AddStdReactorTests(
-//            &RequestReactorTest{
-//                Source: mg.CopySource( flattenEvs( evs... ) ),
-//                Namespace: ns1,
-//                Service: svc1,
-//                Operation: op1,
-//                Parameters: params1,
-//                Authentication: auth1,
-//            },
-//        )
-//    }
-//    fullOrderedReq1Flds := []interface{}{
-//        evFldNs, evNs1,
-//        evFldSvc, evSvc1,
-//        evFldOp, evOp1,
-//        evFldAuth, evAuth1,
-//        evFldParams, evParams1,
-//    }
-//    addSucc1( evReqTyp, fullOrderedReq1Flds, NewEndEvent() )
-//    addSucc1( idFact.NextMapStart(), fullOrderedReq1Flds, NewEndEvent() )
-//    addSucc1( evReqTyp,
-//        evFldAuth, evAuth1,
-//        evFldOp, evOp1,
-//        evFldParams, evParams1,
-//        evFldNs, evNs1,
-//        evFldSvc, evSvc1,
-//        NewEndEvent(),
-//    )
-//    AddStdReactorTests(
-//        &RequestReactorTest{
-//            Source: mg.CopySource(
-//                flattenEvs( evReqTyp,
-//                    evFldNs, evNs1,
-//                    evFldSvc, evSvc1,
-//                    evFldOp, evOp1,
-//                    evFldAuth, i32Val1,
-//                    evFldParams, evParams1,
-//                    NewEndEvent(),
-//                ),
-//            ),
-//            Namespace: ns1,
-//            Service: svc1,
-//            Operation: op1,
-//            Authentication: mg.Int32( 1 ),
-//            Parameters: params1,
-//        },
-//    )
-//    mkReq1 := func( params, auth mg.Value ) *mg.Struct {
-//        pairs := []interface{}{ 
-//            IdNamespace, NamespaceAsBytes( ns1 ),
-//            IdService, IdentifierAsBytes( svc1 ),
-//            IdOperation, IdentifierAsBytes( op1 ),
-//        }
-//        if params != nil { pairs = append( pairs, IdParameters, params ) }
-//        if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }
-//        return mg.MustStruct( QnameRequest, pairs... )
-//    }
-//    addSucc2 := func( src interface{}, authExpct mg.Value ) {
-//        AddStdReactorTests(
-//            &RequestReactorTest{
-//                Namespace: ns1,
-//                Service: svc1,
-//                Operation: op1,
-//                Parameters: EmptySymbolMap(),
-//                Authentication: authExpct,
-//                Source: src,
-//            },
-//        )
-//    } 
-//    // check implicit params with(out) auth and using undetermined event
-//    // ordering
-//    addSucc2( mkReq1( nil, nil ), nil )
-//    addSucc2( mkReq1( nil, auth1 ), auth1 )
-//    // check implicit params with and without auth and with need for reordering
-//    addSucc2(
-//        flattenEvs( evReqTyp, 
-//            evFldSvc, evSvc1, 
-//            evFldOp, evOp1, 
-//            evFldNs, evNs1,
-//            NewEndEvent(),
-//        ),
-//        nil,
-//    )
-//    addSucc2(
-//        flattenEvs( evReqTyp,
-//            evFldSvc, evSvc1,
-//            evFldAuth, evAuth1,
-//            evFldOp, evOp1,
-//            evFldNs, evNs1,
-//            NewEndEvent(),
-//        ),
-//        auth1,
-//    )
-//    addPathSucc := func( 
-//        paramsIn, paramsExpct *mg.SymbolMap, paramEvs []EventExpectation,
-//        auth mg.Value, authEvs []EventExpectation ) {
-//        t := &RequestReactorTest{
-//            Namespace: ns1,
-//            Service: svc1,
-//            Operation: op1,
-//            Parameters: paramsExpct,
-//            ParameterEvents: paramEvs,
-//            Authentication: auth,
-//            AuthenticationEvents: authEvs,
-//        }
-//        pairs := []interface{}{
-//            IdNamespace, ns1.ExternalForm(),
-//            IdService, svc1.ExternalForm(),
-//            IdOperation, op1.ExternalForm(),
-//        }
-//        if paramsIn != nil { pairs = append( pairs, IdParameters, paramsIn ) }
-//        if auth != nil { pairs = append( pairs, IdAuthentication, auth ) }
-//        t.Source = mg.MustStruct( QnameRequest, pairs... )
-//        AddStdReactorTests( t )
-//    }
-//    pathParams := objpath.RootedAt( IdParameters )
-//    evsEmptyParams := []EventExpectation{ 
-//        { idFact.NextMapStart(), pathParams }, { NewEndEvent(), pathParams } }
-//    pathAuth := objpath.RootedAt( IdAuthentication )
-//    addPathSucc( nil, mg.MustSymbolMap(), evsEmptyParams, nil, nil )
-//    addPathSucc( mg.MustSymbolMap(), mg.MustSymbolMap(), evsEmptyParams, nil, nil )
-//    idF1 := id( "f1" )
-//    addPathSucc(
-//        mg.MustSymbolMap( idF1, mg.Int32( 1 ) ),
-//        mg.MustSymbolMap( idF1, mg.Int32( 1 ) ),
-//        []EventExpectation{
-//            { idFact.NextMapStart(), pathParams },
-//            { evFldF1, pathParams.Descend( idF1 ) },
-//            { i32Val1, pathParams.Descend( idF1 ) },
-//            { NewEndEvent(), pathParams },
-//        },
-//        nil, nil,
-//    )
-//    addPathSucc( 
-//        nil, mg.MustSymbolMap(), evsEmptyParams,
-//        mg.Int32( 1 ), []EventExpectation{ { i32Val1, pathAuth } },
-//    )
-//    addPathSucc(
-//        nil, mg.MustSymbolMap(), evsEmptyParams,
-//        auth1, []EventExpectation{
-//            { NewStructStartEvent( authQn ), pathAuth },
-//            { evFldF1, pathAuth.Descend( idF1 ) },
-//            { i32Val1, pathAuth.Descend( idF1 ) },
-//            { NewEndEvent(), pathAuth },
-//        },
-//    )
-//    writeMgIo := func( f func( w *BinWriter ) ) Buffer {
-//        bb := &bytes.Buffer{}
-//        w := NewWriter( bb )
-//        f( w )
-//        return Buffer( bb.Bytes() )
-//    }
-//    nsBuf := func( ns *Namespace ) Buffer {
-//        return writeMgIo( func( w *BinWriter ) { w.WriteNamespace( ns ) } )
-//    }
-//    idBuf := func( id *mg.Identifier ) Buffer {
-//        return writeMgIo( func( w *BinWriter ) { w.WriteIdentifier( id ) } )
-//    }
-//    AddStdReactorTests(
-//        &RequestReactorTest{
-//            Namespace: ns1,
-//            Service: svc1,
-//            Operation: op1,
-//            Parameters: EmptySymbolMap(),
-//            Source: mg.MustStruct( QnameRequest,
-//                IdNamespace, nsBuf( ns1 ),
-//                IdService, idBuf( svc1 ),
-//                IdOperation, idBuf( op1 ),
-//            ),
-//        },
-//    )
-//    AddStdReactorTests(
-//        &RequestReactorTest{
-//            Source: mg.MustStruct( "ns1@v1/S1" ),
-//            Error: mg.NewTypeCastError(
-//                TypeRequest, MustTypeReference( "ns1@v1/S1" ), nil ),
-//        },
-//    )
-//    createReqVcErr := func( 
-//        val interface{}, path idPath, msg string ) *RequestReactorTest {
-//
-//        return &RequestReactorTest{
-//            Source: MustValue( val ),
-//            Error: mg.NewValueCastError( path, msg ),
-//        }
-//    }
-//    addReqVcErr := func( val interface{}, path idPath, msg string ) {
-//        AddStdReactorTests( createReqVcErr( val, path, msg ) )
-//    }
-//    addReqVcErr(
-//        mg.MustSymbolMap( IdNamespace, true ), 
-//        objpath.RootedAt( IdNamespace ),
-//        "invalid value: mingle:core@v1/Boolean",
-//    )
-//    addReqVcErr(
-//        mg.MustSymbolMap( IdNamespace, mg.MustSymbolMap() ),
-//        objpath.RootedAt( IdNamespace ),
-//        "invalid value: mingle:core@v1/SymbolMap",
-//    )
-//    addReqVcErr(
-//        mg.MustSymbolMap( IdNamespace, mg.MustStruct( "ns1@v1/S1" ) ),
-//        objpath.RootedAt( IdNamespace ),
-//        "invalid value: ns1@v1/S1",
-//    )
-//    addReqVcErr(
-//        mg.MustSymbolMap( IdNamespace, mg.MustList() ),
-//        objpath.RootedAt( IdNamespace ),
-//        "invalid value: mingle:core@v1/Value?*",
-//    )
-//    func() {
-//        test := createReqVcErr(
-//            mg.MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, true ),
-//            objpath.RootedAt( IdService ),
-//            "invalid value: mingle:core@v1/Boolean",
-//        )
-//        test.Namespace = ns1
-//        AddStdReactorTests( test )
-//    }()
-//    func() {
-//        test := createReqVcErr(
-//            mg.MustSymbolMap( 
-//                IdNamespace, ns1.ExternalForm(),
-//                IdService, svc1.ExternalForm(),
-//                IdOperation, true,
-//            ),
-//            objpath.RootedAt( IdOperation ),
-//            "invalid value: mingle:core@v1/Boolean",
-//        )
-//        test.Namespace, test.Service = ns1, svc1
-//        AddStdReactorTests( test )
-//    }()
-//    AddStdReactorTests(
-//        &RequestReactorTest{
-//            Source: mg.MustSymbolMap(
-//                IdNamespace, ns1.ExternalForm(),
-//                IdService, svc1.ExternalForm(),
-//                IdOperation, op1.ExternalForm(),
-//                IdParameters, true,
-//            ),
-//            Namespace: ns1,
-//            Service: svc1,
-//            Operation: op1,
-//            Error: mg.NewTypeCastError(
-//                mg.TypeSymbolMap,
-//                TypeBoolean,
-//                objpath.RootedAt( IdParameters ),
-//            ),
-//        },
-//    )
-//    // Check that errors are bubbled up from
-//    // *BinWriter.Read(Identfier|Namespace) when parsing invalid
-//    // namespace/service/operation Buffers
-//    createBinRdErr := func( path *mg.Identifier, msg string, 
-//        pairs ...interface{} ) *RequestReactorTest {
-//
-//        return createReqVcErr(
-//            mg.MustSymbolMap( pairs... ), objpath.RootedAt( path ), msg )
-//    }
-//    addBinRdErr := func( path *mg.Identifier, msg string, pairs ...interface{} ) {
-//        AddStdReactorTests( createBinRdErr( path, msg, pairs... ) )
-//    }
-//    badBuf := []byte{ 0x0f }
-//    addBinRdErr( 
-//        IdNamespace, 
-//        "Expected type code 0x02 but got 0x0f",
-//        IdNamespace, badBuf )
-//    func() {
-//        test := createBinRdErr(
-//            IdService, 
-//            "Expected type code 0x01 but got 0x0f",
-//            IdNamespace, ns1.ExternalForm(), 
-//            IdService, badBuf,
-//        )
-//        test.Namespace = ns1
-//        AddStdReactorTests( test )
-//    }()
-//    func() {
-//        test := createBinRdErr(
-//            IdOperation, 
-//            "Expected type code 0x01 but got 0x0f",
-//            IdNamespace, ns1.ExternalForm(),
-//            IdService, svc1.ExternalForm(),
-//            IdOperation, badBuf,
-//        )
-//        test.Namespace, test.Service = ns1, svc1
-//        AddStdReactorTests( test )
-//    }()
-//    addReqVcErr(
-//        mg.MustSymbolMap( IdNamespace, "ns1::ns2" ),
-//        objpath.RootedAt( IdNamespace ),
-//        "[<input>, line 1, col 5]: Illegal start of identifier part: \":\" " +
-//        "(U+003A)",
-//    )
-//    func() {
-//        test := createReqVcErr(
-//            mg.MustSymbolMap( IdNamespace, ns1.ExternalForm(), IdService, "2bad" ),
-//            objpath.RootedAt( IdService ),
-//            "[<input>, line 1, col 1]: Illegal start of identifier part: " +
-//            "\"2\" (U+0032)",
-//        )
-//        test.Namespace = ns1
-//        AddStdReactorTests( test )
-//    }()
-//    func() {
-//        test := createReqVcErr(
-//            mg.MustSymbolMap(
-//                IdNamespace, ns1.ExternalForm(),
-//                IdService, svc1.ExternalForm(),
-//                IdOperation, "2bad",
-//            ),
-//            objpath.RootedAt( IdOperation ),
-//            "[<input>, line 1, col 1]: Illegal start of identifier part: " +
-//            "\"2\" (U+0032)",
-//        )
-//        test.Namespace, test.Service = ns1, svc1
-//        AddStdReactorTests( test )
-//    }()
-//    t1Bad := qname( "foo@v1/Request" )
-//    AddStdReactorTests(
-//        &RequestReactorTest{
-//            Source: mg.MustStruct( t1Bad ),
-//            Error: mg.NewTypeCastError(
-//                TypeRequest, t1Bad.AsAtomicType(), nil ),
-//        },
-//    )
-//    // Not exhaustively re-testing all ways a field could be missing (assume for
-//    // now that field order tests will handle that). Instead, we are just
-//    // getting basic coverage that the field order supplied by the request
-//    // reactor is in fact being set up correctly and that we have set up the
-//    // right required fields.
-//    AddStdReactorTests(
-//        &RequestReactorTest{
-//            Source: mg.MustSymbolMap( 
-//                IdNamespace, ns1.ExternalForm(),
-//                IdOperation, op1.ExternalForm(),
-//            ),
-//            Namespace: ns1,
-//            Error: mg.NewMissingFieldsError( nil, []*mg.Identifier{ IdService } ),
-//        },
-//    )
-//}
-//
+// we only add here error tests; we assume that a value build reactor sits
+// behind a structural reactor and so let ValueBuildTest successes imply correct
+// behavior of the structural check reactor for valid inputs
+func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
+    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
+    id := mg.MakeTestId
+    evStartField1 := NewFieldStartEvent( id( 1 ) )
+    evStartField2 := NewFieldStartEvent( id( 2 ) )
+    evValue1 := NewValueEvent( mg.Int64( int64( 1 ) ) )
+    evValuePtr1 := NewValueAllocationEvent( mg.TypeInt64, 1 )
+    evListStart := NewListStartEvent( mg.TypeOpaqueList, ptrId( 1 ) )
+    evMapStart := NewMapStartEvent( ptrId( 2 ) )
+    mk1 := func( 
+        errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
+        return &StructuralReactorErrorTest{
+            Events: CopySource( evs ),
+            Error: rctError( nil, errMsg ),
+        }
+    }
+    mk2 := func( 
+        errMsg string, 
+        tt ReactorTopType, 
+        evs ...ReactorEvent ) *StructuralReactorErrorTest {
+        res := mk1( errMsg, evs... )
+        res.TopType = tt
+        return res
+    }
+    b.AddTests(
+        mk1( "Saw start of field 'f2' while expecting a value for field 'f1'",
+            evStartStruct1, evStartField1, evStartField2,
+        ),
+        mk1( "Saw start of field 'f2' while expecting a value for field 'f1'",
+            evStartStruct1, evStartField1, evMapStart, evStartField1,
+            evStartField2,
+        ),
+        mk1( "Saw start of field 'f1' after value was built",
+            evStartStruct1, NewEndEvent(), evStartField1,
+        ),
+        mk1( "Expected field name or end of fields but got value",
+            evStartStruct1, evValue1,
+        ),
+        mk1( "Expected field name or end of fields but got &value",
+            evStartStruct1, evValuePtr1,
+        ),
+        mk1( "Expected field name or end of fields but got &reference",
+            evStartStruct1, ptrRef( 2 ),
+        ),
+        mk1( "Expected field name or end of fields but got list start",
+            evStartStruct1, evListStart,
+        ),
+        mk1( "Expected field name or end of fields but got map start",
+            evStartStruct1, evMapStart,
+        ),
+        mk1( "Expected field name or end of fields but got start of struct " +
+                evStartStruct1.Type.ExternalForm(),
+            evStartStruct1, evStartStruct1,
+        ),
+        mk1( "Saw end while expecting a value for field 'f1'",
+            evStartStruct1, evStartField1, NewEndEvent(),
+        ),
+        mk1( "Saw start of field 'f1' while expecting a list value",
+            evStartStruct1, evStartField1, evListStart, evStartField1,
+        ),
+        mk2( "Expected struct but got value", ReactorTopTypeStruct, evValue1 ),
+        mk2( "Expected struct but got &value", ReactorTopTypeStruct, 
+            evValuePtr1 ),
+        mk2( "Expected struct but got list start", ReactorTopTypeStruct,
+            evListStart,
+        ),
+        mk2( "Expected struct but got map start", ReactorTopTypeStruct,
+            evMapStart,
+        ),
+        mk2( "Expected struct but got start of field 'f1'", 
+            ReactorTopTypeStruct, evStartField1,
+        ),
+        mk2( "Expected struct but got end", 
+            ReactorTopTypeStruct, NewEndEvent() ),
+        mk1( "Multiple entries for field: f1",
+            evStartStruct1, 
+            evStartField1, evValue1,
+            evStartField2, evValue1,
+            evStartField1,
+        ),
+    )
+}
+
+func initPointerReferenceCheckTests( b *ReactorTestSetBuilder ) {
+    id, p := mg.MakeTestId, mg.MakeTestIdPath
+    fld := func( i int ) *FieldStartEvent {
+        return NewFieldStartEvent( id( i ) )
+    }
+    ival := NewValueEvent( mg.Int32( 1 ) )
+    qn := mg.MustQualifiedTypeName( "ns1@v1/S1" )
+    add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
+        b.AddTests(
+            &PointerEventCheckTest{
+                Events: CopySource( evs ),
+                Error: rctError( path, msg ),
+            },
+        )
+    }
+    add0 := func( path objpath.PathNode, evs ...ReactorEvent ) {
+        add( path, "attempt to reference null pointer", evs... )
+    }
+    listStart := func( id mg.PointerId ) *ListStartEvent {
+        return NewListStartEvent( mg.TypeOpaqueList, id )
+    }
+    add0( p( "0" ), listStart( mg.PointerIdNull ), ptrRef( 0 ) )
+    add0( p( "1" ), listStart( mg.PointerIdNull ), ival, ptrRef( 0 ) )
+    add0( p( 1, 2 ),
+        NewMapStartEvent( 0 ), fld( 1 ), 
+            NewMapStartEvent( 0 ), fld( 2 ), ptrRef( 0 ) )
+    addReallocCheck := func( errEv ReactorEvent ) {
+        msg := "attempt to redefine reference: 1"
+        add( p( "1" ), msg,
+            listStart( ptrId( 2 ) ), 
+                ptrAlloc( mg.TypeInt32, 1 ), ival, errEv,
+        )
+        add( p( "1" ), msg, listStart( ptrId( 1 ) ), ival, errEv )
+        add( p( 1 ), msg, NewMapStartEvent( ptrId( 1 ) ), fld( 1 ), errEv )
+        add( p( 1 ), msg,
+            ptrAlloc( mg.TypeInt32, 1 ), 
+            NewStructStartEvent( qn ), fld( 1 ), errEv )
+    }
+    addReallocCheck( ptrAlloc( mg.TypeInt32, 1 ) )
+    addReallocCheck( listStart( ptrId( 1 ) ) )
+    addReallocCheck( NewMapStartEvent( ptrId( 1 ) ) )
+    add( p( "0" ), "unrecognized reference: 1",
+        listStart( ptrId( 2 ) ), ptrRef( 1 ) )
+    add( p( 2 ),
+        "unrecognized reference: 2",
+        NewMapStartEvent( ptrId( 3 ) ),
+        fld( 1 ),
+        ptrAlloc( mg.TypeInt32, 1 ), ival,
+        fld( 2 ),
+        ptrRef( 2 ),
+    )
+    b.AddTests(
+        &PointerEventCheckTest{
+            Events: CopySource( 
+                []ReactorEvent{
+                    NewStructStartEvent( qn ),
+                    fld( 1 ), ptrAlloc( mg.TypeInt32, 0 ), ival,
+                    fld( 2 ), listStart( mg.PointerIdNull ), NewEndEvent(),
+                    fld( 3 ), 
+                        NewMapStartEvent( mg.PointerIdNull ), NewEndEvent(),
+                    NewEndEvent(),
+                },
+            ),
+        },
+    )
+}
+
+func initEventPathTests( b *ReactorTestSetBuilder ) {
+    p := mg.MakeTestIdPath
+    ee := func( ev ReactorEvent, p objpath.PathNode ) EventExpectation {
+        return EventExpectation{ Event: ev, Path: p }
+    }
+    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
+    id := mg.MakeTestId
+    evStartField := func( i int ) *FieldStartEvent {
+        return NewFieldStartEvent( id( i ) )
+    }
+    evValue := func( i int64 ) *ValueEvent {
+        return NewValueEvent( mg.Int64( i ) )
+    }
+    idFact := NewTestPointerIdFactory()
+    evEnd := NewEndEvent()
+    addTest := func( name string, evs ...EventExpectation ) {
+        ptrStart := ee( idFact.NextValueAllocation( mg.TypeValue ), nil )
+        evsWithPtr := append( []EventExpectation{ ptrStart }, evs... )
+        b.AddTests(
+            &EventPathTest{ Name: name, Events: evs },
+            &EventPathTest{ Name: name + "-pointer", Events: evsWithPtr },
+        )
+    }
+    addTest( "empty" )
+    addTest( "top-value", ee( evValue( 1 ), nil ) )
+    addTest( "empty-struct",
+        ee( evStartStruct1, nil ),
+        ee( evEnd, nil ),
+    )
+    addTest( "empty-map",
+        ee( idFact.NextMapStart(), nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( evValue( 1 ), p( 1 ) ),
+        ee( evEnd, nil ),
+    )
+    addTest( "flat-struct",
+        ee( evStartStruct1, nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( evValue( 1 ), p( 1 ) ),
+        ee( evStartField( 2 ), p( 2 ) ),
+            ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 2 ) ),
+                ee( evValue( 2 ), p( 2 ) ),
+        ee( evEnd, nil ),
+    )
+    addTest( "empty-list",
+        ee( idFact.NextValueListStart(), nil ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "flat-list",
+        ee( idFact.NextValueListStart(), nil ),
+            ee( evValue( 1 ), p( "0" ) ),
+            ee( evValue( 1 ), p( "1" ) ),
+            ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( "2" ) ),
+                ee( evValue( 2 ), p( "2" ) ),
+            ee( ptrRef( 2 ), p( "3" ) ),
+            ee( evValue( 4 ), p( "4" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "nested-list1",
+        ee( idFact.NextValueListStart(), nil ),
+            ee( idFact.NextMapStart(), p( "0" ) ),
+                ee( evStartField( 1 ), p( "0", 1 ) ),
+                ee( evValue( 1 ), p( "0", 1 ) ),
+                ee( NewEndEvent(), p( "0" ) ),
+            ee( idFact.NextValueListStart(), p( "1" ) ),
+                ee( evValue( 1 ), p( "1", "0" ) ),
+                ee( NewEndEvent(), p( "1" ) ),
+            ee( idFact.NextValueAllocation( mg.TypeSymbolMap ), p( "2" ) ),
+                ee( idFact.NextMapStart(), p( "2" ) ),
+                    ee( evStartField( 1 ), p( "2", 1 ) ),
+                    ee( evValue( 1 ), p( "2", 1 ) ),
+                    ee( NewEndEvent(), p( "2" ) ),
+            ee( idFact.NextValueAllocation( typeRef( "Int64*" ) ), p( "3" ) ),
+                ee( idFact.NextValueListStart(), p( "3" ) ),
+                    ee( evValue( 1 ), p( "3", "0" ) ),
+                    ee( NewEndEvent(), p( "3" ) ),
+            ee( evValue( 4 ), p( "4" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "nested-list2",
+        ee( idFact.NextValueListStart(), nil ),
+            ee( idFact.NextMapStart(), p( "0" ) ),
+            ee( NewEndEvent(), p( "0" ) ),
+            ee( evValue( 1 ), p( "1" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "nested-list3",
+        ee( idFact.NextValueListStart(), nil ),
+            ee( evValue( 1 ), p( "0" ) ),
+            ee( idFact.NextMapStart(), p( "1" ) ),
+                ee( evStartField( 1 ), p( "1", 1 ) ),
+                    ee( evValue( 1 ), p( "1", 1 ) ),
+                ee( NewEndEvent(), p( "1" ) ),
+            ee( idFact.NextValueAllocation( mg.TypeOpaqueList ), p( "2" ) ),
+                ee( idFact.NextValueListStart(), p( "2" ) ),
+                    ee( evValue( 1 ), p( "2", "0" ) ),
+                    ee( idFact.NextValueAllocation( mg.TypeOpaqueList ), 
+                            p( "2", "1" ) ),
+                        ee( idFact.NextValueListStart(), p( "2", "1" ) ),
+                            ee( evValue( 1 ), p( "2", "1", "0" ) ),
+                            ee( evValue( 2 ), p( "2", "1", "1" ) ),
+                        ee( NewEndEvent(), p( "2", "1" ) ),
+                    ee( evValue( 3 ), p( "2", "2" ) ),
+                ee( NewEndEvent(), p( "2" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "list-regress1",
+        ee( idFact.NextValueListStart(), nil ),
+            ee( idFact.NextValueListStart(), p( "0" ) ),
+            ee( NewEndEvent(), p( "0" ) ),
+            ee( evValue( 1 ), p( "1" ) ),
+            ee( evValue( 1 ), p( "2" ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "flat-map",
+        ee( idFact.NextMapStart(), nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( evValue( 1 ), p( 1 ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "struct-with-containers1",
+        ee( evStartStruct1, nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( idFact.NextValueListStart(), p( 1 ) ),
+                ee( evValue( 1 ), p( 1, "0" ) ),
+                ee( evValue( 1 ), p( 1, "1" ) ),
+            ee( NewEndEvent(), p( 1 ) ),
+        ee( evStartField( 2 ), p( 2 ) ),
+            ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 2 ) ),
+                ee( evValue( 1 ), p( 2 ) ),
+        ee( evStartField( 3 ), p( 3 ) ),
+            ee( idFact.NextValueListStart(), p( 3 ) ),
+                ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 3, "0" ) ),
+                    ee( evValue( 0 ), p( 3, "0" ) ),
+                ee( idFact.NextValueAllocation( mg.TypeInt64 ), p( 3, "1" ) ),
+                    ee( evValue( 0 ), p( 3, "1" ) ),
+            ee( NewEndEvent(), p( 3 ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    addTest( "struct-with-containers2",
+        ee( evStartStruct1, nil ),
+        ee( evStartField( 1 ), p( 1 ) ),
+            ee( idFact.NextMapStart(), p( 1 ) ),
+            ee( evStartField( 2 ), p( 1, 2 ) ),
+                ee( idFact.NextValueListStart(), p( 1, 2 ) ),
+                    ee( evValue( 1 ), p( 1, 2, "0" ) ),
+                    ee( evValue( 1 ), p( 1, 2, "1" ) ),
+                    ee( idFact.NextValueListStart(), p( 1, 2, "2" ) ),
+                        ee( evValue( 1 ), p( 1, 2, "2", "0" ) ),
+                        ee( idFact.NextMapStart(), p( 1, 2, "2", "1" ) ),
+                        ee( evStartField( 1 ), p( 1, 2, "2", "1", 1 ) ),
+                            ee( evValue( 1 ), p( 1, 2, "2", "1", 1 ) ),
+                        ee( evStartField( 2 ), p( 1, 2, "2", "1", 2 ) ),
+                            ee( idFact.NextValueAllocation( mg.TypeInt64 ), 
+                                p( 1, 2, "2", "1", 2 ) ),
+                            ee( evValue( 2 ), p( 1, 2, "2", "1", 2 ) ),
+                        ee( NewEndEvent(), p( 1, 2, "2", "1" ) ),
+                    ee( NewEndEvent(), p( 1, 2, "2" ) ),
+                ee( NewEndEvent(), p( 1, 2 ) ),
+            ee( NewEndEvent(), p( 1 ) ),
+        ee( NewEndEvent(), nil ),
+    )
+    b.AddTests(
+        &EventPathTest{
+            Name: "non-empty-dict-start-path",
+            Events: []EventExpectation{
+                { idFact.NextMapStart(), p( 2 ) },
+                { evStartField( 1 ), p( 2, 1 ) },
+                { evValue( 1 ), p( 2, 1 ) },
+                { NewEndEvent(), p( 2 ) },
+            },
+            StartPath: p( 2 ),
+        },
+        &EventPathTest{
+            Name: "non-empty-list-start-path",
+            Events: []EventExpectation{ 
+                { idFact.NextMapStart(), p( 2, "3" ) },
+                { evStartField( 1 ), p( 2, "3", 1 ) },
+                { evValue( 1 ), p( 2, "3", 1 ) },
+                { NewEndEvent(), p( 2, "3" ) },
+            },
+            StartPath: p( 2, "3" ),
+        },
+    )
+}
+
+func testOrderWithIds( 
+    typ *mg.QualifiedTypeName, 
+    ids ...*mg.Identifier ) FieldOrderReactorTestOrder {
+
+    ord := make( []FieldOrderSpecification, len( ids ) )
+    for i, id := range ids { 
+        ord[ i ] = FieldOrderSpecification{ Field: id, Required: false }
+    }
+    return FieldOrderReactorTestOrder{ Type: typ, Order: ord }
+}
+
+func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
+    idFact := NewTestPointerIdFactory()
+    flds := make( []ReactorEvent, 5 )
+    ids := make( []*mg.Identifier, len( flds ) )
+    for i := 0; i < len( flds ); i++ {
+        ids[ i ] = mg.MakeTestId( i )
+        flds[ i ] = NewFieldStartEvent( ids[ i ] )
+    }
+    i1 := mg.Int32( int32( 1 ) )
+    val1 := NewValueEvent( i1 )
+    t1, t2 := qname( "ns1@v1/S1" ), qname( "ns1@v1/S2" )
+    ss1, ss2 := NewStructStartEvent( t1 ), NewStructStartEvent( t2 )
+    ss2Val1 := mg.MustStruct( t2, ids[ 0 ], i1 )
+    // expct sequences for instance of ns1@v1/S1 by field f0 ...
+    fldVals := []mg.Value{
+        i1,
+        mg.MustSymbolMap( ids[ 0 ], i1, ids[ 1 ], ss2Val1 ),
+        mg.MustList( i1, i1 ),
+        ss2Val1,
+        i1,
+    }
+    mkExpct := func( ord ...int ) *mg.Struct {
+        pairs := []interface{}{}
+        for _, fldNum := range ord {
+            pairs = append( pairs, ids[ fldNum ], fldVals[ fldNum ] )
+        }
+        return mg.MustStruct( t1, pairs... )
+    }
+    // val sequences for fields f0 ...
+    fldEvs := [][]ReactorEvent {
+        []ReactorEvent{ val1 },
+        []ReactorEvent{
+            idFact.NextMapStart(), 
+                flds[ 0 ], val1, 
+                flds[ 1 ], ss2, flds[ 0 ], val1, NewEndEvent(),
+            NewEndEvent(),
+        },
+        []ReactorEvent{ 
+            idFact.NextValueListStart(), val1, val1, NewEndEvent() },
+        []ReactorEvent{ ss2, flds[ 0 ], val1, NewEndEvent() },
+        []ReactorEvent{ val1 },
+    }
+    mkSrc := func( ord ...int ) []ReactorEvent {
+        res := []ReactorEvent{ ss1 }
+        for _, fldNum := range ord {
+            res = append( res, flds[ fldNum ] )
+            res = append( res, fldEvs[ fldNum ]... )
+        }
+        return append( res, NewEndEvent() )
+    }
+    addTest1 := func( src []ReactorEvent, expct mg.Value ) {
+        b.AddTests(
+            &FieldOrderReactorTest{ 
+                Source: CopySource( src ), 
+                Expect: expct, 
+                Orders: []FieldOrderReactorTestOrder{
+                    testOrderWithIds( t1,
+                        ids[ 0 ], ids[ 1 ], ids[ 2 ], ids[ 3 ] ),
+                },
+            },
+        )
+    }
+    for _, ord := range [][]int {
+        []int{ 0, 1, 2, 3 }, // first one should be straight passthrough
+        []int{ 3, 2, 1, 0 },
+        []int{ 0, 3, 2, 1 }, 
+        []int{ 0, 2, 3, 1 },
+        []int{ 0, 1 },
+        []int{ 0, 2 },
+        []int{ 0, 3 },
+        []int{ 2, 0 },
+        []int{ 2, 1 },
+        []int{ 4, 3, 0, 1, 2 },
+        []int{ 4, 3, 2, 1, 0 },
+        []int{ 1, 4, 3, 0, 2 },
+        []int{ 1, 4, 3, 2, 0 },
+        []int{ 0, 4, 3, 2, 1 },
+        []int{ 0, 4, 3, 1, 2 },
+        []int{ 0, 1, 3, 2, 4 },
+    } {
+        addTest1( mkSrc( ord... ), mkExpct( ord... ) )
+    }
+    // Test nested orderings
+    b.AddTests(
+        &FieldOrderReactorTest{
+            Source: CopySource( 
+                []ReactorEvent{
+                    ss1, 
+                        flds[ 0 ], val1,
+                        flds[ 1 ], ss1,
+                            flds[ 2 ], 
+                                idFact.NextValueListStart(), 
+                                    val1, NewEndEvent(),
+                            flds[ 1 ], val1,
+                        NewEndEvent(),
+                    NewEndEvent(),
+                },
+            ),
+            Orders: []FieldOrderReactorTestOrder{
+                testOrderWithIds( t1, ids[ 1 ], ids[ 0 ], ids[ 2 ] ),
+            },
+            Expect: mg.MustStruct( t1,
+                ids[ 0 ], i1,
+                ids[ 1 ], mg.MustStruct( t1,
+                    ids[ 2 ], mg.MustList( i1 ),
+                    ids[ 1 ], i1,
+                ),
+            ),
+        },
+    )
+    // Test generic un-field-ordered values at the top-level as well
+    for i := 0; i < 4; i++ { addTest1( fldEvs[ i ], fldVals[ i ] ) }
+    // Test arbitrary values with no orders in play
+    addTest2 := func( expct mg.Value, src ...ReactorEvent ) {
+        b.AddTests(
+            &FieldOrderReactorTest{
+                Source: CopySource( src ),
+                Expect: expct,
+                Orders: []FieldOrderReactorTestOrder{},
+            },
+        )
+    }
+    addTest2( i1, val1 )
+    addTest2( mg.MustList(), idFact.NextValueListStart(), NewEndEvent() )
+    addTest2( 
+        mg.MustList( i1 ), idFact.NextValueListStart(), val1, NewEndEvent() )
+    addTest2( mg.MustSymbolMap(), idFact.NextMapStart(), NewEndEvent() )
+    addTest2( 
+        mg.MustSymbolMap( ids[ 0 ], i1 ), 
+        idFact.NextMapStart(), flds[ 0 ], val1, NewEndEvent(),
+    )
+    addTest2( mg.MustStruct( ss1.Type ), ss1, NewEndEvent() )
+    addTest2( 
+        mg.MustStruct( ss1.Type, ids[ 0 ], i1 ),
+        ss1, flds[ 0 ], val1, NewEndEvent(),
+    )
+}
+
+func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
+    fldId := mg.MakeTestId
+    ord := FieldOrder( 
+        []FieldOrderSpecification{
+            { fldId( 0 ), true },
+            { fldId( 1 ), true },
+            { fldId( 2 ), false },
+            { fldId( 3 ), false },
+            { fldId( 4 ), true },
+        },
+    )
+    t1 := qname( "ns1@v1/S1" )
+    ords := []FieldOrderReactorTestOrder{ { Order: ord, Type: t1 } }
+    mkSrc := func( flds []int ) []ReactorEvent {
+        evs := []interface{}{ NewStructStartEvent( t1 ) }
+        for _, fld := range flds {
+            evs = append( evs, NewFieldStartEvent( fldId( fld ) ) )
+            evs = append( evs, NewValueEvent( mg.Int32( fld ) ) )
+        }
+        return flattenEvs( append( evs, NewEndEvent() ) )
+    }
+    mkVal := func( flds []int ) *mg.Struct {
+        pairs := make( []interface{}, 0, 2 * len( flds ) )
+        for _, fld := range flds {
+            pairs = append( pairs, fldId( fld ), mg.Int32( fld ) )
+        }
+        return mg.MustStruct( t1, pairs... )
+    }
+    addSucc := func( flds ...int ) {
+        b.AddTests(
+            &FieldOrderMissingFieldsTest{
+                Orders: ords,
+                Source: CopySource( mkSrc( flds ) ),
+                Expect: mkVal( flds ),
+            },
+        )
+    }
+    addSucc( 0, 1, 4 )
+    addSucc( 4, 0, 1 )
+    addSucc( 0, 1, 3, 4 )
+    addSucc( 0, 3, 1, 4 )
+    addSucc( 0, 1, 4, 3, 2 )
+    addErr := func( missIds []int, flds ...int ) {
+        miss := make( []*mg.Identifier, len( missIds ) )
+        for i, missId := range missIds { miss[ i ] = fldId( missId ) }
+        b.AddTests(
+            &FieldOrderMissingFieldsTest{
+                Orders: ords,
+                Source: CopySource( mkSrc( flds ) ),
+                Error: mg.NewMissingFieldsError( nil, miss ),
+            },
+        )
+    }
+    addErr( []int{ 0 }, 1, 2, 3, 4 )
+    addErr( []int{ 1 }, 0, 4, 3, 2 )
+    addErr( []int{ 4 }, 3, 2, 1, 0 )
+    addErr( []int{ 0, 1 }, 4 )
+    addErr( []int{ 1, 4 }, 0 )
+    addErr( []int{ 0, 4 }, 1 )
+    addErr( []int{ 4 }, 1, 0 )
+    addErr( []int{ 1 }, 4, 3, 0, 2 )
+}
+
+func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
+    mapStart := NewMapStartEvent( mg.PointerIdNull )
+    listStart := NewListStartEvent( mg.TypeOpaqueList, mg.PointerIdNull )
+    i1 := mg.Int32( int32( 1 ) )
+    val1 := NewValueEvent( i1 )
+    id := mg.MakeTestId
+    typ := func( i int ) *mg.QualifiedTypeName {
+        return qname( fmt.Sprintf( "ns1@v1/S%d", i ) )
+    }
+    ss := func( i int ) *StructStartEvent { 
+        return NewStructStartEvent( typ( i ) ) 
+    }
+    fld := func( i int ) *FieldStartEvent { 
+        return NewFieldStartEvent( id( i ) ) 
+    }
+    p := mg.MakeTestIdPath
+    expct1 := []EventExpectation{
+        { ss( 1 ), nil },
+            { fld( 0 ), p( 0 ) },
+            { val1, p( 0 ) },
+            { fld( 1 ), p( 1 ) },
+            { mapStart, p( 1 ) },
+                { fld( 1 ), p( 1, 1 ) },
+                { val1, p( 1, 1 ) },
+                { fld( 0 ), p( 1, 0 ) },
+                { val1, p( 1, 0 ) },
+            { NewEndEvent(), p( 1 ) },
+            { fld( 2 ), p( 2 ) },
+            { listStart, p( 2 ) },
+                { val1, p( 2, "0" ) },
+                { val1, p( 2, "1" ) },
+            { NewEndEvent(), p( 2 ) },
+            { fld( 3 ), p( 3 ) },
+            { ss( 2 ), p( 3 ) },
+                { fld( 0 ), p( 3, 0 ) },
+                { val1, p( 3, 0 ) },
+                { fld( 1 ), p( 3, 1 ) },
+                { listStart, p( 3, 1 ) },
+                    { val1, p( 3, 1, "0" ) },
+                    { val1, p( 3, 1, "1" ) },
+                { NewEndEvent(), p( 3, 1 ) },
+            { NewEndEvent(), p( 3 ) },
+            { fld( 4 ), p( 4 ) },
+            { ss( 1 ), p( 4 ) },
+                { fld( 0 ), p( 4, 0 ) },
+                { val1, p( 4, 0 ) },
+                { fld( 1 ), p( 4, 1 ) },
+                { ss( 3 ), p( 4, 1 ) },
+                    { fld( 0 ), p( 4, 1, 0 ) },
+                    { val1, p( 4, 1, 0 ) },
+                    { fld( 1 ), p( 4, 1, 1 ) },
+                    { val1, p( 4, 1, 1 ) },
+                { NewEndEvent(), p( 4, 1 ) },
+                { fld( 2 ), p( 4, 2 ) },
+                { ss( 3 ), p( 4, 2 ) },
+                    { fld( 0 ), p( 4, 2, 0 ) },
+                    { val1, p( 4, 2, 0 ) },
+                    { fld( 1 ), p( 4, 2, 1 ) },
+                    { val1, p( 4, 2, 1 ) },
+                { NewEndEvent(), p( 4, 2 ) },
+                { fld( 3 ), p( 4, 3 ) },
+                { mapStart, p( 4, 3 ) },
+                    { fld( 0 ), p( 4, 3, 0 ) },
+                    { ss( 3 ), p( 4, 3, 0 ) },
+                        { fld( 0 ), p( 4, 3, 0, 0 ) },
+                        { val1, p( 4, 3, 0, 0 ) },
+                        { fld( 1 ), p( 4, 3, 0, 1 ) },
+                        { val1, p( 4, 3, 0, 1 ) },
+                    { NewEndEvent(), p( 4, 3, 0 ) },
+                    { fld( 1 ), p( 4, 3, 1 ) },
+                    { ss( 3 ), p( 4, 3, 1 ) },
+                        { fld( 0 ), p( 4, 3, 1, 0 ) },
+                        { val1, p( 4, 3, 1, 0 ) },
+                        { fld( 1 ), p( 4, 3, 1, 1 ) },
+                        { val1, p( 4, 3, 1, 1 ) },
+                    { NewEndEvent(), p( 4, 3, 1 ) },
+                { NewEndEvent(), p( 4, 3 ) },
+                { fld( 4 ), p( 4, 4 ) },
+                { listStart, p( 4, 4 ) },
+                    { ss( 3 ), p( 4, 4, "0" ) },
+                        { fld( 0 ), p( 4, 4, "0", 0 ) },
+                        { val1, p( 4, 4, "0", 0 ) },
+                        { fld( 1 ), p( 4, 4, "0", 1 ) },
+                        { val1, p( 4, 4, "0", 1 ) },
+                    { NewEndEvent(), p( 4, 4, "0" ) },
+                    { ss( 3 ), p( 4, 4, "1" ) },
+                        { fld( 0 ), p( 4, 4, "1", 0 ) },
+                        { val1, p( 4, 4, "1", 0 ) },
+                        { fld( 1 ), p( 4, 4, "1", 1 ) },
+                        { val1, p( 4, 4, "1", 1 ) },
+                    { NewEndEvent(), p( 4, 4, "1" ) },
+                { NewEndEvent(), p( 4, 4 ) },
+            { NewEndEvent(), p( 4 ) },
+        { NewEndEvent(), nil },
+    }
+    ords1 := []FieldOrderReactorTestOrder{
+        testOrderWithIds( ss( 1 ).Type,
+            id( 0 ), id( 1 ), id( 2 ), id( 3 ), id( 4 ) ),
+        testOrderWithIds( ss( 2 ).Type, id( 0 ), id( 1 ) ),
+        testOrderWithIds( ss( 3 ).Type, id( 0 ), id( 1 ) ),
+    }
+    evs := [][]ReactorEvent{
+        []ReactorEvent{ val1 },
+        []ReactorEvent{ 
+            mapStart, 
+                fld( 1 ), val1, fld( 0 ), val1, NewEndEvent() },
+        []ReactorEvent{ listStart, val1, val1, NewEndEvent() },
+        []ReactorEvent{ 
+            ss( 2 ), 
+                fld( 0 ), val1, 
+                fld( 1 ), listStart, val1, val1, NewEndEvent(),
+            NewEndEvent(),
+        },
+        // val for f4 is nested and has nested ss2 instances that are in varying
+        // need of reordering
+        []ReactorEvent{ 
+            ss( 1 ),
+                fld( 0 ), val1,
+                fld( 4 ), listStart,
+                    ss( 3 ),
+                        fld( 0 ), val1,
+                        fld( 1 ), val1,
+                    NewEndEvent(),
+                    ss( 3 ),
+                        fld( 1 ), val1,
+                        fld( 0 ), val1,
+                    NewEndEvent(),
+                NewEndEvent(),
+                fld( 2 ), ss( 3 ),
+                    fld( 1 ), val1,
+                    fld( 0 ), val1,
+                NewEndEvent(),
+                fld( 3 ), mapStart,
+                    fld( 0 ), ss( 3 ),
+                        fld( 1 ), val1,
+                        fld( 0 ), val1,
+                    NewEndEvent(),
+                    fld( 1 ), ss( 3 ),
+                        fld( 0 ), val1,
+                        fld( 1 ), val1,
+                    NewEndEvent(),
+                NewEndEvent(),
+                fld( 1 ), ss( 3 ),
+                    fld( 0 ), val1,
+                    fld( 1 ), val1,
+                NewEndEvent(),
+            NewEndEvent(),
+        },
+    }
+    mkSrc := func( ord ...int ) []ReactorEvent {
+        res := []ReactorEvent{ ss( 1 ) }
+        for _, i := range ord {
+            res = append( res, fld( i ) )
+            res = append( res, evs[ i ]... )
+        }
+        return append( res, NewEndEvent() )
+    }
+    for _, ord := range [][]int{
+        []int{ 0, 1, 2, 3, 4 },
+        []int{ 4, 3, 2, 1, 0 },
+        []int{ 2, 4, 0, 3, 1 },
+    } {
+        b.AddTests(
+            &FieldOrderPathTest{
+                Source: CopySource( mkSrc( ord... ) ),
+                Expect: expct1,
+                Orders: ords1,
+            },
+        )
+    }
+    b.AddTests(
+        &FieldOrderPathTest{
+            Source: CopySource(
+                []ReactorEvent{
+                    ss( 1 ),
+                        fld( 0 ), val1,
+                        fld( 7 ), val1,
+                        fld( 2 ), val1,
+                        fld( 1 ), val1,
+                    NewEndEvent(),
+                },
+            ),
+            Expect: []EventExpectation{
+                { ss( 1 ), nil },
+                { fld( 0 ), p( 0 ) },
+                { val1, p( 0 ) },
+                { fld( 7 ), p( 7 ) },
+                { val1, p( 7 ) },
+                { fld( 1 ), p( 1 ) },
+                { val1, p( 1 ) },
+                { fld( 2 ), p( 2 ) },
+                { val1, p( 2 ) },
+                { NewEndEvent(), nil },
+            },
+            Orders: []FieldOrderReactorTestOrder{
+                testOrderWithIds( ss( 1 ).Type, id( 0 ), id( 1 ), id( 2 ) ),
+            },
+        },
+    )
+    // Regression for bug fixed in previous commit (f7fa84122047)
+    b.AddTests(
+        &FieldOrderPathTest{
+            Source: CopySource(
+                []ReactorEvent{ ss( 1 ), fld( 1 ), val1, NewEndEvent() } ),
+            Expect: []EventExpectation{
+                { ss( 1 ), nil },
+                { fld( 1 ), p( 1 ) },
+                { val1, p( 1 ) },
+                { NewEndEvent(), nil },
+            },
+            Orders: []FieldOrderReactorTestOrder{
+                testOrderWithIds( ss( 1 ).Type, id( 0 ), id( 1 ), id( 2 ) ),
+            },
+        },
+    )
+}
+
+func initFieldOrderReactorTests( b *ReactorTestSetBuilder ) {
+    initFieldOrderValueTests( b )
+    initFieldOrderMissingFieldTests( b )
+    initFieldOrderPathTests( b )
+}
+
+func initRequestTests( b *ReactorTestSetBuilder ) {
+    id := mg.MustIdentifier
+    idFact := NewTestPointerIdFactory()
+    ns1 := mg.MustNamespace( "ns1@v1" )
+    svc1 := id( "service1" )
+    op1 := id( "op1" )
+    params1 := mg.MustSymbolMap( "f1", int32( 1 ) )
+    authQn := qname( "ns1@v1/Auth1" )
+    auth1 := mg.MustStruct( authQn, "f1", int32( 1 ) )
+    evFldNs := NewFieldStartEvent( mg.IdNamespace )
+    evFldSvc := NewFieldStartEvent( mg.IdService )
+    evFldOp := NewFieldStartEvent( mg.IdOperation )
+    evFldParams := NewFieldStartEvent( mg.IdParameters )
+    evFldAuth := NewFieldStartEvent( mg.IdAuthentication )
+    evFldF1 := NewFieldStartEvent( id( "f1" ) )
+    evReqTyp := NewStructStartEvent( mg.QnameRequest )
+    evNs1 := NewValueEvent( mg.String( ns1.ExternalForm() ) )
+    evSvc1 := NewValueEvent( mg.String( svc1.ExternalForm() ) )
+    evOp1 := NewValueEvent( mg.String( op1.ExternalForm() ) )
+    i32Val1 := NewValueEvent( mg.Int32( 1 ) )
+    evParams1 := []ReactorEvent{ 
+        idFact.NextMapStart(), evFldF1, i32Val1, NewEndEvent() }
+    evAuth1 := []ReactorEvent{ 
+        NewStructStartEvent( authQn ), evFldF1, i32Val1, NewEndEvent() }
+    addSucc1 := func( evs ...interface{} ) {
+        b.AddTests(
+            &RequestReactorTest{
+                Source: CopySource( flattenEvs( evs... ) ),
+                Namespace: ns1,
+                Service: svc1,
+                Operation: op1,
+                Parameters: params1,
+                Authentication: auth1,
+            },
+        )
+    }
+    fullOrderedReq1Flds := []interface{}{
+        evFldNs, evNs1,
+        evFldSvc, evSvc1,
+        evFldOp, evOp1,
+        evFldAuth, evAuth1,
+        evFldParams, evParams1,
+    }
+    addSucc1( evReqTyp, fullOrderedReq1Flds, NewEndEvent() )
+    addSucc1( idFact.NextMapStart(), fullOrderedReq1Flds, NewEndEvent() )
+    addSucc1( evReqTyp,
+        evFldAuth, evAuth1,
+        evFldOp, evOp1,
+        evFldParams, evParams1,
+        evFldNs, evNs1,
+        evFldSvc, evSvc1,
+        NewEndEvent(),
+    )
+    b.AddTests(
+        &RequestReactorTest{
+            Source: CopySource(
+                flattenEvs( evReqTyp,
+                    evFldNs, evNs1,
+                    evFldSvc, evSvc1,
+                    evFldOp, evOp1,
+                    evFldAuth, i32Val1,
+                    evFldParams, evParams1,
+                    NewEndEvent(),
+                ),
+            ),
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Authentication: mg.Int32( 1 ),
+            Parameters: params1,
+        },
+    )
+    mkReq1 := func( params, auth mg.Value ) *mg.Struct {
+        pairs := []interface{}{ 
+            mg.IdNamespace, mg.NamespaceAsBytes( ns1 ),
+            mg.IdService, mg.IdentifierAsBytes( svc1 ),
+            mg.IdOperation, mg.IdentifierAsBytes( op1 ),
+        }
+        if params != nil { pairs = append( pairs, mg.IdParameters, params ) }
+        if auth != nil { pairs = append( pairs, mg.IdAuthentication, auth ) }
+        return mg.MustStruct( mg.QnameRequest, pairs... )
+    }
+    addSucc2 := func( src interface{}, authExpct mg.Value ) {
+        b.AddTests(
+            &RequestReactorTest{
+                Namespace: ns1,
+                Service: svc1,
+                Operation: op1,
+                Parameters: mg.EmptySymbolMap(),
+                Authentication: authExpct,
+                Source: src,
+            },
+        )
+    } 
+    // check implicit params with(out) auth and using undetermined event
+    // ordering
+    addSucc2( mkReq1( nil, nil ), nil )
+    addSucc2( mkReq1( nil, auth1 ), auth1 )
+    // check implicit params with and without auth and with need for reordering
+    addSucc2(
+        flattenEvs( evReqTyp, 
+            evFldSvc, evSvc1, 
+            evFldOp, evOp1, 
+            evFldNs, evNs1,
+            NewEndEvent(),
+        ),
+        nil,
+    )
+    addSucc2(
+        flattenEvs( evReqTyp,
+            evFldSvc, evSvc1,
+            evFldAuth, evAuth1,
+            evFldOp, evOp1,
+            evFldNs, evNs1,
+            NewEndEvent(),
+        ),
+        auth1,
+    )
+    addPathSucc := func( 
+        paramsIn, paramsExpct *mg.SymbolMap, paramEvs []EventExpectation,
+        auth mg.Value, authEvs []EventExpectation ) {
+        t := &RequestReactorTest{
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Parameters: paramsExpct,
+            ParameterEvents: paramEvs,
+            Authentication: auth,
+            AuthenticationEvents: authEvs,
+        }
+        pairs := []interface{}{
+            mg.IdNamespace, ns1.ExternalForm(),
+            mg.IdService, svc1.ExternalForm(),
+            mg.IdOperation, op1.ExternalForm(),
+        }
+        if paramsIn != nil { 
+            pairs = append( pairs, mg.IdParameters, paramsIn ) 
+        }
+        if auth != nil { pairs = append( pairs, mg.IdAuthentication, auth ) }
+        t.Source = mg.MustStruct( mg.QnameRequest, pairs... )
+        b.AddTests( t )
+    }
+    pathParams := objpath.RootedAt( mg.IdParameters )
+    evsEmptyParams := []EventExpectation{ 
+        { idFact.NextMapStart(), pathParams }, { NewEndEvent(), pathParams } }
+    pathAuth := objpath.RootedAt( mg.IdAuthentication )
+    addPathSucc( nil, mg.MustSymbolMap(), evsEmptyParams, nil, nil )
+    addPathSucc( 
+        mg.MustSymbolMap(), mg.MustSymbolMap(), evsEmptyParams, nil, nil )
+    idF1 := id( "f1" )
+    addPathSucc(
+        mg.MustSymbolMap( idF1, mg.Int32( 1 ) ),
+        mg.MustSymbolMap( idF1, mg.Int32( 1 ) ),
+        []EventExpectation{
+            { idFact.NextMapStart(), pathParams },
+            { evFldF1, pathParams.Descend( idF1 ) },
+            { i32Val1, pathParams.Descend( idF1 ) },
+            { NewEndEvent(), pathParams },
+        },
+        nil, nil,
+    )
+    addPathSucc( 
+        nil, mg.MustSymbolMap(), evsEmptyParams,
+        mg.Int32( 1 ), []EventExpectation{ { i32Val1, pathAuth } },
+    )
+    addPathSucc(
+        nil, mg.MustSymbolMap(), evsEmptyParams,
+        auth1, []EventExpectation{
+            { NewStructStartEvent( authQn ), pathAuth },
+            { evFldF1, pathAuth.Descend( idF1 ) },
+            { i32Val1, pathAuth.Descend( idF1 ) },
+            { NewEndEvent(), pathAuth },
+        },
+    )
+    writeMgIo := func( f func( w *mg.BinWriter ) ) mg.Buffer {
+        bb := &bytes.Buffer{}
+        w := mg.NewWriter( bb )
+        f( w )
+        return mg.Buffer( bb.Bytes() )
+    }
+    nsBuf := func( ns *mg.Namespace ) mg.Buffer {
+        return writeMgIo( func( w *mg.BinWriter ) { w.WriteNamespace( ns ) } )
+    }
+    idBuf := func( id *mg.Identifier ) mg.Buffer {
+        return writeMgIo( func( w *mg.BinWriter ) { w.WriteIdentifier( id ) } )
+    }
+    b.AddTests(
+        &RequestReactorTest{
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Parameters: mg.EmptySymbolMap(),
+            Source: mg.MustStruct( mg.QnameRequest,
+                mg.IdNamespace, nsBuf( ns1 ),
+                mg.IdService, idBuf( svc1 ),
+                mg.IdOperation, idBuf( op1 ),
+            ),
+        },
+    )
+    b.AddTests(
+        &RequestReactorTest{
+            Source: mg.MustStruct( "ns1@v1/S1" ),
+            Error: mg.NewTypeCastError(
+                mg.TypeRequest, mg.MustTypeReference( "ns1@v1/S1" ), nil ),
+        },
+    )
+    createReqVcErr := func( 
+        val interface{}, 
+        path objpath.PathNode, 
+        msg string ) *RequestReactorTest {
+
+        return &RequestReactorTest{
+            Source: mg.MustValue( val ),
+            Error: mg.NewValueCastError( path, msg ),
+        }
+    }
+    addReqVcErr := func( val interface{}, path objpath.PathNode, msg string ) {
+        b.AddTests( createReqVcErr( val, path, msg ) )
+    }
+    addReqVcErr(
+        mg.MustSymbolMap( mg.IdNamespace, true ), 
+        objpath.RootedAt( mg.IdNamespace ),
+        "invalid value: mingle:core@v1/Boolean",
+    )
+    addReqVcErr(
+        mg.MustSymbolMap( mg.IdNamespace, mg.MustSymbolMap() ),
+        objpath.RootedAt( mg.IdNamespace ),
+        "invalid value: mingle:core@v1/SymbolMap",
+    )
+    addReqVcErr(
+        mg.MustSymbolMap( mg.IdNamespace, mg.MustStruct( "ns1@v1/S1" ) ),
+        objpath.RootedAt( mg.IdNamespace ),
+        "invalid value: ns1@v1/S1",
+    )
+    addReqVcErr(
+        mg.MustSymbolMap( mg.IdNamespace, mg.MustList() ),
+        objpath.RootedAt( mg.IdNamespace ),
+        "invalid value: mingle:core@v1/Value?*",
+    )
+    func() {
+        test := createReqVcErr(
+            mg.MustSymbolMap( 
+                mg.IdNamespace, ns1.ExternalForm(), mg.IdService, true ),
+            objpath.RootedAt( mg.IdService ),
+            "invalid value: mingle:core@v1/Boolean",
+        )
+        test.Namespace = ns1
+        b.AddTests( test )
+    }()
+    func() {
+        test := createReqVcErr(
+            mg.MustSymbolMap( 
+                mg.IdNamespace, ns1.ExternalForm(),
+                mg.IdService, svc1.ExternalForm(),
+                mg.IdOperation, true,
+            ),
+            objpath.RootedAt( mg.IdOperation ),
+            "invalid value: mingle:core@v1/Boolean",
+        )
+        test.Namespace, test.Service = ns1, svc1
+        b.AddTests( test )
+    }()
+    b.AddTests(
+        &RequestReactorTest{
+            Source: mg.MustSymbolMap(
+                mg.IdNamespace, ns1.ExternalForm(),
+                mg.IdService, svc1.ExternalForm(),
+                mg.IdOperation, op1.ExternalForm(),
+                mg.IdParameters, true,
+            ),
+            Namespace: ns1,
+            Service: svc1,
+            Operation: op1,
+            Error: mg.NewTypeCastError(
+                mg.TypeSymbolMap,
+                mg.TypeBoolean,
+                objpath.RootedAt( mg.IdParameters ),
+            ),
+        },
+    )
+    // Check that errors are bubbled up from
+    // *BinWriter.Read(Identfier|Namespace) when parsing invalid
+    // namespace/service/operation Buffers
+    createBinRdErr := func( path *mg.Identifier, msg string, 
+        pairs ...interface{} ) *RequestReactorTest {
+
+        return createReqVcErr(
+            mg.MustSymbolMap( pairs... ), objpath.RootedAt( path ), msg )
+    }
+    addBinRdErr := func( 
+        path *mg.Identifier, msg string, pairs ...interface{} ) {
+
+        b.AddTests( createBinRdErr( path, msg, pairs... ) )
+    }
+    badBuf := []byte{ 0x0f }
+    addBinRdErr( 
+        mg.IdNamespace, 
+        "Expected type code 0x02 but got 0x0f",
+        mg.IdNamespace, badBuf )
+    func() {
+        test := createBinRdErr(
+            mg.IdService, 
+            "Expected type code 0x01 but got 0x0f",
+            mg.IdNamespace, ns1.ExternalForm(), 
+            mg.IdService, badBuf,
+        )
+        test.Namespace = ns1
+        b.AddTests( test )
+    }()
+    func() {
+        test := createBinRdErr(
+            mg.IdOperation, 
+            "Expected type code 0x01 but got 0x0f",
+            mg.IdNamespace, ns1.ExternalForm(),
+            mg.IdService, svc1.ExternalForm(),
+            mg.IdOperation, badBuf,
+        )
+        test.Namespace, test.Service = ns1, svc1
+        b.AddTests( test )
+    }()
+    addReqVcErr(
+        mg.MustSymbolMap( mg.IdNamespace, "ns1::ns2" ),
+        objpath.RootedAt( mg.IdNamespace ),
+        "[<input>, line 1, col 5]: Illegal start of identifier part: \":\" " +
+        "(U+003A)",
+    )
+    func() {
+        test := createReqVcErr(
+            mg.MustSymbolMap( 
+                mg.IdNamespace, ns1.ExternalForm(), mg.IdService, "2bad" ),
+            objpath.RootedAt( mg.IdService ),
+            "[<input>, line 1, col 1]: Illegal start of identifier part: " +
+            "\"2\" (U+0032)",
+        )
+        test.Namespace = ns1
+        b.AddTests( test )
+    }()
+    func() {
+        test := createReqVcErr(
+            mg.MustSymbolMap(
+                mg.IdNamespace, ns1.ExternalForm(),
+                mg.IdService, svc1.ExternalForm(),
+                mg.IdOperation, "2bad",
+            ),
+            objpath.RootedAt( mg.IdOperation ),
+            "[<input>, line 1, col 1]: Illegal start of identifier part: " +
+            "\"2\" (U+0032)",
+        )
+        test.Namespace, test.Service = ns1, svc1
+        b.AddTests( test )
+    }()
+    t1Bad := qname( "foo@v1/Request" )
+    b.AddTests(
+        &RequestReactorTest{
+            Source: mg.MustStruct( t1Bad ),
+            Error: mg.NewTypeCastError(
+                mg.TypeRequest, t1Bad.AsAtomicType(), nil ),
+        },
+    )
+    // Not exhaustively re-testing all ways a field could be missing (assume for
+    // now that field order tests will handle that). Instead, we are just
+    // getting basic coverage that the field order supplied by the request
+    // reactor is in fact being set up correctly and that we have set up the
+    // right required fields.
+    b.AddTests(
+        &RequestReactorTest{
+            Source: mg.MustSymbolMap( 
+                mg.IdNamespace, ns1.ExternalForm(),
+                mg.IdOperation, op1.ExternalForm(),
+            ),
+            Namespace: ns1,
+            Error: mg.NewMissingFieldsError( 
+                nil, []*mg.Identifier{ mg.IdService } ),
+        },
+    )
+}
+
 //type ResponseReactorTest struct {
 //    In mg.Value
 //    ResVal mg.Value
@@ -1562,12 +1400,12 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //            nil, "response has both a result and an error value" ),
 //    )
 //}
-//
-//func initServiceTests() {
-//    initRequestTests()
+
+func initServiceTests( b *ReactorTestSetBuilder ) {
+    initRequestTests( b )
 //    initResponseTests()
-//}
-//
+}
+
 //type CastReactorTest struct {
 //    In interface{}
 //    Expect mg.Value
@@ -1655,7 +1493,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //func ( t *crtInit ) createTcError0(
 //    in interface{}, 
 //    typExpct, typAct, callTyp TypeReferenceInitializer, 
-//    p idPath ) *CastReactorTest {
+//    p objpath.PathNode ) *CastReactorTest {
 //
 //    return &CastReactorTest{
 //        In: MustValue( in ),
@@ -1671,7 +1509,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //func ( t *crtInit ) addTcError0(
 //    in interface{}, 
 //    typExpct, typAct, callTyp TypeReferenceInitializer, 
-//    p idPath ) {
+//    p objpath.PathNode ) {
 //
 //    t.addCrtDefault( t.createTcError0( in, typExpct, typAct, callTyp, p ) )
 //}
@@ -1726,7 +1564,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //func ( t *crtInit ) createVcError0(
 //    val interface{}, 
 //    typ TypeReferenceInitializer, 
-//    path idPath, 
+//    path objpath.PathNode, 
 //    msg string ) *CastReactorTest {
 //    return &CastReactorTest{
 //        In: MustValue( val ),
@@ -1737,7 +1575,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //    
 //
 //func ( t *crtInit ) addVcError0( 
-//    val interface{}, typ TypeReferenceInitializer, path idPath, msg string ) {
+//    val interface{}, typ TypeReferenceInitializer, path objpath.PathNode, msg string ) {
 //    t.addCrtDefault( t.createVcError0( val, typ, path, msg ) )
 //}
 //
@@ -1778,7 +1616,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //    AddStdReactorTests(
 //        &CastReactorTest{
 //            Expect: valExpct,
-//            In: mg.CopySource( evs ),
+//            In: CopySource( evs ),
 //            Type: asTypeReference( typExpct ),
 //        },
 //    )
@@ -1792,7 +1630,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //    expct, act := asTypeReference( typExpct ), asTypeReference( typAct )
 //    AddStdReactorTests(
 //        &CastReactorTest{
-//            In: mg.CopySource( evs ),
+//            In: CopySource( evs ),
 //            Type: expct,
 //            Path: path,
 //            Err: NewValueCastErrorf( crtPathDefault,
@@ -2331,7 +2169,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //    hv12 := mg.NewHeapValue( mg.Int64( int64( 12 ) ) )
 //    AddStdReactorTests(
 //        &CastReactorTest{
-//            In: mg.CopySource(
+//            In: CopySource(
 //                []ReactorEvent{
 //                    NewStructStartEvent( qn( 1 ) ),
 //                        fldEv( 0 ),
@@ -2418,13 +2256,12 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
 //func initCastReactorTests() { ( &crtInit{} ).call() }
 
 func initReactorTests( b *ReactorTestSetBuilder ) {
-//    StdReactorTests = []interface{}{}
     initValueBuildReactorTests( b )
-//    initStructuralReactorTests()
-//    initPointerReferenceCheckTests()
-//    initEventPathTests()
-//    initFieldOrderReactorTests()
-//    initServiceTests()
+    initStructuralReactorTests( b )
+    initPointerReferenceCheckTests( b )
+    initEventPathTests( b )
+    initFieldOrderReactorTests( b )
+    initServiceTests( b )
 //    initCastReactorTests()
 }
 
@@ -2554,38 +2391,6 @@ func init() { AddTestInitializer( initReactorTests ) }
 //    src interface{}, rct ReactorEventProcessor, a assert.Failer ) {
 //
 //    if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
-//}
-//
-//type eventPathCheckReactor struct {
-//    a *assert.PathAsserter
-//    eeAssert *assert.PathAsserter
-//    expct []EventExpectation
-//    idx int
-//    ignorePointerIds bool
-//}
-//
-//func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
-//    r.a.Truef( r.idx < len( r.expct ), "unexpected event: %v", ev )
-//    ee := r.expct[ r.idx ]
-//    r.idx++
-//    ee.Event.SetPath( ee.Path )
-//    EqualEvents( ee.Event, ev, r.ignorePointerIds, r.eeAssert )
-//    r.eeAssert = r.eeAssert.Next()
-//    return nil
-//}
-//
-//func ( r *eventPathCheckReactor ) Complete() {
-//    r.a.Equalf( r.idx, len( r.expct ), "not all events were seen" )
-//}
-//
-//func NewEventPathCheckReactor( 
-//    expct []EventExpectation, a *assert.PathAsserter ) *eventPathCheckReactor {
-//
-//    return &eventPathCheckReactor{ 
-//        expct: expct, 
-//        a: a,
-//        eeAssert: a.Descend( "expct" ).StartList(),
-//    }
 //}
 //
 //type ReactorTestCall struct {

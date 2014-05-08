@@ -1140,7 +1140,7 @@ var (
     IdOperation *Identifier
     IdParameters *Identifier
     IdAuthentication *Identifier
-    svcReqFieldOrder FieldOrder // initialized in same scope as Ids above
+    ServiceRequestFieldOrder FieldOrder // initialized in same scope as ids 
     IdResult *Identifier
     IdError *Identifier
     QnameTypeReference *QualifiedTypeName
@@ -1215,7 +1215,7 @@ func init() {
     IdOperation = id( "operation" )
     IdParameters = id( "parameters" )
     IdAuthentication = id( "authentication" )
-    svcReqFieldOrder = FieldOrder(
+    ServiceRequestFieldOrder = FieldOrder(
         []FieldOrderSpecification{
             { IdNamespace, true },
             { IdService, true },
