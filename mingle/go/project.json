@@ -4,7 +4,6 @@
     "packages": [ 
         "mingle", 
         "mingle/reactor",
-        "mingle/types",
         "mingle/parser/lexer", 
         "mingle/parser/loc",
         "mingle/parser/syntax"

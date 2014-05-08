@@ -3,6 +3,8 @@ package mingle
 import (
     "bitgirder/assert"
     "bitgirder/objpath"
+    "fmt"
+    "strconv"
 )
 
 type CyclicTestValues struct {
@@ -191,3 +193,88 @@ func atomicRef( s string ) *AtomicTypeReference {
 }
 
 var id = MustIdentifier
+
+func MakeTestId( i int ) *Identifier {
+    return MustIdentifier( fmt.Sprintf( "f%d", i ) )
+}
+
+func mustInt( s string ) int {
+    res, err := strconv.Atoi( s )
+    if ( err != nil ) { panic( err ) }
+    return res
+}
+
+func startTestIdPath( elt interface{} ) objpath.PathNode {
+    switch v := elt.( type ) {
+    case int: return objpath.RootedAt( MakeTestId( v ) )
+    case string: return objpath.RootedAtList().SetIndex( mustInt( v ) )
+    }
+    panic( libErrorf( "unhandled elt: %T", elt ) )
+}
+
+func MakeTestIdPath( elts ...interface{} ) objpath.PathNode { 
+    if len( elts ) == 0 { return nil }
+    res := startTestIdPath( elts[ 0 ] )
+    for i, e := 1, len( elts ); i < e; i++ {
+        switch v := elts[ i ].( type ) {
+        case int: res = res.Descend( MakeTestId( v ) ) 
+        case string: res = res.StartList().SetIndex( mustInt( v ) )
+        default: panic( libErrorf( "unhandled elt: %T", v ) )
+        }
+    }
+    return res
+}
+
+type CastErrorAssert struct {
+    ErrExpect, ErrAct error
+    *assert.PathAsserter
+}
+
+func ( cea CastErrorAssert ) FailActErrType() {
+    cea.Fatalf(
+        "Expected error of type %T but got %T: %s",
+        cea.ErrExpect, cea.ErrAct, cea.ErrAct )
+}
+
+// Returns a path asserter that can be used further
+func ( cea CastErrorAssert ) assertValueError( 
+    expct, act ValueError ) *assert.PathAsserter {
+    a := cea.Descend( "Err" )
+    a.Descend( "Error()" ).Equal( expct.Error(), act.Error() )
+    a.Descend( "Message()" ).Equal( expct.Message(), act.Message() )
+    a.Descend( "Location()" ).Equal( expct.Location(), act.Location() )
+    return a
+}
+
+func ( cea CastErrorAssert ) assertVcError() {
+    if act, ok := cea.ErrAct.( *ValueCastError ); ok {
+        cea.assertValueError( cea.ErrExpect.( *ValueCastError ), act )
+    } else { cea.FailActErrType() }
+}
+
+func ( cea CastErrorAssert ) assertMissingFieldsError() {
+    if act, ok := cea.ErrAct.( *MissingFieldsError ); ok {
+        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
+    } else { cea.FailActErrType() }
+}
+
+func ( cea CastErrorAssert ) assertUnrecognizedFieldError() {
+    if act, ok := cea.ErrAct.( *UnrecognizedFieldError ); ok {
+        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
+    } else { cea.FailActErrType() }
+}
+
+func ( cea CastErrorAssert ) Call() {
+    switch cea.ErrExpect.( type ) {
+    case nil: cea.Fatal( cea.ErrAct )
+    case *ValueCastError: cea.assertVcError()
+    case *MissingFieldsError: cea.assertMissingFieldsError()
+    case *UnrecognizedFieldError: cea.assertUnrecognizedFieldError()
+    default: cea.Fatalf( "Unhandled Err type: %T", cea.ErrExpect )
+    }
+}
+
+func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
+    ca := CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
+    ca.Call()
+}

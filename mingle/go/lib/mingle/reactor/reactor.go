@@ -146,7 +146,7 @@ func NewEndEvent() *EndEvent {
 func EventToString( ev ReactorEvent ) string {
     pairs := [][]string{ { "type", fmt.Sprintf( "%T", ev ) } }
     switch v := ev.( type ) {
-    case *mg.ValueEvent: 
+    case *ValueEvent: 
         pairs = append( pairs, []string{ "value", mg.QuoteValue( v.Val ) } )
     case *StructStartEvent:
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )

@@ -1,6 +1,7 @@
-package mingle
+package reactor
 
 import (
+    mg "mingle"
     "testing"
     "bitgirder/objpath"
     "bitgirder/assert"
@@ -8,8 +9,8 @@ import (
 
 type serviceReactorImplTest struct {
     *assert.PathAsserter
-    failOn *Identifier
-    in Value
+    failOn *mg.Identifier
+    in mg.Value
 }
 
 func ( t serviceReactorImplTest ) Error() string { 
@@ -17,29 +18,29 @@ func ( t serviceReactorImplTest ) Error() string {
 }
 
 func ( t serviceReactorImplTest ) Namespace( 
-    ns *Namespace, path objpath.PathNode ) error {
+    ns *mg.Namespace, path objpath.PathNode ) error {
 
     return nil
 }
 
 func ( t serviceReactorImplTest ) Service( 
-    svc *Identifier, path objpath.PathNode ) error {
+    svc *mg.Identifier, path objpath.PathNode ) error {
 
     return nil
 }
 
 func ( t serviceReactorImplTest ) Operation( 
-    op *Identifier, path objpath.PathNode ) error {
+    op *mg.Identifier, path objpath.PathNode ) error {
 
     return nil
 }
 
 func ( t serviceReactorImplTest ) makeErr( path objpath.PathNode ) error {
-    return NewValueCastError( path, "test-error" )
+    return mg.NewValueCastError( path, "test-error" )
 }
 
 func ( t serviceReactorImplTest ) getProcessor(
-    path objpath.PathNode, id *Identifier ) ( ReactorEventProcessor, error ) {
+    path objpath.PathNode, id *mg.Identifier ) ( ReactorEventProcessor, error ) {
 
     if t.failOn.Equals( id ) { return nil, t.makeErr( path ) }
     return DiscardProcessor, nil
@@ -48,44 +49,44 @@ func ( t serviceReactorImplTest ) getProcessor(
 func ( t serviceReactorImplTest ) GetAuthenticationReactor( 
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
-    return t.getProcessor( path, IdAuthentication )
+    return t.getProcessor( path, mg.IdAuthentication )
 }
 
 func ( t serviceReactorImplTest ) GetParametersReactor( 
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
-    return t.getProcessor( path, IdParameters )
+    return t.getProcessor( path, mg.IdParameters )
 }
 
 func ( t serviceReactorImplTest ) GetErrorReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
-    return t.getProcessor( path, IdError )
+    return t.getProcessor( path, mg.IdError )
 }
 
 func ( t serviceReactorImplTest ) GetResultReactor(
     path objpath.PathNode ) ( ReactorEventProcessor, error ) {
 
-    return t.getProcessor( path, IdResult )
+    return t.getProcessor( path, mg.IdResult )
 }
 
 func ( t serviceReactorImplTest ) callWith( rct ReactorEventProcessor ) {
     pip := InitReactorPipeline( rct )
     err := VisitValue( t.in, pip )
-    errExpct := NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" )
+    errExpct := mg.NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" )
     t.EqualErrors( errExpct, err )
 }
 
 func TestRequestReactorImplErrors( t *testing.T ) {
     a := assert.NewPathAsserter( t )
-    in := MustStruct( QnameRequest,
+    in := mg.MustStruct( mg.QnameRequest,
         "namespace", "ns1@v1",
         "service", "svc1",
         "operation", "op1",
-        "parameters", MustSymbolMap( "p1", 1 ),
+        "parameters", mg.MustSymbolMap( "p1", 1 ),
         "authentication", 1,
     )
-    for _, failOn := range []*Identifier{ IdAuthentication, IdParameters } {
+    for _, failOn := range []*mg.Identifier{ mg.IdAuthentication, mg.IdParameters } {
         test := serviceReactorImplTest{ 
             PathAsserter: a.Descend( failOn ), 
             failOn: failOn,
@@ -96,7 +97,7 @@ func TestRequestReactorImplErrors( t *testing.T ) {
 }
 
 func TestResponseReactorImplErrors( t *testing.T ) {
-    chk := func( failOn *Identifier, in Value ) {
+    chk := func( failOn *mg.Identifier, in mg.Value ) {
         test := serviceReactorImplTest{
             PathAsserter: assert.NewPathAsserter( t ).Descend( failOn ),
             failOn: failOn,
@@ -104,6 +105,6 @@ func TestResponseReactorImplErrors( t *testing.T ) {
         }
         test.callWith( NewResponseReactor( test ) )
     }
-    chk( IdResult, MustSymbolMap( "result", 1 ) )
-    chk( IdError, MustSymbolMap( "error", 1 ) )
+    chk( mg.IdResult, mg.MustSymbolMap( "result", 1 ) )
+    chk( mg.IdError, mg.MustSymbolMap( "error", 1 ) )
 }

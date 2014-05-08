@@ -4,7 +4,7 @@ import (
     mg "mingle"
     "bitgirder/objpath"
     "bitgirder/pipeline"
-    "bytes"
+//    "bytes"
 //    "log"
 )
 
@@ -205,10 +205,9 @@ func ( sr *RequestReactor ) getFieldValueForBuffer(
     path objpath.PathNode,
     reqFld requestFieldType ) ( res interface{}, err error ) {
 
-    bin := mg.NewReader( bytes.NewReader( buf ) )
     switch reqFld {
-    case reqFieldNs: res, err = bin.ReadNamespace()
-    case reqFieldSvc, reqFieldOp: res, err = bin.ReadIdentifier()
+    case reqFieldNs: res, err = mg.NamespaceFromBytes( buf )
+    case reqFieldSvc, reqFieldOp: res, err = mg.IdentifierFromBytes( buf )
     default:
         panic( libErrorf( "Unhandled req fld type for buffer: %d", reqFld ) )
     }
@@ -220,8 +219,10 @@ func ( sr *RequestReactor ) getFieldValue(
     ve *ValueEvent, reqFld requestFieldType ) ( interface{}, error ) {
     path := ve.GetPath()
     switch v := ve.Val.( type ) {
-    case mg.String: return sr.getFieldValueForString( string( v ), path, reqFld )
-    case mg.Buffer: return sr.getFieldValueForBuffer( []byte( v ), path, reqFld )
+    case mg.String: 
+        return sr.getFieldValueForString( string( v ), path, reqFld )
+    case mg.Buffer: 
+        return sr.getFieldValueForBuffer( []byte( v ), path, reqFld )
     }
     return nil, sr.invalidValueErr( path, mg.TypeOf( ve.Val ).ExternalForm() )
 }
