@@ -153,7 +153,7 @@ func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
     listStart := func() *ListStartEvent {
         return NewListStartEvent( mg.TypeOpaqueList, mg.PointerIdNull )
     }
-    b.AddTest(
+    b.AddTests(
         &ValueBuildTest{
             Val: mg.MustList(
                 int32( 1 ),
@@ -164,7 +164,7 @@ func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
                 mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
                 mg.NewHeapValue( mg.MustStruct( "ns1@v1/S1" ) ),
             ),
-            Source: mg.CopySource(
+            Source: CopySource(
                 []ReactorEvent{
                     listStart(),
                         NewValueEvent( mg.Int32( int32( 1 ) ) ),
@@ -187,51 +187,53 @@ func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-//func initValueBuildReactorCycleTests() {
-//    cyc := NewCyclicValues()
-//    AddStdReactorTests(
-//        ValueBuildTest{ Val: cyc.S1 },
-//        ValueBuildTest{ Val: cyc.L1 },
-//        ValueBuildTest{ Val: cyc.M1 },
-//    )
-//    qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
-//    fld := mg.MakeTestId
-//    // we create s1 pointing to s2 pointing to s1, but where s2 has non-cyclic
-//    // fields as well, and then feed s2 field events in various orders in order
-//    // to uncover errors related to clearing field state after encountering
-//    // forward references
-//    s1, s2 := mg.NewHeapValue( mg.NewStruct( qn1 ) ), mg.NewHeapValue( mg.NewStruct( qn1 ) )
-//    s1Val, s2Val := s1.Dereference().( *mg.Struct ), s2.Dereference().( *mg.Struct )
-//    s1ValTyp, s2ValTyp := s1Val.Type.AsAtomicType(), s2Val.Type.AsAtomicType()
-//    s1Val.Fields.Put( fld( 1 ), s2 )
-//    i1Val := mg.Int32( int32( 1 ) )
-//    s2Val.Fields.Put( fld( 1 ), i1Val )
-//    s2Val.Fields.Put( fld( 2 ), s1 )
-//    s2Val.Fields.Put( fld( 3 ), s1 )
-//    s2Val.Fields.Put( fld( 4 ), i1Val )
-//    AddStdReactorTests(
-//        ValueBuildTest{
-//            Val: s1,
-//            Source: []ReactorEvent{
-//                NewValueAllocationEvent( s1ValTyp, s1.Address() ),
-//                NewStructStartEvent( qn1 ),
-//                    NewFieldStartEvent( fld( 1 ) ),
-//                        NewValueAllocationEvent( s2ValTyp, s2.Address() ),
-//                        NewStructStartEvent( qn1 ),
-//                            NewFieldStartEvent( fld( 1 ) ),
-//                                NewValueEvent( i1Val ),
-//                            NewFieldStartEvent( fld( 2 ) ),
-//                                NewValueReferenceEvent( s1.Address() ),
-//                            NewFieldStartEvent( fld( 3 ) ),
-//                                NewValueReferenceEvent( s1.Address() ),
-//                            NewFieldStartEvent( fld( 4 ) ),
-//                                NewValueEvent( i1Val ),
-//                            NewEndEvent(),
-//                    NewEndEvent(),
-//            },
-//        },
-//    )
-//}
+func initValueBuildReactorCycleTests( b *ReactorTestSetBuilder ) {
+    cyc := mg.NewCyclicValues()
+    b.AddTests(
+        &ValueBuildTest{ Val: cyc.S1 },
+        &ValueBuildTest{ Val: cyc.L1 },
+        &ValueBuildTest{ Val: cyc.M1 },
+    )
+    qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
+    fld := mg.MakeTestId
+    // we create s1 pointing to s2 pointing to s1, but where s2 has non-cyclic
+    // fields as well, and then feed s2 field events in various orders in order
+    // to uncover errors related to clearing field state after encountering
+    // forward references
+    s1 := mg.NewHeapValue( mg.NewStruct( qn1 ) )
+    s2 := mg.NewHeapValue( mg.NewStruct( qn1 ) )
+    s1Val := s1.Dereference().( *mg.Struct )
+    s2Val := s2.Dereference().( *mg.Struct )
+    s1ValTyp, s2ValTyp := s1Val.Type.AsAtomicType(), s2Val.Type.AsAtomicType()
+    s1Val.Fields.Put( fld( 1 ), s2 )
+    i1Val := mg.Int32( int32( 1 ) )
+    s2Val.Fields.Put( fld( 1 ), i1Val )
+    s2Val.Fields.Put( fld( 2 ), s1 )
+    s2Val.Fields.Put( fld( 3 ), s1 )
+    s2Val.Fields.Put( fld( 4 ), i1Val )
+    b.AddTests(
+        &ValueBuildTest{
+            Val: s1,
+            Source: []ReactorEvent{
+                NewValueAllocationEvent( s1ValTyp, s1.Address() ),
+                NewStructStartEvent( qn1 ),
+                    NewFieldStartEvent( fld( 1 ) ),
+                        NewValueAllocationEvent( s2ValTyp, s2.Address() ),
+                        NewStructStartEvent( qn1 ),
+                            NewFieldStartEvent( fld( 1 ) ),
+                                NewValueEvent( i1Val ),
+                            NewFieldStartEvent( fld( 2 ) ),
+                                NewValueReferenceEvent( s1.Address() ),
+                            NewFieldStartEvent( fld( 3 ) ),
+                                NewValueReferenceEvent( s1.Address() ),
+                            NewFieldStartEvent( fld( 4 ) ),
+                                NewValueEvent( i1Val ),
+                            NewEndEvent(),
+                    NewEndEvent(),
+            },
+        },
+    )
+}
 
 func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
     s1 := mg.MustStruct( "ns1@v1/S1",
@@ -240,7 +242,7 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
         "map1", mg.MustSymbolMap(),
         "struct1", mg.MustStruct( "ns1@v1/S2" ),
     )
-    addTest := func( v mg.Value ) { b.AddTest( &ValueBuildTest{ Val: v } ) }
+    addTest := func( v mg.Value ) { b.AddTests( &ValueBuildTest{ Val: v } ) }
     addTest( mg.String( "hello" ) )
     addTest( mg.MustList() )
     addTest( mg.MustList( 1, 2, 3 ) )
@@ -278,8 +280,8 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
     )
     valPtr1 := mg.NewHeapValue( mg.Int32( 1 ) )
     addTest( mg.MustList( valPtr1, valPtr1, valPtr1 ) )
-//    initValueBuildZeroRefTests()
-//    initValueBuildReactorCycleTests()
+    initValueBuildZeroRefTests( b )
+    initValueBuildReactorCycleTests( b )
 }
 
 //type StructuralReactorErrorTest struct {

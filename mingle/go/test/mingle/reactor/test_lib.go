@@ -21,8 +21,8 @@ type ReactorTestSetBuilder struct {
     tests []ReactorTest
 }
 
-func ( b *ReactorTestSetBuilder ) AddTest( t ReactorTest ) {
-    b.tests = append( b.tests, t )
+func ( b *ReactorTestSetBuilder ) AddTests( t ...ReactorTest ) {
+    b.tests = append( b.tests, t... )
 }
 
 type ReactorTestSetInitializer func( b *ReactorTestSetBuilder ) 
@@ -42,6 +42,25 @@ func getReactorTests() []ReactorTest {
     b := &ReactorTestSetBuilder{ tests: make( []ReactorTest, 0, 1024 ) }
     for _, ti := range testInits { ti( b ) }
     return b.tests
+}
+
+func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
+
+func ptrAlloc( typ mg.TypeReference, i int ) *ValueAllocationEvent {
+    return NewValueAllocationEvent( typ, ptrId( i ) )
+}
+
+func ptrRef( i int ) *ValueReferenceEvent {
+    return NewValueReferenceEvent( ptrId( i ) )
+}
+
+// to simplify test creation, we reuse event instances when constructing input
+// event sequences, and send them to this method only at the end to ensure that
+// we get a distinct sequence of event values for each test
+func CopySource( evs []ReactorEvent ) []ReactorEvent {
+    res := make( []ReactorEvent, len( evs ) )
+    for i, ev := range evs { res[ i ] = CopyEvent( ev, false ) }
+    return res
 }
 
 type reactorEventSource interface {

@@ -178,7 +178,7 @@ func EventToString( ev ReactorEvent ) string {
 func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     var res ReactorEvent
     switch v := ev.( type ) {
-    case *mg.ValueEvent: res = NewValueEvent( v.Val )
+    case *ValueEvent: res = NewValueEvent( v.Val )
     case *ListStartEvent: res = NewListStartEvent( v.Type, v.Id )
     case *MapStartEvent: res = NewMapStartEvent( v.Id )
     case *StructStartEvent: res = NewStructStartEvent( v.Type )
