@@ -9,7 +9,7 @@ import (
 
 func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
     switch v := val.( type ) {
-    case Value: return w.writeScalarValue( v )
+    case Value: return w.WriteScalarValue( v )
     case *Identifier: return w.WriteIdentifier( v )
     case PointerId: return w.WritePointerId( v )
     case objpath.PathNode: return w.WriteIdPath( v )
@@ -22,7 +22,7 @@ func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
 
 func assertReadScalar( expct Value, rd *BinReader, a *assert.PathAsserter ) {
     if tc, err := rd.ReadTypeCode(); err == nil {
-        if act, err := rd.readScalarValue( tc ); err == nil {
+        if act, err := rd.ReadScalarValue( tc ); err == nil {
             EqualValues( expct, act, a )
         } else {
             a.Fatalf( "couldn't read act: %s", err )

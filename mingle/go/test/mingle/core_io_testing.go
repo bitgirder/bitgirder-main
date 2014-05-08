@@ -180,14 +180,14 @@ func addBinIoRoundtripTests( tests []interface{} ) []interface{} {
 
 type BinIoSequenceRoundtripTest struct {
     Name string
-    Seq []interface{}
+    Seq []Value
 }
 
 func addBinIoSequenceRoundtripTests( tests []interface{} ) []interface{} {
     return append( tests,
         &BinIoSequenceRoundtripTest{
             Name: "struct-sequence",
-            Seq: []interface{}{
+            Seq: []Value{
                 MustStruct( "ns1@v1/S1" ),
                 MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
             },
@@ -210,15 +210,16 @@ func appendInput( data interface{}, w *BinWriter ) {
     case *Identifier: 
         if err := w.WriteIdentifier( v ); err != nil { panic( err ) }
     case string: 
-        if err := w.writeScalarValue( String( v ) ); err != nil { panic( err ) }
+        if err := w.WriteScalarValue( String( v ) ); err != nil { panic( err ) }
     case uint8: if err := w.WriteUint8( v ); err != nil { panic( err ) }
+    case IoTypeCode: if err := w.WriteTypeCode( v ); err != nil { panic( err ) }
     case int32: if err := w.WriteInt32( v ); err != nil { panic( err ) }
     case uint64: if err := w.WriteUint64( v ); err != nil { panic( err ) }
     case *QualifiedTypeName: 
         if err := w.WriteQualifiedTypeName( v ); err != nil { panic( err ) }
     case TypeReference:
         if err := w.WriteTypeReference( v ); err != nil { panic( err ) }
-    default: panic( libErrorf( "Unrecognized input elt: %T", v ) )
+    default: panic( libErrorf( "unrecognized input elt: %T", v ) )
     }
 }
 
@@ -233,28 +234,30 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
     return append( tests, 
         &BinIoInvalidDataTest{
             Name: "unexpected-top-level-type-code",
-            ErrMsg: "[offset 0]: Unrecognized value code: 0x64",
+            ErrMsg: "[offset 0]: unrecognized value code: 0x64",
             Input: makeBinIoInvalidDataTest( binIoInvalidTypeCode ),
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-symmap-val-type-code",
-            ErrMsg: `[offset 39]: Unrecognized value code: 0x64`,
+            ErrMsg: `[offset 39]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
-                tcStruct, int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
-                tcField, MustIdentifier( "f1" ), binIoInvalidTypeCode,
+                IoTypeCodeStruct, 
+                    int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
+                IoTypeCodeField, MustIdentifier( "f1" ), binIoInvalidTypeCode,
             ),
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-list-val-type-code",
-            ErrMsg: `[offset 104]: Unrecognized value code: 0x64`,
+            ErrMsg: `[offset 104]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
-                tcStruct, int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
-                tcField, MustIdentifier( "f1" ),
-                tcList, 
+                IoTypeCodeStruct, 
+                    int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
+                IoTypeCodeField, MustIdentifier( "f1" ),
+                IoTypeCodeList, 
                     uint64( 1 ), // pointer id
                     MustTypeReference( "Int32*" ), // type
                     int32( -1 ), // size
-                tcInt32, int32( 10 ), // an okay list val
+                IoTypeCodeInt32, int32( 10 ), // an okay list val
                 binIoInvalidTypeCode,
             ),
         },

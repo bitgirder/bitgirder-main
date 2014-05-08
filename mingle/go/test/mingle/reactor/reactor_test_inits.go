@@ -1238,12 +1238,12 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     badBuf := []byte{ 0x0f }
     addBinRdErr( 
         mg.IdNamespace, 
-        "Expected type code 0x02 but got 0x0f",
+        "[offset 0]: Expected type code 0x02 but got 0x0f",
         mg.IdNamespace, badBuf )
     func() {
         test := createBinRdErr(
             mg.IdService, 
-            "Expected type code 0x01 but got 0x0f",
+            "[offset 0]: Expected type code 0x01 but got 0x0f",
             mg.IdNamespace, ns1.ExternalForm(), 
             mg.IdService, badBuf,
         )
@@ -1253,7 +1253,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     func() {
         test := createBinRdErr(
             mg.IdOperation, 
-            "Expected type code 0x01 but got 0x0f",
+            "[offset 0]: Expected type code 0x01 but got 0x0f",
             mg.IdNamespace, ns1.ExternalForm(),
             mg.IdService, svc1.ExternalForm(),
             mg.IdOperation, badBuf,

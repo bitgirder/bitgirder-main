@@ -3,245 +3,67 @@ package io
 import (
     mg "mingle"
     mgRct "mingle/reactor"
-    "fmt"
-    "bytes"
+//    "fmt"
+//    "bytes"
     "io"
-    "bitgirder/objpath"
-    "time"
+//    "bitgirder/objpath"
+//    "time"
 //    "log"
-    bgio "bitgirder/io"
+//    bgio "bitgirder/io"
 )
 
-const (
-    tcNull = uint8( 0x00 )
-    tcId = uint8( 0x01 )
-    tcNs = uint8( 0x02 )
-    tcDeclNm = uint8( 0x03 )
-    tcQn = uint8( 0x04 )
-    tcAtomTyp = uint8( 0x05 )
-    tcListTyp = uint8( 0x06 )
-    tcNullableTyp = uint8( 0x07 )
-    tcPointerTyp = uint8( 0x08 )
-    tcRegexRestrict = uint8( 0x09 )
-    tcRangeRestrict = uint8( 0x0a )
-    tcValPtrAlloc = uint8( 0x0b )
-    tcValPtrRef = uint8( 0x0c )
-    tcBool = uint8( 0x0d )
-    tcString = uint8( 0x0e )
-    tcInt32 = uint8( 0x0f )
-    tcInt64 = uint8( 0x10 )
-    tcUint32 = uint8( 0x11 )
-    tcUint64 = uint8( 0x12 )
-    tcFloat32 = uint8( 0x13 )
-    tcFloat64 = uint8( 0x14 )
-    tcTimestamp = uint8( 0x15 )
-    tcBuffer = uint8( 0x16 )
-    tcEnum = uint8( 0x17 )
-    tcSymMap = uint8( 0x18 )
-    tcField = uint8( 0x19 )
-    tcStruct = uint8( 0x1a )
-    tcList = uint8( 0x1b )
-    tcEnd = uint8( 0x1c )
-    tcIdPath = uint8( 0x1d )
-    tcIdPathListNode = uint8( 0x1e )
-)
-
-type BinIoError struct { msg string }
-
-func ( e *BinIoError ) Error() string { return e.msg }
-
-type BinWriter struct { *bgio.BinWriter }
-
-func AsWriter( w *bgio.BinWriter ) *BinWriter { 
-    return &BinWriter{ w } 
-}
+type BinWriter struct { *mg.BinWriter }
 
 func NewWriter( w io.Writer ) *BinWriter { 
-    return AsWriter( bgio.NewLeWriter( w ) )
-}
-
-// helper to power public funcs that convert a value to []byte
-func writeAsBytes( f func ( *BinWriter ) error ) []byte {
-    buf := &bytes.Buffer{}
-    w := mg.NewWriter( buf )
-    if err := f( w ); err != nil {
-        panic( libErrorf( "unhandled error converting to byte: %s", err ) )
-    }
-    return buf.Bytes()
-}
-
-func ( w *BinWriter ) WriteTypeCode( tc uint8 ) error {
-    return w.WriteUint8( tc )
-}
-
-func ( w *BinWriter ) WriteNull() error { return w.WriteTypeCode( tcNull ) }
-
-func ( w *BinWriter ) writeBool( b bool ) ( err error ) {
-    return w.WriteBool( b )
-}
-
-func ( w *BinWriter ) WriteIdentifier( id *mg.Identifier ) ( err error ) {
-    if err = w.WriteTypeCode( tcId ); err != nil { return }
-    if err = w.WriteUint8( uint8( len( id.parts ) ) ); err != nil { return }
-    for _, part := range id.parts {
-        if err = w.WriteUtf8( part ); err != nil { return }
-    }
-    return
-}
-
-func ( w *BinWriter ) WriteIdentifiers( ids []*mg.Identifier ) ( err error ) {
-    if err = w.WriteUint8( uint8( len( ids ) ) ); err != nil { return }
-    for _, id := range ids {
-        if err = w.WriteIdentifier( id ); err != nil { return }
-    }
-    return
-}
-
-type pathWriter struct { w *BinWriter }
-
-// Write the tcId even though WriteIdentifier does so that id path reads can
-// unconditionally read a type code as they go
-func ( pw pathWriter ) Descend( elt interface{} ) ( err error ) {
-    if err = pw.w.WriteTypeCode( tcId ); err != nil { return }
-    return pw.w.WriteIdentifier( elt.( *mg.Identifier ) )
-}
-
-func ( pw pathWriter ) List( idx int ) ( err error ) {
-    if err = pw.w.WriteTypeCode( tcIdPathListNode ); err != nil { return }
-    return pw.w.WriteInt32( int32( idx ) )
-}
-
-func ( w *BinWriter ) WriteIdPath( p objpath.PathNode ) ( err error ) {
-    if err = w.WriteTypeCode( tcIdPath ); err != nil { return }
-    if err = objpath.Visit( p, pathWriter{ w } ); err != nil { return }
-    return w.WriteTypeCode( tcEnd )
-}
-
-func ( w *BinWriter ) WriteNamespace( ns *mg.Namespace ) ( err error ) {
-    if err = w.WriteTypeCode( tcNs ); err != nil { return }
-    if err = w.WriteIdentifiers( ns.Parts ); err != nil { return }
-    return w.WriteIdentifier( ns.Version )
-}
-
-func ( w *BinWriter ) WriteDeclaredTypeName( 
-    n *mg.DeclaredTypeName ) ( err error ) {
-    if err = w.WriteTypeCode( tcDeclNm ); err != nil { return }
-    return w.WriteUtf8( n.nm )
-}
-
-func ( w *BinWriter ) WriteQualifiedTypeName( 
-    qn *mg.QualifiedTypeName ) ( err error ) {
-    if err = w.WriteTypeCode( tcQn ); err != nil { return }
-    if err = w.WriteNamespace( qn.mg.Namespace ); err != nil { return }
-    return w.WriteDeclaredTypeName( qn.Name )
-}
-
-func ( w *BinWriter ) WriteTypeName( nm mg.TypeName ) error {
-    switch v := nm.( type ) {
-    case *DeclaredTypeName: return w.WriteDeclaredTypeName( v )
-    case *mg.QualifiedTypeName: return w.WriteQualifiedTypeName( v )
-    }
-    panic( fmt.Errorf( "%T: Unhandled type name: %T", w, nm ) )
-}
-
-func ( w *BinWriter ) writeRegexRestriction( 
-    rr *mg.RegexRestriction ) ( err error ) {
-
-    if err = w.WriteTypeCode( tcRegexRestrict ); err != nil { return }
-    return w.WriteUtf8( rr.src )
-}
-
-func ( w *BinWriter ) writeEnum( en *mg.Enum ) ( err error ) {
-    if err = w.WriteTypeCode( tcEnum ); err != nil { return }
-    if err = w.WriteQualifiedTypeName( en.Type ); err != nil { return }
-    if err = w.WriteIdentifier( en.mg.Value ); err != nil { return }
-    return
+    return &BinWriter{ mg.NewWriter( w ) }
 }
 
 type writeReactor struct { *BinWriter }
 
 func ( w writeReactor ) startStruct( qn *mg.QualifiedTypeName ) error {
-    if err := w.WriteTypeCode( tcStruct ); err != nil { return err }
+    if err := w.WriteTypeCode( mg.IoTypeCodeStruct ); err != nil { return err }
     if err := w.WriteInt32( int32( -1 ) ); err != nil { return err }
     return w.WriteQualifiedTypeName( qn )
 }
 
 func ( w writeReactor ) startField( fld *mg.Identifier ) error {
-    if err := w.WriteTypeCode( tcField ); err != nil { return err }
+    if err := w.WriteTypeCode( mg.IoTypeCodeField ); err != nil { return err }
     return w.WriteIdentifier( fld )
 }
 
 func ( w writeReactor ) startList( lse *mgRct.ListStartEvent ) error { 
-    if err := w.WriteTypeCode( tcList ); err != nil { return err }
-    if err := w.writePointerId( lse.Id ); err != nil { return err }
+    if err := w.WriteTypeCode( mg.IoTypeCodeList ); err != nil { return err }
+    if err := w.WritePointerId( lse.Id ); err != nil { return err }
     if err := w.WriteListTypeReference( lse.Type ); err != nil { return err }
     return w.WriteInt32( -1 )
 }
 
 func ( w writeReactor ) startMap( id mg.PointerId ) error { 
-    if err := w.WriteTypeCode( tcSymMap ); err != nil { return err }
-    return w.writePointerId( id )
+    if err := w.WriteTypeCode( mg.IoTypeCodeSymMap ); err != nil { return err }
+    return w.WritePointerId( id )
 }
 
 func ( w writeReactor ) value( val mg.Value ) error {
-    switch v := val.( type ) {
-    case nil: return w.WriteNull()
-    case *mg.Null: return w.WriteNull()
-    case Boolean: 
-        if err := w.WriteTypeCode( tcBool ); err != nil { return err }
-        return w.WriteBool( bool( v ) )
-    case mg.Buffer:
-        if err := w.WriteTypeCode( tcBuffer ); err != nil { return err }
-        return w.WriteBuffer32( []byte( v ) )
-    case mg.String:
-        if err := w.WriteTypeCode( tcString ); err != nil { return err }
-        return w.WriteUtf8( string( v ) )
-    case mg.Int32:
-        if err := w.WriteTypeCode( tcInt32 ); err != nil { return err }
-        return w.WriteInt32( int32( v ) )
-    case mg.Int64:
-        if err := w.WriteTypeCode( tcInt64 ); err != nil { return err }
-        return w.WriteInt64( int64( v ) )
-    case mg.Uint32:
-        if err := w.WriteTypeCode( tcUint32 ); err != nil { return err }
-        return w.WriteUint32( uint32( v ) )
-    case mg.Uint64:
-        if err := w.WriteTypeCode( tcUint64 ); err != nil { return err }
-        return w.WriteUint64( uint64( v ) )
-    case mg.Float32:
-        if err := w.WriteTypeCode( tcFloat32 ); err != nil { return err }
-        return w.WriteFloat32( float32( v ) )
-    case mg.Float64:
-        if err := w.WriteTypeCode( tcFloat64 ); err != nil { return err }
-        return w.WriteFloat64( float64( v ) )
-    case mg.Timestamp:
-        if err := w.WriteTypeCode( tcTimestamp ); err != nil { return err }
-        if err := w.WriteInt64( time.Time( v ).Unix() ); err != nil { 
-            return err
-        }
-        return w.WriteInt32( int32( time.Time( v ).Nanosecond() ) )
-    case *mg.Enum: return w.writeEnum( v )
-    }
-    panic( libErrorf( "%T: Unhandled value: %T", w, val ) )
-}
-
-func ( w writeReactor ) writePointerId( id mg.PointerId ) error {
-    return w.WriteUint64( uint64( id ) )
+    return w.WriteScalarValue( val )
 }
 
 func ( w writeReactor ) writeValuePointerAlloc( 
     vp *mgRct.ValueAllocationEvent ) error {
 
-    if err := w.WriteTypeCode( tcValPtrAlloc ); err != nil { return err }
+    if err := w.WriteTypeCode( mg.IoTypeCodeValPtrAlloc ); err != nil { 
+        return err 
+    }
     if err := w.WriteTypeReference( vp.Type ); err != nil { return err }
-    return w.writePointerId( vp.Id )
+    return w.WritePointerId( vp.Id )
 }
 
 func ( w writeReactor ) writeValuePointerReference( 
     v *mgRct.ValueReferenceEvent ) error {
 
-    if err := w.WriteTypeCode( tcValPtrRef ); err != nil { return err }
-    return w.writePointerId( v.Id )
+    if err := w.WriteTypeCode( mg.IoTypeCodeValPtrRef ); err != nil { 
+        return err 
+    }
+    return w.WritePointerId( v.Id )
 }
 
 func ( w writeReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
@@ -251,357 +73,43 @@ func ( w writeReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     case *mgRct.StructStartEvent: return w.startStruct( v.Type )
     case *mgRct.ListStartEvent: return w.startList( v )
     case *mgRct.FieldStartEvent: return w.startField( v.Field )
-    case *mgRct.EndEvent: return w.WriteTypeCode( tcEnd )
+    case *mgRct.EndEvent: return w.WriteTypeCode( mg.IoTypeCodeEnd )
     case *mgRct.ValueAllocationEvent: return w.writeValuePointerAlloc( v )
     case *mgRct.ValueReferenceEvent: return w.writeValuePointerReference( v )
     }
-    panic( libErrorf( "Unhandled event type: %T", ev ) )
+    panic( libErrorf( "unhandled event type: %T", ev ) )
 }
 
-func ( w *BinWriter ) AsReactor() ReactorEventProcessor { 
+func ( w *BinWriter ) AsReactor() mgRct.ReactorEventProcessor { 
     return writeReactor{ w } 
 }
 
 func ( w *BinWriter ) WriteValue( val mg.Value ) ( err error ) {
-    return VisitValue( val, w.AsReactor() )
-}
-
-func ( w *BinWriter ) writeRangeValue( val mg.Value ) error {
-    switch val.( type ) {
-    case nil, mg.Null, mg.String, mg.Int32, mg.Int64, mg.Uint32, mg.Uint64, 
-         mg.Float32, mg.Float64, mg.Timestamp:
-        return w.WriteValue( val )
-    }
-    panic( fmt.Errorf( "%T: Unhandled range val: %T", w, val ) )
-}
-
-func ( w *BinWriter ) writeRangeRestriction( 
-    rr *RangeRestriction ) ( err error ) {
-    if err = w.WriteTypeCode( tcRangeRestrict ); err != nil { return }
-    if err = w.writeBool( rr.MinClosed ); err != nil { return }
-    if err = w.writeRangeValue( rr.Min ); err != nil { return }
-    if err = w.writeRangeValue( rr.Max ); err != nil { return }
-    return w.writeBool( rr.MaxClosed )
-}
-
-func ( w *BinWriter ) WriteAtomicTypeReference( 
-    at *mg.AtomicTypeReference ) ( err error ) {
-
-    if err = w.WriteTypeCode( tcAtomTyp ); err != nil { return }
-    if err = w.WriteTypeName( at.Name ); err != nil { return }
-    switch r := at.Restriction.( type ) {
-    case nil: return w.WriteNull()
-    case *RegexRestriction: return w.writeRegexRestriction( r )
-    case *RangeRestriction: return w.writeRangeRestriction( r )
-    default: panic( fmt.Errorf( "%T: Unhandled restriction: %T", w, r ) )
-    }
-    return
-}
-
-func ( w *BinWriter ) WriteListTypeReference( 
-    lt *mg.ListTypeReference ) ( err error ) {
-    if err = w.WriteTypeCode( tcListTyp ); err != nil { return }
-    if err = w.WriteTypeReference( lt.ElementType ); err != nil { return }
-    return w.writeBool( lt.AllowsEmpty )
-}
-
-func ( w *BinWriter ) WriteNullableTypeReference( 
-    nt *mg.NullableTypeReference ) ( err error ) {
-    if err = w.WriteTypeCode( tcNullableTyp ); err != nil { return }
-    return w.WriteTypeReference( nt.Type )
-}
-
-func ( w *BinWriter ) WritePointerTypeReference(
-    pt *mg.PointerTypeReference ) error {
-
-    if err := w.WriteTypeCode( tcPointerTyp ); err != nil { return err }
-    return w.WriteTypeReference( pt.Type )
-}
-
-func ( w *BinWriter ) WriteTypeReference( typ mg.TypeReference ) error {
-    switch v := typ.( type ) {
-    case *mg.AtomicTypeReference: return w.WriteAtomicTypeReference( v )
-    case *mg.ListTypeReference: return w.WriteListTypeReference( v )
-    case *mg.NullableTypeReference: return w.WriteNullableTypeReference( v )
-    case *mg.PointerTypeReference: return w.WritePointerTypeReference( v )
-    }
-    panic( fmt.Errorf( "%T: Unhandled type reference: %T", w, typ ) )
-}
-
-func TypeReferenceAsBytes( typ mg.TypeReference ) []byte {
-    return writeAsBytes( func( w *BinWriter ) error { 
-        return w.WriteTypeReference( typ )
-    })
-}
-
-func IdPathAsBytes( p objpath.PathNode ) []byte {
-    return writeAsBytes( func( w *BinWriter ) error {
-        return w.WriteIdPath( p )
-    })
-}
-
-func IdentifierAsBytes( id *mg.Identifier ) []byte {
-    return writeAsBytes( func( w *BinWriter ) error {
-        return w.WriteIdentifier( id )
-    })
-}
-
-func QualifiedTypeNameAsBytes( qn *mg.QualifiedTypeName ) []byte {
-    return writeAsBytes( func( w *BinWriter ) error {
-        return w.WriteQualifiedTypeName( qn )
-    })
-}
-
-func NamespaceAsBytes( ns *mg.Namespace ) []byte {
-    return writeAsBytes( func( w *BinWriter ) error {
-        return w.WriteNamespace( ns )
-    })
-}
-
-type offsetTracker struct {
-    rd io.Reader
-    off int64
-    saved int16
-    forUnread int16
-}
-
-func ( ot *offsetTracker ) Read( p []byte ) ( int, error ) {
-    resAdd := 0
-    ot.forUnread = -1
-    if ot.saved >= 0 && len( p ) > 0 {
-        p[ 0 ] = byte( ot.saved )
-        ot.saved = -1
-        resAdd = 1
-    }
-    res := 0
-    var err error
-    if len( p ) > 0 { res, err = ot.rd.Read( p[ resAdd : ] ) }
-    if err == nil { 
-        res += resAdd 
-        ot.forUnread = int16( p[ res - 1 ] )
-    }
-    ot.off += int64( res )
-    return res, err
-}
-
-func ( ot *offsetTracker ) UnreadByte() error {
-    if ot.forUnread < 0 { return libErrorf( "Nothing to Unread()" ) }
-    ot.off -= 1
-    ot.saved, ot.forUnread = ot.forUnread, -1
-    return nil
+    return mgRct.VisitValue( val, w.AsReactor() )
 }
 
 type BinReader struct {
-    ot *offsetTracker
-    *bgio.BinReader
+    *mg.BinReader
 }
 
 func NewReader( r io.Reader ) *BinReader {
-    ot := &offsetTracker{ rd: r, off: 0, saved: -1 }
-    return &BinReader{ ot: ot, BinReader: bgio.NewLeReader( ot ) }
-}
-
-func NewReaderBytes( buf []byte ) *BinReader {
-    return mg.NewReader( bytes.NewBuffer( buf ) )
-}
-
-func ( r *BinReader ) offset() int64 {
-    return r.ot.off
-}
-
-func ( r *BinReader ) ioErrorf( tmpl string, args ...interface{} ) *BinIoError {
-    str := &bytes.Buffer{}
-    fmt.Fprintf( str, "[offset %d]: ", r.offset() - 1 )
-    fmt.Fprintf( str, tmpl, args... )
-    return &BinIoError{ str.mg.String() }
-}
-
-func ( r *BinReader ) ReadTypeCode() ( res uint8, err error ) {
-    return r.ReadUint8()
-}
-
-// State of reader is undefined after a call to this method that returns a
-// non-nil error
-func ( r *BinReader ) PeekTypeCode() ( uint8, error ) {
-    res, err := r.ReadTypeCode()
-    if err2 := r.ot.UnreadByte(); err2 != nil { panic( err2 ) }
-    return res, err
-}
-
-func ( r *BinReader ) ExpectTypeCode( expct uint8 ) ( res uint8, err error ) {
-    if res, err = r.ReadTypeCode(); err == nil {
-        if res != expct { 
-            tmpl := "Expected type code 0x%02x but got 0x%02x"
-            err = fmt.Errorf( tmpl, expct, res )
-        }
-    }
-    return
-}
-
-func ( r *BinReader ) readBool() ( bool, error ) { return r.ReadBool() }
-
-func ( r *BinReader ) ReadIdentifier() ( id *mg.Identifier, err error ) {
-    if _, err = r.ExpectTypeCode( tcId ); err != nil { return }
-    var sz uint8
-    if sz, err = r.ReadUint8(); err != nil { return }
-    id = &mg.Identifier{ make( []string, sz ) }
-    for i := uint8( 0 ); i < sz; i++ {
-        if id.parts[ i ], err = r.ReadUtf8(); err != nil { return }
-    }
-    return    
-}
-
-func ( r *BinReader ) ReadIdentifiers() ( ids []*mg.Identifier, err error ) {
-    var sz uint8
-    if sz, err = r.ReadUint8(); err != nil { return }
-    ids = make( []*mg.Identifier, sz )
-    for i := uint8( 0 ); i < sz; i++ {
-        if ids[ i ], err = r.ReadIdentifier(); err != nil { return }
-    }
-    return
-}
-
-func ( r *BinReader ) readIdPathNext( 
-    p objpath.PathNode ) ( objpath.PathNode, bool, error ) {
-    tc, err := r.ReadTypeCode()
-    if err != nil { return nil, false, err }
-    switch tc {
-    case tcId:
-        if id, err := r.ReadIdentifier(); err == nil { 
-            if p == nil { 
-                return objpath.RootedAt( id ), false, nil
-            } else { return p.Descend( id ), false, nil }
-        } else { return nil, false, err }
-    case tcIdPathListNode:
-        if i, err := r.ReadInt32(); err == nil {
-            var l *objpath.ListNode
-            if p == nil { 
-                l = objpath.RootedAtList() 
-            } else { l = p.StartList() }
-            for ; i > 0; i-- { l = l.Next() }
-            return l, false, nil
-        } else { return nil, false, err }
-    case tcEnd: return p, true, nil
-    }
-    return nil, false, r.ioErrorf( "Unrecognized id path code: 0x%02x", tc )
-}
-
-func ( r *BinReader ) ReadIdPath() ( p objpath.PathNode, err error ) {
-    if _, err = r.ExpectTypeCode( tcIdPath ); err != nil { return }
-    for done := false; ! done; {
-        if p, done, err = r.readIdPathNext( p ); err != nil { return }
-    }
-    return
-}
-
-func ( r *BinReader ) ReadNamespace() ( ns *mg.Namespace, err error ) {
-    if _, err = r.ExpectTypeCode( tcNs ); err != nil { return }
-    ns = &mg.Namespace{}
-    if ns.Parts, err = r.ReadIdentifiers(); err != nil { return }
-    if ns.Version, err = r.ReadIdentifier(); err != nil { return }
-    return
-}
-
-func ( r *BinReader ) ReadDeclaredTypeName() ( nm *DeclaredTypeName,    
-                                               err error ) {
-    if _, err = r.ExpectTypeCode( tcDeclNm ); err != nil { return }
-    var s string
-    if s, err = r.ReadUtf8(); err != nil { return }
-    nm = &DeclaredTypeName{ s }
-    return
-}
-
-func ( r *BinReader ) ReadQualifiedTypeName() ( qn *mg.QualifiedTypeName,
-                                                err error ) {
-    if _, err = r.ExpectTypeCode( tcQn ); err != nil { return }
-    qn = &mg.QualifiedTypeName{}
-    if qn.mg.Namespace, err = r.ReadNamespace(); err != nil { return }
-    if qn.Name, err = r.ReadDeclaredTypeName(); err != nil { return }
-    return
-}
-
-func ( r *BinReader ) ReadTypeName() ( nm TypeName, err error ) {
-    var tc uint8
-    if tc, err = r.PeekTypeCode(); err != nil { return }
-    switch tc {
-    case tcDeclNm: return r.ReadDeclaredTypeName()
-    case tcQn: return r.ReadQualifiedTypeName()
-    }
-    return nil, fmt.Errorf( "mingle: Unrecognized type name code: 0x%02x", tc )
-}
-
-// Note: type code is already read
-func ( r *BinReader ) readRegexRestriction() ( rr *RegexRestriction,
-                                               err error ) {
-    var src string
-    if src, err = r.ReadUtf8(); err != nil { return }
-    return NewRegexRestriction( src )
-}
-
-func ( r *BinReader ) readEnum() ( en *mg.Enum, err error ) {
-    en = &mg.Enum{}
-    if en.Type, err = r.ReadQualifiedTypeName(); err != nil { return }
-    if en.mg.Value, err = r.ReadIdentifier(); err != nil { return }
-    return
+    return &BinReader{ mg.NewReader( r ) }
 }
 
 func ( r *BinReader ) readScalarValue( 
-    tc uint8, rep ReactorEventProcessor ) ( err error ) {
-    var val mg.Value
-    switch tc {
-    case tcNull: val = mg.NullVal
-    case tcString: 
-        var s string
-        if s, err = r.ReadUtf8(); err == nil { val = mg.String( s ) }
-    case tcBuffer:
-        var buf []byte
-        if buf, err = r.ReadBuffer32(); err == nil { val = mg.Buffer( buf ) }
-    case tcTimestamp:
-        var ux int64
-        var ns int32
-        if ux, err = r.ReadInt64(); err == nil { 
-            if ns, err = r.ReadInt32(); err == nil { 
-                val = mg.Timestamp( time.Unix( ux, int64( ns ) ) )
-            } 
-        }
-    case tcInt32:
-        var i int32
-        if i, err = r.ReadInt32(); err == nil { val = mg.Int32( i ) }
-    case tcInt64:
-        var i int64
-        if i, err = r.ReadInt64(); err == nil { val = mg.Int64( i ) }
-    case tcUint32:
-        var i uint32
-        if i, err = r.ReadUint32(); err == nil { val = mg.Uint32( i ) }
-    case tcUint64:
-        var i uint64
-        if i, err = r.ReadUint64(); err == nil { val = mg.Uint64( i ) }
-    case tcFloat32:
-        var f float32
-        if f, err = r.ReadFloat32(); err == nil { val = mg.Float32( f ) }
-    case tcFloat64:
-        var f float64
-        if f, err = r.ReadFloat64(); err == nil { val = mg.Float64( f ) }
-    case tcBool:
-        var b bool
-        if b, err = r.ReadBool(); err == nil { val = Boolean( b ) }
-    case tcEnum: val, err = r.readEnum()
-    default: panic( libErrorf( "Not a scalar val type: 0x%02x", tc ) )
-    }
-    if err == nil { err = rep.ProcessEvent( NewValueEvent( val ) ) }
-    return 
+    tc mg.IoTypeCode, rep mgRct.ReactorEventProcessor ) error {
+
+    val, err := r.ReadScalarValue( tc )
+    if err != nil { return err }
+    return rep.ProcessEvent( mgRct.NewValueEvent( val ) )
 }
 
-func ( r *BinReader ) readPointerId() ( mg.PointerId, error ) {
-    id64, err := r.ReadUint64()
-    if err != nil { return 0, err }
-    return mg.PointerId( id64 ), nil
-}
+func ( r *BinReader ) readValuePointerAlloc( 
+    rep mgRct.ReactorEventProcessor ) error {
 
-func ( r *BinReader ) readValuePointerAlloc( rep ReactorEventProcessor ) error {
     if typ, err := r.ReadTypeReference(); err == nil {
-        if id, err := r.readPointerId(); err == nil {
-            ev := NewValueAllocationEvent( typ, id )
+        if id, err := r.ReadPointerId(); err == nil {
+            ev := mgRct.NewValueAllocationEvent( typ, id )
             if err := rep.ProcessEvent( ev ); err != nil { return err }
         } else { return err }
     } else { return err }
@@ -609,67 +117,68 @@ func ( r *BinReader ) readValuePointerAlloc( rep ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readValuePointerReference( 
-    rep ReactorEventProcessor ) error {
+    rep mgRct.ReactorEventProcessor ) error {
 
-    id, err := r.readPointerId()
+    id, err := r.ReadPointerId()
     if err != nil { return err }
-    return rep.ProcessEvent( NewValueReferenceEvent( id ) )
+    return rep.ProcessEvent( mgRct.NewValueReferenceEvent( id ) )
 }
 
-func ( r *BinReader ) readMapFields( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) readMapFields( rep mgRct.ReactorEventProcessor ) error {
     for {
         tc, err := r.ReadTypeCode()
         if err != nil { return err }
         switch tc {
-        case tcEnd: return rep.ProcessEvent( NewEndEvent() )
-        case tcField:
+        case mg.IoTypeCodeEnd: return rep.ProcessEvent( mgRct.NewEndEvent() )
+        case mg.IoTypeCodeField:
             id, err := r.ReadIdentifier()
-            if err == nil { err = rep.ProcessEvent( NewFieldStartEvent( id ) ) }
+            if err == nil { 
+                err = rep.ProcessEvent( mgRct.NewFieldStartEvent( id ) ) 
+            }
             if err != nil { return err }
             if err := r.implReadValue( rep ); err != nil { return err }
-        default: return r.ioErrorf( "Unexpected map pair code: 0x%02x", tc )
+        default: return r.IoErrorf( "Unexpected map pair code: 0x%02x", tc )
         }
     }
     panic( libErrorf( "unreachable" ) )
 }
 
-func ( r *BinReader ) readSymbolMap( rep ReactorEventProcessor ) error {
-    if id, err := r.readPointerId(); err == nil {
-        if err := rep.ProcessEvent( NewMapStartEvent( id ) ); err != nil { 
+func ( r *BinReader ) readSymbolMap( rep mgRct.ReactorEventProcessor ) error {
+    if id, err := r.ReadPointerId(); err == nil {
+        if err := rep.ProcessEvent( mgRct.NewMapStartEvent( id ) ); err != nil {
             return err 
         }
     } else { return err }
     return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readStruct( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) readStruct( rep mgRct.ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err }
     if qn, err := r.ReadQualifiedTypeName(); err == nil {
-        if err = rep.ProcessEvent( NewStructStartEvent( qn ) ); err != nil { 
-            return err 
-        }
+        ev := mgRct.NewStructStartEvent( qn )
+        if err = rep.ProcessEvent( ev ); err != nil { return err }
     } else { return err }
     return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readListHeader( rep ReactorEventProcessor ) error {
-    if id, err := r.readPointerId(); err == nil {
+func ( r *BinReader ) readListHeader( rep mgRct.ReactorEventProcessor ) error {
+    if id, err := r.ReadPointerId(); err == nil {
         if typ, err := r.ReadListTypeReference(); err == nil {
-            lse := NewListStartEvent( typ, id )
+            lse := mgRct.NewListStartEvent( typ, id )
             if err = rep.ProcessEvent( lse ); err != nil { return err }
         } else { return err }
     } else { return err }
     return nil
 }
 
-func ( r *BinReader ) readListValues( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) readListValues( rep mgRct.ReactorEventProcessor ) error {
     if _, err := r.ReadInt32(); err != nil { return err } // skip size
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
-        if tc == tcEnd {
+        if tc == mg.IoTypeCodeEnd {
             if _, err = r.ReadTypeCode(); err != nil { return err }
-            return rep.ProcessEvent( NewEndEvent() )
+            return rep.ProcessEvent( mgRct.NewEndEvent() )
         } else { 
             if err = r.implReadValue( rep ); err != nil { return err } 
         }
@@ -677,144 +186,40 @@ func ( r *BinReader ) readListValues( rep ReactorEventProcessor ) error {
     panic( libErrorf( "Unreachable" ) )
 }
 
-func ( r *BinReader ) readList( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) readList( rep mgRct.ReactorEventProcessor ) error {
     if err := r.readListHeader( rep ); err != nil { return err }
     return r.readListValues( rep )
 }
 
-func ( r *BinReader ) implReadValue( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) implReadValue( rep mgRct.ReactorEventProcessor ) error {
     tc, err := r.ReadTypeCode()
     if err != nil { return err }
     switch tc {
-    case tcNull, tcString, tcBuffer, tcTimestamp, tcInt32, tcInt64, tcUint32,
-         tcUint64, tcFloat32, tcFloat64, tcBool, tcEnum:
+    case mg.IoTypeCodeNull, mg.IoTypeCodeString, mg.IoTypeCodeBuffer, 
+         mg.IoTypeCodeTimestamp, mg.IoTypeCodeInt32, mg.IoTypeCodeInt64, 
+         mg.IoTypeCodeUint32, mg.IoTypeCodeUint64, mg.IoTypeCodeFloat32,
+         mg.IoTypeCodeFloat64, mg.IoTypeCodeBool, mg.IoTypeCodeEnum:
         return r.readScalarValue( tc, rep )
-    case tcValPtrAlloc: return r.readValuePointerAlloc( rep )
-    case tcValPtrRef: return r.readValuePointerReference( rep )
-    case tcSymMap: return r.readSymbolMap( rep )
-    case tcStruct: return r.readStruct( rep )
-    case tcList: return r.readList( rep )
-    default: return r.ioErrorf( "Unrecognized value code: 0x%02x", tc )
+    case mg.IoTypeCodeValPtrAlloc: return r.readValuePointerAlloc( rep )
+    case mg.IoTypeCodeValPtrRef: return r.readValuePointerReference( rep )
+    case mg.IoTypeCodeSymMap: return r.readSymbolMap( rep )
+    case mg.IoTypeCodeStruct: return r.readStruct( rep )
+    case mg.IoTypeCodeList: return r.readList( rep )
+    default: return r.IoErrorf( "unrecognized value code: 0x%02x", tc )
     }
-    panic( libErrorf( "Unreachable" ) )
+    panic( libErrorf( "unreachable" ) )
 }
 
-func ( r *BinReader ) ReadReactorValue( rep ReactorEventProcessor ) error {
+func ( r *BinReader ) ReadReactorValue( 
+    rep mgRct.ReactorEventProcessor ) error {
+
     return r.implReadValue( rep )
 }
 
 func ( r *BinReader ) ReadValue() ( mg.Value, error ) {
-    vb := NewValueBuilder()
-    pip := InitReactorPipeline( vb )
+    vb := mgRct.NewValueBuilder()
+    pip := mgRct.InitReactorPipeline( vb )
     err := r.ReadReactorValue( pip )
     if err != nil { return nil, err }
     return vb.GetValue(), nil
-}
-
-func ( r *BinReader ) readRangeVal() ( val mg.Value, err error ) {
-    var tc uint8
-    if tc, err = r.PeekTypeCode(); err != nil { return }
-    switch tc {
-    case tcString, tcTimestamp, tcInt32, tcInt64, tcUint32, tcUint64,
-         tcFloat32, tcFloat64: 
-        return r.ReadValue()
-    case tcNull: 
-        _, err = r.ReadValue()
-        return
-    }
-    err = fmt.Errorf( "mingle: Unrecognized range value code: 0x%02x", tc )
-    return
-} 
-
-// Note: type code is already read
-func ( r *BinReader ) readRangeRestriction() ( rr *RangeRestriction,
-                                               err error ) {
-    rr = &RangeRestriction{}
-    if rr.MinClosed, err = r.readBool(); err != nil { return }
-    if rr.Min, err = r.readRangeVal(); err != nil { return }
-    if rr.Max, err = r.readRangeVal(); err != nil { return }
-    if rr.MaxClosed, err = r.readBool(); err != nil { return }
-    return
-}
-
-func ( r *BinReader ) readRestriction() ( vr ValueRestriction, err error ) {
-    var tc uint8
-    if tc, err = r.ReadTypeCode(); err != nil { return }
-    switch tc {
-    case tcNull: return nil, nil
-    case tcRegexRestrict: return r.readRegexRestriction()
-    case tcRangeRestrict: return r.readRangeRestriction()
-    }
-    err = fmt.Errorf( "mingle: Unrecognized restriction type code: 0x%02x", tc )
-    return
-}
-
-func ( r *BinReader ) ReadAtomicTypeReference() ( at *mg.AtomicTypeReference,
-                                                  err error ) {
-    if _, err = r.ExpectTypeCode( tcAtomTyp ); err != nil { return }
-    at = &mg.AtomicTypeReference{}
-    if at.Name, err = r.ReadQualifiedTypeName(); err != nil { return }
-    if at.Restriction, err = r.readRestriction(); err != nil { return }
-    return
-}
-
-func ( r *BinReader ) ReadListTypeReference() ( lt *mg.ListTypeReference,
-                                               err error ) {
-    if _, err = r.ExpectTypeCode( tcListTyp ); err != nil { return }
-    lt = &mg.ListTypeReference{}
-    if lt.ElementType, err = r.ReadTypeReference(); err != nil { return }
-    if lt.AllowsEmpty, err = r.readBool(); err != nil { return }
-    return
-}
-
-func ( r *BinReader ) ReadNullableTypeReference() ( 
-    nt *mg.NullableTypeReference, err error ) {
-
-    if _, err = r.ExpectTypeCode( tcNullableTyp ); err != nil { return }
-    var typ mg.TypeReference
-    if typ, err = r.ReadTypeReference(); err != nil { return }
-    nt = mg.MustNullableTypeReference( typ )
-    return
-}
-
-func ( r *BinReader ) ReadPointerTypeReference() ( 
-    pt *mg.PointerTypeReference, err error ) {
-
-    if _, err = r.ExpectTypeCode( tcPointerTyp ); err != nil { return }
-    var typ mg.TypeReference
-    if typ, err = r.ReadTypeReference(); err != nil { return }
-    return mg.NewPointerTypeReference( typ ), nil
-}
-
-func ( r *BinReader ) ReadTypeReference() ( typ mg.TypeReference, err error ) {
-    var tc uint8
-    if tc, err = r.PeekTypeCode(); err != nil { return }
-    switch tc {
-    case tcAtomTyp: return r.ReadAtomicTypeReference()
-    case tcListTyp: return r.ReadListTypeReference()
-    case tcNullableTyp: return r.ReadNullableTypeReference()
-    case tcPointerTyp: return r.ReadPointerTypeReference()
-    }
-    err = r.ioErrorf( "Unrecognized type reference code: 0x%02x", tc )
-    return
-}
-
-func TypeReferenceFromBytes( buf []byte ) ( mg.TypeReference, error ) {
-    return NewReaderBytes( buf ).ReadTypeReference()
-}
-
-func IdPathFromBytes( buf []byte ) ( objpath.PathNode, error ) {
-    return NewReaderBytes( buf ).ReadIdPath()
-}
-
-func IdentifierFromBytes( buf []byte ) ( *mg.Identifier, error ) {
-    return NewReaderBytes( buf ).ReadIdentifier()
-}
-
-func QualifiedTypeNameFromBytes( buf []byte ) ( *mg.QualifiedTypeName, error ) {
-    return NewReaderBytes( buf ).ReadQualifiedTypeName()
-}
-
-func NamespaceFromBytes( buf []byte ) ( *mg.Namespace, error ) {
-    return NewReaderBytes( buf ).ReadNamespace()
 }

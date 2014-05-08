@@ -4,7 +4,6 @@ import (
     mg "mingle"
     "bitgirder/objpath"
     "bitgirder/pipeline"
-//    "bytes"
 //    "log"
 )
 
@@ -215,8 +214,9 @@ func ( sr *RequestReactor ) getFieldValueForBuffer(
     return
 }
 
-func ( sr *RequestReactor ) getFieldValue( 
+func ( sr *RequestReactor ) getFieldValue(
     ve *ValueEvent, reqFld requestFieldType ) ( interface{}, error ) {
+
     path := ve.GetPath()
     switch v := ve.Val.( type ) {
     case mg.String: 
