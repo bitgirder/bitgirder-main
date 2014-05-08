@@ -1984,7 +1984,7 @@ func ( t *crtInit ) addNullableTests() {
         t.addSucc( nil, expct, typ )
     }
     for _, prim := range PrimitiveTypes {
-        if isNullableType( prim ) {
+        if IsNullableType( prim ) {
             typs = append( typs, MustNullableTypeReference( prim ) )
         } else {
             t.addNullValueError( nil, prim )

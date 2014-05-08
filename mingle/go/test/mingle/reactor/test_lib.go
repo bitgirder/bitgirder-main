@@ -218,3 +218,8 @@ func ( f *TestPointerIdFactory ) nextHeapTestValue(
 func checkNoError( err error, c *ReactorTestCall ) {
     if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
 }
+
+func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
+    ca := mg.CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
+    ca.Call()
+}

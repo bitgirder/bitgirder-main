@@ -309,7 +309,7 @@ func ( tc typeCompleter ) AsNullableType(
     typ interface{} ) ( interface{}, error ) {
 
     baseTyp := typ.( TypeReference )
-    if isNullableType( baseTyp ) { 
+    if IsNullableType( baseTyp ) { 
         return MustNullableTypeReference( baseTyp ), nil
     }
     return nil, errors.New( "not a nullable type" )

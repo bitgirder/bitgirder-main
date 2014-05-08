@@ -414,7 +414,7 @@ type NullableTypeReference struct {
     Type TypeReference
 }
 
-func isNullableType( typ TypeReference ) bool {
+func IsNullableType( typ TypeReference ) bool {
     switch v := typ.( type ) {
     case *ListTypeReference: return true;
     case *NullableTypeReference: return false;
@@ -427,7 +427,7 @@ func isNullableType( typ TypeReference ) bool {
 }
 
 func MustNullableTypeReference( typ TypeReference ) *NullableTypeReference {
-    if ! isNullableType( typ ) {
+    if ! IsNullableType( typ ) {
         panic( libErrorf( "not a nullable type (%T): %s", typ, typ ) )
     }
     return &NullableTypeReference{ Type: typ }

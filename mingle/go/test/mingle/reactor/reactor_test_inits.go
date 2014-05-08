@@ -3,12 +3,9 @@ package reactor
 import (
     mg "mingle"
     "bitgirder/objpath"
-//    "bitgirder/assert"
     "fmt"
-//    "encoding/base64"
+    "encoding/base64"
     "bytes"
-//    "strconv"
-//    "log"
 )
 
 var qname = mg.MustQualifiedTypeName
@@ -16,6 +13,7 @@ var qname = mg.MustQualifiedTypeName
 func typeRef( val interface{} ) mg.TypeReference {
     switch v := val.( type ) {
     case mg.TypeReference: return v
+    case *mg.QualifiedTypeName: return &mg.AtomicTypeReference{ Name: v }
     case string: return mg.MustTypeReference( v )
     }
     panic( libErrorf( "unhandled type ref input: %T", val ) )
@@ -1318,942 +1316,941 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-//type ResponseReactorTest struct {
-//    In mg.Value
-//    ResVal mg.Value
-//    ResEvents []EventExpectation
-//    ErrVal mg.Value
-//    ErrEvents []EventExpectation
-//    Error error
-//}
-//
-//func initResponseTests() {
-//    idFact := NewTestPointerIdFactory()
-//    addSucc := func( in, res, err mg.Value ) {
-//        AddStdReactorTests(
-//            &ResponseReactorTest{ In: in, ResVal: res, ErrVal: err } )
-//    }
-//    i32Val1 := mg.Int32( 1 )
-//    err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
-//    addSucc( mg.MustStruct( QnameResponse ), nil, nil )
-//    addSucc( mg.MustSymbolMap(), nil, nil )
-//    addSucc( mg.MustSymbolMap( IdResult, mg.NullVal ), mg.NullVal, nil )
-//    addSucc( mg.MustSymbolMap( IdResult, i32Val1 ), i32Val1, nil )
-//    addSucc( mg.MustSymbolMap( IdError, mg.NullVal ), nil, mg.NullVal )
-//    addSucc( mg.MustSymbolMap( IdError, err1 ), nil, err1 )
-//    addSucc( mg.MustSymbolMap( IdError, int32( 1 ) ), nil, i32Val1 )
-//    pathRes := objpath.RootedAt( IdResult )
-//    pathResF1 := pathRes.Descend( id( "f1" ) )
-//    pathErr := objpath.RootedAt( IdError )
-//    pathErrF1 := pathErr.Descend( id( "f1" ) )
-//    AddStdReactorTests(
-//        &ResponseReactorTest{
-//            In: mg.MustStruct( QnameResponse, "result", int32( 1 ) ),
-//            ResVal: i32Val1,
-//            ResEvents: []EventExpectation{ 
-//                { NewValueEvent( i32Val1 ), pathRes },
-//            },
-//        },
-//        &ResponseReactorTest{
-//            In: mg.MustSymbolMap( "result", mg.MustSymbolMap( "f1", int32( 1 ) ) ),
-//            ResVal: mg.MustSymbolMap( "f1", int32( 1 ) ),
-//            ResEvents: []EventExpectation{
-//                { idFact.NextMapStart(), pathRes },
-//                { NewFieldStartEvent( id( "f1" ) ), pathResF1 },
-//                { NewValueEvent( i32Val1 ), pathResF1 },
-//                { NewEndEvent(), pathRes },
-//            },
-//        },
-//        &ResponseReactorTest{
-//            In: mg.MustSymbolMap( "error", int32( 1 ) ),
-//            ErrVal: i32Val1,
-//            ErrEvents: []EventExpectation{ 
-//                { NewValueEvent( i32Val1 ), pathErr },
-//            },
-//        },
-//        &ResponseReactorTest{
-//            In: mg.MustSymbolMap( "error", err1 ),
-//            ErrVal: err1,
-//            ErrEvents: []EventExpectation{
-//                { NewStructStartEvent( err1.Type ), pathErr },
-//                { NewFieldStartEvent( id( "f1" ) ), pathErrF1 },
-//                { NewValueEvent( i32Val1 ), pathErrF1 },
-//                { NewEndEvent(), pathErr },
-//            },
-//        },
-//    )
-//    addFail := func( in mg.Value, err error ) {
-//        AddStdReactorTests( &ResponseReactorTest{ In: in, Error: err } )
-//    }
-//    addFail(
-//        err1.Fields,
-//        NewUnrecognizedFieldError( nil, id( "f1" ) ),
-//    )
-//    addFail(
-//        mg.MustStruct( "ns1@v1/Response" ),
-//        mg.NewTypeCastError( 
-//            TypeResponse, MustTypeReference( "ns1@v1/Response" ), nil ),
-//    )
-//    addFail(
-//        mg.MustSymbolMap( IdResult, i32Val1, IdError, err1 ),
-//        mg.NewValueCastError( 
-//            nil, "response has both a result and an error value" ),
-//    )
-//}
+func initResponseTests( b *ReactorTestSetBuilder ) {
+    id := mg.MakeTestId
+    idFact := NewTestPointerIdFactory()
+    addSucc := func( in, res, err mg.Value ) {
+        b.AddTests(
+            &ResponseReactorTest{ In: in, ResVal: res, ErrVal: err } )
+    }
+    i32Val1 := mg.Int32( 1 )
+    err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
+    addSucc( mg.MustStruct( mg.QnameResponse ), nil, nil )
+    addSucc( mg.MustSymbolMap(), nil, nil )
+    addSucc( mg.MustSymbolMap( mg.IdResult, mg.NullVal ), mg.NullVal, nil )
+    addSucc( mg.MustSymbolMap( mg.IdResult, i32Val1 ), i32Val1, nil )
+    addSucc( mg.MustSymbolMap( mg.IdError, mg.NullVal ), nil, mg.NullVal )
+    addSucc( mg.MustSymbolMap( mg.IdError, err1 ), nil, err1 )
+    addSucc( mg.MustSymbolMap( mg.IdError, int32( 1 ) ), nil, i32Val1 )
+    pathRes := objpath.RootedAt( mg.IdResult )
+    pathResF1 := pathRes.Descend( id( 1 ) )
+    pathErr := objpath.RootedAt( mg.IdError )
+    pathErrF1 := pathErr.Descend( id( 1 ) )
+    b.AddTests(
+        &ResponseReactorTest{
+            In: mg.MustStruct( mg.QnameResponse, "result", int32( 1 ) ),
+            ResVal: i32Val1,
+            ResEvents: []EventExpectation{ 
+                { NewValueEvent( i32Val1 ), pathRes },
+            },
+        },
+        &ResponseReactorTest{
+            In: mg.MustSymbolMap( 
+                "result", mg.MustSymbolMap( "f1", int32( 1 ) ) ),
+            ResVal: mg.MustSymbolMap( "f1", int32( 1 ) ),
+            ResEvents: []EventExpectation{
+                { idFact.NextMapStart(), pathRes },
+                { NewFieldStartEvent( id( 1 ) ), pathResF1 },
+                { NewValueEvent( i32Val1 ), pathResF1 },
+                { NewEndEvent(), pathRes },
+            },
+        },
+        &ResponseReactorTest{
+            In: mg.MustSymbolMap( "error", int32( 1 ) ),
+            ErrVal: i32Val1,
+            ErrEvents: []EventExpectation{ 
+                { NewValueEvent( i32Val1 ), pathErr },
+            },
+        },
+        &ResponseReactorTest{
+            In: mg.MustSymbolMap( "error", err1 ),
+            ErrVal: err1,
+            ErrEvents: []EventExpectation{
+                { NewStructStartEvent( err1.Type ), pathErr },
+                { NewFieldStartEvent( id( 1 ) ), pathErrF1 },
+                { NewValueEvent( i32Val1 ), pathErrF1 },
+                { NewEndEvent(), pathErr },
+            },
+        },
+    )
+    addFail := func( in mg.Value, err error ) {
+        b.AddTests( &ResponseReactorTest{ In: in, Error: err } )
+    }
+    addFail(
+        err1.Fields,
+        mg.NewUnrecognizedFieldError( nil, id( 1 ) ),
+    )
+    addFail(
+        mg.MustStruct( "ns1@v1/Response" ),
+        mg.NewTypeCastError( 
+            mg.TypeResponse, mg.MustTypeReference( "ns1@v1/Response" ), nil ),
+    )
+    addFail(
+        mg.MustSymbolMap( mg.IdResult, i32Val1, mg.IdError, err1 ),
+        mg.NewValueCastError( 
+            nil, "response has both a result and an error value" ),
+    )
+}
 
 func initServiceTests( b *ReactorTestSetBuilder ) {
     initRequestTests( b )
-//    initResponseTests()
+    initResponseTests( b )
 }
 
-//type CastReactorTest struct {
-//    In interface{}
-//    Expect mg.Value
-//    Type mg.TypeReference
-//    Path objpath.PathNode
-//    Err error
-//    Profile string
-//}
+var crtPathDefault = objpath.RootedAt( mg.MustIdentifier( "inVal" ) )
+
+type crtInit struct {
+    b *ReactorTestSetBuilder
+    buf1 mg.Buffer
+    tm1 mg.Timestamp
+    map1 *mg.SymbolMap
+    en1 *mg.Enum
+    struct1 *mg.Struct
+}
+
+func ( t *crtInit ) initStdVals() {
+    t.buf1 = mg.Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
+    t.tm1 = mg.MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
+    t.map1 = mg.MustSymbolMap( "key1", 1, "key2", "val2" )
+    t.en1 = mg.MustEnum( "ns1@v1/E1", "en-val1" )
+    t.struct1 = mg.MustStruct( "ns1@v1/S1", "key1", "val1" )
+}
+
+func ( t *crtInit ) addCrt( crt *CastReactorTest ) { t.b.AddTests( crt ) }
+
+func ( t *crtInit ) addCrtDefault( crt *CastReactorTest ) {
+    crt.Path = crtPathDefault
+    t.addCrt( crt )
+}
+
+func ( t *crtInit ) createSucc(
+    in, expct interface{}, typ interface{} ) *CastReactorTest {
+
+    return &CastReactorTest{ 
+        In: mg.MustValue( in ), 
+        Expect: mg.MustValue( expct ), 
+        Type: typeRef( typ ),
+    }
+}
+
+func ( t *crtInit ) addSucc( 
+    in, expct interface{}, typ interface{} ) {
+    t.addCrtDefault( t.createSucc( in, expct, typ ) )
+}
+
+func ( t *crtInit ) addIdent( in interface{}, typ interface{} ) {
+    v := mg.MustValue( in )
+    t.addSucc( v, v, typeRef( typ ) )
+}
+
+func ( t *crtInit ) addBaseTypeTests() {
+    t.addIdent( mg.Boolean( true ), mg.TypeBoolean )
+    t.addIdent( t.buf1, mg.TypeBuffer )
+    t.addIdent( "s", mg.TypeString )
+    t.addIdent( mg.Int32( 1 ), mg.TypeInt32 )
+    t.addIdent( mg.Int64( 1 ), mg.TypeInt64 )
+    t.addIdent( mg.Uint32( 1 ), mg.TypeUint32 )
+    t.addIdent( mg.Uint64( 1 ), mg.TypeUint64 )
+    t.addIdent( mg.Float32( 1.0 ), mg.TypeFloat32 )
+    t.addIdent( mg.Float64( 1.0 ), mg.TypeFloat64 )
+    t.addIdent( t.tm1, mg.TypeTimestamp )
+    t.addIdent( t.en1, t.en1.Type )
+    t.addIdent( t.map1, mg.TypeSymbolMap )
+    t.addIdent( t.struct1, t.struct1.Type )
+    t.addIdent( nil, mg.TypeNullableValue )
+    t.addSucc( 
+        mg.Int32( -1 ), mg.Uint32( uint32( 4294967295 ) ), mg.TypeUint32 )
+    t.addSucc( 
+        mg.Int64( -1 ), mg.Uint32( uint32( 4294967295 ) ), mg.TypeUint32 )
+    t.addSucc( 
+        mg.Int32( -1 ), 
+        mg.Uint64( uint64( 18446744073709551615 ) ), 
+        mg.TypeUint64,
+    )
+    t.addSucc( 
+        mg.Int64( -1 ), 
+        mg.Uint64( uint64( 18446744073709551615 ) ), 
+        mg.TypeUint64,
+    )
+    t.addSucc( "true", true, mg.TypeBoolean )
+    t.addSucc( "TRUE", true, mg.TypeBoolean )
+    t.addSucc( "TruE", true, mg.TypeBoolean )
+    t.addSucc( "false", false, mg.TypeBoolean )
+    t.addSucc( true, "true", mg.TypeString )
+    t.addSucc( false, "false", mg.TypeString )
+}
+
+func ( t *crtInit ) createTcError0(
+    in interface{}, 
+    typExpct, typAct, callTyp interface{}, 
+    p objpath.PathNode ) *CastReactorTest {
+
+    return &CastReactorTest{
+        In: mg.MustValue( in ),
+        Type: typeRef( callTyp ),
+        Err: mg.NewTypeCastError( 
+            typeRef( typExpct ),
+            typeRef( typAct ),
+            p,
+        ),
+    }
+}
+
+func ( t *crtInit ) addTcError0(
+    in interface{}, 
+    typExpct, typAct, callTyp interface{}, 
+    p objpath.PathNode ) {
+
+    t.addCrtDefault( t.createTcError0( in, typExpct, typAct, callTyp, p ) )
+}
+
+func ( t *crtInit ) createTcError(
+    in interface{}, 
+    typExpct, typAct interface{} ) *CastReactorTest {
+    return t.createTcError0( in, typExpct, typAct, typExpct, crtPathDefault )
+}
+
+func ( t *crtInit ) addTcError(
+    in interface{}, typExpct, typAct interface{} ) {
+    t.addTcError0( in, typExpct, typAct, typExpct, crtPathDefault )
+}
+
+func ( t *crtInit ) addMiscTcErrors() {
+    t.addTcError( t.en1, "ns1@v1/Bad", t.en1.Type )
+    t.addTcError( t.struct1, "ns1@v1/Bad", t.struct1.Type )
+    t.addTcError( "s", mg.TypeNull, mg.TypeString )
+    t.addTcError( int32( 1 ), "Buffer", "Int32" )
+    t.addTcError( int32( 1 ), "Buffer?", "Int32" )
+    t.addTcError( true, "Float32", "Boolean" )
+    t.addTcError( true, "&Float32", "Boolean" )
+    t.addTcError( true, "&Float32?", "Boolean" )
+    t.addTcError( true, "Int32", "Boolean" )
+    t.addTcError( true, "&Int32", "Boolean" )
+    t.addTcError( true, "&Int32?", "Boolean" )
+    t.addTcError( mg.MustList( 1, 2 ), mg.TypeString, mg.TypeOpaqueList )
+    t.addTcError( mg.MustList(), "String?", mg.TypeOpaqueList )
+    t.addTcError( "s", "String*", "String" )
+    t.addCrtDefault(
+        &CastReactorTest{
+            In: mg.MustList( 1, t.struct1 ),
+            Type: typeRef( "Int32*" ),
+            Err: mg.NewTypeCastError(
+                typeRef( "Int32" ),
+                &mg.AtomicTypeReference{ Name: t.struct1.Type },
+                crtPathDefault.StartList().Next(),
+            ),
+        },
+    )
+    t.addTcError( t.struct1, "&Int32?", t.struct1.Type )
+    t.addTcError( 12, t.struct1.Type, "Int64" )
+    for _, prim := range mg.PrimitiveTypes {
+        // not an err for prims mg.Value and mg.SymbolMap
+        if prim != mg.TypeSymbolMap { 
+            t.addTcError( t.struct1, prim, t.struct1.Type )
+        }
+    }
+}
+
+func ( t *crtInit ) createVcError0(
+    val interface{}, 
+    typ interface{}, 
+    path objpath.PathNode, 
+    msg string ) *CastReactorTest {
+    return &CastReactorTest{
+        In: mg.MustValue( val ),
+        Type: typeRef( typ ),
+        Err: mg.NewValueCastError( path, msg ),
+    }
+}
+    
+
+func ( t *crtInit ) addVcError0( 
+    val interface{}, typ interface{}, path objpath.PathNode, msg string ) {
+    t.addCrtDefault( t.createVcError0( val, typ, path, msg ) )
+}
+
+func ( t *crtInit ) createVcError(
+    val interface{}, 
+    typ interface{}, 
+    msg string ) *CastReactorTest {
+    return t.createVcError0( val, typ, crtPathDefault, msg )
+}
+
+func ( t *crtInit ) addVcError( 
+    val interface{}, typ interface{}, msg string ) {
+    t.addVcError0( val, typ, crtPathDefault, msg )
+}
+
+func ( t *crtInit ) addNullValueError(
+    val interface{}, typ interface{} ) {
+
+    t.addVcError( val, typ, "Value is null" )
+}
+
+func ( t *crtInit ) addMiscVcErrors() {
+    t.addVcError( "s", mg.TypeBoolean, `Invalid boolean value: "s"` )
+    t.addVcError( nil, mg.TypeString, "Value is null" )
+    t.addVcError( nil, `String~"a"`, "Value is null" )
+    t.addVcError( mg.MustList(), "String+", "empty list" )
+    t.addVcError0( 
+        mg.MustList( mg.MustList( int32( 1 ), int32( 2 ) ), mg.MustList() ), 
+        "Int32+*", 
+        crtPathDefault.StartList().Next(),
+        "empty list",
+    )
+}
+
+func ( t *crtInit ) addPtrRefSucc(
+    typExpct interface{}, valExpct mg.Value, evs ...ReactorEvent ) {
+
+    t.b.AddTests(
+        &CastReactorTest{
+            Expect: valExpct,
+            In: CopySource( evs ),
+            Type: typeRef( typExpct ),
+        },
+    )
+}
+
+func ( t *crtInit ) addPtrRefFail0(
+    typExpct, typAct interface{}, 
+    path objpath.PathNode,
+    evs ...ReactorEvent ) {
+    
+    expct, act := typeRef( typExpct ), typeRef( typAct )
+    t.b.AddTests(
+        &CastReactorTest{
+            In: CopySource( evs ),
+            Type: expct,
+            Path: path,
+            Err: mg.NewValueCastErrorf( crtPathDefault,
+                "expected %s but got a reference to %s", expct, act ),
+        },
+    )
+}
+
+func ( t *crtInit ) addPtrRefFail( 
+    typExpct, typAct interface{}, evs ...ReactorEvent ) {
+
+    t.addPtrRefFail0( typExpct, typAct, crtPathDefault, evs... )
+}
+
+func ( t *crtInit ) addStringTests() {
+    t.addIdent( "s", "String?" )
+    t.addIdent( "abbbc", `String~"^ab+c$"` )
+    t.addIdent( "abbbc", `String~"^ab+c$"?` )
+    t.addIdent( nil, `String~"^ab+c$"?` )
+    t.addIdent( "", `String~"^a*"?` )
+    t.addSucc( 
+        mg.MustList( "123", 129 ), 
+        mg.MustList( "123", "129" ),
+        `String~"^\\d+$"*`,
+    )
+    for _, quant := range []string { "*", "+", "?*", "*?" } {
+        val := mg.MustList( "a", "aaaaaa" )
+        t.addSucc( val, val, `String~"^a+$"` + quant )
+    }
+    t.addVcError( 
+        "ac", 
+        `String~"^ab+c$"`,
+        `Value "ac" does not satisfy restriction "^ab+c$"`,
+    )
+    t.addVcError(
+        "ab",
+        `String~"^a*$"?`,
+        "Value \"ab\" does not satisfy restriction \"^a*$\"",
+    )
+    t.addVcError0(
+        mg.MustList( "a", "b" ),
+        `String~"^a+$"*`,
+        crtPathDefault.StartList().Next(),
+        "Value \"b\" does not satisfy restriction \"^a+$\"",
+    )
+    t.addTcError( mg.EmptySymbolMap(), mg.TypeString, mg.TypeSymbolMap )
+    t.addTcError( mg.EmptyList(), mg.TypeString, mg.TypeOpaqueList )
+}
+
+func ( t *crtInit ) addIdentityNumTests() {
+    t.addIdent( int64( 1 ), "Int64~[-1,1]" )
+    t.addIdent( int64( 1 ), "Int64~(,2)" )
+    t.addIdent( int64( 1 ), "Int64~[1,1]" )
+    t.addIdent( int64( 1 ), "Int64~[-2, 32)" )
+    t.addIdent( int32( 1 ), "Int32~[-2, 32)" )
+    t.addIdent( uint32( 3 ), "Uint32~[2,32)" )
+    t.addIdent( uint64( 3 ), "Uint64~[2,32)" )
+    t.addIdent( mg.Float32( -1.1 ), "Float32~[-2.0,32)" )
+    t.addIdent( mg.Float64( -1.1 ), "Float64~[-2.0,32)" )
+    numTests := []struct{ val mg.Value; str string; typ mg.TypeReference } {
+        { val: mg.Int32( 1 ), str: "1", typ: mg.TypeInt32 },
+        { val: mg.Int64( 1 ), str: "1", typ: mg.TypeInt64 },
+        { val: mg.Uint32( 1 ), str: "1", typ: mg.TypeUint32 },
+        { val: mg.Uint64( 1 ), str: "1", typ: mg.TypeUint64 },
+        { val: mg.Float32( 1.0 ), str: "1", typ: mg.TypeFloat32 },
+        { val: mg.Float64( 1.0 ), str: "1", typ: mg.TypeFloat64 },
+    }
+    s1 := mg.MustStruct( "ns1@v1/S1" )
+    for _, numCtx := range numTests {
+        t.addSucc( numCtx.val, numCtx.str, mg.TypeString )
+        t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
+        ptrVal := mg.NewHeapValue( numCtx.val )
+        ptrTyp := mg.NewPointerTypeReference( numCtx.typ )
+        t.addSucc( numCtx.val, ptrVal, ptrTyp )
+        t.addSucc( numCtx.str, ptrVal, ptrTyp )
+        t.addSucc( ptrVal, numCtx.str, mg.TypeString )
+        t.addSucc( ptrVal, numCtx.val, numCtx.typ )
+        t.addTcError( mg.EmptySymbolMap(), numCtx.typ, mg.TypeSymbolMap )
+        t.addTcError( mg.EmptySymbolMap(), ptrTyp, mg.TypeSymbolMap )
+        t.addVcError( nil, numCtx.typ, "Value is null" )
+        t.addTcError( mg.EmptyList(), numCtx.typ, mg.TypeOpaqueList )
+        t.addTcError( t.buf1, numCtx.typ, mg.TypeBuffer )
+        t.addCrtDefault(
+            t.createTcError0(
+                mg.NewHeapValue( t.buf1 ),
+                ptrTyp.Type,
+                mg.TypeBuffer,
+                ptrTyp,
+                crtPathDefault,
+            ),
+        )
+        t.addTcError( s1, numCtx.typ, s1.Type )
+        t.addTcError( ptrVal, s1.Type, numCtx.typ )
+        t.addTcError( s1, ptrTyp, s1.Type )
+        for _, valCtx := range numTests {
+            t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
+            t.addSucc( mg.NewHeapValue( valCtx.val ), numCtx.val, numCtx.typ )
+            t.addSucc( valCtx.val, ptrVal, ptrTyp )
+            t.addSucc( mg.NewHeapValue( valCtx.val ), ptrVal, ptrTyp )
+        }
+    }
+}
+
+func ( t *crtInit ) addTruncateNumTests() {
+    posVals := 
+        []mg.Value{ mg.Float32( 1.1 ), mg.Float64( 1.1 ), mg.String( "1.1" ) }
+    for _, val := range posVals {
+        t.addSucc( val, mg.Int32( 1 ), mg.TypeInt32 )
+        t.addSucc( val, mg.Int64( 1 ), mg.TypeInt64 )
+        t.addSucc( val, mg.Uint32( 1 ), mg.TypeUint32 )
+        t.addSucc( val, mg.Uint64( 1 ), mg.TypeUint64 )
+    }
+    negVals := []mg.Value{ 
+        mg.Float32( -1.1 ), mg.Float64( -1.1 ), mg.String( "-1.1" ) }
+    for _, val := range negVals {
+        t.addSucc( val, mg.Int32( -1 ), mg.TypeInt32 )
+        t.addSucc( val, mg.Int64( -1 ), mg.TypeInt64 )
+    }
+    t.addSucc( int64( 1 << 31 ), int32( -2147483648 ), mg.TypeInt32 )
+    t.addSucc( int64( 1 << 33 ), int32( 0 ), mg.TypeInt32 )
+    t.addSucc( int64( 1 << 31 ), uint32( 1 << 31 ), mg.TypeUint32 )
+}
+
+func ( t *crtInit ) addNumTests() {
+    for _, typ := range mg.NumericTypes {
+        t.addVcError( "not-a-num", typ, `invalid syntax: not-a-num` )
+    }
+    t.addIdentityNumTests()
+    t.addTruncateNumTests()
+    t.addSucc( "1", int64( 1 ), "Int64~[-1,1]" ) // cover mg.String with range
+    rngErr := func( val string, typ mg.TypeReference ) {
+        t.addVcError( val, typ, fmt.Sprintf( "value out of range: %s", val ) )
+    }
+    rngErr( "2147483648", mg.TypeInt32 )
+    rngErr( "-2147483649", mg.TypeInt32 )
+    rngErr( "9223372036854775808", mg.TypeInt64 )
+    rngErr( "-9223372036854775809", mg.TypeInt64 )
+    rngErr( "4294967296", mg.TypeUint32 )
+    t.addVcError( "-1", mg.TypeUint32, "value out of range: -1" )
+    t.addVcError( "-1", mg.NewPointerTypeReference( mg.TypeUint32 ), 
+        "value out of range: -1" )
+    rngErr( "18446744073709551616", mg.TypeUint64 )
+    t.addVcError( "-1", mg.TypeUint64, "value out of range: -1" )
+    for _, tmpl := range []string{ "%s", "&%s", "%s?" } {
+        t.addVcError(
+            12, fmt.Sprintf( tmpl, "Int32~[0,10)" ), 
+            "Value 12 does not satisfy restriction [0,10)" )
+    }
+}
+
+func ( t *crtInit ) addBufferTests() {
+    buf1B64 := mg.String( base64.StdEncoding.EncodeToString( t.buf1 ) )
+    t.addSucc( t.buf1, buf1B64, mg.TypeString )
+    t.addSucc( mg.NewHeapValue( t.buf1 ), buf1B64, mg.TypeString )
+    t.addSucc( mg.NewHeapValue( t.buf1 ), mg.NewHeapValue( buf1B64 ),
+        mg.NewPointerTypeReference( mg.TypeString ) )
+    t.addSucc( buf1B64, t.buf1, mg.TypeBuffer  )
+    t.addSucc( mg.NewHeapValue( buf1B64 ), t.buf1, mg.TypeBuffer )
+    t.addSucc( mg.NewHeapValue( buf1B64 ), mg.NewHeapValue( t.buf1 ),
+        mg.NewPointerTypeReference( mg.TypeBuffer ) )
+    t.addVcError( "abc$/@", mg.TypeBuffer, 
+        "Invalid base64 string: illegal base64 data at input byte 3" )
+}
+
+func ( t *crtInit ) addTimeTests() {
+    t.addIdent(
+        mg.Now(), `Timestamp~["1970-01-01T00:00:00Z","2200-01-01T00:00:00Z"]` )
+    t.addSucc( t.tm1, t.tm1.Rfc3339Nano(), mg.TypeString )
+    t.addSucc( t.tm1.Rfc3339Nano(), t.tm1, mg.TypeTimestamp )
+    t.addVcError(
+        mg.MustTimestamp( "2012-01-01T00:00:00Z" ),
+        `mingle:core@v1/Timestamp~` +
+            `["2000-01-01T00:00:00Z","2001-01-01T00:00:00Z"]`,
+        "Value 2012-01-01T00:00:00Z does not satisfy restriction " +
+            "[\"2000-01-01T00:00:00Z\",\"2001-01-01T00:00:00Z\"]",
+    )
+}
+
+func ( t *crtInit ) addEnumTests() {
+    ptrTyp := mg.NewPointerTypeReference( 
+        &mg.AtomicTypeReference{ Name: t.en1.Type } )
+    t.addSucc( mg.NewHeapValue( t.en1 ), mg.NewHeapValue( t.en1 ), ptrTyp )
+    t.addSucc( t.en1, mg.NewHeapValue( t.en1 ), ptrTyp )
+    t.addSucc( t.en1, "en-val1", mg.TypeString  )
+    t.addSucc( t.en1, mg.NewHeapValue( mg.MustValue( "en-val1" ) ), 
+        mg.NewPointerTypeReference( mg.TypeString ) )
+    t.addTcError( mg.EmptySymbolMap(), t.en1.Type, mg.TypeSymbolMap )
+    t.addNullValueError( nil, t.en1.Type )
+    t.addTcError( t.en1, "ns1@v1/E2", t.en1.Type )
+    t.addTcError( mg.NewHeapValue( t.en1 ), "ns1@v1/E2", t.en1.Type )
+    t.addTcError( t.en1, "&ns1@v1/E2", t.en1.Type )
+    t.addCrtDefault(
+        t.createTcError0(
+            mg.NewHeapValue( t.en1 ),
+            "ns1@v1/E2",
+            "ns1@v1/E1",
+            "&ns1@v1/E2",
+            crtPathDefault,
+        ),
+    )
+}
+
+func ( t *crtInit ) addNullableTests() {
+    typs := []mg.TypeReference{}
+    addNullSucc := func( expct interface{}, typ mg.TypeReference ) {
+        t.addSucc( nil, expct, typ )
+    }
+    for _, prim := range mg.PrimitiveTypes {
+        if mg.IsNullableType( prim ) {
+            typs = append( typs, mg.MustNullableTypeReference( prim ) )
+        } else {
+            t.addNullValueError( nil, prim )
+        }
+    }
+    typs = append( typs,
+        mg.MustTypeReference( "&Null?" ),
+        mg.MustTypeReference( "String?" ),
+        mg.MustTypeReference( "String*?" ),
+        mg.MustTypeReference( "&Int32?*?" ),
+        mg.MustTypeReference( "String+?" ),
+        mg.MustTypeReference( "&ns1@v1/T?" ),
+        mg.MustTypeReference( "ns1@v1/T*?" ),
+    )
+    for _, typ := range typs { addNullSucc( nil, typ ) }
+}
+
+func ( t *crtInit ) addListTests() {
+    for _, quant := range []string{ "*", "**", "***" } {
+        t.addSucc( []interface{}{}, mg.MustList(), "Int64" + quant )
+    }
+    for _, quant := range []string{ "**", "*+" } {
+        v := mg.MustList( mg.MustList(), mg.MustList() )
+        t.addIdent( v, "Int64" + quant )
+    }
+    // test conversions in a deeply nested list
+    t.addSucc(
+        []interface{}{
+            []interface{}{ "1", int32( 1 ), int64( 1 ) },
+            []interface{}{ float32( 1.0 ), float64( 1.0 ) },
+            []interface{}{},
+        },
+        mg.MustList(
+            mg.MustList( mg.Int64( 1 ), mg.Int64( 1 ), mg.Int64( 1 ) ),
+            mg.MustList( mg.Int64( 1 ), mg.Int64( 1 ) ),
+            mg.MustList(),
+        ),
+        "Int64**",
+    )
+    t.addSucc(
+        []interface{}{ int64( 1 ), nil, "hi" },
+        mg.MustList( "1", nil, "hi" ),
+        "String?*",
+    )
+    s1 := mg.MustStruct( "ns1@v1/S1" )
+    t.addSucc(
+        []interface{}{ s1, mg.NewHeapValue( s1 ), nil },
+        mg.MustList( mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), mg.NullVal ),
+        "&ns1@v1/S1?*",
+    )
+    t.addVcError0(
+        []interface{}{ mg.NewHeapValue( s1 ), nil },
+        "&ns1@v1/S1*",
+        crtPathDefault.StartList().SetIndex( 1 ),
+        "Value is null",
+    )
+    t.addVcError0(
+        []interface{}{ s1, nil },
+        "ns1@v1/S1*",
+        crtPathDefault.StartList().SetIndex( 1 ),
+        "Value is null",
+    )
+    t.addSucc(
+        []interface{}{ 
+            int32( 1 ), 
+            []interface{}{}, 
+            []interface{}{ int32( 1 ), int32( 2 ), int32( 3 ) },
+            "s1", 
+            s1, 
+            nil,
+        },
+        mg.MustList(
+            mg.NewHeapValue( mg.Int32( 1 ) ),
+            mg.NewHeapValue( mg.MustList() ),
+            mg.NewHeapValue( 
+                mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) ) ),
+            mg.NewHeapValue( mg.String( "s1" ) ),
+            mg.NewHeapValue( s1 ),
+            mg.NullVal,
+        ),
+        "&Value?*",
+    )
+    t.addSucc( mg.MustList(), mg.MustList(), mg.TypeValue )
+    intList1 := mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
+    t.addSucc( intList1, intList1, mg.TypeValue )
+    t.addSucc( intList1, intList1, mg.TypeOpaqueList )
+    t.addSucc( intList1, intList1, "Int32*?" )
+    t.addSucc( 
+        mg.MustList(), 
+        mg.NewHeapValue( mg.MustList() ), 
+        mg.NewPointerTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+    )
+    t.addSucc( 
+        mg.NewHeapValue( mg.MustList() ), 
+        mg.NewHeapValue( mg.MustList() ),
+        mg.NewPointerTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+    )
+    t.addSucc( mg.NewHeapValue( mg.MustList() ), mg.MustList(), "&Int32*" )
+    t.addSucc( nil, mg.NullVal, "Int32*?" )
+    t.addNullValueError( nil, "Int32*" )
+    t.addNullValueError( nil, "Int32+" )
+    t.addNullValueError( mg.NewHeapValue( mg.NullVal ), "Int32+" )
+    t.addVcError( mg.NewHeapValue( mg.MustList() ), "&Int32+", "empty list" )
+    t.addSucc( 
+        nil, 
+        mg.NullVal,
+        mg.MustNullableTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+    )
+    t.addSucc( 
+        mg.NewHeapValue( mg.NullVal ), 
+        mg.NullVal,
+        mg.MustNullableTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+    )
+}
+
+func ( t *crtInit ) addMapTests() {
+    m1 := mg.MustSymbolMap
+    m2 := func() *mg.SymbolMap { return mg.MustSymbolMap( "f1", int32( 1 ) ) }
+    t.addSucc( m1(), m1(), mg.TypeSymbolMap )
+    t.addSucc( m1(), m1(), mg.TypeValue )
+    t.addSucc( m2(), m2(), mg.TypeSymbolMap )
+    t.addSucc( m2(), m2(), "SymbolMap?" )
+    s2 := &mg.Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2() }
+    t.addSucc( s2, m2(), mg.TypeSymbolMap )
+    l1 := mg.MustList()
+    l2 := mg.MustList( m1(), m2() )
+    lt1 := mg.MustTypeReference( "SymbolMap*" )
+    lt2 := mg.MustTypeReference( "SymbolMap+" )
+    t.addSucc( l1, l1, lt1 )
+    t.addSucc( l2, l2, lt2 )
+    t.addSucc(
+        mg.MustSymbolMap( "f1", mg.NullVal ), 
+        mg.MustSymbolMap( "f1", mg.NullVal ), 
+        mg.TypeValue,
+    )
+    t.addSucc( mg.MustList( s2, s2 ), mg.MustList( m2(), m2() ), lt2 )
+    t.addTcError( int32( 1 ), mg.TypeSymbolMap, mg.TypeInt32 )
+    t.addTcError0(
+        mg.MustList( m1(), int32( 1 ) ),
+        mg.TypeSymbolMap,
+        mg.TypeInt32,
+        lt2,
+        crtPathDefault.StartList().SetIndex( 1 ),
+    )
+    nester := mg.MustSymbolMap( "f1", mg.MustSymbolMap( "f2", int32( 1 ) ) )
+    t.addSucc( nester, nester, mg.TypeSymbolMap )
+    t.addSucc( m1(), mg.NewHeapValue( m1() ), "&SymbolMap" )
+    t.addSucc( mg.NewHeapValue( m1() ), mg.NewHeapValue( m1() ), "&SymbolMap" )
+    t.addSucc( mg.NewHeapValue( m1() ), m1(), "SymbolMap" )
+    t.addSucc( nil, mg.NullVal, "SymbolMap?" )
+    t.addSucc( nil, mg.NullVal, "&SymbolMap?" )
+    t.addSucc( 
+        mg.NewHeapValue( mg.NullVal ), 
+        mg.NewHeapValue( mg.NullVal ),
+        mg.NewPointerTypeReference( mg.MustTypeReference( "SymbolMap?" ) ),
+    )
+    t.addNullValueError( nil, "SymbolMap" )
+    t.addNullValueError( nil, "&SymbolMap" )
+    t.addNullValueError( mg.NewHeapValue( mg.NullVal ), "&SymbolMap" )
+}
+
+func ( t *crtInit ) addStructTests() {
+    qn1 := qname( "ns1@v1/T1" )
+    t1 := qn1.AsAtomicType()
+    s1 := mg.MustStruct( qn1 )
+    s2 := mg.MustStruct( qn1, "f1", int32( 1 ) )
+    qn2 := qname( "ns1@v1/T2" )
+    t2 := qn2.AsAtomicType()
+    s3 := mg.MustStruct( qn2,
+        "f1", int32( 1 ),
+        "f2", s1,
+        "f3", s2,
+        "f4", mg.MustList( s1, s2 ),
+    )
+    t.addSucc( s1, s1, mg.TypeValue )
+    t.addSucc( s1, s1, t1 )
+    t.addSucc( s2, s2, t1 )
+    t.addSucc( s1, mg.NewHeapValue( s1 ), "&ns1@v1/T1?" )
+    t.addSucc( s3, s3, t2 )
+    l1 := mg.MustList( s1, s2 )
+    t.addSucc( l1, l1, &mg.ListTypeReference{ t1, false } )
+    t.addSucc( l1, l1, &mg.ListTypeReference{ t1, true } )
+    s4 := mg.MustStruct( "ns1@v1/T4", "f1", mg.NullVal )
+    t.addSucc( s4, s4, s4.Type )
+    f1 := func( in interface{}, inTyp interface{} ) {
+        t.addTcError0(
+            mg.MustList( s1, in ),
+            t1,
+            inTyp,
+            &mg.ListTypeReference{ t1, false },
+            crtPathDefault.StartList().SetIndex( 1 ),
+        )
+    }
+    f1( s3, t2 )
+    f1( int32( 1 ), "Int32" )
+    t.addSucc( mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), "&ns1@v1/T1" )
+    t.addSucc( s1, mg.NewHeapValue( s1 ), "&ns1@v1/T1" )
+    t.addSucc( mg.NewHeapValue( s1 ), s1, "ns1@v1/T1" )
+    t.addSucc( nil, mg.NullVal, "&ns1@v1/T1?" )
+    t.addNullValueError( nil, "&ns1@v1/T1" )
+    t.addNullValueError( mg.NewHeapValue( mg.NullVal ), "&ns1@v1/T1" )
+    t.addTcError( s1, "ns1@v1/T2", "ns1@v1/T1" )
+    t.addTcError( mg.NewHeapValue( s1 ), "ns1@v1/T2", "ns1@v1/T1" )
+    t.addTcError( s1, "ns1@v1/T2", "ns1@v1/T1" )
+    t.addTcError( mg.NewHeapValue( s1 ), "ns1@v1/T2", "ns1@v1/T1" )
+}
+
+func ( t *crtInit ) addInterfaceImplBasicTests() {
+    add := func( crt *CastReactorTest ) {
+        crt.Profile = "interface-impl-basic"
+        t.addCrtDefault( crt )
+    }
+    addSucc := func( in, expct interface{}, typ interface{} ) {
+        add( t.createSucc( in, expct, typ ) )
+    }
+    t1 := qname( "ns1@v1/T1" )
+    t2 := qname( "ns1@v1/T2" )
+    s1 := mg.MustStruct( t1, "f1", int32( 1 ) )
+    addSucc( mg.MustStruct( t1, "f1", "1" ), s1, t1 )
+    addSucc( mg.MustSymbolMap( "f1", "1" ), s1, t1 )
+    addSucc( "cast1", int32( 1 ), "ns1@v1/S3" )
+    addSucc( "cast2", int32( -1 ), "ns1@v1/S3" )
+    s1Sub1 := mg.MustStruct( "ns1@v1/T1Sub1" )
+    addSucc( s1Sub1, s1Sub1, "ns1@v1/T1" )
+    addSucc( 
+        mg.MustList( "cast1", "cast2" ), 
+        mg.MustList( int32( 1 ), int32( -1 ) ),
+        "ns1@v1/S3*",
+    )
+    addSucc( nil, nil, "&ns1@v1/S3?" )
+    arb := mg.MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
+    addSucc( arb, arb, arb.Type )
+    add( t.createTcError( int32( 1 ), "ns1@v1/S3", mg.TypeInt32 ) )
+    add( t.createTcError( arb, "ns1@v1/S1", arb.Type ) )
+    add( 
+        t.createTcError0( 
+            int32( 1 ), 
+            "ns1@v1/S3", 
+            mg.TypeInt32, 
+            "&ns1@v1/S3?", 
+            crtPathDefault,
+        ),
+    )
+    add( 
+        t.createTcError0( 
+            mg.MustList( int32( 1 ) ),
+            "ns1@v1/S3",
+            mg.TypeInt32,
+            "ns1@v1/S3*",
+            crtPathDefault.StartList(),
+        ),
+    )
+    add( t.createVcError( "cast3", "ns1@v1/S3", "test-message-cast3" ) )
+    add( t.createVcError( "cast3", "&ns1@v1/S3?", "test-message-cast3" ) )
+    add(
+        t.createVcError0( 
+            mg.MustList( "cast2", "cast3" ),
+            "ns1@v1/S3+",
+            crtPathDefault.StartList().SetIndex( 1 ),
+            "test-message-cast3",
+        ),
+    )
+    s2InFlds := 
+        mg.MustSymbolMap( "f1", "1", "f2", mg.MustSymbolMap( "f1", "1" ) )
+    s2 := mg.MustStruct( t2, "f1", int32( 1 ), "f2", s1 )
+    addSucc( &mg.Struct{ Type: t2, Fields: s2InFlds }, s2, t2 )
+    addSucc( s2InFlds, s2, t2 )
+    add( t.createTcError( mg.MustStruct( t2, "f1", int32( 1 ) ), t1, t2 ) )
+    add( 
+        t.createTcError0(
+            mg.MustStruct( t1, "f1", mg.MustList( 1, 2 ) ),
+            mg.TypeInt32,
+            mg.TypeOpaqueList,
+            t1,
+            crtPathDefault.Descend( mg.MakeTestId( 1 ) ),
+        ),
+    )
+    extraFlds1 := mg.MustSymbolMap( "f1", int32( 1 ), "x1", int32( 0 ) )
+    failExtra1 := func( val interface{} ) {
+        msg := "unrecognized field: x1"
+        add( t.createVcError0( val, t1, crtPathDefault, msg ) )
+    }
+    failExtra1( &mg.Struct{ Type: t1, Fields: extraFlds1 } )
+    failExtra1( extraFlds1 )
+    failTyp := qname( "ns1@v1/FailType" )
+    add(
+        t.createVcError0(
+            mg.MustStruct( failTyp ), 
+            failTyp, 
+            crtPathDefault,
+            "test-message-fail-type",
+        ),
+    )
+}
+
+// target definition would be:
 //
-//var crtPathDefault = objpath.RootedAt( MustIdentifier( "inVal" ) )
+//  struct S1 {
+//      f0 mg.Int32
+//      f1 &mg.Int32
+//      f2 &mg.Int32
+//      f3 &mg.Int64
+//      f4 mg.Int64
+//      f5 Int64*
+//      f6 Int32*
+//      f7 String*
+//      f8 &Int32*
+//      f9 S2
+//      f10 S2
+//      f11 &S2
+//      f12 &mg.Int64
+//      f13 &mg.Int64
+//      f14 mg.Int64
+//  }
 //
-//type crtInit struct {
-//    buf1 Buffer
-//    tm1 mg.Timestamp
-//    map1 *mg.SymbolMap
-//    en1 *Enum
-//    struct1 *mg.Struct
-//}
-//
-//func ( t *crtInit ) initStdVals() {
-//    t.buf1 = Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
-//    t.tm1 = MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
-//    t.map1 = mg.MustSymbolMap( "key1", 1, "key2", "val2" )
-//    t.en1 = MustEnum( "ns1@v1/E1", "en-val1" )
-//    t.struct1 = mg.MustStruct( "ns1@v1/S1", "key1", "val1" )
-//}
-//
-//func ( t *crtInit ) addCrt( crt *CastReactorTest ) { 
-//    StdReactorTests = append( StdReactorTests, crt ) 
-//}
-//
-//func ( t *crtInit ) addCrtDefault( crt *CastReactorTest ) {
-//    crt.Path = crtPathDefault
-//    t.addCrt( crt )
-//}
-//
-//func ( t *crtInit ) createSucc(
-//    in, expct interface{}, typ TypeReferenceInitializer ) *CastReactorTest {
-//    return &CastReactorTest{ 
-//        In: MustValue( in ), 
-//        Expect: MustValue( expct ), 
-//        Type: asTypeReference( typ ),
-//    }
-//}
-//
-//func ( t *crtInit ) addSucc( 
-//    in, expct interface{}, typ TypeReferenceInitializer ) {
-//    t.addCrtDefault( t.createSucc( in, expct, typ ) )
-//}
-//
-//func ( t *crtInit ) addIdent( in interface{}, typ TypeReferenceInitializer ) {
-//    v := MustValue( in )
-//    t.addSucc( v, v, asTypeReference( typ ) )
-//}
-//
-//func ( t *crtInit ) addBaseTypeTests() {
-//    t.addIdent( Boolean( true ), TypeBoolean )
-//    t.addIdent( t.buf1, mg.TypeBuffer )
-//    t.addIdent( "s", mg.TypeString )
-//    t.addIdent( mg.Int32( 1 ), mg.TypeInt32 )
-//    t.addIdent( mg.Int64( 1 ), mg.TypeInt64 )
-//    t.addIdent( Uint32( 1 ), TypeUint32 )
-//    t.addIdent( Uint64( 1 ), TypeUint64 )
-//    t.addIdent( mg.Float32( 1.0 ), mg.TypeFloat32 )
-//    t.addIdent( mg.Float64( 1.0 ), mg.TypeFloat64 )
-//    t.addIdent( t.tm1, TypeTimestamp )
-//    t.addIdent( t.en1, t.en1.Type )
-//    t.addIdent( t.map1, mg.TypeSymbolMap )
-//    t.addIdent( t.struct1, t.struct1.Type )
-//    t.addIdent( nil, mg.TypeNullableValue )
-//    t.addSucc( mg.Int32( -1 ), Uint32( uint32( 4294967295 ) ), TypeUint32 )
-//    t.addSucc( mg.Int64( -1 ), Uint32( uint32( 4294967295 ) ), TypeUint32 )
-//    t.addSucc( 
-//        mg.Int32( -1 ), Uint64( uint64( 18446744073709551615 ) ), TypeUint64 )
-//    t.addSucc( 
-//        mg.Int64( -1 ), Uint64( uint64( 18446744073709551615 ) ), TypeUint64 )
-//    t.addSucc( "true", true, TypeBoolean )
-//    t.addSucc( "TRUE", true, TypeBoolean )
-//    t.addSucc( "TruE", true, TypeBoolean )
-//    t.addSucc( "false", false, TypeBoolean )
-//    t.addSucc( true, "true", mg.TypeString )
-//    t.addSucc( false, "false", mg.TypeString )
-//}
-//
-//func ( t *crtInit ) createTcError0(
-//    in interface{}, 
-//    typExpct, typAct, callTyp TypeReferenceInitializer, 
-//    p objpath.PathNode ) *CastReactorTest {
-//
-//    return &CastReactorTest{
-//        In: MustValue( in ),
-//        Type: asTypeReference( callTyp ),
-//        Err: mg.NewTypeCastError( 
-//            asTypeReference( typExpct ),
-//            asTypeReference( typAct ),
-//            p,
-//        ),
-//    }
-//}
-//
-//func ( t *crtInit ) addTcError0(
-//    in interface{}, 
-//    typExpct, typAct, callTyp TypeReferenceInitializer, 
-//    p objpath.PathNode ) {
-//
-//    t.addCrtDefault( t.createTcError0( in, typExpct, typAct, callTyp, p ) )
-//}
-//
-//func ( t *crtInit ) createTcError(
-//    in interface{}, 
-//    typExpct, typAct TypeReferenceInitializer ) *CastReactorTest {
-//    return t.createTcError0( in, typExpct, typAct, typExpct, crtPathDefault )
-//}
-//
-//func ( t *crtInit ) addTcError(
-//    in interface{}, typExpct, typAct TypeReferenceInitializer ) {
-//    t.addTcError0( in, typExpct, typAct, typExpct, crtPathDefault )
-//}
-//
-//func ( t *crtInit ) addMiscTcErrors() {
-//    t.addTcError( t.en1, "ns1@v1/Bad", t.en1.Type )
-//    t.addTcError( t.struct1, "ns1@v1/Bad", t.struct1.Type )
-//    t.addTcError( "s", mg.TypeNull, mg.TypeString )
-//    t.addTcError( int32( 1 ), "Buffer", "Int32" )
-//    t.addTcError( int32( 1 ), "Buffer?", "Int32" )
-//    t.addTcError( true, "Float32", "Boolean" )
-//    t.addTcError( true, "&Float32", "Boolean" )
-//    t.addTcError( true, "&Float32?", "Boolean" )
-//    t.addTcError( true, "Int32", "Boolean" )
-//    t.addTcError( true, "&Int32", "Boolean" )
-//    t.addTcError( true, "&Int32?", "Boolean" )
-//    t.addTcError( mg.MustList( 1, 2 ), mg.TypeString, mg.TypeOpaqueList )
-//    t.addTcError( mg.MustList(), "String?", mg.TypeOpaqueList )
-//    t.addTcError( "s", "String*", "String" )
-//    t.addCrtDefault(
-//        &CastReactorTest{
-//            In: mg.MustList( 1, t.struct1 ),
-//            Type: asTypeReference( "Int32*" ),
-//            Err: mg.NewTypeCastError(
-//                asTypeReference( "Int32" ),
-//                &mg.AtomicTypeReference{ Name: t.struct1.Type },
-//                crtPathDefault.StartList().Next(),
-//            ),
-//        },
-//    )
-//    t.addTcError( t.struct1, "&Int32?", t.struct1.Type )
-//    t.addTcError( 12, t.struct1.Type, "Int64" )
-//    for _, prim := range PrimitiveTypes {
-//        // not an err for prims mg.Value and mg.SymbolMap
-//        if prim != mg.TypeSymbolMap { 
-//            t.addTcError( t.struct1, prim, t.struct1.Type )
-//        }
-//    }
-//}
-//
-//func ( t *crtInit ) createVcError0(
-//    val interface{}, 
-//    typ TypeReferenceInitializer, 
-//    path objpath.PathNode, 
-//    msg string ) *CastReactorTest {
-//    return &CastReactorTest{
-//        In: MustValue( val ),
-//        Type: asTypeReference( typ ),
-//        Err: mg.NewValueCastError( path, msg ),
-//    }
-//}
-//    
-//
-//func ( t *crtInit ) addVcError0( 
-//    val interface{}, typ TypeReferenceInitializer, path objpath.PathNode, msg string ) {
-//    t.addCrtDefault( t.createVcError0( val, typ, path, msg ) )
-//}
-//
-//func ( t *crtInit ) createVcError(
-//    val interface{}, 
-//    typ TypeReferenceInitializer, 
-//    msg string ) *CastReactorTest {
-//    return t.createVcError0( val, typ, crtPathDefault, msg )
-//}
-//
-//func ( t *crtInit ) addVcError( 
-//    val interface{}, typ TypeReferenceInitializer, msg string ) {
-//    t.addVcError0( val, typ, crtPathDefault, msg )
-//}
-//
-//func ( t *crtInit ) addNullValueError(
-//    val interface{}, typ TypeReferenceInitializer ) {
-//
-//    t.addVcError( val, typ, "Value is null" )
-//}
-//
-//func ( t *crtInit ) addMiscVcErrors() {
-//    t.addVcError( "s", TypeBoolean, `Invalid boolean value: "s"` )
-//    t.addVcError( nil, mg.TypeString, "Value is null" )
-//    t.addVcError( nil, `String~"a"`, "Value is null" )
-//    t.addVcError( mg.MustList(), "String+", "empty list" )
-//    t.addVcError0( 
-//        mg.MustList( mg.MustList( int32( 1 ), int32( 2 ) ), mg.MustList() ), 
-//        "Int32+*", 
-//        crtPathDefault.StartList().Next(),
-//        "empty list",
-//    )
-//}
-//
-//func ( t *crtInit ) addPtrRefSucc(
-//    typExpct TypeReferenceInitializer, valExpct mg.Value, evs ...ReactorEvent ) {
-//
-//    AddStdReactorTests(
-//        &CastReactorTest{
-//            Expect: valExpct,
-//            In: CopySource( evs ),
-//            Type: asTypeReference( typExpct ),
-//        },
-//    )
-//}
-//
-//func ( t *crtInit ) addPtrRefFail0(
-//    typExpct, typAct TypeReferenceInitializer, 
-//    path objpath.PathNode,
-//    evs ...ReactorEvent ) {
-//    
-//    expct, act := asTypeReference( typExpct ), asTypeReference( typAct )
-//    AddStdReactorTests(
-//        &CastReactorTest{
-//            In: CopySource( evs ),
-//            Type: expct,
-//            Path: path,
-//            Err: NewValueCastErrorf( crtPathDefault,
-//                "expected %s but got a reference to %s", expct, act ),
-//        },
-//    )
-//}
-//
-//func ( t *crtInit ) addPtrRefFail( 
-//    typExpct, typAct TypeReferenceInitializer, evs ...ReactorEvent ) {
-//
-//    t.addPtrRefFail0( typExpct, typAct, crtPathDefault, evs... )
-//}
-//
-//func ( t *crtInit ) addStringTests() {
-//    t.addIdent( "s", "String?" )
-//    t.addIdent( "abbbc", `String~"^ab+c$"` )
-//    t.addIdent( "abbbc", `String~"^ab+c$"?` )
-//    t.addIdent( nil, `String~"^ab+c$"?` )
-//    t.addIdent( "", `String~"^a*"?` )
-//    t.addSucc( 
-//        mg.MustList( "123", 129 ), 
-//        mg.MustList( "123", "129" ),
-//        `String~"^\\d+$"*`,
-//    )
-//    for _, quant := range []string { "*", "+", "?*", "*?" } {
-//        val := mg.MustList( "a", "aaaaaa" )
-//        t.addSucc( val, val, `String~"^a+$"` + quant )
-//    }
-//    t.addVcError( 
-//        "ac", 
-//        `String~"^ab+c$"`,
-//        `Value "ac" does not satisfy restriction "^ab+c$"`,
-//    )
-//    t.addVcError(
-//        "ab",
-//        `String~"^a*$"?`,
-//        "Value \"ab\" does not satisfy restriction \"^a*$\"",
-//    )
-//    t.addVcError0(
-//        mg.MustList( "a", "b" ),
-//        `String~"^a+$"*`,
-//        crtPathDefault.StartList().Next(),
-//        "Value \"b\" does not satisfy restriction \"^a+$\"",
-//    )
-//    t.addTcError( EmptySymbolMap(), mg.TypeString, mg.TypeSymbolMap )
-//    t.addTcError( EmptyList(), mg.TypeString, mg.TypeOpaqueList )
-//}
-//
-//func ( t *crtInit ) addIdentityNumTests() {
-//    t.addIdent( int64( 1 ), "Int64~[-1,1]" )
-//    t.addIdent( int64( 1 ), "Int64~(,2)" )
-//    t.addIdent( int64( 1 ), "Int64~[1,1]" )
-//    t.addIdent( int64( 1 ), "Int64~[-2, 32)" )
-//    t.addIdent( int32( 1 ), "Int32~[-2, 32)" )
-//    t.addIdent( uint32( 3 ), "Uint32~[2,32)" )
-//    t.addIdent( uint64( 3 ), "Uint64~[2,32)" )
-//    t.addIdent( mg.Float32( -1.1 ), "Float32~[-2.0,32)" )
-//    t.addIdent( mg.Float64( -1.1 ), "Float64~[-2.0,32)" )
-//    numTests := []struct{ val Value; str string; typ mg.TypeReference } {
-//        { val: mg.Int32( 1 ), str: "1", typ: mg.TypeInt32 },
-//        { val: mg.Int64( 1 ), str: "1", typ: mg.TypeInt64 },
-//        { val: Uint32( 1 ), str: "1", typ: TypeUint32 },
-//        { val: Uint64( 1 ), str: "1", typ: TypeUint64 },
-//        { val: mg.Float32( 1.0 ), str: "1", typ: mg.TypeFloat32 },
-//        { val: mg.Float64( 1.0 ), str: "1", typ: mg.TypeFloat64 },
-//    }
-//    s1 := mg.MustStruct( "ns1@v1/S1" )
-//    for _, numCtx := range numTests {
-//        t.addSucc( numCtx.val, numCtx.str, mg.TypeString )
-//        t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
-//        ptrVal := mg.NewHeapValue( numCtx.val )
-//        ptrTyp := NewPointerTypeReference( numCtx.typ )
-//        t.addSucc( numCtx.val, ptrVal, ptrTyp )
-//        t.addSucc( numCtx.str, ptrVal, ptrTyp )
-//        t.addSucc( ptrVal, numCtx.str, mg.TypeString )
-//        t.addSucc( ptrVal, numCtx.val, numCtx.typ )
-//        t.addTcError( EmptySymbolMap(), numCtx.typ, mg.TypeSymbolMap )
-//        t.addTcError( EmptySymbolMap(), ptrTyp, mg.TypeSymbolMap )
-//        t.addVcError( nil, numCtx.typ, "Value is null" )
-//        t.addTcError( EmptyList(), numCtx.typ, mg.TypeOpaqueList )
-//        t.addTcError( t.buf1, numCtx.typ, mg.TypeBuffer )
-//        t.addCrtDefault(
-//            t.createTcError0(
-//                mg.NewHeapValue( t.buf1 ),
-//                ptrTyp.Type,
-//                mg.TypeBuffer,
-//                ptrTyp,
-//                crtPathDefault,
-//            ),
-//        )
-//        t.addTcError( s1, numCtx.typ, s1.Type )
-//        t.addTcError( ptrVal, s1.Type, numCtx.typ )
-//        t.addTcError( s1, ptrTyp, s1.Type )
-//        for _, valCtx := range numTests {
-//            t.addSucc( valCtx.val, numCtx.val, numCtx.typ )
-//            t.addSucc( mg.NewHeapValue( valCtx.val ), numCtx.val, numCtx.typ )
-//            t.addSucc( valCtx.val, ptrVal, ptrTyp )
-//            t.addSucc( mg.NewHeapValue( valCtx.val ), ptrVal, ptrTyp )
-//        }
-//    }
-//}
-//
-//func ( t *crtInit ) addTruncateNumTests() {
-//    posVals := []mg.Value{ mg.Float32( 1.1 ), mg.Float64( 1.1 ), mg.String( "1.1" ) }
-//    for _, val := range posVals {
-//        t.addSucc( val, mg.Int32( 1 ), mg.TypeInt32 )
-//        t.addSucc( val, mg.Int64( 1 ), mg.TypeInt64 )
-//        t.addSucc( val, Uint32( 1 ), TypeUint32 )
-//        t.addSucc( val, Uint64( 1 ), TypeUint64 )
-//    }
-//    negVals := []mg.Value{ mg.Float32( -1.1 ), mg.Float64( -1.1 ), mg.String( "-1.1" ) }
-//    for _, val := range negVals {
-//        t.addSucc( val, mg.Int32( -1 ), mg.TypeInt32 )
-//        t.addSucc( val, mg.Int64( -1 ), mg.TypeInt64 )
-//    }
-//    t.addSucc( int64( 1 << 31 ), int32( -2147483648 ), mg.TypeInt32 )
-//    t.addSucc( int64( 1 << 33 ), int32( 0 ), mg.TypeInt32 )
-//    t.addSucc( int64( 1 << 31 ), uint32( 1 << 31 ), TypeUint32 )
-//}
-//
-//func ( t *crtInit ) addNumTests() {
-//    for _, typ := range NumericTypes {
-//        t.addVcError( "not-a-num", typ, `invalid syntax: not-a-num` )
-//    }
-//    t.addIdentityNumTests()
-//    t.addTruncateNumTests()
-//    t.addSucc( "1", int64( 1 ), "Int64~[-1,1]" ) // just cover mg.String with range
-//    rngErr := func( val string, typ mg.TypeReference ) {
-//        t.addVcError( val, typ, fmt.Sprintf( "value out of range: %s", val ) )
-//    }
-//    rngErr( "2147483648", mg.TypeInt32 )
-//    rngErr( "-2147483649", mg.TypeInt32 )
-//    rngErr( "9223372036854775808", mg.TypeInt64 )
-//    rngErr( "-9223372036854775809", mg.TypeInt64 )
-//    rngErr( "4294967296", TypeUint32 )
-//    t.addVcError( "-1", TypeUint32, "value out of range: -1" )
-//    t.addVcError( "-1", NewPointerTypeReference( TypeUint32 ), 
-//        "value out of range: -1" )
-//    rngErr( "18446744073709551616", TypeUint64 )
-//    t.addVcError( "-1", TypeUint64, "value out of range: -1" )
-//    for _, tmpl := range []string{ "%s", "&%s", "%s?" } {
-//        t.addVcError(
-//            12, fmt.Sprintf( tmpl, "Int32~[0,10)" ), 
-//            "Value 12 does not satisfy restriction [0,10)" )
-//    }
-//}
-//
-//func ( t *crtInit ) addBufferTests() {
-//    buf1B64 := mg.String( base64.StdEncoding.EncodeToString( t.buf1 ) )
-//    t.addSucc( t.buf1, buf1B64, mg.TypeString )
-//    t.addSucc( mg.NewHeapValue( t.buf1 ), buf1B64, mg.TypeString )
-//    t.addSucc( mg.NewHeapValue( t.buf1 ), mg.NewHeapValue( buf1B64 ),
-//        NewPointerTypeReference( mg.TypeString ) )
-//    t.addSucc( buf1B64, t.buf1, mg.TypeBuffer  )
-//    t.addSucc( mg.NewHeapValue( buf1B64 ), t.buf1, mg.TypeBuffer )
-//    t.addSucc( mg.NewHeapValue( buf1B64 ), mg.NewHeapValue( t.buf1 ),
-//        NewPointerTypeReference( mg.TypeBuffer ) )
-//    t.addVcError( "abc$/@", mg.TypeBuffer, 
-//        "Invalid base64 string: illegal base64 data at input byte 3" )
-//}
-//
-//func ( t *crtInit ) addTimeTests() {
-//    t.addIdent(
-//        Now(), `Timestamp~["1970-01-01T00:00:00Z","2200-01-01T00:00:00Z"]` )
-//    t.addSucc( t.tm1, t.tm1.Rfc3339Nano(), mg.TypeString )
-//    t.addSucc( t.tm1.Rfc3339Nano(), t.tm1, TypeTimestamp )
-//    t.addVcError(
-//        MustTimestamp( "2012-01-01T00:00:00Z" ),
-//        `mingle:core@v1/Timestamp~` +
-//            `["2000-01-01T00:00:00Z","2001-01-01T00:00:00Z"]`,
-//        "Value 2012-01-01T00:00:00Z does not satisfy restriction " +
-//            "[\"2000-01-01T00:00:00Z\",\"2001-01-01T00:00:00Z\"]",
-//    )
-//}
-//
-//func ( t *crtInit ) addEnumTests() {
-//    ptrTyp :=
-//        NewPointerTypeReference( &mg.AtomicTypeReference{ Name: t.en1.Type } )
-//    t.addSucc( mg.NewHeapValue( t.en1 ), mg.NewHeapValue( t.en1 ), ptrTyp )
-//    t.addSucc( t.en1, mg.NewHeapValue( t.en1 ), ptrTyp )
-//    t.addSucc( t.en1, "en-val1", mg.TypeString  )
-//    t.addSucc( t.en1, mg.NewHeapValue( MustValue( "en-val1" ) ), 
-//        NewPointerTypeReference( mg.TypeString ) )
-//    t.addTcError( EmptySymbolMap(), t.en1.Type, mg.TypeSymbolMap )
-//    t.addNullValueError( nil, t.en1.Type )
-//    t.addTcError( t.en1, "ns1@v1/E2", t.en1.Type )
-//    t.addTcError( mg.NewHeapValue( t.en1 ), "ns1@v1/E2", t.en1.Type )
-//    t.addTcError( t.en1, "&ns1@v1/E2", t.en1.Type )
-//    t.addCrtDefault(
-//        t.createTcError0(
-//            mg.NewHeapValue( t.en1 ),
-//            "ns1@v1/E2",
-//            "ns1@v1/E1",
-//            "&ns1@v1/E2",
-//            crtPathDefault,
-//        ),
-//    )
-//}
-//
-//func ( t *crtInit ) addNullableTests() {
-//    typs := []mg.TypeReference{}
-//    addNullSucc := func( expct interface{}, typ mg.TypeReference ) {
-//        t.addSucc( nil, expct, typ )
-//    }
-//    for _, prim := range PrimitiveTypes {
-//        if isNullableType( prim ) {
-//            typs = append( typs, MustNullableTypeReference( prim ) )
-//        } else {
-//            t.addNullValueError( nil, prim )
-//        }
-//    }
-//    typs = append( typs,
-//        MustTypeReference( "&Null?" ),
-//        MustTypeReference( "String?" ),
-//        MustTypeReference( "String*?" ),
-//        MustTypeReference( "&Int32?*?" ),
-//        MustTypeReference( "String+?" ),
-//        MustTypeReference( "&ns1@v1/T?" ),
-//        MustTypeReference( "ns1@v1/T*?" ),
-//    )
-//    for _, typ := range typs { addNullSucc( nil, typ ) }
-//}
-//
-//func ( t *crtInit ) addListTests() {
-//    for _, quant := range []string{ "*", "**", "***" } {
-//        t.addSucc( []interface{}{}, mg.MustList(), "Int64" + quant )
-//    }
-//    for _, quant := range []string{ "**", "*+" } {
-//        v := mg.MustList( mg.MustList(), mg.MustList() )
-//        t.addIdent( v, "Int64" + quant )
-//    }
-//    // test conversions in a deeply nested list
-//    t.addSucc(
-//        []interface{}{
-//            []interface{}{ "1", int32( 1 ), int64( 1 ) },
-//            []interface{}{ float32( 1.0 ), float64( 1.0 ) },
-//            []interface{}{},
-//        },
-//        mg.MustList(
-//            mg.MustList( mg.Int64( 1 ), mg.Int64( 1 ), mg.Int64( 1 ) ),
-//            mg.MustList( mg.Int64( 1 ), mg.Int64( 1 ) ),
-//            mg.MustList(),
-//        ),
-//        "Int64**",
-//    )
-//    t.addSucc(
-//        []interface{}{ int64( 1 ), nil, "hi" },
-//        mg.MustList( "1", nil, "hi" ),
-//        "String?*",
-//    )
-//    s1 := mg.MustStruct( "ns1@v1/S1" )
-//    t.addSucc(
-//        []interface{}{ s1, mg.NewHeapValue( s1 ), nil },
-//        mg.MustList( mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), mg.NullVal ),
-//        "&ns1@v1/S1?*",
-//    )
-//    t.addVcError0(
-//        []interface{}{ mg.NewHeapValue( s1 ), nil },
-//        "&ns1@v1/S1*",
-//        crtPathDefault.StartList().SetIndex( 1 ),
-//        "Value is null",
-//    )
-//    t.addVcError0(
-//        []interface{}{ s1, nil },
-//        "ns1@v1/S1*",
-//        crtPathDefault.StartList().SetIndex( 1 ),
-//        "Value is null",
-//    )
-//    t.addSucc(
-//        []interface{}{ 
-//            int32( 1 ), 
-//            []interface{}{}, 
-//            []interface{}{ int32( 1 ), int32( 2 ), int32( 3 ) },
-//            "s1", 
-//            s1, 
-//            nil,
-//        },
-//        mg.MustList(
-//            mg.NewHeapValue( mg.Int32( 1 ) ),
-//            mg.NewHeapValue( mg.MustList() ),
-//            mg.NewHeapValue( mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) ) ),
-//            mg.NewHeapValue( mg.String( "s1" ) ),
-//            mg.NewHeapValue( s1 ),
-//            mg.NullVal,
-//        ),
-//        "&Value?*",
-//    )
-//    t.addSucc( mg.MustList(), mg.MustList(), mg.TypeValue )
-//    intList1 := mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
-//    t.addSucc( intList1, intList1, mg.TypeValue )
-//    t.addSucc( intList1, intList1, mg.TypeOpaqueList )
-//    t.addSucc( intList1, intList1, "Int32*?" )
-//    t.addSucc( 
-//        mg.MustList(), 
-//        mg.NewHeapValue( mg.MustList() ), 
-//        NewPointerTypeReference( MustTypeReference( "&Int32*" ) ),
-//    )
-//    t.addSucc( 
-//        mg.NewHeapValue( mg.MustList() ), 
-//        mg.NewHeapValue( mg.MustList() ),
-//        NewPointerTypeReference( MustTypeReference( "&Int32*" ) ),
-//    )
-//    t.addSucc( mg.NewHeapValue( mg.MustList() ), mg.MustList(), "&Int32*" )
-//    t.addSucc( nil, mg.NullVal, "Int32*?" )
-//    t.addNullValueError( nil, "Int32*" )
-//    t.addNullValueError( nil, "Int32+" )
-//    t.addNullValueError( mg.NewHeapValue( mg.NullVal ), "Int32+" )
-//    t.addVcError( mg.NewHeapValue( mg.MustList() ), "&Int32+", "empty list" )
-//    t.addSucc( 
-//        nil, 
-//        mg.NullVal,
-//        MustNullableTypeReference( MustTypeReference( "&Int32*" ) ),
-//    )
-//    t.addSucc( 
-//        mg.NewHeapValue( mg.NullVal ), 
-//        mg.NullVal,
-//        MustNullableTypeReference( MustTypeReference( "&Int32*" ) ),
-//    )
-//}
-//
-//func ( t *crtInit ) addMapTests() {
-//    m1 := mg.MustSymbolMap
-//    m2 := func() *mg.SymbolMap { return mg.MustSymbolMap( "f1", int32( 1 ) ) }
-//    t.addSucc( m1(), m1(), mg.TypeSymbolMap )
-//    t.addSucc( m1(), m1(), mg.TypeValue )
-//    t.addSucc( m2(), m2(), mg.TypeSymbolMap )
-//    t.addSucc( m2(), m2(), "SymbolMap?" )
-//    s2 := &mg.Struct{ Type: qname( "ns2@v1/S1" ), Fields: m2() }
-//    t.addSucc( s2, m2(), mg.TypeSymbolMap )
-//    l1 := mg.MustList()
-//    l2 := mg.MustList( m1(), m2() )
-//    lt1 := MustTypeReference( "SymbolMap*" )
-//    lt2 := MustTypeReference( "SymbolMap+" )
-//    t.addSucc( l1, l1, lt1 )
-//    t.addSucc( l2, l2, lt2 )
-//    t.addSucc(
-//        mg.MustSymbolMap( "f1", mg.NullVal ), 
-//        mg.MustSymbolMap( "f1", mg.NullVal ), 
-//        mg.TypeValue,
-//    )
-//    t.addSucc( mg.MustList( s2, s2 ), mg.MustList( m2(), m2() ), lt2 )
-//    t.addTcError( int32( 1 ), mg.TypeSymbolMap, mg.TypeInt32 )
-//    t.addTcError0(
-//        mg.MustList( m1(), int32( 1 ) ),
-//        mg.TypeSymbolMap,
-//        mg.TypeInt32,
-//        lt2,
-//        crtPathDefault.StartList().SetIndex( 1 ),
-//    )
-//    nester := mg.MustSymbolMap( "f1", mg.MustSymbolMap( "f2", int32( 1 ) ) )
-//    t.addSucc( nester, nester, mg.TypeSymbolMap )
-//    t.addSucc( m1(), mg.NewHeapValue( m1() ), "&SymbolMap" )
-//    t.addSucc( mg.NewHeapValue( m1() ), mg.NewHeapValue( m1() ), "&SymbolMap" )
-//    t.addSucc( mg.NewHeapValue( m1() ), m1(), "SymbolMap" )
-//    t.addSucc( nil, mg.NullVal, "SymbolMap?" )
-//    t.addSucc( nil, mg.NullVal, "&SymbolMap?" )
-//    t.addSucc( 
-//        mg.NewHeapValue( mg.NullVal ), 
-//        mg.NewHeapValue( mg.NullVal ),
-//        NewPointerTypeReference( MustTypeReference( "SymbolMap?" ) ),
-//    )
-//    t.addNullValueError( nil, "SymbolMap" )
-//    t.addNullValueError( nil, "&SymbolMap" )
-//    t.addNullValueError( mg.NewHeapValue( mg.NullVal ), "&SymbolMap" )
-//}
-//
-//func ( t *crtInit ) addStructTests() {
-//    qn1 := qname( "ns1@v1/T1" )
-//    t1 := qn1.AsAtomicType()
-//    s1 := mg.MustStruct( qn1 )
-//    s2 := mg.MustStruct( qn1, "f1", int32( 1 ) )
-//    qn2 := qname( "ns1@v1/T2" )
-//    t2 := qn2.AsAtomicType()
-//    s3 := mg.MustStruct( qn2,
-//        "f1", int32( 1 ),
-//        "f2", s1,
-//        "f3", s2,
-//        "f4", mg.MustList( s1, s2 ),
-//    )
-//    t.addSucc( s1, s1, mg.TypeValue )
-//    t.addSucc( s1, s1, t1 )
-//    t.addSucc( s2, s2, t1 )
-//    t.addSucc( s1, mg.NewHeapValue( s1 ), "&ns1@v1/T1?" )
-//    t.addSucc( s3, s3, t2 )
-//    l1 := mg.MustList( s1, s2 )
-//    t.addSucc( l1, l1, &mg.ListTypeReference{ t1, false } )
-//    t.addSucc( l1, l1, &mg.ListTypeReference{ t1, true } )
-//    s4 := mg.MustStruct( "ns1@v1/T4", "f1", mg.NullVal )
-//    t.addSucc( s4, s4, s4.Type )
-//    f1 := func( in interface{}, inTyp TypeReferenceInitializer ) {
-//        t.addTcError0(
-//            mg.MustList( s1, in ),
-//            t1,
-//            inTyp,
-//            &mg.ListTypeReference{ t1, false },
-//            crtPathDefault.StartList().SetIndex( 1 ),
-//        )
-//    }
-//    f1( s3, t2 )
-//    f1( int32( 1 ), "Int32" )
-//    t.addSucc( mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), "&ns1@v1/T1" )
-//    t.addSucc( s1, mg.NewHeapValue( s1 ), "&ns1@v1/T1" )
-//    t.addSucc( mg.NewHeapValue( s1 ), s1, "ns1@v1/T1" )
-//    t.addSucc( nil, mg.NullVal, "&ns1@v1/T1?" )
-//    t.addNullValueError( nil, "&ns1@v1/T1" )
-//    t.addNullValueError( mg.NewHeapValue( mg.NullVal ), "&ns1@v1/T1" )
-//    t.addTcError( s1, "ns1@v1/T2", "ns1@v1/T1" )
-//    t.addTcError( mg.NewHeapValue( s1 ), "ns1@v1/T2", "ns1@v1/T1" )
-//    t.addTcError( s1, "ns1@v1/T2", "ns1@v1/T1" )
-//    t.addTcError( mg.NewHeapValue( s1 ), "ns1@v1/T2", "ns1@v1/T1" )
-//}
-//
-//func ( t *crtInit ) addInterfaceImplBasicTests() {
-//    add := func( crt *CastReactorTest ) {
-//        crt.Profile = "interface-impl-basic"
-//        t.addCrtDefault( crt )
-//    }
-//    addSucc := func( in, expct interface{}, typ TypeReferenceInitializer ) {
-//        add( t.createSucc( in, expct, typ ) )
-//    }
-//    t1 := qname( "ns1@v1/T1" )
-//    t2 := qname( "ns1@v1/T2" )
-//    s1 := mg.MustStruct( t1, "f1", int32( 1 ) )
-//    addSucc( mg.MustStruct( t1, "f1", "1" ), s1, t1 )
-//    addSucc( mg.MustSymbolMap( "f1", "1" ), s1, t1 )
-//    addSucc( "cast1", int32( 1 ), "ns1@v1/S3" )
-//    addSucc( "cast2", int32( -1 ), "ns1@v1/S3" )
-//    s1Sub1 := mg.MustStruct( "ns1@v1/T1Sub1" )
-//    addSucc( s1Sub1, s1Sub1, "ns1@v1/T1" )
-//    addSucc( 
-//        mg.MustList( "cast1", "cast2" ), 
-//        mg.MustList( int32( 1 ), int32( -1 ) ),
-//        "ns1@v1/S3*",
-//    )
-//    addSucc( nil, nil, "&ns1@v1/S3?" )
-//    arb := mg.MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
-//    addSucc( arb, arb, arb.Type )
-//    add( t.createTcError( int32( 1 ), "ns1@v1/S3", mg.TypeInt32 ) )
-//    add( t.createTcError( arb, "ns1@v1/S1", arb.Type ) )
-//    add( 
-//        t.createTcError0( 
-//            int32( 1 ), 
-//            "ns1@v1/S3", 
-//            mg.TypeInt32, 
-//            "&ns1@v1/S3?", 
-//            crtPathDefault,
-//        ),
-//    )
-//    add( 
-//        t.createTcError0( 
-//            mg.MustList( int32( 1 ) ),
-//            "ns1@v1/S3",
-//            mg.TypeInt32,
-//            "ns1@v1/S3*",
-//            crtPathDefault.StartList(),
-//        ),
-//    )
-//    add( t.createVcError( "cast3", "ns1@v1/S3", "test-message-cast3" ) )
-//    add( t.createVcError( "cast3", "&ns1@v1/S3?", "test-message-cast3" ) )
-//    add(
-//        t.createVcError0( 
-//            mg.MustList( "cast2", "cast3" ),
-//            "ns1@v1/S3+",
-//            crtPathDefault.StartList().SetIndex( 1 ),
-//            "test-message-cast3",
-//        ),
-//    )
-//    s2InFlds := mg.MustSymbolMap( "f1", "1", "f2", mg.MustSymbolMap( "f1", "1" ) )
-//    s2 := mg.MustStruct( t2, "f1", int32( 1 ), "f2", s1 )
-//    addSucc( &mg.Struct{ Type: t2, Fields: s2InFlds }, s2, t2 )
-//    addSucc( s2InFlds, s2, t2 )
-//    add( t.createTcError( mg.MustStruct( t2, "f1", int32( 1 ) ), t1, t2 ) )
-//    add( 
-//        t.createTcError0(
-//            mg.MustStruct( t1, "f1", mg.MustList( 1, 2 ) ),
-//            mg.TypeInt32,
-//            mg.TypeOpaqueList,
-//            t1,
-//            crtPathDefault.Descend( id( "f1" ) ),
-//        ),
-//    )
-//    extraFlds1 := mg.MustSymbolMap( "f1", int32( 1 ), "x1", int32( 0 ) )
-//    failExtra1 := func( val interface{} ) {
-//        msg := "unrecognized field: x1"
-//        add( t.createVcError0( val, t1, crtPathDefault, msg ) )
-//    }
-//    failExtra1( &mg.Struct{ Type: t1, Fields: extraFlds1 } )
-//    failExtra1( extraFlds1 )
-//    failTyp := qname( "ns1@v1/FailType" )
-//    add(
-//        t.createVcError0(
-//            mg.MustStruct( failTyp ), 
-//            failTyp, 
-//            crtPathDefault,
-//            "test-message-fail-type",
-//        ),
-//    )
-//}
-//
-//// target definition would be:
-////
-////  struct S1 {
-////      f0 mg.Int32
-////      f1 &mg.Int32
-////      f2 &mg.Int32
-////      f3 &mg.Int64
-////      f4 mg.Int64
-////      f5 Int64*
-////      f6 Int32*
-////      f7 String*
-////      f8 &Int32*
-////      f9 S2
-////      f10 S2
-////      f11 &S2
-////      f12 &mg.Int64
-////      f13 &mg.Int64
-////      f14 mg.Int64
-////  }
-////
-//func ( t *crtInit ) addInterfacePointerHandlingTests() {
-//    qn := func( i int ) *mg.QualifiedTypeName {
-//        return mg.MustQualifiedTypeName( fmt.Sprintf( "ns1@v1/S%d", i ) )
-//    }
-//    typ := func( i int ) *mg.AtomicTypeReference {
-//        return &mg.AtomicTypeReference{ Name: qn( i ) }
-//    }
-//    fldEv := func( i int ) *FieldStartEvent {
-//        return NewFieldStartEvent( mg.MakeTestId( i ) )
-//    }
-//    list := func( typ mg.TypeReference, vals ...interface{} ) *mg.List {
-//        res := mg.MustList( vals... )
-//        res.Type = &mg.ListTypeReference{ ElementType: typ }
-//        return res
-//    }
-//    hv12 := mg.NewHeapValue( mg.Int64( int64( 12 ) ) )
-//    AddStdReactorTests(
-//        &CastReactorTest{
-//            In: CopySource(
-//                []ReactorEvent{
-//                    NewStructStartEvent( qn( 1 ) ),
-//                        fldEv( 0 ),
-//                            ptrAlloc( mg.TypeInt64, 1 ), 
-//                                NewValueEvent( mg.Int64( int64( 1 ) ) ),
-//                        fldEv( 1 ), ptrRef( 1 ),
-//                        fldEv( 2 ),
-//                            ptrAlloc( mg.TypeInt64, 2 ), 
-//                                NewValueEvent( mg.Int64( int64( 2 ) ) ),
-//                        fldEv( 3 ), ptrRef( 2 ),
-//                        fldEv( 4 ), ptrRef( 2 ),
-//                        fldEv( 5 ), 
-//                            NewListStartEvent( 
-//                                &mg.ListTypeReference{ ElementType: mg.TypeInt32 },
-//                                ptrId( 3 ),
-//                            ),
-//                                NewValueEvent( mg.Int32( int32( 0 ) ) ),
-//                                NewValueEvent( mg.Int32( int32( 1 ) ) ),
-//                                NewEndEvent(),
-//                        fldEv( 6 ), ptrRef( 3 ),
-//                        fldEv( 7 ), ptrRef( 3 ),
-//                        fldEv( 8 ), ptrRef( 3 ),
-//                        fldEv( 9 ), 
-//                            ptrAlloc( typ( 2 ), 4 ),
-//                                NewStructStartEvent( qn( 2 ) ), NewEndEvent(),
-//                        fldEv( 10 ), ptrRef( 4 ),
-//                        fldEv( 11 ), ptrRef( 4 ),
-//                        fldEv( 12 ), 
-//                            ptrAlloc( mg.TypeInt64, 5 ),
-//                                NewValueEvent( mg.Int64( int64( 12 ) ) ),
-//                        fldEv( 13 ), ptrRef( 5 ),
-//                        fldEv( 14 ), ptrRef( 5 ),
-//                    NewEndEvent(),
-//                },
-//            ),
-//            Expect: mg.MustStruct( qn( 1 ),
-//                "f0", mg.Int32( int32( 1 ) ),
-//                "f1", mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
-//                "f2", mg.NewHeapValue( mg.Int32( int32( 2 ) ) ),
-//                "f3", mg.NewHeapValue( mg.Int64( int64( 2 ) ) ),
-//                "f4", mg.Int64( int64( 2 ) ),
-//                "f5", list( mg.TypeInt64, int64( 0 ), int64( 1 ) ),
-//                "f6", list( mg.TypeInt32, int32( 0 ), int32( 1 ) ),
-//                "f7", list( mg.TypeString, "0", "1" ),
-//                "f8", list( NewPointerTypeReference( mg.TypeInt32 ),
-//                    mg.NewHeapValue( mg.Int32( int32( 0 ) ) ),
-//                    mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
-//                ),
-//                "f9", mg.MustStruct( qn( 2 ) ),
-//                "f10", mg.MustStruct( qn( 2 ) ),
-//                "f11", mg.NewHeapValue( mg.MustStruct( qn( 2 ) ) ),
-//                "f12", hv12,
-//                "f13", hv12,
-//                "f14", mg.Int64( int64( 12 ) ),
-//            ),
-//            Type: typ( 1 ),
-//            Profile: "interface-pointer-handling",
-//        },
-//    )
-//}
-//
-//func ( t *crtInit ) addInterfaceImplTests() {
-//    t.addInterfaceImplBasicTests()
-//    t.addInterfacePointerHandlingTests()
-//}
-//
-//func ( t *crtInit ) call() {
-//    t.initStdVals()
-//    t.addBaseTypeTests()
-//    t.addMiscTcErrors()
-//    t.addMiscVcErrors()
-//    t.addNumTests()
-//    t.addStringTests()
-//    t.addBufferTests()
-//    t.addTimeTests()
-//    t.addEnumTests()
-//    t.addNullableTests()
-//    t.addListTests()
-//    t.addMapTests()
-//    t.addStructTests()
-//    t.addInterfaceImplTests()
-//}
-//
-//func initCastReactorTests() { ( &crtInit{} ).call() }
+func ( t *crtInit ) addInterfacePointerHandlingTests() {
+    qn := func( i int ) *mg.QualifiedTypeName {
+        return mg.MustQualifiedTypeName( fmt.Sprintf( "ns1@v1/S%d", i ) )
+    }
+    typ := func( i int ) *mg.AtomicTypeReference {
+        return &mg.AtomicTypeReference{ Name: qn( i ) }
+    }
+    fldEv := func( i int ) *FieldStartEvent {
+        return NewFieldStartEvent( mg.MakeTestId( i ) )
+    }
+    list := func( typ mg.TypeReference, vals ...interface{} ) *mg.List {
+        res := mg.MustList( vals... )
+        res.Type = &mg.ListTypeReference{ ElementType: typ }
+        return res
+    }
+    hv12 := mg.NewHeapValue( mg.Int64( int64( 12 ) ) )
+    t.b.AddTests(
+        &CastReactorTest{
+            In: CopySource(
+                []ReactorEvent{
+                    NewStructStartEvent( qn( 1 ) ),
+                        fldEv( 0 ),
+                            ptrAlloc( mg.TypeInt64, 1 ), 
+                                NewValueEvent( mg.Int64( int64( 1 ) ) ),
+                        fldEv( 1 ), ptrRef( 1 ),
+                        fldEv( 2 ),
+                            ptrAlloc( mg.TypeInt64, 2 ), 
+                                NewValueEvent( mg.Int64( int64( 2 ) ) ),
+                        fldEv( 3 ), ptrRef( 2 ),
+                        fldEv( 4 ), ptrRef( 2 ),
+                        fldEv( 5 ), 
+                            NewListStartEvent( 
+                                &mg.ListTypeReference{ 
+                                    ElementType: mg.TypeInt32 },
+                                ptrId( 3 ),
+                            ),
+                                NewValueEvent( mg.Int32( int32( 0 ) ) ),
+                                NewValueEvent( mg.Int32( int32( 1 ) ) ),
+                                NewEndEvent(),
+                        fldEv( 6 ), ptrRef( 3 ),
+                        fldEv( 7 ), ptrRef( 3 ),
+                        fldEv( 8 ), ptrRef( 3 ),
+                        fldEv( 9 ), 
+                            ptrAlloc( typ( 2 ), 4 ),
+                                NewStructStartEvent( qn( 2 ) ), NewEndEvent(),
+                        fldEv( 10 ), ptrRef( 4 ),
+                        fldEv( 11 ), ptrRef( 4 ),
+                        fldEv( 12 ), 
+                            ptrAlloc( mg.TypeInt64, 5 ),
+                                NewValueEvent( mg.Int64( int64( 12 ) ) ),
+                        fldEv( 13 ), ptrRef( 5 ),
+                        fldEv( 14 ), ptrRef( 5 ),
+                    NewEndEvent(),
+                },
+            ),
+            Expect: mg.MustStruct( qn( 1 ),
+                "f0", mg.Int32( int32( 1 ) ),
+                "f1", mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
+                "f2", mg.NewHeapValue( mg.Int32( int32( 2 ) ) ),
+                "f3", mg.NewHeapValue( mg.Int64( int64( 2 ) ) ),
+                "f4", mg.Int64( int64( 2 ) ),
+                "f5", list( mg.TypeInt64, int64( 0 ), int64( 1 ) ),
+                "f6", list( mg.TypeInt32, int32( 0 ), int32( 1 ) ),
+                "f7", list( mg.TypeString, "0", "1" ),
+                "f8", list( mg.NewPointerTypeReference( mg.TypeInt32 ),
+                    mg.NewHeapValue( mg.Int32( int32( 0 ) ) ),
+                    mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
+                ),
+                "f9", mg.MustStruct( qn( 2 ) ),
+                "f10", mg.MustStruct( qn( 2 ) ),
+                "f11", mg.NewHeapValue( mg.MustStruct( qn( 2 ) ) ),
+                "f12", hv12,
+                "f13", hv12,
+                "f14", mg.Int64( int64( 12 ) ),
+            ),
+            Type: typ( 1 ),
+            Profile: "interface-pointer-handling",
+        },
+    )
+}
+
+func ( t *crtInit ) addInterfaceImplTests() {
+    t.addInterfaceImplBasicTests()
+    t.addInterfacePointerHandlingTests()
+}
+
+func ( t *crtInit ) call() {
+    t.initStdVals()
+    t.addBaseTypeTests()
+    t.addMiscTcErrors()
+    t.addMiscVcErrors()
+    t.addStringTests()
+    t.addNumTests()
+    t.addBufferTests()
+    t.addTimeTests()
+    t.addEnumTests()
+    t.addNullableTests()
+    t.addListTests()
+    t.addMapTests()
+    t.addStructTests()
+    t.addInterfaceImplTests()
+}
+
+func initCastReactorTests( b *ReactorTestSetBuilder ) { 
+    ( &crtInit{ b: b } ).call() 
+}
 
 func initReactorTests( b *ReactorTestSetBuilder ) {
     initValueBuildReactorTests( b )
@@ -2262,160 +2259,7 @@ func initReactorTests( b *ReactorTestSetBuilder ) {
     initEventPathTests( b )
     initFieldOrderReactorTests( b )
     initServiceTests( b )
-//    initCastReactorTests()
+    initCastReactorTests( b )
 }
 
 func init() { AddTestInitializer( initReactorTests ) }
-
-//
-//type CastErrorAssert struct {
-//    ErrExpect, ErrAct error
-//    *assert.PathAsserter
-//}
-//
-//func ( cea CastErrorAssert ) FailActErrType() {
-//    cea.Fatalf(
-//        "Expected error of type %T but got %T: %s",
-//        cea.ErrExpect, cea.ErrAct, cea.ErrAct )
-//}
-//
-//// Returns a path asserter that can be used further
-//func ( cea CastErrorAssert ) assertValueError( 
-//    expct, act ValueError ) *assert.PathAsserter {
-//    a := cea.Descend( "Err" )
-//    a.Descend( "Error()" ).Equal( expct.Error(), act.Error() )
-//    a.Descend( "Message()" ).Equal( expct.Message(), act.Message() )
-//    a.Descend( "Location()" ).Equal( expct.Location(), act.Location() )
-//    return a
-//}
-//
-//func ( cea CastErrorAssert ) assertVcError() {
-//    if act, ok := cea.ErrAct.( *ValueCastError ); ok {
-//        cea.assertValueError( cea.ErrExpect.( *ValueCastError ), act )
-//    } else { cea.FailActErrType() }
-//}
-//
-//func ( cea CastErrorAssert ) assertMissingFieldsError() {
-//    if act, ok := cea.ErrAct.( *MissingFieldsError ); ok {
-//        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
-//    } else { cea.FailActErrType() }
-//}
-//
-//func ( cea CastErrorAssert ) assertUnrecognizedFieldError() {
-//    if act, ok := cea.ErrAct.( *UnrecognizedFieldError ); ok {
-//        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
-//    } else { cea.FailActErrType() }
-//}
-//
-//func ( cea CastErrorAssert ) Call() {
-//    switch cea.ErrExpect.( type ) {
-//    case nil: cea.Fatal( cea.ErrAct )
-//    case *ValueCastError: cea.assertVcError()
-//    case *MissingFieldsError: cea.assertMissingFieldsError()
-//    case *UnrecognizedFieldError: cea.assertUnrecognizedFieldError()
-//    default: cea.Fatalf( "Unhandled Err type: %T", cea.ErrExpect )
-//    }
-//}
-//
-//func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
-//    ca := CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
-//    ca.Call()
-//}
-//
-//func eventForEqualityCheck( 
-//    ev ReactorEvent, ignorePointerIds bool ) ReactorEvent {
-//
-//    ev = CopyEvent( ev, true )
-//    switch v := ev.( type ) {
-//    case *ValueAllocationEvent: v.Id = mg.PointerIdNull
-//    case *ValueReferenceEvent: v.Id = mg.PointerIdNull
-//    case *MapStartEvent: v.Id = mg.PointerIdNull
-//    case *ListStartEvent: v.Id = mg.PointerIdNull
-//    }
-//    return ev
-//}
-//
-//func EqualEvents( 
-//    expct, act ReactorEvent, ignorePointerIds bool, a *assert.PathAsserter ) {
-//
-//    expct = eventForEqualityCheck( expct, ignorePointerIds )
-//    act = eventForEqualityCheck( act, ignorePointerIds )
-//    a.Equalf( expct, act, "events are not equal: %s != %s",
-//        EventToString( expct ), EventToString( act ) )
-//}
-//
-//type reactorEventSource interface {
-//    Len() int
-//    EventAt( int ) ReactorEvent
-//}
-//
-//func FeedEventSource( 
-//    src reactorEventSource, proc ReactorEventProcessor ) error {
-//
-//    for i, e := 0, src.Len(); i < e; i++ {
-//        if err := proc.ProcessEvent( src.EventAt( i ) ); err != nil { 
-//            return err
-//        }
-//    }
-//    return nil
-//}
-//
-//func AssertFeedEventSource(
-//    src reactorEventSource, proc ReactorEventProcessor, a assert.Failer ) {
-//    
-//    if err := FeedEventSource( src, proc ); err != nil { a.Fatal( err ) }
-//}
-//
-//type eventSliceSource []ReactorEvent
-//func ( src eventSliceSource ) Len() int { return len( src ) }
-//func ( src eventSliceSource ) EventAt( i int ) ReactorEvent { return src[ i ] }
-//
-//type eventExpectSource []EventExpectation
-//
-//func ( src eventExpectSource ) Len() int { return len( src ) }
-//
-//func ( src eventExpectSource ) EventAt( i int ) ReactorEvent {
-//    return CopyEvent( src[ i ].Event, true )
-//}
-//
-//func FeedSource( src interface{}, rct ReactorEventProcessor ) error {
-//    switch v := src.( type ) {
-//    case reactorEventSource: return FeedEventSource( v, rct )
-//    case []ReactorEvent: return FeedSource( eventSliceSource( v ), rct )
-//    case mg.Value: return VisitValue( v, rct )
-//    }
-//    panic( libErrorf( "unhandled source: %T", src ) )
-//}
-//
-//func AssertFeedSource( 
-//    src interface{}, rct ReactorEventProcessor, a assert.Failer ) {
-//
-//    if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
-//}
-//
-//type ReactorTestCall struct {
-//    *assert.PathAsserter
-//    Test interface{}
-//}
-//
-//func ( c *ReactorTestCall ) CheckNoError( err error ) {
-//    if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
-//}
-//
-//func ( c *ReactorTestCall ) EqualErrors( expct, act error ) {
-//    if expct == nil { c.Fatal( act ) }
-//    c.Equalf( expct, act, "expected %q (%T) but got %q (%T)",
-//        expct, expct, act, act )
-//}
-//
-//func CheckBuiltValue( expct mg.Value, vb *ValueBuilder, a *assert.PathAsserter ) {
-//    if expct == nil {
-//        if vb != nil {
-//            a.Fatalf( "unexpected value: %s", QuoteValue( vb.GetValue() ) )
-//        }
-//    } else { 
-//        a.Falsef( vb == nil, 
-//            "expecting value %s but value builder is nil", QuoteValue( expct ) )
-//        EqualWireValues( expct, vb.GetValue(), a ) 
-//    }
-//}

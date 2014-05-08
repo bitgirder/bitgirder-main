@@ -58,6 +58,15 @@ type FieldOrderPathTest struct {
     Orders []FieldOrderReactorTestOrder
 }
 
+type CastReactorTest struct {
+    In interface{}
+    Expect mg.Value
+    Type mg.TypeReference
+    Path objpath.PathNode
+    Err error
+    Profile string
+}
+
 type RequestReactorTest struct {
     Source interface{}
     Namespace *mg.Namespace
@@ -67,5 +76,14 @@ type RequestReactorTest struct {
     ParameterEvents []EventExpectation
     Authentication mg.Value
     AuthenticationEvents []EventExpectation
+    Error error
+}
+
+type ResponseReactorTest struct {
+    In mg.Value
+    ResVal mg.Value
+    ResEvents []EventExpectation
+    ErrVal mg.Value
+    ErrEvents []EventExpectation
     Error error
 }
