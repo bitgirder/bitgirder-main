@@ -233,17 +233,31 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             Num: &lexer.NumericToken{ Int: "1" }, Loc: lc( 6 ) },
         RightClosed: true,
     }
-    for typ, expct := range map[ string ]*CompletableTypeReference {
-        "A": &CompletableTypeReference{ nmA, nil, emptyQuants },
-        "A+": &CompletableTypeReference{ nmA, nil, quants },
-        `A~"a"+`: &CompletableTypeReference{ nmA, regex, quants },
-        `A~"a"`: &CompletableTypeReference{ nmA, regex, emptyQuants },
-        `A~[0,1]+`: &CompletableTypeReference{ nmA, rng, quants },
-        `A~[0,1]`: &CompletableTypeReference{ nmA, rng, emptyQuants },
+    for _, s := range []struct { in string; ref *CompletableTypeReference }{
+        { "A", &CompletableTypeReference{ 
+            ErrLoc: lc( 1 ), Name: nmA, quants: emptyQuants } },
+        { "A+", &CompletableTypeReference{ 
+            ErrLoc: lc( 1 ), Name: nmA, quants: quants } },
+        { `A~"a"+`, &CompletableTypeReference{ 
+            ErrLoc: lc( 1 ), Name: nmA, Restriction: regex, quants: quants } },
+        { `A~"a"`, &CompletableTypeReference{ 
+            ErrLoc: lc( 1 ), 
+            Name: nmA, 
+            Restriction: regex, 
+            quants: emptyQuants },
+        },
+        { `A~[0,1]+`, &CompletableTypeReference{ 
+            ErrLoc: lc( 1 ), Name: nmA, Restriction: rng, quants: quants } },
+        { `A~[0,1]`, &CompletableTypeReference{ 
+            ErrLoc: lc( 1 ),
+            Name: nmA, 
+            Restriction: rng, 
+            quants: emptyQuants },
+        },
     } {
-        st := newSyntaxBuildTester( typ + "\n", false, t )
+        st := newSyntaxBuildTester( s.in + "\n", false, t )
         if ref, _, err := st.sb.ExpectTypeReference( nil ); err == nil {
-            assert.Equal( expct, ref )
+            assert.Equal( s.ref, ref )
         } else { t.Fatal( err ) }
         st.expectSynthEnd()
         st.expectToken( "any", lexer.WhitespaceToken( []byte( "\n" ) ) )
