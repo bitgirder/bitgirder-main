@@ -311,6 +311,10 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
           saw: "allocation of &mingle:core@v1/Int64",
           ev: ptrAlloc( mg.TypeInt64, 2 ),
         },
+        { expctTyp: "SymbolMap",
+          saw: typeRef( "Int32" ).ExternalForm(),
+          ev: NewValueEvent( mg.Int32( int32( 1 ) ) ),
+        },
     } {
         lt := listTypeRef( s.expctTyp + "*" )
         lse := NewListStartEvent( lt, ptrId( 1 ) )
@@ -324,6 +328,18 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
             NewListStartEvent( listTypeRef( "Int32*" ), ptrId( 2 ) ),
             NewValueEvent( mg.Int32( 1 ) ),
             NewValueEvent( mg.Int64( 2 ) ),
+        ),
+    )
+    b.AddTests(
+        mk1(
+            "allocation of &mingle:core@v1/SymbolMap followed by mingle:core@v1/Int32",
+            ptrAlloc( mg.TypeSymbolMap, 1 ),
+            NewValueEvent( mg.Int32( int32( 1 ) ) ),
+        ),
+        mk1(
+            "allocation of &ns1@v1/S1 followed by ns1@v1/S2",
+            ptrAlloc( typeRef( "ns1@v1/S1" ), 1 ),
+            NewValueEvent( mg.MustStruct( "ns1@v1/S2" ) ),
         ),
     )
 }
