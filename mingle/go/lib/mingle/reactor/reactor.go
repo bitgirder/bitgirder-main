@@ -328,3 +328,7 @@ func VisitValue( mv mg.Value, rep ReactorEventProcessor ) error {
     vv := valueVisit{ rep: rep, visitMap: make( map[ mg.PointerId ] bool ) }
     return vv.visitValue( mv )
 }
+
+func isAssignableValueType( typ mg.TypeReference ) bool {
+    return mg.CanAssignType( mg.TypeValue, typ )
+}

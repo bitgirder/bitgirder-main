@@ -58,7 +58,7 @@ func RunReactorTestsInNamespace( ns *mg.Namespace, t *testing.T ) {
             ta = a.Descend( nt.TestName() ) 
         }
         c := &ReactorTestCall{ PathAsserter: ta }
-//        c.Logf( "calling %T", rt )
+        c.Logf( "calling %T", rt )
         rt.Call( c )
         la = la.Next()
     }
@@ -189,15 +189,6 @@ func NewEventPathCheckReactor(
     }
 }
 
-type heapTestValue struct {
-    id mg.PointerId
-    val mg.Value
-}
-
-func ( ht heapTestValue ) valImpl() {}
-func ( ht heapTestValue ) Address() mg.PointerId { return ht.id }
-func ( ht heapTestValue ) Dereference() mg.Value { return ht.val }
-
 type TestPointerIdFactory struct { id mg.PointerId }
 
 func NewTestPointerIdFactory() *TestPointerIdFactory {
@@ -228,12 +219,6 @@ func ( f *TestPointerIdFactory ) NextValueAllocation(
     typ mg.TypeReference ) *ValueAllocationEvent {
 
     return NewValueAllocationEvent( typ, f.NextPointerId() )
-}
-
-func ( f *TestPointerIdFactory ) nextHeapTestValue( 
-    val mg.Value ) heapTestValue {
-
-    return heapTestValue{ val: val, id: f.NextPointerId() }
 }
 
 func CheckNoError( err error, c *ReactorTestCall ) {

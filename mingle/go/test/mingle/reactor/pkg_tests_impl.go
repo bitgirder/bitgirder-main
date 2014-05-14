@@ -11,13 +11,13 @@ import (
 
 func ( t *ValueBuildTest ) Call( c *ReactorTestCall ) {
     rcts := []interface{}{}
-//    rcts = append( rcts, NewDebugReactor( c ) )
+    rcts = append( rcts, NewDebugReactor( c ) )
     vb := NewValueBuilder()
     rcts = append( rcts, vb )
     pip := InitReactorPipeline( rcts... )
     var err error
     if t.Source == nil {
-//        c.Logf( "visiting %s", QuoteValue( t.Val ) )
+        c.Logf( "visiting %s", mg.QuoteValue( t.Val ) )
         err = VisitValue( t.Val, pip )
     } else { err = FeedSource( t.Source, pip ) }
     if err == nil {
@@ -27,16 +27,20 @@ func ( t *ValueBuildTest ) Call( c *ReactorTestCall ) {
 
 func ( t *StructuralReactorErrorTest ) Call( c *ReactorTestCall ) {
     rct := NewStructuralReactor( t.TopType )
-    pip := InitReactorPipeline( rct )
+//    pip := InitReactorPipeline( rct )
+    pip := InitReactorPipeline( NewDebugReactor( c ), rct )
     src := eventSliceSource( t.Events )
+    c.Logf( "calling structural test, err: %s", t.Error )
     if err := FeedEventSource( src, pip ); err == nil {
         c.Fatalf( "Expected error (%T): %s", t.Error, t.Error ) 
-    } else { c.Equal( t.Error, err ) }
+    } else { c.EqualErrors( t.Error, err ) }
 }
 
 func ( t *PointerEventCheckTest ) Call( c *ReactorTestCall ) {
     rct := InitReactorPipeline( 
-        NewPathSettingProcessor(), NewPointerCheckReactor() )
+        NewDebugReactor( c ), NewPathSettingProcessor(),
+        NewPointerCheckReactor() )
+//        NewPathSettingProcessor(), NewPointerCheckReactor() )
     if err := FeedSource( t.Events, rct ); err == nil {
         c.Truef( t.Error == nil, 
             "expected error (%T): %s", t.Error, t.Error )

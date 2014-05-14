@@ -1,10 +1,6 @@
-- make Timestamp a numeric type
-
-- add structure reactor checks that enforce that the value following an
-  allocation have the type specified, and that list values are of the correct
-  type
-
 - reactors should reject cyclic inputs (and visit should fail when visiting one)
+
+- casting anything to Null should work, but should discard the actual value
 
 - ensure that Buffer.String() prints at most N leading/trailing hex chars, but
   does not attempt to hexify an enormous buffer (can always add

@@ -262,6 +262,7 @@ type ValueRestriction interface {
     // Will panic if val is nil or is not the correct type for this instance
     AcceptsValue( val Value ) bool
 
+    // vr may be nil
     equalsRestriction( vr ValueRestriction ) bool
 }
 
@@ -1264,6 +1265,92 @@ func TypeOf( mgVal Value ) TypeReference {
     case ValuePointer: return typeOfValuePointer( v )
     }
     panic( libErrorf( "unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
+}
+
+func canAssignAtomic( 
+    val Value, at *AtomicTypeReference, useRestriction bool ) bool {
+
+    if at.Name.Equals( QnameNull ) { return true }
+    if _, ok := val.( *Null ); ok { return false }
+    if at.Name.Equals( QnameValue ) { return true }
+    switch vt := TypeOf( val ).( type ) {
+    case *AtomicTypeReference:
+        if ! vt.Name.Equals( at.Name ) { return false }
+        if at.Restriction == nil || ( ! useRestriction ) { return true }
+        return at.Restriction.AcceptsValue( val )
+    }
+    return false
+}
+
+func CanAssign( val Value, typ TypeReference, useRestriction bool ) bool {
+    switch t := typ.( type ) {
+    case *AtomicTypeReference: return canAssignAtomic( val, t, useRestriction )
+    case *PointerTypeReference: 
+        if vp, ok := val.( ValuePointer ); ok {
+            return CanAssign( vp.Dereference(), t.Type, useRestriction )
+        }
+    case *NullableTypeReference:
+        if _, ok := val.( *Null ); ok { return true }
+        return CanAssign( val, t.Type, useRestriction )
+    case *ListTypeReference:
+        if l, ok := val.( *List ); ok { return t.Equals( l.Type ) }
+    default: panic( libErrorf( "unhandled type for assign: %T", typ ) )
+    }
+    return false
+}
+
+func canAssignAtomicType( 
+    from TypeReference, to *AtomicTypeReference, relaxRestrictions bool ) bool {
+    if to.Name.Equals( QnameValue ) { return true }
+    f, ok := from.( *AtomicTypeReference );
+    if ! ok { return false }
+    if ! f.Name.Equals( to.Name ) { return false }
+    if relaxRestrictions {
+        if to.Restriction == nil { return true }
+        // f.Restriction could still be nil, so we make it the operand
+        return to.Restriction.equalsRestriction( f.Restriction )
+    }
+    if f.Restriction == nil { return to.Restriction == nil }
+    return f.Restriction.equalsRestriction( to.Restriction )
+}
+
+func canAssignNullableType( 
+    from TypeReference, 
+    to *NullableTypeReference, 
+    relaxRestrictions bool ) bool {
+
+    if f, ok := from.( *NullableTypeReference ); ok { from = f.Type }
+    return canAssignType( from, to.Type, relaxRestrictions )
+}
+
+func canAssignPointerType( from TypeReference, to *PointerTypeReference ) bool {
+    return from.Equals( to )
+}
+
+func canAssignListType( from TypeReference, to *ListTypeReference ) bool {
+    if f, ok := from.( *ListTypeReference ); ok {
+        if f.ElementType.Equals( to.ElementType ) {
+            return to.AllowsEmpty || ( ! f.AllowsEmpty )
+        }
+    }
+    return false
+}
+
+func canAssignType( from, to TypeReference, relaxRestrictions bool ) bool {
+    switch t := to.( type ) {
+    case *AtomicTypeReference: 
+        return canAssignAtomicType( from, t, relaxRestrictions )
+    case *NullableTypeReference: 
+        return canAssignNullableType( from, t, relaxRestrictions )
+    case *PointerTypeReference: return canAssignPointerType( from, t )
+    case *ListTypeReference: return canAssignListType( from, t )
+    default: panic( libErrorf( "unhandled type: %T", to ) )
+    }
+    return false
+}
+
+func CanAssignType( from, to TypeReference ) bool {
+    return canAssignType( from, to, true )
 }
 
 type MissingFieldsError struct {

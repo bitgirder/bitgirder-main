@@ -493,6 +493,148 @@ func TestRestrictionAccept( t *testing.T ) {
     f( String( "aaaaa" ), vr2, false )
 }
 
+func TestCanAssign( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    mkList := func( typ string, vals ...interface{} ) *List {
+        res := MustList( vals... )
+        res.Type = MustTypeReference( typ ).( *ListTypeReference )
+        return res
+    }
+    for _, s := range []struct { 
+        typ TypeReference
+        val Value
+        ignoreRestriction bool
+        expctFail bool
+    } {
+        { typ: TypeNull, val: NullVal },
+        { typ: TypeInt32, val: Int32( int32( 1 ) ) },
+        { typ: TypeInt32, val: Int64( int64( 1 ) ), expctFail: true },
+        { typ: TypeInt32, 
+          val: NewHeapValue( Int32( 1 ) ),
+          expctFail: true,
+        },
+        { typ: NewPointerTypeReference( TypeInt32 ),
+          val: NewHeapValue( Int32( 1 ) ),
+        },
+        { typ: MustTypeReference( "&Int32" ),
+          val: NewHeapValue( Int64( 1 ) ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "&Int32?" ),
+          val: NewHeapValue( Int64( 1 ) ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "&Int32?" ), val: NullVal, },
+        { typ: MustTypeReference( "Int32~[0,1]" ), val: Int32( 0 ) },
+        { typ: MustTypeReference( "Int32~[0,1]" ), 
+          val: Int32( 2 ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "Int32~[0,1]" ), 
+          val: Int32( 2 ),
+          ignoreRestriction: true,
+          expctFail: false,
+        },
+        { typ: MustTypeReference( "&Int32~[0,1]" ), 
+          val: NewHeapValue( Int32( 2 ) ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "&Int32~[0,1]" ), 
+          val: NewHeapValue( Int32( 2 ) ),
+          ignoreRestriction: true,
+        },
+        { typ: MustTypeReference( "Int32" ),
+          val: mkList( "Int32*" ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "Int32*" ), val: mkList( "Int32*" ) },
+        { typ: MustTypeReference( "Int32**" ),
+          val: mkList( "Int32**" ),
+        },
+        { typ: MustTypeReference( "Int32**" ),
+          val: mkList( "Int32*" ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "Int32*" ),
+          val: mkList( "Int32**" ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "String?" ), val: String( "s" ) },
+        { typ: MustTypeReference( "String?" ), val: NullVal },
+        { typ: MustTypeReference( "String?" ), val: NullVal },
+        { typ: MustTypeReference( "ns1@v1/S1" ),
+          val: MustStruct( "ns1@v1/S1" ),
+        },
+        { typ: MustTypeReference( "ns1@v1/S1" ),
+          val: MustEnum( "ns1@v1/S1", "c1" ),
+        },
+        { typ: MustTypeReference( "ns1@v1/S1" ),
+          val: String( "s" ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "ns1@v1/S1" ),
+          val: MustStruct( "ns1@v1/S2" ),
+          expctFail: true,
+        },
+        { typ: MustTypeReference( "ns1@v1/S1" ),
+          val: MustEnum( "ns1@v1/S2", "c1" ),
+          expctFail: true,
+        },
+        { typ: TypeValue, val: String( "s" ) },
+        { typ: TypeValue, val: NewHeapValue( Int32( int32( 1 ) ) ) },
+        { typ: TypeValue, val: NullVal, expctFail: true },
+        { typ: TypeValue, val: MustStruct( "ns1@v1/S1" ) },
+        { typ: TypeNullableValue, val: NullVal },
+        { typ: TypeNullableValue, val: String( "s" ) },
+    } {
+//        la.Logf( 
+//            "checking typ %s, val: %s, expctFail: %t, ignoreRestriction: %t",
+//            s.typ, QuoteValue( s.val ), s.expctFail, s.ignoreRestriction )
+        actFail := ! CanAssign( s.val, s.typ, ! s.ignoreRestriction )
+        la.Descend( "expctFail" ).Equal( s.expctFail, actFail )
+        la = la.Next()
+    }
+}
+
+func TestCanAssignType( t *testing.T ) {
+    a := assert.Asserter{ t }
+    chkBase := func( from, to string, expct bool ) {
+        act := CanAssignType( 
+            MustTypeReference( from ), MustTypeReference( to ) )
+        a.Equalf( expct, act, "assignment from %s --> %s, expct: %t, act: %t",
+            from, to, expct, act )
+    }
+    chk := func( from, to string, expct bool ) {
+        chkBase( from, to, expct )
+        chkBase( from, "Value", true )
+        chkBase( from, "Value?", true )
+    }
+    chk( "Int32", "Int32", true )
+    chk( "Int32", "&Int32", false )
+    chk( "Int32", "Int64", false )
+    chk( "&Int32", "&Int32", true )
+    chk( "&Int32", "&Int32?", true )
+    chk( "&Int32?", "&Int32?", true )
+    chk( "Int32*", "Int32", false )
+    chk( "Int32*", "Int32*", true )
+    chk( "Int32+", "Int32*", true )
+    chk( "Int32*", "Int32+", false )
+    chk( "Int32*", "Int32*?", true )
+    chk( "Int32*?", "Int32*", false )
+    chk( "Int32", "Value", true )
+    chk( "Int32*", "Value", true )
+    chk( "Int32~[0,1]", "Int32", true )
+    chk( "Int32", "Int32~[0,1]", false )
+    chk( "&Int32~[0,1]", "&Int32", false )
+    chk( "&Int32~[0,1]", "&Int32~[0,1]", true )
+    chk( "&Int32~[0,1]", "&Int32~[0,1]?", true )
+    chk( "&Int32~[0,1]?", "&Int32~[0,1]?", true )
+    chk( "&Int32~[0,1]?", "&Int32~[0,1]", false )
+    chk( "Value", "Value", true )
+    chk( "Int32*", "Value*", false )
+    chk( "Int32+", "Value+", false )
+}
+
 type quoteValueAsserter struct {
     *assert.Asserter
 }
