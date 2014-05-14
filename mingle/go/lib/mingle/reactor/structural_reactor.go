@@ -18,9 +18,15 @@ func NewStructuralReactor( topTyp ReactorTopType ) *StructuralReactor {
     return &StructuralReactor{ stack: stack.NewStack(), topTyp: topTyp }
 }
 
-type listStructureCheck struct { typ mg.TypeReference }
+type listStructureCheck struct { 
+    id mg.PointerId
+    typ mg.TypeReference 
+}
 
-type mapStructureCheck struct { seen *mg.IdentifierMap }
+type mapStructureCheck struct { 
+    id mg.PointerId
+    seen *mg.IdentifierMap 
+}
 
 func newMapStructureCheck() *mapStructureCheck {
     return &mapStructureCheck{ seen: mg.NewIdentifierMap() }
@@ -35,7 +41,10 @@ func ( mc *mapStructureCheck ) startField( fld *mg.Identifier ) error {
     return nil
 }
 
-type valAllocCheck struct { typ mg.TypeReference }
+type valAllocCheck struct { 
+    id mg.PointerId
+    typ mg.TypeReference 
+}
 
 func ( sr *StructuralReactor ) descForEvent( ev ReactorEvent ) string {
     switch v := ev.( type ) {
@@ -102,6 +111,28 @@ func ( sr *StructuralReactor ) checkTopType( ev ReactorEvent ) error {
     if sr.couldStartWithEvent( ev ) { return nil }    
     return sr.failTopType( ev )
 }
+
+func idForStructureCheck( val interface{} ) mg.PointerId { 
+    switch v := val.( type ) {
+    case listStructureCheck: return v.id
+    case *mapStructureCheck: return v.id
+    case valAllocCheck: return v.id
+    }
+    return mg.PointerIdNull
+}
+
+func ( sr *StructuralReactor ) checkNoCycle( id mg.PointerId ) ( err error ) {
+    if id == mg.PointerIdNull { return nil }
+    sr.stack.VisitTop( func ( elt interface{} ) {
+        if err != nil { return }
+        if eltId := idForStructureCheck( elt ); eltId == id {
+            err = rctErrorf( nil, "reference %s is cyclic", id )
+        }
+    })
+    return
+}
+
+func ( sr *StructuralReactor ) push( val interface{} ) { sr.stack.Push( val ) }
 
 func ( sr *StructuralReactor ) failUnexpectedMapEnd( val interface{} ) error {
     desc := sr.sawDescFor( val )
@@ -229,7 +260,7 @@ func ( sr *StructuralReactor ) execValueCheck(
         }
     }
     if err != nil { return }
-    if pushIfOk != nil { sr.stack.Push( pushIfOk ) }
+    if pushIfOk != nil { sr.push( pushIfOk ) }
     return 
 }
 
@@ -241,21 +272,29 @@ func ( sr *StructuralReactor ) completeValue() {
     sr.done = sr.stack.IsEmpty()
 }
 
-// used for ValueEvent and ValueReferenceEvent
 func ( sr *StructuralReactor ) checkValue( ev ReactorEvent ) error {
     if err := sr.execValueCheck( ev, nil ); err != nil { return err }
     sr.completeValue()
     return nil
 }
 
+func ( sr *StructuralReactor ) checkValueReference( 
+    ev *ValueReferenceEvent ) error {
+
+    if err := sr.checkNoCycle( ev.Id ); err != nil { return err }
+    return sr.checkValue( ev )
+}
+
 func ( sr *StructuralReactor ) checkValueAlloc( 
     va *ValueAllocationEvent ) error {
 
-    return sr.execValueCheck( va, valAllocCheck{ va.Type } )
+    return sr.execValueCheck( va, valAllocCheck{ typ: va.Type, id: va.Id } )
 }
 
 func ( sr *StructuralReactor ) checkStructureStart( ev ReactorEvent ) error {
-    return sr.execValueCheck( ev, newMapStructureCheck() )
+    chk := newMapStructureCheck()
+    if ms, ok := ev.( *MapStartEvent ); ok { chk.id = ms.Id }
+    return sr.execValueCheck( ev, chk )
 }
 
 func ( sr *StructuralReactor ) checkFieldStart( fs *FieldStartEvent ) error {
@@ -263,7 +302,7 @@ func ( sr *StructuralReactor ) checkFieldStart( fs *FieldStartEvent ) error {
     top := sr.stack.Peek()
     if mc, ok := top.( *mapStructureCheck ); ok {
         if err := mc.startField( fs.Field ); err != nil { return err }
-        sr.stack.Push( fs.Field )
+        sr.push( fs.Field )
         return nil
     }
     return rctErrorf( fs.GetPath(), 
@@ -272,7 +311,8 @@ func ( sr *StructuralReactor ) checkFieldStart( fs *FieldStartEvent ) error {
 }
 
 func ( sr *StructuralReactor ) checkListStart( le *ListStartEvent ) error {
-    return sr.execValueCheck( le, listStructureCheck{ le.Type.ElementType } )
+    lsc := listStructureCheck{ typ: le.Type.ElementType, id: le.Id }
+    return sr.execValueCheck( le, lsc )
 }
 
 func ( sr *StructuralReactor ) checkEnd( ee *EndEvent ) error {
@@ -291,7 +331,8 @@ func ( sr *StructuralReactor ) checkEnd( ee *EndEvent ) error {
 func ( sr *StructuralReactor ) ProcessEvent( ev ReactorEvent ) error {
     if err := sr.checkNotDone( ev ); err != nil { return err }
     switch v := ev.( type ) {
-    case *ValueEvent, *ValueReferenceEvent: return sr.checkValue( v )
+    case *ValueEvent: return sr.checkValue( v )
+    case *ValueReferenceEvent: return sr.checkValueReference( v )
     case *ValueAllocationEvent: return sr.checkValueAlloc( v )
     case *StructStartEvent, *MapStartEvent: return sr.checkStructureStart( ev )
     case *FieldStartEvent: return sr.checkFieldStart( v )

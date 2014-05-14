@@ -74,54 +74,6 @@ func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-func initValueBuildReactorCycleTests( b *ReactorTestSetBuilder ) {
-    cyc := mg.NewCyclicValues()
-    b.AddTests(
-        &ValueBuildTest{ Val: cyc.S1 },
-        &ValueBuildTest{ Val: cyc.L1 },
-        &ValueBuildTest{ Val: cyc.M1 },
-    )
-    qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
-    fld := mg.MakeTestId
-    // we create s1 pointing to s2 pointing to s1, but where s2 has non-cyclic
-    // fields as well, and then feed s2 field events in various orders in order
-    // to uncover errors related to clearing field state after encountering
-    // forward references
-    s1 := mg.NewHeapValue( mg.NewStruct( qn1 ) )
-    s2 := mg.NewHeapValue( mg.NewStruct( qn1 ) )
-    s1Val := s1.Dereference().( *mg.Struct )
-    s2Val := s2.Dereference().( *mg.Struct )
-    s1ValTyp, s2ValTyp := s1Val.Type.AsAtomicType(), s2Val.Type.AsAtomicType()
-    s1Val.Fields.Put( fld( 1 ), s2 )
-    i1Val := mg.Int32( int32( 1 ) )
-    s2Val.Fields.Put( fld( 1 ), i1Val )
-    s2Val.Fields.Put( fld( 2 ), s1 )
-    s2Val.Fields.Put( fld( 3 ), s1 )
-    s2Val.Fields.Put( fld( 4 ), i1Val )
-    b.AddTests(
-        &ValueBuildTest{
-            Val: s1,
-            Source: []ReactorEvent{
-                NewValueAllocationEvent( s1ValTyp, s1.Address() ),
-                NewStructStartEvent( qn1 ),
-                    NewFieldStartEvent( fld( 1 ) ),
-                        NewValueAllocationEvent( s2ValTyp, s2.Address() ),
-                        NewStructStartEvent( qn1 ),
-                            NewFieldStartEvent( fld( 1 ) ),
-                                NewValueEvent( i1Val ),
-                            NewFieldStartEvent( fld( 2 ) ),
-                                NewValueReferenceEvent( s1.Address() ),
-                            NewFieldStartEvent( fld( 3 ) ),
-                                NewValueReferenceEvent( s1.Address() ),
-                            NewFieldStartEvent( fld( 4 ) ),
-                                NewValueEvent( i1Val ),
-                            NewEndEvent(),
-                    NewEndEvent(),
-            },
-        },
-    )
-}
-
 func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
     s1 := mg.MustStruct( "ns1@v1/S1",
         "val1", mg.String( "hello" ),
@@ -168,7 +120,6 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
     valPtr1 := mg.NewHeapValue( mg.Int32( 1 ) )
     addTest( mg.MustList( valPtr1, valPtr1, valPtr1 ) )
     initValueBuildZeroRefTests( b )
-    initValueBuildReactorCycleTests( b )
 }
 
 // we only add here error tests; we assume that a value build reactor sits
@@ -181,8 +132,17 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     evStartField2 := NewFieldStartEvent( id( 2 ) )
     evValue1 := NewValueEvent( mg.Int64( int64( 1 ) ) )
     evValuePtr1 := NewValueAllocationEvent( mg.TypeInt64, 1 )
-    evListStart := NewListStartEvent( mg.TypeOpaqueList, ptrId( 1 ) )
-    evMapStart := NewMapStartEvent( ptrId( 2 ) )
+    listStart := func( i int ) *ListStartEvent {
+        return NewListStartEvent( mg.TypeOpaqueList, ptrId( i ) )
+    }
+    mapStart := func( i int ) *MapStartEvent {
+        return NewMapStartEvent( ptrId( i ) )
+    }
+    valAlloc := func( i int ) *ValueAllocationEvent {
+        return NewValueAllocationEvent( mg.TypeValue, ptrId( i ) )
+    }
+    evListStart := listStart( 1 )
+    evMapStart := mapStart( 2 )
     mk1 := func( 
         errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
@@ -255,6 +215,42 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
             evStartField1, evValue1,
             evStartField2, evValue1,
             evStartField1,
+        ),
+        mk1( "reference 1 is cyclic",
+            listStart( 1 ), ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            listStart( 1 ),
+            NewValueEvent( mg.Int32( int32( 1 ) ) ), ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            listStart( 1 ), listStart( 2 ), ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            listStart( 1 ), mapStart( 2 ), evStartField1, ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic", 
+            mapStart( 1 ), evStartField1, ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            mapStart( 1 ), evStartField1, listStart( 2 ), ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            mapStart( 1 ), 
+            evStartField1, 
+            mapStart( 2 ), 
+            evStartField1,
+            ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            valAlloc( 1 ), ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            listStart( 2 ), valAlloc( 1 ), listStart( 2 ), ptrRef( 1 ),
+        ),
+        mk1( "reference 1 is cyclic",
+            valAlloc( 1 ),
+            evStartStruct1, evStartField1, ptrRef( 1 ),
         ),
     )
     addAllocFail := func( ev ReactorEvent, errStr string ) {
