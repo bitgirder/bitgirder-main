@@ -85,30 +85,18 @@ func newListAcc( id mg.PointerId ) *listAcc {
     return &listAcc{ id: id, l: mg.NewList( mg.TypeOpaqueList ) } 
 }
 
-type valueBuildResolution struct {
-    id mg.PointerId
-    f func( mg.Value )
-}
-
 // Can make this public if needed
 type valueAccumulator struct {
     val mg.Value
     accs *stack.Stack
     refs map[ mg.PointerId ] interface{}
-    resolutions []valueBuildResolution
 }
 
 func newValueAccumulator() *valueAccumulator {
     return &valueAccumulator{ 
         accs: stack.NewStack(), 
         refs: make( map[ mg.PointerId ] interface{} ),
-        resolutions: make( []valueBuildResolution, 0, 4 ),
     }
-}
-
-func ( va *valueAccumulator ) addResolver( id mg.PointerId, f func( mg.Value ) ) {
-    res := valueBuildResolution{ id: id, f: f }
-    va.resolutions = append( va.resolutions, res )
 }
 
 func ( va *valueAccumulator ) pushAcc( acc interface{} ) { va.accs.Push( acc ) }
@@ -136,19 +124,6 @@ func ( va *valueAccumulator ) mustPeekAcc() interface{} {
     panic( libError( "acc stack is empty" ) )
 }
 
-func ( va *valueAccumulator ) setForwardFieldValue( ma *mapAcc, id mg.PointerId ) {
-    fld := ma.clearField()
-    va.addResolver( id, func( val mg.Value ) { ma.m.Put( fld, val ) } )
-}
-
-func ( va *valueAccumulator ) forwardValueReferenced( id mg.PointerId ) {
-    switch v := va.mustPeekAcc().( type ) {
-    case *structAcc: va.setForwardFieldValue( v.flds, id )
-    case *mapAcc: va.setForwardFieldValue( v, id )
-    default: panic( libErrorf( "unhandled acc: %T", v ) )
-    }
-}
-
 func ( va *valueAccumulator ) acceptValue( acc interface{}, val mg.Value ) bool {
     switch v := acc.( type ) {
     case *valPtrAcc: v.val = mg.NewHeapValue( val ); return true
@@ -173,18 +148,10 @@ func ( va *valueAccumulator ) popAccValue() {
     va.valueReady( va.valueForAcc( va.accs.Pop() ) )
 }
 
-func ( va *valueAccumulator ) resolve() {
-    for _, rs := range va.resolutions {
-        acc := va.refs[ rs.id ]
-        rs.f( va.valueForAcc( acc ) )
-    }
-}
-
 func ( va *valueAccumulator ) valueReady( val mg.Value ) {
     if acc, ok := va.peekAcc(); ok {
         if va.acceptValue( acc, val ) { va.popAccValue() }
     } else {
-        va.resolve()
         va.val = val
     }
 }
@@ -208,18 +175,9 @@ func ( va *valueAccumulator ) startField( fld *mg.Identifier ) {
 
 func ( va *valueAccumulator ) end() { va.popAccValue() }
 
-func ( va *valueAccumulator ) isForwardRef( acc interface{} ) bool {
-    if vp, ok := acc.( *valPtrAcc ); ok { return vp.val == nil }
-    return false
-}
-
 func ( va *valueAccumulator ) valueReferenced( vr *ValueReferenceEvent ) error {
     if acc, ok := va.refs[ vr.Id ]; ok {
-        if va.isForwardRef( acc ) {
-            va.forwardValueReferenced( vr.Id )
-        } else { 
-            va.valueReady( va.valueForAcc( acc ) ) 
-        }
+        va.valueReady( va.valueForAcc( acc ) ) 
         return nil
     }
     return rctErrorf( vr.GetPath(), "unhandled value pointer ref: %s", vr.Id )
