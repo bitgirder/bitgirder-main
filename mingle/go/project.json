@@ -11,8 +11,6 @@
         "mingle/parser/syntax"
     ],
     "test-packages": [
-        "mingle/testing",
-        "mingle/testing/testval",
         "mingle/parser/testing"
     ],
     "test-commands": {
