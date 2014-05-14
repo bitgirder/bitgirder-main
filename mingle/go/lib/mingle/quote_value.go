@@ -87,7 +87,7 @@ func ( vq valueQuote ) appendValuePointer( vp ValuePointer ) {
 func ( vq valueQuote ) appendValue( val Value ) {
     switch v := val.( type ) {
     case String: fmt.Fprintf( vq.buf, "%q", string( v ) )
-    case Buffer: fmt.Fprintf( vq.buf, "buf[%x]", []byte( v ) )
+    case Buffer: fmt.Fprintf( vq.buf, "buf[%d]", len( []byte( v ) ) )
     case Timestamp: fmt.Fprintf( vq.buf, "%s", v.Rfc3339Nano() )
     case *Null: vq.buf.WriteString( "null" )
     case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:

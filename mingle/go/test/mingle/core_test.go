@@ -657,7 +657,7 @@ func TestQuoteValue( t *testing.T ) {
     a := &quoteValueAsserter{ &assert.Asserter{ t } }
     a.call( Boolean( true ), "true" )
     a.call( Boolean( false ), "false" )
-    a.call( Buffer( []byte{ 0, 1, 2 } ), "buf[000102]" )
+    a.call( Buffer( []byte{ 0, 1, 2 } ), "buf[3]" )
     a.call( String( "s" ), `"s"` )
     a.call( Int32( 1 ), "1" )
     a.call( Int64( 1 ), "1" )
