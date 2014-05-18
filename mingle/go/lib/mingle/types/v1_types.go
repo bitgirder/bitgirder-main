@@ -24,6 +24,10 @@ func initCoreV1Prims() {
     }
 }
 
+func initCoreV1ValueTypes() {
+    coreTypesV1.MustAdd( &PrimitiveDefinition{ Name: mg.QnameValue } )
+}
+
 func initCoreV1StandardError() *StructDefinition {
     ed := NewStructDefinition()
     ed.Name = asCoreV1Qn( "StandardError" )
@@ -75,6 +79,7 @@ func initCoreV1Exceptions() {
 func init() {
     coreTypesV1 = NewDefinitionMap()
     initCoreV1Prims()
+    initCoreV1ValueTypes()
     initCoreV1Exceptions()
 }
 

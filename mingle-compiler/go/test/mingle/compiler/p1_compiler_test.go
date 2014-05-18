@@ -154,14 +154,14 @@ struct Struct1 {
     string3 String default "hello there"
     string4 String~"a*" default "aaaaa"
     string5 String~"^.*(a|b)$"?
-    bool1 Boolean?
+    bool1 &Boolean?
     bool2 Boolean default true
     buf1 Buffer?
-    timestamp1 Timestamp?
+    timestamp1 &Timestamp?
     timestamp2 Timestamp default "2007-08-24T14:15:43.123450000-07:00"
     int1 Int64
     int2 Int64 default 1234
-    int3 Int64?
+    int3 &Int64?
     int4 Int32 default 12
     int5 Int32~[0,) default 1111
     int6 Int64~(,)
@@ -170,7 +170,7 @@ struct Struct1 {
     ints1 Int64*
     ints2 Int32+ default [ 1, -2, 3, -4 ]
     float1 Float64 default 3.1
-    float2 Float64~(-1e-10,3]?
+    float2 &Float64~(-1e-10,3]?
     float3 Float32 default 3.2
     floats1 Float32*
     val1 Value
@@ -190,7 +190,7 @@ enum Enum1 { red, green, lightGrey }
 struct Struct3 < Struct1 {
     string6 String?
     inst1 Struct2
-    enum1 Enum1?
+    enum1 &Enum1?
     enum2 Enum1 default Enum1.green
 
     @constructor( Int64 )
@@ -212,10 +212,10 @@ alias Alias5 Int64~[0,)
 
 struct Struct5 {
     f1 Alias1
-    f2 Alias1? default "hello"
+    f2 Alias1 default "hello"
     f3 Alias1*
     f4 Alias1+ default [ "a", "b" ]
-    f5 Alias1?*+
+    f5 Alias1*+
     f6 Alias2
     f7 Alias2*
     f8 Alias3 default [ "hello" ]
@@ -229,20 +229,20 @@ service Service1 {
     op op1(): String*
 
     op op2( param1 String,
-         param2 Struct1?,
+         param2 &Struct1?,
          param3 Int64 default 12,
          param4 Alias1*,
          param5 Alias2 ): ns1/Struct2,
             throws Exception1, Exception3
     
-    op op3(): Int64? throws Exception2
+    op op3(): &Int64? throws Exception2
 
     op op4(): Null
 }
 
 prototype Proto1(): String
 prototype Proto2(): String throws Exception1
-prototype Proto3( f1 Struct1, f2 String default "hi" ): Struct1?
+prototype Proto3( f1 Struct1, f2 String default "hi" ): &Struct1?
 
 prototype Sec1( authentication Struct1 ): Null
 
@@ -318,7 +318,7 @@ alias Alias1 ns1/Struct3
 alias Alias2 ns1/Alias3
 
 struct Struct1 {
-    inst1 ns1@v1/Struct1?
+    inst1 &ns1@v1/Struct1?
     inst2 Struct2
     inst3 Struct4
     inst4 Alias1
@@ -376,7 +376,7 @@ namespace ns1
 
 struct Struct1 { f1 String default "hello" }
 
-struct Struct2 < ns1@v1/Struct1 { f1 Struct1? }
+struct Struct2 < ns1@v1/Struct1 { f1 &Struct1? }
 
 alias Struct1V1 ns1@v1/Struct1
 
@@ -430,12 +430,12 @@ service Service1 {
                     types.MakeFieldDef(
                         "string5", `mingle:core@v1/String~"^.*(a|b)$"?`, nil ),
                     types.MakeFieldDef( 
-                        "bool1", "mingle:core@v1/Boolean?", nil ),
+                        "bool1", "&mingle:core@v1/Boolean?", nil ),
                     types.MakeFieldDef( 
                         "bool2", "mingle:core@v1/Boolean", true ),
                     types.MakeFieldDef( "buf1", "mingle:core@v1/Buffer?", nil ),
                     types.MakeFieldDef( 
-                        "timestamp1", "mingle:core@v1/Timestamp?", nil ),
+                        "timestamp1", "&mingle:core@v1/Timestamp?", nil ),
                     types.MakeFieldDef(
                         "timestamp2", 
                         "mingle:core@v1/Timestamp",
@@ -445,7 +445,7 @@ service Service1 {
                     types.MakeFieldDef( "int1", "mingle:core@v1/Int64", nil ),
                     types.MakeFieldDef( 
                         "int2", "mingle:core@v1/Int64", int64( 1234 ) ),
-                    types.MakeFieldDef( "int3", "mingle:core@v1/Int64?", nil ),
+                    types.MakeFieldDef( "int3", "&mingle:core@v1/Int64?", nil ),
                     types.MakeFieldDef( 
                         "int4", "mingle:core@v1/Int32", int32( 12 ) ),
                     types.MakeFieldDef( 
@@ -465,7 +465,7 @@ service Service1 {
                     types.MakeFieldDef(
                         "float1", "mingle:core@v1/Float64", float64( 3.1 ) ),
                     types.MakeFieldDef(
-                        "float2", "mingle:core@v1/Float64~(-1e-10,3]?", nil ),
+                        "float2", "&mingle:core@v1/Float64~(-1e-10,3]?", nil ),
                     types.MakeFieldDef(
                         "float3", "mingle:core@v1/Float32", float32( 3.2 ) ),
                     types.MakeFieldDef( 
@@ -496,7 +496,7 @@ service Service1 {
                     types.MakeFieldDef( 
                         "string6", "mingle:core@v1/String?", nil ),
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
-                    types.MakeFieldDef( "enum1", "ns1@v1/Enum1?", nil ),
+                    types.MakeFieldDef( "enum1", "&ns1@v1/Enum1?", nil ),
                     types.MakeFieldDef( 
                         "enum2",
                         "ns1@v1/Enum1",
@@ -516,7 +516,7 @@ service Service1 {
                     types.MakeFieldDef(
                         "f1", "mingle:core@v1/String?", nil ),
                     types.MakeFieldDef(
-                        "f2", "mingle:core@v1/String??", "hello" ),
+                        "f2", "mingle:core@v1/String?", "hello" ),
                     types.MakeFieldDef(
                         "f3", "mingle:core@v1/String?*", nil ),
                     types.MakeFieldDef(
@@ -525,7 +525,7 @@ service Service1 {
                         []interface{}{ "a", "b" },
                     ),
                     types.MakeFieldDef(
-                        "f5", "mingle:core@v1/String??*+", nil ),
+                        "f5", "mingle:core@v1/String?*+", nil ),
                     types.MakeFieldDef(
                         "f6", "ns1@v1/Struct1", nil ),
                     types.MakeFieldDef(
@@ -589,7 +589,7 @@ service Service1 {
                         types.MakeFieldDef( 
                             "f2", "mingle:core@v1/String", "hi" ),
                     },
-                    "ns1@v1/Struct1?",
+                    "&ns1@v1/Struct1?",
                     []string{},
                 ),
             },
@@ -632,7 +632,7 @@ service Service1 {
                             types.MakeFieldDef( 
                                 "param1", "mingle:core@v1/String", nil ),
                             types.MakeFieldDef(
-                                "param2", "ns1@v1/Struct1?", nil ),
+                                "param2", "&ns1@v1/Struct1?", nil ),
                             types.MakeFieldDef(
                                 "param3", "mingle:core@v1/Int64", int64( 12 ) ),
                             types.MakeFieldDef(
@@ -647,7 +647,7 @@ service Service1 {
                 types.MakeOpDef( "op3",
                     types.MakeCallSig(
                         []*types.FieldDefinition{},
-                        "mingle:core@v1/Int64?",
+                        "&mingle:core@v1/Int64?",
                         []string{ "ns1@v1/Exception2" },
                     ),
                 ),
@@ -776,7 +776,7 @@ service Service1 {
                 "ns2@v1/Struct1",
                 "",
                 []*types.FieldDefinition{
-                    types.MakeFieldDef( "inst1", "ns1@v1/Struct1?", nil ),
+                    types.MakeFieldDef( "inst1", "&ns1@v1/Struct1?", nil ),
                     types.MakeFieldDef( "inst2", "ns2@v1/Struct2", nil ),
                     types.MakeFieldDef( "inst3", "ns1@v1/Struct4", nil ),
                     types.MakeFieldDef( "inst4", "ns1@v1/Struct3", nil ),
@@ -887,7 +887,7 @@ service Service1 {
                 "ns1@v2/Struct2",
                 "ns1@v1/Struct1",
                 []*types.FieldDefinition{
-                    types.MakeFieldDef( "f1", "ns1@v2/Struct1?", nil ),
+                    types.MakeFieldDef( "f1", "&ns1@v2/Struct1?", nil ),
                 },
             ),
             &types.AliasedTypeDefinition{

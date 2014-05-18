@@ -28,8 +28,7 @@ func ( ctx *context ) failEvalf( tmpl string, argv ...interface{} ) error {
 
 func evalListVal( lv *code.ListValue, ctx *context ) ( *mg.List, error ) {
     res := mg.MakeList( len( lv.Values ) )
-    var err error
-    for i, eltVal := range lv.Values {
+    for _, eltVal := range lv.Values {
         if evRes, err := evaluate( eltVal, ctx ); err == nil {
             res.Add( evRes )
         } else { return nil, err }

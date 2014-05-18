@@ -12,6 +12,7 @@ import (
     "mingle/parser/syntax"
     "mingle/parser/loc"
     "mingle/code"
+    mgRct "mingle/reactor"
     interp "mingle/interpreter"
     "mingle/types"
     mg "mingle"
@@ -349,6 +350,7 @@ func ( bs *buildScope ) aliasValFor(
 func ( bs *buildScope ) completeType( 
     typ *syntax.CompletableTypeReference,
     tr *typeResolution ) mg.TypeReference {
+
     qn := bs.qnameFor( typ.Name, tr.errLoc )
     if qn == nil { return nil }
     var base mg.TypeReference
@@ -361,7 +363,10 @@ func ( bs *buildScope ) completeType(
         } else { base = bs.unalias( aliasVal, qn, tr ) }
     }
     if base == nil { return nil }
-    return mg.CompleteType( base, typ )
+    res, err := mg.CompleteType( base, typ )
+    if err == nil { return res }
+    bs.c.addError( typ.ErrLoc, err.Error() )
+    return nil
 }
 
 // This method may return non-nil even if some errors were encountered, to allow
@@ -1308,10 +1313,10 @@ func ( c *Compilation ) buildExpression(
 }
 
 func castConstVal( val mg.Value, typ mg.TypeReference ) ( mg.Value, error ) {
-    rct := mg.NewDefaultCastReactor( typ )
-    vb := mg.NewValueBuilder()
-    pip := mg.InitReactorPipeline( rct, vb )
-    if err := mg.VisitValue( val, pip ); err != nil { return nil, err }
+    rct := mgRct.NewDefaultCastReactor( typ )
+    vb := mgRct.NewValueBuilder()
+    pip := mgRct.InitReactorPipeline( rct, vb )
+    if err := mgRct.VisitValue( val, pip ); err != nil { return nil, err }
     return vb.GetValue(), nil
 }
 

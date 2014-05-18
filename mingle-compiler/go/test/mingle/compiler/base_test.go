@@ -353,10 +353,10 @@ func TestCompiler( t *testing.T ) {
                 f4 String* default [ "a", 1, "c", false, 1.2 ]
                 f5 Int32 default 1.1
                 f6 Int32 default false
-                f7 Int32? default "2"
+                f7 &Int32? default "2"
                 f8 Int32+ default [ 1, 2, -3, "a", true, 1.2 ]
                 f9 Float32 default true
-                f10 Float32? default "1.0"
+                f10 &Float32? default "1.0"
                 f11 Float32* default [ 1.1, true, "a", [] ]
                 f12 Boolean default "true"
                 f13 Boolean default 1
@@ -380,14 +380,14 @@ func TestCompiler( t *testing.T ) {
         expectError( 9, 58, "Expected mingle:core@v1/String but got number" ).
         expectError( 10, 34, "Expected mingle:core@v1/Int32 but got float" ).
         expectError( 11, 34, "Expected mingle:core@v1/Int32 but got boolean" ).
-        expectError( 12, 35, "Expected mingle:core@v1/Int32? but got string" ).
+        expectError( 12, 36, "Expected &mingle:core@v1/Int32? but got string" ).
         expectError( 13, 47, "Expected mingle:core@v1/Int32 but got string" ).
         expectError( 13, 52, "Expected mingle:core@v1/Int32 but got boolean" ).
         expectError( 13, 58, "Expected mingle:core@v1/Int32 but got float" ).
         expectError( 14, 36,
             "Expected mingle:core@v1/Float32 but got boolean" ).
-        expectError( 15, 38,
-            "Expected mingle:core@v1/Float32? but got string" ).
+        expectError( 15, 39,
+            "Expected &mingle:core@v1/Float32? but got string" ).
         expectError( 16, 45, 
             "Expected mingle:core@v1/Float32 but got boolean" ).
         expectError( 16, 51, "Expected mingle:core@v1/Float32 but got string" ).

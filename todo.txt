@@ -1,0 +1,2 @@
+- parser tree doesn't need explicit type reference source locs now that
+  CompletableTypeReference has them itself

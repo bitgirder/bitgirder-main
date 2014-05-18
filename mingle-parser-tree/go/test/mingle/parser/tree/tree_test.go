@@ -4,7 +4,6 @@ import (
 //    "log"
     "testing"
     "bytes"
-    "fmt"
     "sort"
     "bitgirder/assert"
     "bitgirder/objpath"
@@ -115,17 +114,36 @@ func ( t *treeCheck ) equalTypeDeclInfo( i1, i2 *TypeDeclInfo ) {
     t.descend( "SuperTypeLoc" ).Equal( i1.SuperTypeLoc, i2.SuperTypeLoc )
 }
 
+type quantAppender int
+
+func ( qa quantAppender ) AsListType( 
+    typ interface{}, allowsEmpty bool ) ( interface{}, error ) {
+
+    bb := typ.( *bytes.Buffer )
+    if allowsEmpty { bb.WriteString( "*" ) } else { bb.WriteString( "+" ) }
+    return bb, nil
+}
+
+func ( qa quantAppender ) AsNullableType( 
+    typ interface{} ) ( interface{}, error ) {
+
+    typ.( *bytes.Buffer ).WriteString( "?" )
+    return typ, nil
+}
+
+func ( qa quantAppender ) AsPointerType( 
+    typ interface{} ) ( interface{}, error ) {
+
+    res := &bytes.Buffer{}
+    res.WriteString( "&" )
+    res.WriteString( typ.( *bytes.Buffer ).String() )
+    return res, nil
+}
+
 func quantsFor( t *syntax.CompletableTypeReference ) string {
-    f := func( typ interface{}, q syntax.TypeQuantifier ) interface{} {
-        s := typ.( string )
-        switch q {
-        case syntax.TypeQuantifierNullable: return s + "?"
-        case syntax.TypeQuantifierList: return s + "*"
-        case syntax.TypeQuantifierNonEmptyList: return s + "+"
-        }
-        panic( fmt.Errorf( "Unhandled quant: %d", q ) )
-    }
-    return t.CompleteType( "", f ).( string )
+    res, err := t.CompleteType( &bytes.Buffer{}, quantAppender( 1 ) )
+    if err != nil { panic( err ) }
+    return res.( *bytes.Buffer ).String()
 }
 
 // Checking right now is loose on restrictions, and we really only check that
@@ -477,6 +495,11 @@ func initResultTestSource1() {
     lc1 := func( line, col int ) *loc.Location {
         return &loc.Location{ Source: "testSource1", Line: line, Col: col }
     }
+    sxTyp1 := func( s string, line, col int ) *syntax.CompletableTypeReference {
+        res := sxTyp( s )
+        res.ErrLoc = lc1( line, col )
+        return res
+    }
     testParseResults[ "testSource1" ] = &NsUnit{
         SourceName: "testSource1",
         NsDecl: &NamespaceDecl{ 
@@ -699,7 +722,7 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Struct3" ),
                     NameLoc: lc1( 45, 8 ),
-                    SuperType: sxTyp( "Struct1" ),
+                    SuperType: sxTyp1( "Struct1", 45, 17 ),
                     SuperTypeLoc: lc1( 45, 18 ),
                 },
                 Fields: []*FieldDecl{
@@ -731,7 +754,7 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Struct4" ),
                     NameLoc: lc1( 54, 8 ),
-                    SuperType: sxTyp( "Struct1" ),
+                    SuperType: sxTyp1( "Struct1", 54, 17 ),
                     SuperTypeLoc: lc1( 54, 18 ),
                 },
                 Fields: []*FieldDecl{},
@@ -742,7 +765,7 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Error1" ),
                     NameLoc: lc1( 56, 8 ),
-                    SuperType: sxTyp( "StandardError" ),
+                    SuperType: sxTyp1( "StandardError", 56, 16 ),
                     SuperTypeLoc: lc1( 56, 17 ),
                 },
                 Fields: []*FieldDecl{},
@@ -767,7 +790,7 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Error3" ),
                     NameLoc: lc1( 59, 8 ),
-                    SuperType: sxTyp( "Error1" ),
+                    SuperType: sxTyp1( "Error1", 59, 16 ),
                     SuperTypeLoc: lc1( 59, 17 ),
                 },
                 Fields: []*FieldDecl{
@@ -970,7 +993,9 @@ func initResultTestSource1() {
                       TypeLoc: lc1( 91, 8 ),
                       Default: &QualifiedExpression{
                         Lhs: &PrimaryExpression{
-                            Prim: sxTyp( "E1" ), PrimLoc: lc1( 91, 19 ) },
+                            Prim: sxTyp1( "E1", 91, 19 ), 
+                            PrimLoc: lc1( 91, 19 ),
+                        },
                         Id: mgId( "green" ),
                         IdLoc: lc1( 91, 22 ),
                       },
