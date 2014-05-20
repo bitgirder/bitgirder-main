@@ -11,9 +11,7 @@ func id( strs ...string ) *mg.Identifier {
     return mg.NewIdentifierUnsafe( strs )
 }
 
-func ws( str string ) WhitespaceToken { 
-    return WhitespaceToken( []byte( str ) )
-}
+func ws( str string ) WhitespaceToken { return WhitespaceToken( str ) }
 
 var makeTypeName = mg.NewDeclaredTypeNameUnsafe
 

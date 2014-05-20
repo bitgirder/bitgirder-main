@@ -9,6 +9,7 @@ import (
     "fmt"
     "bufio"
     "bytes"
+    "strings"
     "unicode"
     "unicode/utf16"
 )
@@ -341,10 +342,10 @@ func isWhitespace( r rune ) bool {
     return r == ' ' || r == '\t' || r == '\r' || r == '\n'
 }
 
-type WhitespaceToken []byte
+type WhitespaceToken string
 
 func ( ws WhitespaceToken ) hasNewline() bool {
-    return bytes.IndexRune( []byte( ws ), '\n' ) >= 0
+    return strings.IndexRune( string( ws ), '\n' ) >= 0
 }
 
 func ( lx *Lexer ) readWhitespace() ( tok WhitespaceToken, err error ) {
@@ -357,11 +358,11 @@ func ( lx *Lexer ) readWhitespace() ( tok WhitespaceToken, err error ) {
                 buf.WriteRune( r )
             } else { 
                 if err != io.EOF { lx.unreadRune() }
-                return WhitespaceToken( buf.Bytes() ), err
+                return WhitespaceToken( buf.String() ), err
             }
         }
     }
-    return nil, err
+    return
 }
 
 var specialTokChars []byte
@@ -473,7 +474,7 @@ func ( lx *Lexer ) readSpecialTok() ( Token, error ) {
 
 func isCommentStart( r rune ) bool { return r == '#' }
 
-type CommentToken []byte
+type CommentToken string
 
 func ( lx *Lexer ) readComment() ( tok Token, err error ) {
     buf := bytes.Buffer{}
@@ -485,8 +486,8 @@ func ( lx *Lexer ) readComment() ( tok Token, err error ) {
             loop = r != '\n'
         }
     }
-    if ! isLexErr( err ) { return CommentToken( buf.Bytes() ), err }
-    return nil, err
+    if ! isLexErr( err ) { tok = CommentToken( buf.String() ) }
+    return 
 }
 
 func isDeclaredTypeNameStart( r rune ) bool { return r >= 'A' && r <= 'Z' }
