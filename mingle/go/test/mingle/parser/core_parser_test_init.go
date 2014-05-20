@@ -8,7 +8,7 @@ import (
 
 type NumericTokenTest struct { 
     Negative bool
-    Int, Frac, Exp, ExpChar string 
+    Token *NumericToken
 }
 
 type Namespace struct {
@@ -147,23 +147,28 @@ func init() {
         strFail( `"a\udd1e\ud834"`, 3, 
             "Invalid surrogate pair \\uDD1E\\uD834" ),
     )
+    numTokTest := func( neg bool, i, f, e string, c rune ) *NumericTokenTest {
+        return &NumericTokenTest{
+            Negative: neg,
+            Token: &NumericToken{ Int: i, Frac: f, Exp: e, ExpRune: c },
+        }
+    }
     numSucc := func( in string, num *NumericTokenTest ) *CoreParseTest {
         return &CoreParseTest{ In: in, Expect: num, TestType: TestTypeNumber }
     }
     numFail := peFailBinder( TestTypeNumber )
     CoreParseTests = append( CoreParseTests,
-        numSucc( "1", &NumericTokenTest{ false, "1", "", "", "" } ),
-        numSucc( "-1", &NumericTokenTest{ true, "1", "", "", "" } ),
-        numSucc( "1.1", &NumericTokenTest{ false, "1", "1", "", "" } ),
-        numSucc( "-1.1", &NumericTokenTest{ true, "1", "1", "", "" } ),
-        numSucc( "1.1e0", &NumericTokenTest{ false, "1", "1", "0", "e" } ),
-        numSucc( "1.1E3", &NumericTokenTest{ false, "1", "1", "3", "E" } ),
-        numSucc( "1.1e+1", &NumericTokenTest{ false, "1", "1", "1", "e" } ),
-        numSucc( "11e-1", &NumericTokenTest{ false, "11", "", "-1", "e" } ),
-        numSucc( "000000e0", 
-            &NumericTokenTest{ false, "000000", "", "0", "e" } ),
+        numSucc( "1", numTokTest( false, "1", "", "",  0 ) ),
+        numSucc( "-1", numTokTest( true, "1", "", "",  0 ) ),
+        numSucc( "1.1", numTokTest( false, "1", "1", "",  0 ) ),
+        numSucc( "-1.1", numTokTest( true, "1", "1", "",  0 ) ),
+        numSucc( "1.1e0", numTokTest( false, "1", "1", "0", 'e' ) ),
+        numSucc( "1.1E3", numTokTest( false, "1", "1", "3", 'E' ) ),
+        numSucc( "1.1e+1", numTokTest( false, "1", "1", "1", 'e' ) ),
+        numSucc( "11e-1", numTokTest( false, "11", "", "-1", 'e' ) ),
+        numSucc( "000000e0", numTokTest( false, "000000", "", "0", 'e' ) ),
         numSucc( "00001.100000", 
-            &NumericTokenTest{ false, "00001", "100000", "", "" } ),
+            numTokTest( false, "00001", "100000", "",  0 ) ),
         numFail( "0.", 2, "Number has empty or invalid fractional part" ),
         numFail( "0.x3", 3, 
             `Unexpected char in fractional part: "x" (U+0078)` ),

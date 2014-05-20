@@ -8,7 +8,6 @@ import (
     "container/list"
     "fmt"
     "bufio"
-    "errors"
     "bytes"
     "unicode"
     "unicode/utf16"
@@ -17,10 +16,6 @@ import (
 const replChar = rune( 0xfffd )
 
 type Token interface{}
-
-type idPart string
-
-type DeclaredTypeName string
 
 type Keyword string
 
@@ -61,18 +56,18 @@ func init() {
     kwdMap[ "true" ] = KeywordTrue
 }
 
-const runeReplChar = rune( '\ufffd' )
+const lxRuneReplChar = rune( '\ufffd' )
 
 func isLexErr( err error ) bool { return err != nil && err != io.EOF }
 
-type stackElt struct {
+type lxStackElt struct {
     tok Token
     lc *Location
     eol bool
 }
 
-type unreadElt struct {
-    elt stackElt
+type lxUnreadElt struct {
+    elt lxStackElt
     synthLoc *Location
 }
 
@@ -88,14 +83,14 @@ type Lexer struct {
     strip bool
     sawEof bool
     synthLoc *Location
-    unread *unreadElt
-    stack [ 2 ]stackElt
+    unread *lxUnreadElt
+    stack [ 2 ]lxStackElt
     stackLen int
 }
 
 func ( lx *Lexer ) stackEmpty() bool { return lx.stackLen == 0 }
 
-func ( lx *Lexer ) push( e stackElt ) {
+func ( lx *Lexer ) push( e lxStackElt ) {
     if lx.stackLen < 2 { 
         lx.stack[ lx.stackLen ] = e
         lx.stackLen++
@@ -109,14 +104,14 @@ func ( lx *Lexer ) stackAccess() int {
     return lx.stackLen - 1
 }
 
-func ( lx *Lexer ) peek() stackElt { return lx.stack[ lx.stackAccess() ] }
+func ( lx *Lexer ) peek() lxStackElt { return lx.stack[ lx.stackAccess() ] }
 
-func ( lx *Lexer ) pop() stackElt {
+func ( lx *Lexer ) pop() lxStackElt {
     idx := lx.stackAccess()
     res := lx.stack[ idx ]
     // zero the previous element to simplify debugging (hard to tell a stale
     // element from a live one)
-    lx.stack[ idx ] = stackElt{}
+    lx.stack[ idx ] = lxStackElt{}
     lx.stackLen--
     return res
 }
@@ -137,11 +132,11 @@ func ( lx *Lexer ) SetSynthEnd() {
     }
 }
 
-var unreadNoValErr = errors.New( "lexer: No value to unread" )
+var lxUnreadNoValErr = libError( "no value to unread" )
 
 func ( lx *Lexer ) UnreadToken() {
     if ue := lx.unread; ue == nil {
-        panic( unreadNoValErr )
+        panic( lxUnreadNoValErr )
     } else {
         lx.synthLoc = ue.synthLoc
         lx.push( ue.elt )
@@ -296,10 +291,9 @@ func ( lx *Lexer ) readNonIdentTailChar(
 } 
 
 func ( lx *Lexer ) accumulateidPart(
-    idSep idSeparation, partNum int ) ( part idPart, 
-                                        idSep2 idSeparation, 
-                                        idDone bool, 
-                                        err error ) {
+    idSep idSeparation, 
+    partNum int ) ( part string, idSep2 idSeparation, idDone bool, err error ) {
+
     buf := bytes.Buffer{}
     var r rune
     if r, err = lx.readidPartFirstRune( idSep, partNum ); err == nil { 
@@ -314,7 +308,7 @@ func ( lx *Lexer ) accumulateidPart(
         default: 
             idSep2, partDone, idDone, err = lx.readNonIdentTailChar( r, idSep )
         }
-        if partDone { part = idPart( buf.String() ) }
+        if partDone { part = buf.String() }
     }
     return
 }
@@ -323,7 +317,7 @@ func ( lx *Lexer ) parseIdentifier() ( id *mg.Identifier, err error ) {
     idSep := lx.initialidPartSep()
     parts := make( []string, 0, 3 )
     for id == nil && err == nil {
-        var part idPart
+        var part string
         var idDone bool
         if part, idSep, idDone, err = 
             lx.accumulateidPart( idSep, len( parts ) ); ! isLexErr( err ) {
@@ -523,7 +517,7 @@ func ( lx *Lexer ) readDeclaredTypeName() ( tok Token, err error ) {
         case isDeclaredTypeNameTail( r ): buf.WriteRune( r )
         case err == io.EOF || isWhitespace( r ) || isSpecialTokChar( r ):
             if err == nil { lx.unreadRune() } // not on io.EOF
-            tok = DeclaredTypeName( buf.String() )
+            tok = mg.NewDeclaredTypeNameUnsafe( buf.String() )
         default:
             msg := "Illegal type name rune: %q (%U)"
             err = lx.prevError( msg, string( r ), r )
@@ -787,10 +781,10 @@ func ( lx *Lexer ) readStack() ( tok Token, lc *Location, err error ) {
     if elt.eol && lx.synthLoc != nil {
         tok, lc, err = SpecialTokenSynthEnd, lx.synthLoc, nil
         lx.synthLoc = nil
-        lx.unread = &unreadElt{ stackElt{ tok, lc, false }, lx.synthLoc }
+        lx.unread = &lxUnreadElt{ lxStackElt{ tok, lc, false }, lx.synthLoc }
     } else {
         lx.pop() // remove elt
-        lx.unread = &unreadElt{ elt, lx.synthLoc }
+        lx.unread = &lxUnreadElt{ elt, lx.synthLoc }
         tok, lc, err = elt.tok, elt.lc, nil
         if lx.stackEmpty() { lx.updateSynthLoc( tok ) }
     }
@@ -870,7 +864,7 @@ func hasEol( tok Token ) bool {
 func ( lx *Lexer ) updateSynthLoc( tok Token ) {
     setLoc := false
     switch v := tok.( type ) {
-    case *mg.Identifier, DeclaredTypeName, StringToken, *NumericToken: 
+    case *mg.Identifier, *mg.DeclaredTypeName, StringToken, *NumericToken: 
         setLoc = true
     case WhitespaceToken: if v.hasNewline() { lx.synthLoc = nil }
     case SpecialToken:
@@ -925,10 +919,10 @@ func ( lx *Lexer ) implReadToken(
     if ! lx.strip { eol = hasEol( tok ) }
     if ! eol { lx.updateSynthLoc( tok ) }
     if eol && lx.synthLoc != nil {
-        lx.push( stackElt{ tok, lc, eol } )
+        lx.push( lxStackElt{ tok, lc, eol } )
         tok, lc, lx.synthLoc = SpecialTokenSynthEnd, lx.synthLoc, nil
     }
-    lx.unread = &unreadElt{ stackElt{ tok, lc, eol }, lx.synthLoc }
+    lx.unread = &lxUnreadElt{ lxStackElt{ tok, lc, eol }, lx.synthLoc }
     return
 }
 

@@ -1,4 +1,2 @@
 - parser tree doesn't need explicit type reference source locs now that
   CompletableTypeReference has them itself
-
-- simplify struct for NumericTokenTest to just include *NumericToken and sign

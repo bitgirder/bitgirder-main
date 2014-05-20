@@ -15,9 +15,7 @@ func ws( str string ) WhitespaceToken {
     return WhitespaceToken( []byte( str ) )
 }
 
-func makeTypeName( str string ) DeclaredTypeName {
-    return DeclaredTypeName( []byte( str ) )
-}
+var makeTypeName = mg.NewDeclaredTypeNameUnsafe
 
 type ParseErrorExpect struct {
     Col int

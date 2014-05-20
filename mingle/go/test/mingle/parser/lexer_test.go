@@ -353,7 +353,7 @@ func TestUnreadToken( t *testing.T ) {
             assert.AssertPanic(
                 func() { a.lx.UnreadToken() },
                 func( err interface{} ) { 
-                    if err != unreadNoValErr { t.Fatal( err ) }
+                    if err != lxUnreadNoValErr { t.Fatal( err ) }
                 },
             )
         }

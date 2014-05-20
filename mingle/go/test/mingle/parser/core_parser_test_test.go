@@ -3,7 +3,6 @@ package parser
 import ( 
     "testing"
     "bitgirder/assert"
-    "fmt"
 )
 
 func parseCoreParseTest( 
@@ -24,20 +23,11 @@ func parseCoreParseTest(
     return
 }
 
-func convCptVal( val interface{} ) Token {
+func convCptVal( val interface{} ) interface{} {
     switch v := val.( type ) {
-    case StringToken: return StringToken( v )
-    case *NumericTokenTest:
-        expRune := rune( 0 )
-        if v.ExpChar != "" { expRune = rune( v.ExpChar[ 0 ] ) }
-        return &NumericToken{
-            Int: v.Int,
-            Frac: v.Frac,
-            Exp: v.Exp,
-            ExpRune: expRune,
-        }
+    case *NumericTokenTest: return v.Token
     }
-    panic( fmt.Errorf( "Unhandled cpt expect val: %T", val ) )
+    return val
 }
 
 func assertCoreParseError( cpt *CoreParseTest, err error, t *testing.T ) {
