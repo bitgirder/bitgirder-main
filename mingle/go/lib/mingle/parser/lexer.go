@@ -17,6 +17,8 @@ const replChar = rune( 0xfffd )
 
 type Token interface{}
 
+const idFmtNull = mg.IdentifierFormat( 0 )
+
 type Keyword string
 
 const (
@@ -227,30 +229,21 @@ func isIdentTailChar( r rune ) bool {
     return isIdentLower( r ) || isIdentDigit( r )
 }
 
-type idSeparation int
-
-const (
-    idSepExternal = idSeparation( iota )
-    idSepHyphen
-    idSepUnderscore
-    idSepCap
-)
-
-func ( lx *Lexer ) initialidPartSep() idSeparation {
-    if lx.isExternal { return idSepExternal }
-    return idSepCap
+func ( lx *Lexer ) initialIdPartFmt() mg.IdentifierFormat {
+    if lx.isExternal { return idFmtNull }
+    return mg.LcCamelCapped
 }
 
 func ( lx *Lexer ) errorUnrecognizedIdentRune( r rune ) error {
     return lx.prevError( "Invalid id rune: %q (%U)", string( r ), r )
 }
 
-func ( lx *Lexer ) readidPartFirstRune( 
-    idSep idSeparation, partNum int ) ( r rune, err error ) {
+func ( lx *Lexer ) readIdPartFirstRune( 
+    idFmt mg.IdentifierFormat, partNum int ) ( r rune, err error ) {
     if partNum > 0 {
-        switch idSep {
-        case idSepHyphen: lx.mustRune( '-' )
-        case idSepUnderscore: lx.mustRune( '_' )
+        switch idFmt {
+        case mg.LcHyphenated: lx.mustRune( '-' )
+        case mg.LcUnderscore: lx.mustRune( '_' )
         }
     }
     switch r, err = lx.readRune(); {
@@ -261,7 +254,7 @@ func ( lx *Lexer ) readidPartFirstRune(
             err = lx.parseError( msg )
         }
     case isIdentLower( r ): return
-    case isIdentCap( r ) && idSep == idSepCap: r = unicode.ToLower( r )
+    case isIdentCap( r ) && idFmt == mg.LcCamelCapped: r = unicode.ToLower( r )
     default: 
         err = lx.prevError( 
                 "Illegal start of identifier part: %q (%U)", string( r ), r )
@@ -269,60 +262,63 @@ func ( lx *Lexer ) readidPartFirstRune(
     return
 }
 
+type lxIdPartAccRes struct {
+    part string
+    partDone bool
+    idFmt mg.IdentifierFormat
+    idDone bool
+}
+
 func ( lx *Lexer ) readNonIdentTailChar( 
-    r rune, 
-    idSep idSeparation ) ( idSep2 idSeparation, 
-                           partDone bool,
-                           idDone bool, 
-                           err error ) {
+    r rune, ar *lxIdPartAccRes ) ( err error ) {
+
+    f := ar.idFmt
     switch {
-    case r == '-' && ( idSep == idSepHyphen || idSep == idSepExternal ):
-        idSep2, partDone = idSepHyphen, true
-    case r == '_' && ( idSep == idSepUnderscore || idSep == idSepExternal ):
-        idSep2, partDone = idSepUnderscore, true
-    case isIdentCap( r ) && ( idSep == idSepCap || idSep == idSepExternal ):
-        idSep2, partDone = idSepCap, true
+    case r == '-' && ( f == mg.LcHyphenated || f == idFmtNull ):
+        ar.idFmt, ar.partDone = mg.LcHyphenated, true
+    case r == '_' && ( f == mg.LcUnderscore || f == idFmtNull ):
+        ar.idFmt, ar.partDone = mg.LcUnderscore, true
+    case isIdentCap( r ) && ( f == mg.LcCamelCapped || f == idFmtNull ):
+        ar.idFmt, ar.partDone = mg.LcCamelCapped, true
     case isSpecialTokChar( r ) || isWhitespace( r ): 
-        partDone, idDone = true, true
+        ar.partDone, ar.idDone = true, true
     default: err = lx.errorUnrecognizedIdentRune( r )
     }
     if err == nil { lx.unreadRune() }
     return
 } 
 
-func ( lx *Lexer ) accumulateidPart(
-    idSep idSeparation, 
-    partNum int ) ( part string, idSep2 idSeparation, idDone bool, err error ) {
+func ( lx *Lexer ) accumulateIdPart(
+    idFmt mg.IdentifierFormat, partNum int ) ( res lxIdPartAccRes, err error ) {
 
     buf := bytes.Buffer{}
     var r rune
-    if r, err = lx.readidPartFirstRune( idSep, partNum ); err == nil { 
+    if r, err = lx.readIdPartFirstRune( idFmt, partNum ); err == nil { 
         buf.WriteRune( r )
     } else { return }
-    for part == "" && err == nil {
-        var partDone bool
+    res.idFmt = idFmt // may be changed if idFmtNull in readNonIdentTailChar
+    for res.part == "" && err == nil {
         switch r, err = lx.readRune(); {
-        case isLexErr( err ): {}
-        case err == io.EOF: partDone, idDone = true, true
+        case isLexErr( err ):;
+        case err == io.EOF: res.partDone, res.idDone = true, true
         case isIdentTailChar( r ): buf.WriteRune( r )
-        default: 
-            idSep2, partDone, idDone, err = lx.readNonIdentTailChar( r, idSep )
+        default: err = lx.readNonIdentTailChar( r, &res )
         }
-        if partDone { part = buf.String() }
+        if res.partDone { res.part = buf.String() }
     }
     return
 }
 
 func ( lx *Lexer ) parseIdentifier() ( id *mg.Identifier, err error ) {
-    idSep := lx.initialidPartSep()
+    idFmt := lx.initialIdPartFmt()
     parts := make( []string, 0, 3 )
     for id == nil && err == nil {
-        var part string
-        var idDone bool
-        if part, idSep, idDone, err = 
-            lx.accumulateidPart( idSep, len( parts ) ); ! isLexErr( err ) {
-            parts = append( parts, string( part ) )
-            if idDone { id = mg.NewIdentifierUnsafe( parts ) }
+        var partRes lxIdPartAccRes
+        partRes, err = lx.accumulateIdPart( idFmt, len( parts ) )
+        if ! isLexErr( err ) {
+            idFmt = partRes.idFmt
+            parts = append( parts, string( partRes.part ) )
+            if partRes.idDone { id = mg.NewIdentifierUnsafe( parts ) }
         }
     }
     return

@@ -14,6 +14,8 @@ import (
     "unsafe"
 )
 
+// values declared and accepted by this package are always > 0; 0 may be used
+// privately as the null/unknown format
 type IdentifierFormat uint
 
 const (
