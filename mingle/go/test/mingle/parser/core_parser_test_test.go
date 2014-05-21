@@ -3,10 +3,14 @@ package parser
 import ( 
     "testing"
     "bitgirder/assert"
+    "errors"
 )
+
+var skipErrPlaceholder = errors.New( "placeholder" )
 
 func parseCoreParseTest( 
     cpt *CoreParseTest, t *testing.T ) ( tok Token, err error ) {
+
     a := newLexerAsserter( cpt.In, false, t )
     switch cpt.TestType {
     case TestTypeString: tok, _, err = a.lx.ReadToken()
@@ -17,7 +21,11 @@ func parseCoreParseTest(
                 tok, _, err = a.lx.ReadToken() // now get the number
             }
         }
-    default: t.Fatalf( "Unknown: %T", cpt.Expect )
+    default: 
+        t.Logf( "skipping test type: %s", cpt.TestType )
+        err = skipErrPlaceholder
+        return 
+//    default: t.Fatalf( "Unknown: %T", cpt.Expect )
     }
     if err == nil { expectEof( a.lx, t ) }
     return
@@ -31,6 +39,7 @@ func convCptVal( val interface{} ) interface{} {
 }
 
 func assertCoreParseError( cpt *CoreParseTest, err error, t *testing.T ) {
+    if err == skipErrPlaceholder { return }
     if cpt.Err == nil { t.Fatal( err ) }
     if pe, ok := err.( *ParseError ); ok {
         ee := cpt.Err.( *ParseErrorExpect )
@@ -50,10 +59,5 @@ func assertCoreParse( cpt *CoreParseTest, t *testing.T ) {
 }
 
 func TestCoreParseTests( t *testing.T ) {
-    for _, cpt := range CoreParseTests {
-        if cpt.TestType == TestTypeString || 
-           cpt.TestType == TestTypeNumber { 
-            assertCoreParse( cpt, t ) 
-        }
-    }
+    for _, cpt := range CoreParseTests { assertCoreParse( cpt, t ) }
 }
