@@ -3,6 +3,7 @@ package parser
 import (
     "testing"
     "bitgirder/assert"
+    "bytes"
     mg "mingle"
 //    "log"
 )
@@ -46,4 +47,14 @@ func AssertParsePanic( errExpct *ParseErrorExpect, t *testing.T, f func() ) {
         } else { t.Fatal( err ) }
     }
     assert.AssertPanic( f, errHndlr )
+}
+
+func newTestLexer( in string, strip bool ) *Lexer {
+    return New(
+        &Options{
+            Reader: bytes.NewBufferString( in ),
+            SourceName: ParseSourceInput,
+            Strip: strip,
+        },
+    )
 }

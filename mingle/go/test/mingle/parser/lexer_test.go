@@ -31,16 +31,6 @@ type lexerAsserter struct {
     *testing.T
 }
 
-func newTestLexer( in string, strip bool ) *Lexer {
-    return New(
-        &Options{
-            Reader: bytes.NewBufferString( in ),
-            SourceName: ParseSourceInput,
-            Strip: strip,
-        },
-    )
-}
-
 func newLexerAsserter( src string, strip bool, t *testing.T ) *lexerAsserter {
     return &lexerAsserter{ newTestLexer( src, strip ), t }
 }

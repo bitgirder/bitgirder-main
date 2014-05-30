@@ -9,33 +9,25 @@ import (
 var skipErrPlaceholder = errors.New( "placeholder" )
 
 func parseCoreParseTest( 
-    cpt *CoreParseTest, t *testing.T ) ( tok Token, err error ) {
+    cpt *CoreParseTest, t *testing.T ) ( res interface{}, err error ) {
 
-    a := newLexerAsserter( cpt.In, false, t )
+    t.Logf( "input for test type %s: %q", cpt.TestType, cpt.In )
+    lx := newTestLexer( cpt.In, false )
     switch cpt.TestType {
-    case TestTypeString: tok, _, err = a.lx.ReadToken()
-    case TestTypeNumber: 
-        if tok, _, err = a.lx.ReadToken(); err == nil {
-            if tok == SpecialTokenMinus && cpt.Expect != nil {
-                assert.True( cpt.Expect.( *NumericTokenTest ).Negative )
-                tok, _, err = a.lx.ReadToken() // now get the number
-            }
-        }
+    case TestTypeString, TestTypeNumber: 
+        res, _, err = lx.ReadToken()
+        if err == nil { expectEof( lx, t ) }
+    case TestTypeIdentifier: res, err = ParseIdentifier( cpt.In )
+    case TestTypeDeclaredTypeName: res, err = ParseDeclaredTypeName( cpt.In )
+    case TestTypeNamespace: res, err = ParseNamespace( cpt.In )
+    case TestTypeQualifiedTypeName: res, err = ParseQualifiedTypeName( cpt.In )
     default: 
         t.Logf( "skipping test type: %s", cpt.TestType )
         err = skipErrPlaceholder
         return 
 //    default: t.Fatalf( "Unknown: %T", cpt.Expect )
     }
-    if err == nil { expectEof( a.lx, t ) }
     return
-}
-
-func convCptVal( val interface{} ) interface{} {
-    switch v := val.( type ) {
-    case *NumericTokenTest: return v.Token
-    }
-    return val
 }
 
 func assertCoreParseError( cpt *CoreParseTest, err error, t *testing.T ) {
@@ -50,11 +42,10 @@ func assertCoreParseError( cpt *CoreParseTest, err error, t *testing.T ) {
 }
 
 func assertCoreParse( cpt *CoreParseTest, t *testing.T ) {
-    if tok, err := parseCoreParseTest( cpt, t ); err == nil {
+    if act, err := parseCoreParseTest( cpt, t ); err == nil {
         if cpt.Err == nil { 
-            expct := convCptVal( cpt.Expect )
-            assert.Equal( expct, tok ) 
-        } else { t.Fatalf( "Got %s, expected error %#v", tok, cpt.Err ) }
+            assert.Equal( cpt.Expect, act ) 
+        } else { t.Fatalf( "Got %s, expected error %#v", act, cpt.Err ) }
     } else { assertCoreParseError( cpt, err, t ) }
 }
 

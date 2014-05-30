@@ -3,6 +3,7 @@ package parser
 import(
 //    "log"
     mg "mingle"
+    "bytes"
     "io"
     "fmt"
     "strings"
@@ -44,6 +45,15 @@ type Builder struct {
 }
 
 func NewBuilder( lx *Lexer ) *Builder { return &Builder{ lx: lx } }
+
+func newSyntaxBuilderExt( s string ) *Builder {
+    opts := &Options{
+        Reader: bytes.NewBufferString( s ),
+        SourceName: ParseSourceInput,
+        IsExternal: true,
+    }
+    return NewBuilder( New( opts ) )
+}
 
 type tokenExpectType int
 

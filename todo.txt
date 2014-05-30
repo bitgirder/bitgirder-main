@@ -1,2 +1,15 @@
+- change parser.New() to parser.NewLexer()
+
+- change parser.Builder to parser.SyntaxBuilder
+
+- change parser.Options to parser.LexerOptions
+
 - parser tree doesn't need explicit type reference source locs now that
   CompletableTypeReference has them itself
+
+- consider adding MingleIdentifier, MingleNamespace as addressable value types 
+
+- add tests for parenthesized type expressions
+
+- add checked constructors for creating type references from outside mg package
+  (CreateAtomicUnsafe..., etc)
