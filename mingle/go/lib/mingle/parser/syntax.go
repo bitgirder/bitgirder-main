@@ -547,37 +547,6 @@ type CompletableTypeReference struct {
     quants quantList
 }
 
-func ( ctr *CompletableTypeReference ) completionError( err error ) error {
-    return &ParseError{ err.Error(), ctr.ErrLoc }
-}
-
-type TypeCompleter interface {
-    AsListType( typ interface{}, allowsEmpty bool ) ( interface{}, error )
-    AsNullableType( typ interface{} ) ( interface{}, error )
-    AsPointerType( typ interface{} ) ( interface{}, error )
-}
-
-func ( ctr *CompletableTypeReference ) CompleteType( 
-    typ interface{}, tc TypeCompleter ) ( interface{}, error ) {
-
-    var err error
-    for i := 0; i < ctr.ptrDepth; i++ { 
-        if typ, err = tc.AsPointerType( typ ); err != nil { 
-            return nil, ctr.completionError( err )
-        }
-    }
-    for _, quant := range ctr.quants {
-        switch quant {
-        case SpecialTokenPlus: typ, err = tc.AsListType( typ, false )
-        case SpecialTokenAsterisk: typ, err = tc.AsListType( typ, true )
-        case SpecialTokenQuestionMark: typ, err = tc.AsNullableType( typ )
-        default: panic( fmt.Errorf( "Unexpected quant: %s", quant ) )
-        }
-        if err != nil { return nil, ctr.completionError( err ) }
-    }
-    return typ, nil
-}
-
 // In addition to returning a type ref, this method will, via its helper
 // methods, ensure that sb.SetSynthEnd() is called after the token that
 // completes the type reference, effectively making type references capable of
