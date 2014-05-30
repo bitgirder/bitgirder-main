@@ -1061,34 +1061,6 @@ func MustStruct(
     return res
 }
 
-type IdentifiedName struct {
-    Namespace *Namespace
-    Names []*Identifier
-}
-
-func ( nm *IdentifiedName ) ExternalForm() string {
-    buf := make( []byte, 0, 32 )
-    buf = nm.Namespace.formatToBuf( buf, LcHyphenated )
-    for _, id := range nm.Names {
-        buf = append( buf, byte( '/' ) )
-        buf = id.formatToBuf( buf, LcHyphenated )
-    }
-    return string( buf )
-}
-
-func ( nm *IdentifiedName ) String() string { return nm.ExternalForm() }
-
-func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
-    if nm2 == nil { return false }
-    if nm.Namespace.Equals( nm2.Namespace ) {
-        f := func( i int ) bool {
-            return nm.Names[ i ].Equals( nm2.Names[ i ] )
-        }
-        return equalSlices( len( nm.Names ), len( nm2.Names ), f )
-    }
-    return false
-}
-
 type idPath objpath.PathNode // elts are *Identifier
 
 var idPathRootVal idPath

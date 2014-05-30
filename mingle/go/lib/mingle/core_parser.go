@@ -361,35 +361,6 @@ func MustTypeReference( input string ) TypeReference {
     }).( TypeReference )
 }
 
-func ParseIdentifiedName( input string ) ( nm *IdentifiedName, err error ) {
-    sb := sxBldrExt( input )
-    nm = &IdentifiedName{ Names: make( []*Identifier, 0, 4 ) }
-    var sxNs *syntax.Namespace
-    if sxNs, _, err = sb.ExpectNamespace( nil ); err == nil { 
-        nm.Namespace = ConvertSyntaxNamespace( sxNs )
-    } else { return }
-    for sb.HasTokens() && err == nil {
-        if _, err = sb.ExpectSpecial( lexer.SpecialTokenForwardSlash ); 
-            err == nil {
-            var sxId *syntax.TokenNode
-            if sxId, err = sb.ExpectIdentifier(); err == nil {
-                id := ConvertSyntaxId( sxId.Identifier() )
-                nm.Names = append( nm.Names, id )
-            }
-        }
-    }
-    if err == nil && len( nm.Names ) == 0 {
-        err = &loc.ParseError{ "Missing name", sb.Location() }
-    }
-    return
-}
-
-func MustIdentifiedName( input string ) *IdentifiedName {
-    return doParseAndCreate( func() ( interface{}, error ) {
-        return ParseIdentifiedName( input )
-    }).( *IdentifiedName )
-}
-
 func ParseTimestamp( str string ) ( Timestamp, error ) {
     t, err := time.Parse( time.RFC3339Nano, str )
     if err != nil {

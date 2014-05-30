@@ -36,7 +36,6 @@ func parseCore( cpt *pt.CoreParseTest ) ( interface{}, error ) {
     case pt.TestTypeNamespace: return ParseNamespace( cpt.In )
     case pt.TestTypeDeclaredTypeName: return ParseDeclaredTypeName( cpt.In )
     case pt.TestTypeQualifiedTypeName: return ParseQualifiedTypeName( cpt.In )
-    case pt.TestTypeIdentifiedName: return ParseIdentifiedName( cpt.In )
     case pt.TestTypeTypeReference: return ParseTypeReference( cpt.In )
     }
     panic( fmt.Errorf( "Unhandled TestType: %s", cpt.TestType ) )
@@ -82,13 +81,6 @@ func convertPtQualifiedTypeName( nm *pt.QualifiedTypeName ) *QualifiedTypeName {
     return &QualifiedTypeName{
         Namespace: convertPtNamespace( nm.Namespace ),
         Name: convertPtDeclTypeName( nm.Name ),
-    }
-}
-
-func convertPtIdentifiedName( nm *pt.IdentifiedName ) *IdentifiedName {
-    return &IdentifiedName{
-        Namespace: convertPtNamespace( nm.Namespace ),
-        Names: convertPtIdentifiers( nm.Names ),
     }
 }
 
@@ -154,7 +146,6 @@ func convertPtVal( val interface{} ) interface{} {
     case *pt.Namespace: return convertPtNamespace( v )
     case pt.DeclaredTypeName: return convertPtDeclTypeName( v )
     case *pt.QualifiedTypeName: return convertPtQualifiedTypeName( v )
-    case *pt.IdentifiedName: return convertPtIdentifiedName( v )
     case *pt.AtomicTypeReference, 
          *pt.ListTypeReference,
          *pt.NullableTypeReference,
@@ -521,40 +512,6 @@ func TestMustTypeReferencePanic( t *testing.T ) {
     errExpct := 
         &pt.ParseErrorExpect{ 7, "Expected type path but found: END" }
     pt.AssertParsePanic( errExpct, t, func() { MustTypeReference( "ns1@v1" ) } )
-}
-
-func TestIdentifiedNameStringer( t *testing.T ) {
-    str := "ns1@v1/n1/n2"
-    assert.Equal( str, MustIdentifiedName( str ).String() )
-}
-
-func TestIdentifiedNameMustPanic( t *testing.T ) {
-    errExpct := &pt.ParseErrorExpect{ 10, "Missing name" }
-    pt.AssertParsePanic( errExpct, t, 
-        func() { MustIdentifiedName( "someNs@v1" ) } )
-}
-
-func TestIdentifiedNameEquality( t *testing.T ) {
-    nm1A := MustIdentifiedName( "ns1@v1/id1" )
-    assertEquality( nm1A, nil, nm1A.Equals( nil ), false, t )
-    assertEqualityTests(
-        func( a, b interface{} ) bool {
-            return a.( *IdentifiedName ).Equals( b.( *IdentifiedName ) )
-        },
-        t,
-        equalityTest{ nm1A, nm1A, true },
-        equalityTest{ nm1A, MustIdentifiedName( "ns1@v1/id1" ), true },
-        equalityTest{ nm1A, MustIdentifiedName( "ns2@v1/id1" ), false },
-        equalityTest{ nm1A, MustIdentifiedName( "ns1@v2/id1" ), false },
-        equalityTest{ nm1A, MustIdentifiedName( "ns1@v1/id2" ), false },
-        equalityTest{ nm1A, MustIdentifiedName( "ns1@v1/id1/id2" ), false },
-        equalityTest{ nm1A, MustIdentifiedName( "ns1:ns2@v1/id1" ), false },
-        equalityTest{
-            MustIdentifiedName( "ns1:ns2@v1/id1/id2/id3" ),
-            MustIdentifiedName( "ns1:ns2@v1/id1/id2/id3" ),
-            true,
-        },
-    )
 }
 
 func TestTimestampStrings( t *testing.T ) {

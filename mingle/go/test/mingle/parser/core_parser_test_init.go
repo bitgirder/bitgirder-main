@@ -16,7 +16,6 @@ const (
     TestTypeDeclaredTypeName = CoreParseTestType( "declared-type-name" )
     TestTypeQualifiedTypeName = CoreParseTestType( "qualified-type-name" )
     TestTypeTypeName = CoreParseTestType( "type-name" )
-    TestTypeIdentifiedName = CoreParseTestType( "identified-name" )
     TestTypeTypeReference = CoreParseTestType( "type-reference" )
 )
 
@@ -288,44 +287,6 @@ func init() {
         qnFail( "ns1@v1/T1/", 10, "Unexpected token: /" ),
         qnFail( "ns1@v1//T1", 8, "Illegal type name start: \"/\" (U+002F)" ),
         qnFail( "ns1@v1/T1#T2", 10, "Illegal type name rune: \"#\" (U+0023)" ),
-    )
-    idNmSucc := func( 
-        in, extForm string, 
-        ns *mg.Namespace, 
-        ids ...*mg.Identifier ) *CoreParseTest {
-
-        return &CoreParseTest{
-            In: in,
-            ExternalForm: extForm,
-            Expect: &mg.IdentifiedName{ ns, ids },
-            TestType: TestTypeIdentifiedName,
-        }
-    }
-    idNmFail := peFailBinder( TestTypeIdentifiedName )
-    CoreParseTests = append( CoreParseTests,
-        idNmSucc( "some:ns@v1/someId1",
-            "some:ns@v1/some-id1",
-            ns( idV1, id( "some" ), id( "ns" ) ), id( "some", "id1" ) ),
-        idNmSucc( "some:ns@v1/someId1/someId2", 
-            "some:ns@v1/some-id1/some-id2", 
-            ns( idV1, id( "some" ), id( "ns" ) ), 
-            id( "some", "id1" ), id( "some", "id2" ) ),
-        idNmSucc( "some:ns@v1/someId1/some-id2/some_id3",
-            "some:ns@v1/some-id1/some-id2/some-id3",
-            ns( idV1, id( "some" ), id( "ns" ) ),
-            id( "some", "id1" ), id( "some", "id2" ), id( "some", "id3" ) ),
-        idNmSucc( "singleNs@v1/singleIdent", 
-            "single-ns@v1/single-ident", 
-            ns( idV1, id( "single", "ns" ) ), id( "single", "ident" ) ),
-        idNmFail( "someNs@v1", 10, "Missing name" ),
-        idNmFail( "some:ns@v1", 11, "Missing name" ),
-        idNmFail( "some:ns@v1/", 12, "Empty identifier" ),
-        idNmFail( "some:ns@v3/trailingSlash/", 26, "Empty identifier" ),
-        idNmFail( "some:ns@v1/SomeId", 12, 
-            `Illegal start of identifier part: "S" (U+0053)` ),
-        idNmFail( "", 1, "Empty identifier" ),
-        idNmFail( "/some:ns@v1/noGood/leadingSlash", 1, 
-            "Illegal start of identifier part: \"/\" (U+002F)" ),
     )
     // We can't reference the predefined QnameString, QnameFloat32, etc, since
     // they are also defined in an init scope and we don't want to assume that

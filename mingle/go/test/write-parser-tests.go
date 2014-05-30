@@ -54,13 +54,6 @@ func qnAsStruct( qn *pt.QualifiedTypeName ) *mg.Struct {
     )
 }
 
-func idNmAsStruct( nm *pt.IdentifiedName ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "IdentifiedName" ),
-        "namespace", asValue( nm.Namespace ),
-        "names", idListAsValue( nm.Names ),
-    )
-}
-
 func asRangeValue( v interface{} ) mg.Value {
     if tm, ok := v.( pt.Timestamp ); ok { v = mg.MustTimestamp( string( tm ) ) }
     return mg.MustValue( v )
@@ -126,7 +119,6 @@ func asValue( val interface{} ) mg.Value {
     case pt.DeclaredTypeName:
         return mg.MustStruct( ptTyp( "DeclaredTypeName" ), "name", string( v ) )
     case *pt.QualifiedTypeName: return qnAsStruct( v )
-    case *pt.IdentifiedName: return idNmAsStruct( v )
     case *pt.AtomicTypeReference: return atomicAsStruct( v )
     case *pt.RangeRestriction: return rngAsStruct( v )
     case pt.RegexRestriction: return regxAsStruct( v )
