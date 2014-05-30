@@ -75,8 +75,8 @@ func TestSkipWsOrComments( t *testing.T ) {
 }
 
 func TestExpectSpecialMulti( t *testing.T ) {
-    expct := []SpecialToken{ 
-        SpecialTokenQuestionMark, SpecialTokenAsperand }
+    expct := []SpecialToken{ SpecialTokenQuestionMark, SpecialTokenAsperand }
+    pa := assert.NewPathAsserter( t )
     for i := 0; i < len( expct ); i++ {
         specs := expct[ 0 : i + 1 ]
         st := newSyntaxBuildTester( "?", false, t )
@@ -93,7 +93,7 @@ func TestExpectSpecialMulti( t *testing.T ) {
                     clause = string( specs[ 0 ] )
                 } else { clause = `one of [ "?", "@" ]` }
                 msg := `Expected ` + clause + ` but found: ` + string( s[ 0 ] )
-                AssertParseError( err, &ParseErrorExpect{ 1, msg }, t )
+                AssertParseError( err, &ParseErrorExpect{ 1, msg }, pa )
             }
         }
     }

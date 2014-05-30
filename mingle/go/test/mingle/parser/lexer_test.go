@@ -142,10 +142,10 @@ func TestLexerBasic( t *testing.T ) {
     a.expectEof()
 }
 
-func expectEof( lx *Lexer, t *testing.T ) {
+func expectEof( lx *Lexer, failer assert.Failer ) {
     // pull off the optional synthetic end and then expect eof (okay to get
     // eof twice)
-    f := func() { t.Fatalf( "Expected eof" ) }
+    f := func() { failer.Fatal( "Expected eof" ) }
     if tok2, _, err2 := lx.ReadToken(); err2 != io.EOF {
         if err2 == nil && tok2 != SpecialTokenSynthEnd { f() }
     }

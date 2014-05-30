@@ -1,7 +1,6 @@
 package parser
 
 import (
-    "testing"
     "bitgirder/assert"
     "bytes"
     mg "mingle"
@@ -22,31 +21,15 @@ type ParseErrorExpect struct {
 }
 
 func AssertParseError(
-    err error, errExpct *ParseErrorExpect, t *testing.T ) {
-    if pErr, ok := err.( *ParseError); ok {
-        if pErr.Message != errExpct.Message {
-            t.Fatalf( "Got error message %#v but expected %#v",
-                pErr.Message, errExpct.Message )
-        }
-        if pErr.Loc.Col != errExpct.Col {
-            t.Fatalf( "Got col %d but expected %d", pErr.Loc.Col, errExpct.Col )
-        }
-        if pErr.Loc.Line != 1 { 
-            t.Fatalf( "Unexpected err line %d", pErr.Loc.Line ) 
-        }
-        if pErr.Loc.Source != ParseSourceInput {
-            t.Fatalf( "Unexpected error source: %#v", pErr.Loc.Source )
-        }
-    } else { t.Fatalf( "%s (%T)", err, err ) }
-}
+    err error, errExpct *ParseErrorExpect, a *assert.PathAsserter ) {
 
-func AssertParsePanic( errExpct *ParseErrorExpect, t *testing.T, f func() ) {
-    errHndlr := func( err interface{} ) {
-        if parseErr, ok := err.( *ParseError ); ok {
-            AssertParseError( parseErr, errExpct, t )
-        } else { t.Fatal( err ) }
-    }
-    assert.AssertPanic( f, errHndlr )
+    pErr, ok := err.( *ParseError)
+    if ! ok { a.Fatal( err ) }
+    a.Descend( "Message" ).Equal( errExpct.Message, pErr.Message )
+    aLoc := a.Descend( "Loc" )
+    aLoc.Descend( "Col" ).Equal( errExpct.Col, pErr.Loc.Col )
+    aLoc.Descend( "Line" ).Equal( 1, pErr.Loc.Line )
+    aLoc.Descend( "Source" ).Equal( ParseSourceInput, pErr.Loc.Source )
 }
 
 func newTestLexer( in string, strip bool ) *Lexer {

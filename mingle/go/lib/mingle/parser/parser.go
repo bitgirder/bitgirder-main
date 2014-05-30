@@ -39,3 +39,10 @@ func ParseQualifiedTypeName( s string ) ( *mg.QualifiedTypeName, error ) {
     return nil, err
 }
 
+func ParseTypeReference( s string ) ( *CompletableTypeReference, error ) {
+    sb := newSyntaxBuilderExt( s )
+    ctr, _, err := sb.ExpectTypeReference( nil )
+    if err == nil { err = sb.CheckTrailingToken() }
+    if err == nil { return ctr, nil }
+    return nil, err
+}
