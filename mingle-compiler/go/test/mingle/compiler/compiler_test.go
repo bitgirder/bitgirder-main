@@ -2,158 +2,9 @@ package compiler
 
 import (
     "testing"
-    "fmt"
-    "bytes"
     "bitgirder/assert"
-    "mingle/parser/tree"
     "mingle/types"
 )
-
-type testSource struct {
-    name string
-    source string
-}
-
-func makeErrorKey( name string, line, col int, msg string ) string {
-    return fmt.Sprintf( "%s:%d:%d:%q", name, line, col, msg )
-}
-
-type errorExpect struct {
-    name string
-    line, col int
-    message string
-}
-
-func ( ee errorExpect ) key() string {
-    return makeErrorKey( ee.name, ee.line, ee.col, ee.message )
-}
-
-type compilerTest struct {
-    *assert.PathAsserter
-    t *testing.T
-    name string
-    sources []testSource
-    libs []testSource
-    errs []errorExpect
-    expctDefs *types.DefinitionMap
-}
-
-func newCompilerTest( name string ) *compilerTest {
-    return &compilerTest{ 
-        name: name, 
-        sources: []testSource{},
-        libs: []testSource{},
-        errs: []errorExpect{},
-        expctDefs: types.NewDefinitionMap(),
-    }
-}
-
-func ( et *compilerTest ) errorf( tmpl string, argv ...interface{} ) {
-    et.t.Errorf( et.name + ": " + tmpl, argv... )
-}
-
-func ( et *compilerTest ) addLib( name, src string ) *compilerTest {
-    et.libs = append( et.libs, testSource{ name, src } )
-    return et
-}
-
-func ( et *compilerTest ) addSource( name, src string ) *compilerTest {
-    ets := testSource{ name: name, source: src }
-    et.sources = append( et.sources, ets )
-    return et
-}
-
-func ( et *compilerTest ) setSource( src string ) *compilerTest {
-    if len( et.sources ) == 0 { 
-        et.addSource( "<>", src ) 
-    } else { panic( "Attempt to call setSource with sources already present" ) }
-    return et
-}
-
-func ( et *compilerTest ) expectSrcError( 
-    name string, line, col int, msg string ) *compilerTest {
-    err := errorExpect{ name, line, col, msg }
-    et.errs = append( et.errs, err )
-    return et
-}
-
-func ( et *compilerTest ) expectError( 
-    line, col int, msg string ) *compilerTest {
-    return et.expectSrcError( "<>", line, col, msg )
-}
-
-func ( et *compilerTest ) expectDef( def types.Definition ) *compilerTest {
-    et.expctDefs.MustAdd( def )
-    return et
-}
-
-func ( et *compilerTest ) compile( 
-    srcs []testSource, extTypes *types.DefinitionMap ) *CompilationResult {
-    comp := NewCompilation()
-    comp.SetExternalTypes( extTypes )
-    for _, src := range srcs {
-        rd := bytes.NewBufferString( src.source )
-        if unit, err := tree.ParseSource( src.name, rd ); err == nil {
-            comp.AddSource( unit )
-        } else { et.Fatal( err ) }
-    }
-    cr, err := comp.Execute()
-    if err == nil { return cr }
-    et.Fatal( err )
-    panic( "Unreached" )
-}
-
-func ( et *compilerTest ) compileResult() *CompilationResult {
-    extTypes := types.CoreTypesV1()
-    if len( et.libs ) > 0 {
-        cr := et.compile( et.libs, extTypes )
-        extTypes.MustAddFrom( cr.BuiltTypes )
-    }
-    return et.compile( et.sources, extTypes )
-}
-
-func ( et *compilerTest ) assertDefs( cr *CompilationResult ) {
-    a := et.PathAsserter.Descend( "(expctDefs)" )
-    built := roundtripCompilation( cr.BuiltTypes, et.t )
-    et.expctDefs.EachDefinition( func( def types.Definition ) {
-        nm := def.GetName()
-        a2 := a.Descend( nm )
-        if builtDef := built.Get( nm ); builtDef == nil {
-            a2.Fatalf( "not built" )
-        } else { types.NewDefAsserter( a ).AssertDef( def, builtDef ) }
-    })
-}
-
-func ( et *compilerTest ) makeErrorMap() map[ string ]errorExpect {
-    res := make( map[ string ]errorExpect, len( et.errs ) )
-    for _, err := range et.errs { res[ err.key() ] = err }
-    return res
-}
-
-func ( et *compilerTest ) checkError( 
-    err *Error, errMap map[ string ]errorExpect ) int {
-    lc := err.Location
-    k := makeErrorKey( lc.Source, lc.Line, lc.Col, err.Message )
-    if _, ok := errMap[ k ]; ok {
-        delete( errMap, k )
-        return 0
-    }
-    et.errorf( "Unexpected compiler error: %s", err )
-    return 1
-}
-
-func ( et *compilerTest ) call() {
-    cr := et.compileResult()
-    et.assertDefs( cr )
-    errMap := et.makeErrorMap()
-    errCount := 0
-    for _, err := range cr.Errors { errCount += et.checkError( err, errMap ) }
-    for _, err := range errMap {
-        et.errorf( "Error was not encountered: %v", err )
-    }
-    errCount += len( errMap )
-    if errCount > 0 { et.t.FailNow() }
-}
 
 func TestCompiler( t *testing.T ) {
     tests := []*compilerTest{
@@ -249,6 +100,193 @@ func TestCompiler( t *testing.T ) {
         expectSrcError( "f6", 1, 21,
             "Importing S1 from ns1@v1 would conflict with declared type in " +
             "ns4@v1" ),
+
+        newCompilerTest( "core-type-implicit-resolution" ).
+        setSource( `
+            @version v1
+            namespace ns1
+            struct S1 {
+                f1 Boolean
+                f2 Buffer
+                f3 String
+                f4 Int32
+                f5 Uint32
+                f6 Int64
+                f7 Uint64
+                f8 Float32
+                f9 Float64
+                f10 Timestamp
+                f11 SymbolMap
+                f12 Int32*+
+                f13 &Int32
+            }
+        `).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S1", "",
+                []*types.FieldDefinition{
+                    fldDef( "f1", "mingle:core@v1/Boolean", nil ),
+                    fldDef( "f2", "mingle:core@v1/Buffer", nil ),
+                    fldDef( "f3", "mingle:core@v1/String", nil ),
+                    fldDef( "f4", "mingle:core@v1/Int32", nil ),
+                    fldDef( "f5", "mingle:core@v1/Uint32", nil ),
+                    fldDef( "f6", "mingle:core@v1/Int64", nil ),
+                    fldDef( "f7", "mingle:core@v1/Uint64", nil ),
+                    fldDef( "f8", "mingle:core@v1/Float32", nil ),
+                    fldDef( "f9", "mingle:core@v1/Float64", nil ),
+                    fldDef( "f10", "mingle:core@v1/Timestamp", nil ),
+                    fldDef( "f11", "mingle:core@v1/SymbolMap", nil ),
+                    fldDef( "f12", "mingle:core@v1/Int32*+", nil ),
+                    fldDef( "f13", "&mingle:core@v1/Int32", nil ),
+                },
+            ),
+        ),
+
+        newCompilerTest( "nullable-type-handling" ).
+        setSource( `
+            @version v1
+            namespace ns1
+            struct S1 {}
+            enum E1 { c1 }
+            struct S2 {
+                f1 Boolean?
+                f2 Int32?
+                f3 Uint32?
+                f4 Int64?
+                f5 Uint64
+                f6 Float32?
+                f7 Float64?
+                f8 Timestamp?
+                f9 E1?
+                f10 S1?
+            }
+            struct S3 {
+                f1 String?
+                f2 Buffer?
+                f3 SymbolMap?
+                f4 Int32*?
+            }
+        ` ).
+        expectError( 7, 20, "not a nullable type" ).
+        expectError( 8, 20, "not a nullable type" ).
+        expectError( 9, 20, "not a nullable type" ).
+        expectError( 10, 20, "not a nullable type" ).
+        expectError( 11, 20, "not a nullable type" ).
+        expectError( 12, 20, "not a nullable type" ).
+        expectError( 13, 20, "not a nullable type" ).
+        expectError( 14, 20, "not a nullable type" ).
+        expectError( 15, 20, "not a nullable type" ).
+        expectError( 16, 21, "not a nullable type" ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S3", "",
+                []*types.FieldDefinition{
+                    fldDef( "f1", "mingle:core@v1/String?", nil ),
+                    fldDef( "f2", "mingle:core@v1/Buffer?", nil ),
+                    fldDef( "f3", "mingle:core@v1/SymbolMap?", nil ),
+                    fldDef( "f4", "mingle:core@v1/Int32*?", nil ),
+                },
+            ),
+        ),
+
+        newCompilerTest( "valid-restrictions" ).
+        setSource( `
+            @version v1
+            namespace ns1
+            struct S1 {
+                f1 String~"a"
+                f2 String~["aaa", "bbb"]
+
+                # We simultaneously permute primitive num types and interval
+                # combinations with the next 4
+                f3 Int32~( 0, 2 ]
+                f4 Uint32~[ 0, 1 ]
+                f5 Int64~[ 0, 2 )
+                f6 Uint64~( 0, 2 )
+
+                f7 Float32~[ 1, 2 )
+                f8 Float64~[ 0.1, 2.1 )
+
+                f9 Timestamp~[ "2012-01-01T12:00:00Z", "2012-01-02T12:00:00Z" ] 
+            }
+        ` ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S1", "",
+                []*types.FieldDefinition{
+                    fldDef( "f1", `mingle:core@v1/String~"a"`, nil ),
+                    fldDef( "f2", `mingle:core@v1/String~["aaa", "bbb"]`, nil ),
+                    fldDef( "f3", `mingle:core@v1/Int32~(0,2]`, nil ),
+                    fldDef( "f4", `mingle:core@v1/Uint32~[0,1]`, nil ),
+                    fldDef( "f5", `mingle:core@v1/Int64~[0,2)`, nil ),
+                    fldDef( "f6", `mingle:core@v1/Uint64~(0,2)`, nil ),
+                    fldDef( "f7", `mingle:core@v1/Float32~[1,2)`, nil ),
+                    fldDef( "f8", `mingle:core@v1/Float64~[0.1,2.1)`, nil ),
+                    fldDef( 
+                        "f9",
+                        `mingle:core@v1/Timestamp~["2012-01-01T12:00:00Z","2012-01-02T12:00:00Z"]`,
+                        nil,
+                    ),
+                
+                },
+            ),
+        ),
+
+        newCompilerTest( "invalid-restrictions" ).
+        setSource( `
+            @version v1
+            namespace ns1
+            struct S1 {}
+            struct S2 {
+                f1 S1~(,)
+                f2 S1~"a"
+                f3 String~[0, "1")
+                f4 String~["0", 1)
+                f5 Timestamp~(,1)
+                f6 Int32~["a", 2)
+                f7 Int32~(1, "20" )
+                f8 Int32~"a"
+                f9 Buffer~[0,1]
+                f10 Timestamp~[ "2012-01-02T12:00:00Z", "2012-01-01T12:00:00Z" ]
+                f11 Timestamp~["2001-0x-22",)
+                f12 String~"ab[a-z"
+                f13 Int32~[0,-1]
+                f14 Uint32~(0,0)
+                f15 Int64~[0,0)
+                f16 Uint64~(0,0]
+                f17 Int32~(0,1)
+                f18 String~("a","a")
+                f19 Timestamp~( "2012-01-01T12:00:00Z", "2012-01-01T12:00:00Z" )
+                f20 Int32~[1.0,2]
+                f21 Int32~[1,2.0]
+                f22 Float32~(1.0,1.0)
+                f23 Float64~(0.0,-1.0)
+                f24 Int32~("1",3]
+                f25 Int32~[0,"2")
+            }
+        ` ).
+        expectError( 6, 1, "Invalid target type for range restriction" ).
+        expectError( 7, 1, "Invalid target type for regex restriction" ).
+        expectError( 8, 1, "Got number as min value for range" ).
+        expectError( 9, 1, "Got number as max value for range" ).
+        expectError( 10, 1, "Got number as max value for range" ).
+        expectError( 11, 1, "Got string as min value for range" ).
+        expectError( 12, 1, "Got string as max value for range" ).
+        expectError( 13, 1, "Invalid target type for regex restriction" ).
+        expectError( 14, 1, "Invalid target type for range restriction" ).
+        expectError( 15, 1,"Unsatisfiable range" ).
+        expectError( 16, 1,"Invalid min value in range restriction: val: Invalid timestamp: [<input>, line 1, col 1]: Invalid RFC3339 time: \"2001-0x-22\"" ).
+        expectError( 17, 1,`error parsing regexp: missing closing ]: "[a-z"` ).
+        expectError( 18, 1, "Unsatisfiable range" ).
+        expectError( 19, 1, "Unsatisfiable range" ).
+        expectError( 20, 1, "Unsatisfiable range" ).
+        expectError( 21, 1, "Unsatisfiable range" ).
+        expectError( 22, 1, "Unsatisfiable range" ).
+        expectError( 23, 1, "Unsatisfiable range" ).
+        expectError( 24, 1, "Unsatisfiable range" ).
+        expectError( 25, 1, "Got decimal as min value for range" ).
+        expectError( 26, 1, "Got decimal as max value for range" ).
+        expectError( 27, 1, "Unsatisfiable range" ).
+        expectError( 28, 1, "Unsatisfiable range" ).
+        expectError( 29, 1, "Got string as min value for range" ).
+        expectError( 30, 1, "Got string as max value for range" ),
 
         newCompilerTest( "dup-decls-in-same-source" ).
         setSource( `
