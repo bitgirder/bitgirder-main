@@ -1844,7 +1844,7 @@ func ( t *crtInit ) addTruncateNumTests() {
 
 func ( t *crtInit ) addNumTests() {
     for _, typ := range mg.NumericTypes {
-        t.addVcError( "not-a-num", typ, `invalid syntax: not-a-num` )
+        t.addVcError( "not-a-num", typ, `invalid number: not-a-num` )
     }
     t.addIdentityNumTests()
     t.addTruncateNumTests()

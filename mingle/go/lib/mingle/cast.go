@@ -2,7 +2,6 @@ package mingle
 
 import (
     "strings"
-    "strconv"
     "encoding/base64"
     "bitgirder/objpath"
     "fmt"
@@ -66,62 +65,14 @@ func castString(
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
 
-func valueCastErrorForNumError(
-    path objpath.PathNode, err *strconv.NumError ) error {
+func parseNumberForCast( 
+    s String, numTyp TypeReference, path objpath.PathNode ) ( Value, error ) {
 
-    return NewValueCastErrorf( path, "%s: %s", err.Err.Error(), err.Num )
-}
-
-func parseIntInitial(
-    ms String,
-    bitSize int,
-    numType TypeReference,
-    path objpath.PathNode ) ( sInt int64, uInt uint64, err error ) {
-
-    s := strings.TrimSpace( string( ms ) )
-    if indx := strings.IndexAny( s, "eE." ); indx >= 0 {
-        var f float64
-        f, err = strconv.ParseFloat( s, 64 )
-        if err == nil { sInt, uInt  = int64( f ), uint64( f ) }
-    } else { 
-        if numType == TypeUint32 || numType == TypeUint64 {
-            if len( s ) > 0 && s[ 0 ] == '-' {
-                err = NewValueCastErrorf( path, "value out of range: %s", s )
-            } else {
-                uInt, err = strconv.ParseUint( s, 10, bitSize )
-                sInt = int64( uInt ) // do this even if err != nil
-            }
-        } else {
-            sInt, err = strconv.ParseInt( s, 10, bitSize )
-            uInt = uint64( sInt )
-        }
+    val, err := ParseNumber( string( s ), numTyp )
+    if ne, ok := err.( *NumberFormatError ); ok {
+        err = NewValueCastError( path, ne.Error() )
     }
-    return
-}
-
-func parseInt( 
-    s String, 
-    bitSize int, 
-    numTyp TypeReference, 
-    path objpath.PathNode ) ( Value, error ) {
-
-    sInt, uInt, parseErr := parseIntInitial( s, bitSize, numTyp, path )
-    if parseErr == nil {
-        switch numTyp {
-        case TypeInt32: return Int32( sInt ), nil
-        case TypeInt64: return Int64( sInt ), nil
-        case TypeUint32: return Uint32( uInt ), nil
-        case TypeUint64: return Uint64( uInt ), nil
-        default:
-            msg := "Unhandled number type: %s"
-            panic( NewValueCastErrorf( path, msg, numTyp ) )
-        }
-    } 
-    switch err := parseErr.( type ) {
-    case *strconv.NumError: return nil, valueCastErrorForNumError( path, err )
-    case *ValueCastError: return nil, err
-    }
-    return nil, NewValueCastErrorf( path, parseErr.Error() )
+    return val, err 
 }
 
 func castInt32( 
@@ -137,7 +88,7 @@ func castInt32(
     case Uint64: return Int32( int32( v ) ), nil
     case Float32: return Int32( int32( v ) ), nil
     case Float64: return Int32( int32( v ) ), nil
-    case String: return parseInt( v, 32, TypeInt32, path )
+    case String: return parseNumberForCast( v, TypeInt32, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -155,7 +106,7 @@ func castInt64(
     case Uint64: return Int64( int64( v ) ), nil
     case Float32: return Int64( int64( v ) ), nil
     case Float64: return Int64( int64( v ) ), nil
-    case String: return parseInt( v, 64, TypeInt64, path )
+    case String: return parseNumberForCast( v, TypeInt64, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -173,7 +124,7 @@ func castUint32(
     case Uint64: return Uint32( uint32( v ) ), nil
     case Float32: return Uint32( uint32( v ) ), nil
     case Float64: return Uint32( uint32( v ) ), nil
-    case String: return parseInt( v, 32, TypeUint32, path )
+    case String: return parseNumberForCast( v, TypeUint32, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -191,27 +142,9 @@ func castUint64(
     case Uint64: return v, nil
     case Float32: return Uint64( uint64( v ) ), nil
     case Float64: return Uint64( uint64( v ) ), nil
-    case String: return parseInt( v, 64, TypeUint64, path )
+    case String: return parseNumberForCast( v, TypeUint64, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
-}
-
-func parseFloat32(
-    s string,
-    bitSize int,
-    numTyp TypeReference,
-    path objpath.PathNode ) ( Value, error ) {
-
-    f, err := strconv.ParseFloat( string( s ), bitSize )
-    if err != nil { 
-        ne := err.( *strconv.NumError )
-        return nil, valueCastErrorForNumError( path, ne )
-    }
-    switch numTyp {
-    case TypeFloat32: return Float32( f ), nil
-    case TypeFloat64: return Float64( f ), nil
-    }
-    panic( NewValueCastErrorf( path, "Unhandled num type: %s", numTyp ) )
 }
 
 func castFloat32( 
@@ -227,7 +160,7 @@ func castFloat32(
     case Uint64: return Float32( float32( v ) ), nil
     case Float32: return v, nil
     case Float64: return Float32( float32( v ) ), nil
-    case String: return parseFloat32( string( v ), 32, TypeFloat32, path )
+    case String: return parseNumberForCast( v, TypeFloat32, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -245,7 +178,7 @@ func castFloat64(
     case Uint64: return Float64( float64( v ) ), nil
     case Float32: return Float64( float64( v ) ), nil
     case Float64: return v, nil
-    case String: return parseFloat32( string( v ), 64, TypeFloat64, path )
+    case String: return parseNumberForCast( v, TypeFloat64, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }

@@ -1039,3 +1039,68 @@ func TestTypeReferenceEquals( t *testing.T ) {
     chk( nt1, nt2, false )
     chk( nt1, lt1Empty, false )
 }
+
+type numberParseTest struct {
+    *assert.PathAsserter
+    in string
+    out Value
+    typ TypeReference
+    err error
+}
+
+func ( t *numberParseTest ) call() {
+    t.Logf( "parsing %q as %s", t.in, t.typ )
+    if act, err := ParseNumber( t.in, t.typ ); err == nil {
+        EqualValues( t.out, act, t )
+    } else { t.EqualErrors( t.err, err ) }
+}
+
+func TestNumberParsers( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    tests := make( []*numberParseTest, 0, 16 )
+    tests = append( tests,
+        &numberParseTest{ 
+            in: "1", out: Int32( int32( 1 ) ), typ: TypeInt32 },
+        &numberParseTest{ 
+            in: "1.1", out: Int32( int32( 1 ) ), typ: TypeInt32 },
+        &numberParseTest{ 
+            in: "1", out: Uint32( uint32( 1 ) ), typ: TypeUint32 },
+        &numberParseTest{ 
+            in: "1.1", out: Uint32( uint32( 1 ) ), typ: TypeUint32 },
+        &numberParseTest{ 
+            in: "1", out: Int64( int64( 1 ) ), typ: TypeInt64 },
+        &numberParseTest{ 
+            in: "1.1", out: Int64( int64( 1 ) ), typ: TypeInt64 },
+        &numberParseTest{ 
+            in: "1", out: Uint64( uint64( 1 ) ), typ: TypeUint64 },
+        &numberParseTest{ 
+            in: "1.1", out: Uint64( uint64( 1 ) ), typ: TypeUint64 },
+        &numberParseTest{ 
+            in: "1.1", out: Float32( float32( 1.1 ) ), typ: TypeFloat32 },
+        &numberParseTest{ 
+            in: "1.1", out: Float64( float64( 1.1 ) ), typ: TypeFloat64 },
+    )
+    rngErr := func( val string, typ TypeReference ) {
+        err := newNumberRangeError( val )
+        tests = append( tests, &numberParseTest{ in: val, typ: typ, err: err } )
+    }
+    rngErr( "2147483648", TypeInt32 )
+    rngErr( "-2147483649", TypeInt32 )
+    rngErr( "4294967296", TypeUint32 )
+    rngErr( "-1", TypeUint32 )
+    rngErr( "9223372036854775808", TypeInt64 )
+    rngErr( "-9223372036854775809", TypeInt64 )
+    rngErr( "18446744073709551616", TypeUint64 )
+    rngErr( "-1", TypeUint64 )
+    for _, nt := range NumericTypes { 
+        s := "badNum"
+        err := newNumberSyntaxError( s )
+        test := &numberParseTest{ in: s, typ: nt, err: err }
+        tests = append( tests, test )
+    }
+    for _, t := range tests {
+        t.PathAsserter = la
+        t.call()
+        la = la.Next()
+    }
+}
