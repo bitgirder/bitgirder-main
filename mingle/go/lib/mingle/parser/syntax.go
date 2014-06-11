@@ -509,14 +509,14 @@ func ( sb *Builder ) completeRangeRightSide(
 
 func ( sb *Builder ) completeRangeRestriction( 
     tn *TokenNode ) ( rg *RangeRestrictionSyntax, err error ) {
+
     leftClosed := tn.SpecialToken() == SpecialTokenOpenBracket
-    leftLoc := tn.Loc
-    rg = &RangeRestrictionSyntax{ LeftClosed: leftClosed }
+    rg = &RangeRestrictionSyntax{ Loc: tn.Loc, LeftClosed: leftClosed }
     if err = sb.completeRangeLeftSide( rg ); err != nil { return }
     if err = sb.SkipWsOrComments(); err != nil { return }
     var rightLoc *Location
     if rightLoc, err = sb.completeRangeRightSide( rg ); err != nil { return }
-    return rg, sb.checkRange( rg, leftLoc, rightLoc )
+    return rg, sb.checkRange( rg, rg.Loc, rightLoc )
 }
 
 func ( sb *Builder ) pollTypeRefRestriction() (
@@ -632,6 +632,7 @@ func ( nx *NumRestrictionSyntax ) LiteralString() string {
 }
 
 type RangeRestrictionSyntax struct {
+    Loc *Location
     LeftClosed bool
     Left RestrictionSyntax
     Right RestrictionSyntax

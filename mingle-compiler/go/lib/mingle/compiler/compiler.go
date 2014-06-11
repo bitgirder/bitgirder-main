@@ -313,6 +313,19 @@ func ( bs *buildScope ) resolveRegexRestriction(
     return nil
 }
 
+func ( bs *buildScope ) parseTimestamp( 
+    str string, errLoc *parser.Location ) ( mg.Timestamp, bool ) {
+    
+    tm, err := parser.ParseTimestamp( str )
+    if err == nil { return tm, true }
+    if pe, ok := err.( *parser.ParseError ); ok {
+        bs.c.addError( errLoc, pe.Message )
+        return tm, false
+    }
+    bs.c.addError( errLoc, err.Error() )
+    return tm, false
+}
+
 var rangeValTypeNames []*mg.QualifiedTypeName
 
 func init() {
@@ -332,8 +345,17 @@ func ( bs *buildScope ) setRangeNumValue(
     valPtr *mg.Value,
     rx *parser.NumRestrictionSyntax,
     qn *mg.QualifiedTypeName,
+    errLoc *parser.Location,
     bound string ) int {
 
+    if ! mg.IsNumericTypeName( qn ) {
+        bs.c.addErrorf( rx.Loc, "Got number as %s value for range", bound )
+        return 1
+    }
+    if mg.IsIntegerTypeName( qn ) && ( ! rx.Num.IsInt() ) {
+        bs.c.addErrorf( rx.Loc, "Got decimal as %s value for range", bound )
+        return 1
+    }
     num, err := mg.ParseNumber( rx.LiteralString(), qn )
     if err == nil {
         *valPtr = num
@@ -346,12 +368,10 @@ func ( bs *buildScope ) setRangeNumValue(
 func ( bs *buildScope ) setRangeTimestampValue(
     valPtr *mg.Value, str string, errLoc *parser.Location ) int {
         
-    tm, err := mg.ParseTimestamp( str )
-    if err == nil {
+    if tm, ok := bs.parseTimestamp( str, errLoc ); ok {
         *valPtr = tm
         return 0
-    } 
-    bs.c.addError( errLoc, err.Error() )
+    }
     return 1
 }
 
@@ -369,7 +389,7 @@ func ( bs *buildScope ) setRangeStringValue(
     case qn.Equals( mg.QnameTimestamp ):
         return bs.setRangeTimestampValue( valPtr, rx.Str, errLoc )
     }
-    bs.c.addErrorf( errLoc, "Got string as value for %s range", qn )
+    bs.c.addErrorf( rx.Loc, "Got string as %s value for range", bound )
     return 1
 }
 
@@ -383,35 +403,44 @@ func ( bs *buildScope ) setRangeValue(
 
     switch v := rx.( type ) {
     case *parser.NumRestrictionSyntax: 
-        return bs.setRangeNumValue( valPtr, v, qn, bound )
+        return bs.setRangeNumValue( valPtr, v, qn, errLoc, bound )
     case *parser.StringRestrictionSyntax: 
         return bs.setRangeStringValue( valPtr, v, qn, errLoc, bound )
     }
     panic( libErrorf( "unhandled restriction: %T", rx ) )
 }
 
-//func areAdjacentInts( min, max Value ) bool {
-//    switch minV := min.( type ) {
-//    case Int32: return int32( max.( Int32 ) ) - int32( minV ) == int32( 1 )
-//    case Uint32: return uint32( max.( Uint32 ) ) - uint32( minV ) == uint32( 1 )
-//    case Int64: return int64( max.( Int64 ) ) - int64( minV ) == int64( 1 )
-//    case Uint64: return uint64( max.( Uint64 ) ) - uint64( minV ) == uint64( 1 )
-//    }
-//    return false
-//}
-//
-//func checkRangeBounds( rr *RangeRestriction ) error {
-//    failed := false
-//    switch i := rr.Min.( Comparer ).Compare( rr.Max ); {
-//    case i == 0: failed = ! ( rr.MinClosed && rr.MaxClosed )
-//    case i > 0: failed = true
-//    case i < 0: 
-//        open := ! ( rr.MinClosed || rr.MaxClosed )
-//        failed = open && areAdjacentInts( rr.Min, rr.Max )
-//    }
-//    if failed { return &RestrictionTypeError{ "Unsatisfiable range" } }
-//    return nil
-//}
+func areAdjacentInts( min, max mg.Value ) bool {
+    switch minV := min.( type ) {
+    case mg.Int32: 
+        return int32( max.( mg.Int32 ) ) - int32( minV ) == int32( 1 )
+    case mg.Uint32: 
+        return uint32( max.( mg.Uint32 ) ) - uint32( minV ) == uint32( 1 )
+    case mg.Int64: 
+        return int64( max.( mg.Int64 ) ) - int64( minV ) == int64( 1 )
+    case mg.Uint64: 
+        return uint64( max.( mg.Uint64 ) ) - uint64( minV ) == uint64( 1 )
+    }
+    return false
+}
+
+func ( bs *buildScope ) checkRangeBounds( 
+    rr *mg.RangeRestriction, errLoc *parser.Location ) int {
+
+    failed := false
+    switch i := rr.Min.( mg.Comparer ).Compare( rr.Max ); {
+    case i == 0: failed = ! ( rr.MinClosed && rr.MaxClosed )
+    case i > 0: failed = true
+    case i < 0: 
+        open := ! ( rr.MinClosed || rr.MaxClosed )
+        failed = open && areAdjacentInts( rr.Min, rr.Max )
+    }
+    if failed { 
+        bs.c.addError( errLoc, "Unsatisfiable range" )
+        return 1
+    }
+    return 0
+}
 
 func ( bs *buildScope ) setRangeValues(
     rr *mg.RangeRestriction, 
@@ -426,9 +455,9 @@ func ( bs *buildScope ) setRangeValues(
     if rx.Right != nil {
         fails += bs.setRangeValue( &( rr.Max ), rx.Right, qn, errLoc, "max" ) 
     }
-//    if ! ( rr.Min == nil || rr.Max == nil ) { 
-//        if ! bs.checkRangeBounds( rr, errLoc ) { fails++ }
-//    }
+    if ! ( rr.Min == nil || rr.Max == nil ) { 
+        fails += bs.checkRangeBounds( rr, rx.Loc ) 
+    }
     return fails == 0
 }
 
@@ -1315,13 +1344,11 @@ func asStringExpression(
         return &compiledExpression{ code.String( str ), resType }
     } else if qnameIn( expctType ).Equals( mg.QnameTimestamp ) {
         if expctType == nil { resType = mg.TypeTimestamp }
-        if tm, err := mg.ParseTimestamp( str ); err == nil {
+        if tm, ok := bs.parseTimestamp( str, strLoc ); ok {
             return &compiledExpression{ 
                 &code.Timestamp{ tm }, mg.TypeTimestamp }
-        } else if pe, ok := err.( *parser.ParseError ); ok { 
-            bs.c.addErrorf( strLoc, pe.Message )
-            return nil
-        } else { panic( &implError{ err.Error() } ) }
+        }
+        return nil
     }
     bs.c.addErrorf( strLoc, "Expected %s but got string", expctType )
     return nil

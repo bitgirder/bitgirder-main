@@ -486,6 +486,9 @@ func typeWithRangeLoc(
     locLeft, locRight *parser.Location ) *parser.CompletableTypeReference {
 
     rx := t.Restriction.( *parser.RangeRestrictionSyntax )
+
+    rx.Loc = locLeft.Dup()
+    rx.Loc.Col--
     if locLeft != nil { rxSetLoc( rx.Left, locLeft ) }
     if locRight != nil { rxSetLoc( rx.Right, locRight ) }
     return t

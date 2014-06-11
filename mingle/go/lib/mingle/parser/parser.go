@@ -2,6 +2,8 @@ package parser
 
 import (
     mg "mingle"
+    "time"
+    "fmt"
 //    "log"
 )
 
@@ -45,4 +47,16 @@ func ParseTypeReference( s string ) ( *CompletableTypeReference, error ) {
     if err == nil { err = sb.CheckTrailingToken() }
     if err == nil { return ctr, nil }
     return nil, err
+}
+
+func ParseTimestamp( str string ) ( mg.Timestamp, error ) {
+    t, err := time.Parse( time.RFC3339Nano, str )
+    if err != nil {
+        parseErr := &ParseError{
+            Message: fmt.Sprintf( "Invalid RFC3339 time: %q", str ),
+            Loc: &Location{ 1, 1, ParseSourceInput },
+        }
+        return mg.Timestamp( t ), parseErr
+    }
+    return mg.Timestamp( t ), nil
 }

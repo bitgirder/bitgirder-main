@@ -65,16 +65,31 @@ func castString(
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
 
+func isDecimalNumString( s String ) bool {
+    return strings.IndexAny( string( s ), "eE." ) >= 0
+}
+
 func parseNumberForCast( 
     s String, 
     numTyp *QualifiedTypeName, 
     path objpath.PathNode ) ( Value, error ) {
 
-    val, err := ParseNumber( string( s ), numTyp )
+    asFloat := IsIntegerTypeName( numTyp ) && isDecimalNumString( s )
+    parseTyp := numTyp
+    if asFloat { parseTyp = QnameFloat64 }
+    val, err := ParseNumber( string( s ), parseTyp )
     if ne, ok := err.( *NumberFormatError ); ok {
         err = NewValueCastError( path, ne.Error() )
     }
-    return val, err 
+    if err != nil || ( ! asFloat ) { return val, err }
+    f64 := float64( val.( Float64 ) )
+    switch {
+    case numTyp.Equals( QnameInt32 ): val = Int32( int32( f64 ) )
+    case numTyp.Equals( QnameUint32 ): val = Uint32( uint32( f64 ) )
+    case numTyp.Equals( QnameInt64 ): val = Int64( int64( f64 ) )
+    case numTyp.Equals( QnameUint64 ): val = Uint64( uint64( f64 ) )
+    }
+    return val, nil
 }
 
 func castInt32( 

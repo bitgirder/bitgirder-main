@@ -218,6 +218,7 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
     }
     regex := &RegexRestrictionSyntax{ Pat: "a", Loc: lc( 3 ) }
     rng := &RangeRestrictionSyntax{
+        Loc: lc( 3 ),
         LeftClosed: true, 
         Left: &NumRestrictionSyntax{
             Num: &NumericToken{ Int: "0" }, Loc: lc( 4 ) },

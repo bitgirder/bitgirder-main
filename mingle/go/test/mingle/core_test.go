@@ -454,8 +454,9 @@ func TestComparer( t *testing.T ) {
     }
     f( String( "a" ), String( "a" ), true )
     f( String( "a" ), String( "b" ), false )
-    for _, typ := range NumericTypes {
+    for _, qn := range NumericTypeNames {
         mkNum := func( s string ) Comparer {
+            typ := qn.AsAtomicType()
             val, err := CastAtomic( String( s ), typ, idPathRootVal )
             if err != nil { t.Fatal( err ) }
             return val.( Comparer )
@@ -1093,7 +1094,7 @@ func TestNumberParsers( t *testing.T ) {
     sxErr( "1.1", QnameUint32 )
     sxErr( "1.1", QnameInt64 )
     sxErr( "1.1", QnameUint64 )
-    for _, nt := range NumericTypes { sxErr( "badNum", nt.Name ) }
+    for _, qn := range NumericTypeNames { sxErr( "badNum", qn ) }
     for _, t := range tests {
         t.PathAsserter = la
         t.call()

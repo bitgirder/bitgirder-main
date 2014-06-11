@@ -59,6 +59,7 @@ func assertRangeRestriction(
 
     act, ok := rs.( *RangeRestrictionSyntax )
     a.Truef( ok, "not a range restriction: %T", rs )
+    a.Descend( "Loc" ).Equal( expct.Loc, act.Loc )
     a.Descend( "LeftClosed" ).Equal( expct.LeftClosed, act.LeftClosed )
     assertRestriction( expct.Left, act.Left, a.Descend( "Left" ) )
     assertRestriction( expct.Right, act.Right, a.Descend( "Right" ) )

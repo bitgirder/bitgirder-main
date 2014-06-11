@@ -12,6 +12,20 @@ import(
     "mingle/parser/syntax"
 )
 
+func IsIntegerType( typ TypeReference ) bool {
+    return typ.Equals( TypeInt32 ) || 
+           typ.Equals( TypeInt64 ) ||
+           typ.Equals( TypeUint32 ) ||
+           typ.Equals( TypeUint64 )
+}
+
+func IsNumericType( typ TypeReference ) bool {
+    if at, ok := typ.( *AtomicTypeReference ); ok {
+        return IsNumericTypeName( at.Name )
+    }
+    return false
+}
+
 func doParseAndCreate( f func() ( interface{}, error ) ) interface{} {
     res, err := f()
     if err != nil { panic( err ) }

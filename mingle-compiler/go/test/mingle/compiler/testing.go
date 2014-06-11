@@ -185,6 +185,7 @@ func ( et *compilerTest ) checkError(
 }
 
 func ( et *compilerTest ) call() {
+    et.Log( "calling" )
     cr := et.compileResult()
     et.assertDefs( cr )
     errMap := et.makeErrorMap()

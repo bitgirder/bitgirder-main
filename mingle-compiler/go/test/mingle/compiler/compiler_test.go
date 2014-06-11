@@ -152,7 +152,7 @@ func TestCompiler( t *testing.T ) {
                 f2 Int32?
                 f3 Uint32?
                 f4 Int64?
-                f5 Uint64
+                f5 Uint64?
                 f6 Float32?
                 f7 Float64?
                 f8 Timestamp?
@@ -263,31 +263,38 @@ func TestCompiler( t *testing.T ) {
                 f26 String~["aab", "aaa"]
             }
         ` ).
-        expectError( 6, 1, "Invalid target type for range restriction" ).
-        expectError( 7, 1, "Invalid target type for regex restriction" ).
-        expectError( 8, 1, "Got number as min value for range" ).
-        expectError( 9, 1, "Got number as max value for range" ).
-        expectError( 10, 1, "Got number as max value for range" ).
-        expectError( 11, 1, "Got string as min value for range" ).
-        expectError( 12, 1, "Got string as max value for range" ).
-        expectError( 13, 1, "Invalid target type for regex restriction" ).
-        expectError( 14, 1, "Invalid target type for range restriction" ).
-        expectError( 15, 1,"Unsatisfiable range" ).
-        expectError( 16, 32,"Invalid min value in range restriction: val: Invalid timestamp: [<input>, line 1, col 1]: Invalid RFC3339 time: \"2001-0x-22\"" ).
-        expectError( 17, 1,`error parsing regexp: missing closing ]: "[a-z"` ).
-        expectError( 18, 1, "Unsatisfiable range" ).
-        expectError( 19, 1, "Unsatisfiable range" ).
-        expectError( 20, 1, "Unsatisfiable range" ).
-        expectError( 21, 1, "Unsatisfiable range" ).
-        expectError( 22, 1, "Unsatisfiable range" ).
-        expectError( 23, 1, "Unsatisfiable range" ).
-        expectError( 24, 1, "Unsatisfiable range" ).
-        expectError( 25, 1, "Got decimal as min value for range" ).
-        expectError( 26, 1, "Got decimal as max value for range" ).
-        expectError( 27, 1, "Unsatisfiable range" ).
-        expectError( 28, 1, "Unsatisfiable range" ).
-        expectError( 29, 1, "Got string as min value for range" ).
-        expectError( 30, 1, "Got string as max value for range" ),
+        expectError( 6, 20, 
+            "Invalid target type for range restriction: ns1@v1/S1" ).
+        expectError( 7, 20, 
+            "Invalid target type for regex restriction: ns1@v1/S1" ).
+        expectError( 8, 28, "Got number as min value for range" ).
+        expectError( 9, 33, "Got number as max value for range" ).
+        expectError( 10, 32, "Got number as max value for range" ).
+        expectError( 11, 27, "Got string as min value for range" ).
+        expectError( 12, 30, "Got string as max value for range" ).
+        expectError( 13, 20, 
+            "Invalid target type for regex restriction: mingle:core@v1/Int32" ).
+        expectError( 14, 20, 
+            "Invalid target type for range restriction: mingle:core@v1/Buffer",
+        ).
+        expectError( 15, 31,"Unsatisfiable range" ).
+        expectError( 16, 21, `Invalid RFC3339 time: "2001-0x-22"` ).
+        expectError( 17, 28,
+            "error parsing regexp: missing closing ]: `[a-z`" ).
+        expectError( 18, 27, "Unsatisfiable range" ).
+        expectError( 19, 28, "Unsatisfiable range" ).
+        expectError( 20, 27, "Unsatisfiable range" ).
+        expectError( 21, 28, "Unsatisfiable range" ).
+        expectError( 22, 27, "Unsatisfiable range" ).
+        expectError( 23, 28, "Unsatisfiable range" ).
+        expectError( 24, 31, "Unsatisfiable range" ).
+        expectError( 25, 28, "Got decimal as min value for range" ).
+        expectError( 26, 30, "Got decimal as max value for range" ).
+        expectError( 27, 29, "Unsatisfiable range" ).
+        expectError( 28, 29, "Unsatisfiable range" ).
+        expectError( 29, 28, "Got string as min value for range" ).
+        expectError( 30, 30, "Got string as max value for range" ).
+        expectError( 31, 28, "Unsatisfiable range" ),
 
         newCompilerTest( "dup-decls-in-same-source" ).
         setSource( `
@@ -512,23 +519,6 @@ func TestCompiler( t *testing.T ) {
         expectError( 5, 58, "Non-atomic use of Null type" ).
         expectError( 5, 58, "Null type not allowed here" ).
         expectError( 5, 67, "Non-atomic use of Null type" ),
-    
-        newCompilerTest( "restriction-syntax-errors" ).
-        setSource( `
-            @version v1
-            namespace ns
-            struct S { 
-                f1 String~"a[bc"
-                f2 String~[1,2] 
-                f3 Int32~"a*"
-                f4 Int32~[12,11)
-            }
-        ` ).
-        expectError( 5, 20, "error parsing regexp: missing closing ]: `[bc`" ).
-        expectError( 6, 20, "Got number as min value for range" ).
-        expectError( 7, 20,
-            "Invalid target type for regex restriction: mingle:core@v1/Int32" ).
-        expectError( 8, 20, "Unsatisfiable range" ),
  
         newCompilerTest( "restriction-value-errors" ).
         setSource( `

@@ -1843,8 +1843,9 @@ func ( t *crtInit ) addTruncateNumTests() {
 }
 
 func ( t *crtInit ) addNumTests() {
-    for _, typ := range mg.NumericTypes {
-        t.addVcError( "not-a-num", typ, `invalid number: not-a-num` )
+    for _, qn := range mg.NumericTypeNames {
+        t.addVcError( "not-a-num", qn.AsAtomicType(), 
+            `invalid number: not-a-num` )
     }
     t.addIdentityNumTests()
     t.addTruncateNumTests()
@@ -1862,7 +1863,7 @@ func ( t *crtInit ) addNumTests() {
         "value out of range: -1" )
     rngErr( "18446744073709551616", mg.TypeUint64 )
     t.addVcError( "-1", mg.TypeUint64, "value out of range: -1" )
-    for _, tmpl := range []string{ "%s", "&%s", "%s?" } {
+    for _, tmpl := range []string{ "%s", "&%s", "&%s?" } {
         t.addVcError(
             12, fmt.Sprintf( tmpl, "Int32~[0,10)" ), 
             "Value 12 does not satisfy restriction [0,10)" )

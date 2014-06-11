@@ -433,7 +433,8 @@ func IsNullableType( typ TypeReference ) bool {
     case *PointerTypeReference: return true;
     case *AtomicTypeReference:
         if ! v.Name.Namespace.Equals( CoreNsV1 ) { return false }
-        return ! ( v.Name.Equals( QnameBoolean ) || IsNumericType( v ) )
+        return ! ( v.Name.Equals( QnameBoolean ) || 
+                   v.Name.Equals( QnameTimestamp ) || IsNumericType( v ) )
     }
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
@@ -1137,7 +1138,7 @@ var (
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
 var PrimitiveTypes []*AtomicTypeReference
-var NumericTypes []*AtomicTypeReference
+var NumericTypeNames []*QualifiedTypeName
 
 var CoreNsV1 *Namespace
 
@@ -1185,13 +1186,13 @@ func init() {
     }
     TypeNullableValue = &NullableTypeReference{ TypeValue }
     TypeOpaqueList = &ListTypeReference{ TypeNullableValue, true }
-    NumericTypes = []*AtomicTypeReference{
-        TypeInt32,
-        TypeInt64,
-        TypeUint32,
-        TypeUint64,
-        TypeFloat32,
-        TypeFloat64,
+    NumericTypeNames = []*QualifiedTypeName{
+        QnameInt32,
+        QnameInt64,
+        QnameUint32,
+        QnameUint64,
+        QnameFloat32,
+        QnameFloat64,
     }
     QnameRequest, TypeRequest = f1( "Request" )
     QnameResponse, TypeResponse = f1( "Response" )
@@ -1212,16 +1213,16 @@ func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {
     return qn, ok
 }
 
-func IsNumericType( typ TypeReference ) bool {
-    for _, num := range NumericTypes { if num.Equals( typ ) { return true } }
-    return false
+func IsIntegerTypeName( qn *QualifiedTypeName ) bool {
+    return qn.Equals( QnameInt32 ) || 
+           qn.Equals( QnameInt64 ) ||
+           qn.Equals( QnameUint32 ) ||
+           qn.Equals( QnameUint64 )
 }
 
-func IsIntegerType( typ TypeReference ) bool {
-    return typ.Equals( TypeInt32 ) || 
-           typ.Equals( TypeInt64 ) ||
-           typ.Equals( TypeUint32 ) ||
-           typ.Equals( TypeUint64 )
+func IsNumericTypeName( qn *QualifiedTypeName ) bool {
+    for _, nm := range NumericTypeNames { if nm.Equals( qn ) { return true } }
+    return false
 }
 
 func typeOfValuePointer( vp ValuePointer ) *PointerTypeReference {
