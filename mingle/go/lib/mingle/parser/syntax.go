@@ -425,15 +425,17 @@ func ( sb *Builder ) PollPlusMinus() ( *TokenNode, bool, error ) {
     return nil, false, err
 }
 
-func ( sb *Builder ) pollPointerDepth() ( int, error ) {
-    res := 0
+func ( sb *Builder ) pollPointerDepth() ( int, *Location, error ) {
+    depth := 0
+    var l *Location
     for {
         tok, err := sb.PollSpecial( SpecialTokenAmpersand )
-        if err != nil { return 0, err }
+        if err != nil { return 0, nil, err }
         if tok == nil { break }
-        res++
+        if l == nil { l = tok.Loc }
+        depth++
     }
-    return res, nil
+    return depth, l, nil
 }
 
 func ( sb *Builder ) expectRestrictionSyntax() (
@@ -547,6 +549,36 @@ type CompletableTypeReference struct {
     quants quantList
 }
 
+type TypeCompleter interface {
+
+    CompleteBaseType ( 
+        mg.TypeName, 
+        RestrictionSyntax, 
+        *Location ) ( mg.TypeReference, bool, error )
+}
+
+func ( t *CompletableTypeReference ) CompleteType( 
+    tc TypeCompleter ) ( mg.TypeReference, error ) {
+
+    res, ok, err := tc.CompleteBaseType( t.Name, t.Restriction, t.ErrLoc )
+    if ! ( ok && err == nil ) { return nil, err }
+    for i := 0; i < t.ptrDepth; i++ { res = mg.NewPointerTypeReference( res ) }
+    for _, quant := range t.quants {
+        switch quant {
+        case SpecialTokenPlus: 
+            res = &mg.ListTypeReference{ ElementType: res, AllowsEmpty: false }
+        case SpecialTokenAsterisk:
+            res = &mg.ListTypeReference{ ElementType: res, AllowsEmpty: true }
+        case SpecialTokenQuestionMark:
+            if mg.IsNullableType( res ) {
+                res = mg.MustNullableTypeReference( res )
+            } else { return nil, mg.NewNullableTypeError( res ) }
+        default: panic( libErrorf( "unhandled quant: %s", quant ) )
+        }
+    }
+    return res, nil
+}
+
 // In addition to returning a type ref, this method will, via its helper
 // methods, ensure that sb.SetSynthEnd() is called after the token that
 // completes the type reference, effectively making type references capable of
@@ -557,11 +589,16 @@ func ( sb *Builder ) ExpectTypeReference(
                                l *Location,
                                err error ) {
 
-    tmp := &CompletableTypeReference{ ErrLoc: sb.Location() }
-    if tmp.ptrDepth, err = sb.pollPointerDepth(); err != nil { return }
-    if tmp.Name, l, err = sb.ExpectTypeName( verDefl ); err != nil { return }
+    tmp := &CompletableTypeReference{}
+    var ptrLoc, nmLoc *Location
+    if tmp.ptrDepth, ptrLoc, err = sb.pollPointerDepth(); err != nil { return }
+    if tmp.Name, nmLoc, err = sb.ExpectTypeName( verDefl ); err != nil { 
+        return 
+    }
     if tmp.Restriction, err = sb.pollTypeRefRestriction(); err != nil { return }
     if tmp.quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }
+    if ptrLoc == nil { tmp.ErrLoc = nmLoc } else { tmp.ErrLoc = ptrLoc }
+    l = tmp.ErrLoc
     ref = tmp
     return
 }

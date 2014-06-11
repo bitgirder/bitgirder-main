@@ -1044,12 +1044,12 @@ type numberParseTest struct {
     *assert.PathAsserter
     in string
     out Value
-    typ TypeReference
+    typ *QualifiedTypeName
     err error
 }
 
 func ( t *numberParseTest ) call() {
-    t.Logf( "parsing %q as %s", t.in, t.typ )
+//    t.Logf( "parsing %q as %s", t.in, t.typ )
     if act, err := ParseNumber( t.in, t.typ ); err == nil {
         EqualValues( t.out, act, t )
     } else { t.EqualErrors( t.err, err ) }
@@ -1060,44 +1060,40 @@ func TestNumberParsers( t *testing.T ) {
     tests := make( []*numberParseTest, 0, 16 )
     tests = append( tests,
         &numberParseTest{ 
-            in: "1", out: Int32( int32( 1 ) ), typ: TypeInt32 },
+            in: "1", out: Int32( int32( 1 ) ), typ: QnameInt32 },
         &numberParseTest{ 
-            in: "1.1", out: Int32( int32( 1 ) ), typ: TypeInt32 },
+            in: "1", out: Uint32( uint32( 1 ) ), typ: QnameUint32 },
         &numberParseTest{ 
-            in: "1", out: Uint32( uint32( 1 ) ), typ: TypeUint32 },
+            in: "1", out: Int64( int64( 1 ) ), typ: QnameInt64 },
         &numberParseTest{ 
-            in: "1.1", out: Uint32( uint32( 1 ) ), typ: TypeUint32 },
+            in: "1", out: Uint64( uint64( 1 ) ), typ: QnameUint64 },
         &numberParseTest{ 
-            in: "1", out: Int64( int64( 1 ) ), typ: TypeInt64 },
+            in: "1.1", out: Float32( float32( 1.1 ) ), typ: QnameFloat32 },
         &numberParseTest{ 
-            in: "1.1", out: Int64( int64( 1 ) ), typ: TypeInt64 },
-        &numberParseTest{ 
-            in: "1", out: Uint64( uint64( 1 ) ), typ: TypeUint64 },
-        &numberParseTest{ 
-            in: "1.1", out: Uint64( uint64( 1 ) ), typ: TypeUint64 },
-        &numberParseTest{ 
-            in: "1.1", out: Float32( float32( 1.1 ) ), typ: TypeFloat32 },
-        &numberParseTest{ 
-            in: "1.1", out: Float64( float64( 1.1 ) ), typ: TypeFloat64 },
+            in: "1.1", out: Float64( float64( 1.1 ) ), typ: QnameFloat64 },
     )
-    rngErr := func( val string, typ TypeReference ) {
+    rngErr := func( val string, typ *QualifiedTypeName ) {
         err := newNumberRangeError( val )
         tests = append( tests, &numberParseTest{ in: val, typ: typ, err: err } )
     }
-    rngErr( "2147483648", TypeInt32 )
-    rngErr( "-2147483649", TypeInt32 )
-    rngErr( "4294967296", TypeUint32 )
-    rngErr( "-1", TypeUint32 )
-    rngErr( "9223372036854775808", TypeInt64 )
-    rngErr( "-9223372036854775809", TypeInt64 )
-    rngErr( "18446744073709551616", TypeUint64 )
-    rngErr( "-1", TypeUint64 )
-    for _, nt := range NumericTypes { 
-        s := "badNum"
-        err := newNumberSyntaxError( s )
-        test := &numberParseTest{ in: s, typ: nt, err: err }
+    rngErr( "2147483648", QnameInt32 )
+    rngErr( "-2147483649", QnameInt32 )
+    rngErr( "4294967296", QnameUint32 )
+    rngErr( "-1", QnameUint32 )
+    rngErr( "9223372036854775808", QnameInt64 )
+    rngErr( "-9223372036854775809", QnameInt64 )
+    rngErr( "18446744073709551616", QnameUint64 )
+    rngErr( "-1", QnameUint64 )
+    sxErr := func( in string, typ *QualifiedTypeName ) {
+        err := newNumberSyntaxError( in )
+        test := &numberParseTest{ in: in, typ: typ, err: err }
         tests = append( tests, test )
     }
+    sxErr( "1.1", QnameInt32 )
+    sxErr( "1.1", QnameUint32 )
+    sxErr( "1.1", QnameInt64 )
+    sxErr( "1.1", QnameUint64 )
+    for _, nt := range NumericTypes { sxErr( "badNum", nt.Name ) }
     for _, t := range tests {
         t.PathAsserter = la
         t.call()

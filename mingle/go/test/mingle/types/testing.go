@@ -131,6 +131,10 @@ func ( a *DefAsserter ) equalType( v1, v2 interface{} ) interface{} {
     return v2
 }
 
+func ( a *DefAsserter ) equalTypeRef( t1, t2 mg.TypeReference ) {
+    a.Truef( t1.Equals( t2 ), "%s != %s", t1, t2 )
+}
+
 func ( a *DefAsserter ) assertPrimDef( 
     p1 *PrimitiveDefinition, d2 Definition ) {
     _ = a.equalType( p1, d2 ).( *PrimitiveDefinition )
@@ -138,8 +142,10 @@ func ( a *DefAsserter ) assertPrimDef(
 
 func ( a *DefAsserter ) assertAliasDef( 
     a1 *AliasedTypeDefinition, d2 Definition ) {
+
     a2 := a.equalType( a1, d2 ).( *AliasedTypeDefinition )
-    a.Equal( a1, a2 )
+    a.Descend( "Name" ).Equal( a1.Name, a2.Name )
+    a.Descend( "AliasedType" ).Equal( a1.AliasedType, a2.AliasedType )
 }
 
 func asCompStr( ids []*mg.Identifier ) string {
@@ -157,7 +163,7 @@ func ( a *DefAsserter ) assertIdSets( ids1, ids2 []*mg.Identifier ) {
 
 func ( a *DefAsserter ) assertFieldDef( fd1, fd2 *FieldDefinition ) {
     a.descend( "(Name)" ).Equal( fd1.Name, fd2.Name )
-    a.descend( "(Type)" ).True( fd1.Type.Equals( fd2.Type ) )
+    a.descend( "(Type)" ).equalTypeRef( fd1.Type, fd2.Type )
     mg.EqualValues( fd1.Default, fd2.Default, a.descend( "(Default)" ) )
 }
 

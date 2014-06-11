@@ -6,6 +6,7 @@ import (
 //    "log"
     "bytes"
     "strings"
+    "errors"
     mg "mingle"
 )
 
@@ -252,5 +253,128 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
         } else { t.Fatal( err ) }
         st.expectSynthEnd()
         st.expectToken( "any", WhitespaceToken( []byte( "\n" ) ) )
+    }
+}
+
+type typeCompleterImpl struct {
+    in string
+    err error
+    notOk bool
+    expct mg.TypeReference
+}
+
+func ( tc *typeCompleterImpl ) qnameForName( 
+    nm mg.TypeName ) *mg.QualifiedTypeName {
+    
+    switch {
+    case nm.Equals( mg.NewDeclaredTypeNameUnsafe( "String" ) ):
+        return mg.QnameString
+    case nm.Equals( mg.NewDeclaredTypeNameUnsafe( "Int32" ) ):
+        return mg.QnameInt32
+    }
+    return nm.( *mg.QualifiedTypeName )
+}
+
+func ( tc *typeCompleterImpl ) addRestriction(
+    at *mg.AtomicTypeReference, rx RestrictionSyntax ) error {
+
+    if rx == nil { return nil }
+    mkInt := func( rx RestrictionSyntax ) mg.Int32 {
+        n := rx.( *NumRestrictionSyntax ).Num 
+        res, err := mg.ParseNumber( n.String(), mg.QnameInt32 )
+        if err == nil { return res.( mg.Int32 ) }
+        panic( err )
+    }
+    switch v := rx.( type ) {
+    case *RegexRestrictionSyntax:
+        var err error
+        at.Restriction, err = mg.NewRegexRestriction( v.Pat )
+        if err != nil { return err }
+    case *RangeRestrictionSyntax:
+        rr := &mg.RangeRestriction{
+            MinClosed: v.LeftClosed, 
+            MaxClosed: v.RightClosed,
+        }
+        if v.Left != nil { rr.Min = mkInt( v.Left ) }
+        if v.Right != nil { rr.Max = mkInt( v.Right ) }
+        at.Restriction = rr
+    default: panic( libErrorf( "unhandled restriction: %T", rx ) )
+    }
+    return nil
+}
+
+func ( tc *typeCompleterImpl ) CompleteBaseType( 
+    nm mg.TypeName,
+    rx RestrictionSyntax,
+    l *Location ) ( mg.TypeReference, bool, error ) {
+
+    if tc.notOk { return nil, false, tc.err }
+    if tc.err != nil { return nil, true, tc.err }
+    at := &mg.AtomicTypeReference{ Name: tc.qnameForName( nm ) }
+    if err := tc.addRestriction( at, rx ); err != nil { return nil, false, err }
+    return at, true, nil
+}
+
+func TestCompleteType( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    for _, tt := range []*typeCompleterImpl{
+        { in: "mingle:core@v1/String", expct: mg.TypeString },
+        {
+            in: `mingle:core@v1/String~"a"`,
+            expct: &mg.AtomicTypeReference{
+                Name: mg.QnameString,
+                Restriction: mg.MustRegexRestriction( "a" ),
+            },
+        },
+        { 
+            in: `mingle:core@v1/Int32~[0,2)`,
+            expct: &mg.AtomicTypeReference{
+                Name: mg.QnameInt32,
+                Restriction: &mg.RangeRestriction{
+                    MinClosed: true,
+                    Min: mg.Int32( int32( 0 ) ),
+                    Max: mg.Int32( int32( 2 ) ),
+                    MaxClosed: false,
+                },
+            },
+        },
+        { in: "Int32", expct: mg.TypeInt32 },
+        {
+            in: "&&String",
+            expct: mg.NewPointerTypeReference(
+                mg.NewPointerTypeReference( mg.TypeString ) ),
+        },
+        {
+            in: "&String?",
+            expct: mg.MustNullableTypeReference(
+                mg.NewPointerTypeReference( mg.TypeString ) ),
+        },
+        {
+            in: "String*+*",
+            expct: &mg.ListTypeReference{
+                ElementType: &mg.ListTypeReference{
+                    ElementType: &mg.ListTypeReference{
+                        ElementType: mg.TypeString,
+                        AllowsEmpty: true,
+                    },
+                    AllowsEmpty: false,
+                },
+                AllowsEmpty: true,
+            },
+        },
+        { in: "Int32?", err: mg.NewNullableTypeError( mg.TypeInt32 ) },
+        { in: "Stuff", err: errors.New( "test-error" ) },
+        { in: "Stuff", notOk: true, err: errors.New( "test-error" ) },
+        { in: "Stuff", notOk: true },
+    } {
+        ct, err := ParseTypeReference( tt.in )
+        if err != nil { la.Fatal( err ) }
+        typ, err := ct.CompleteType( tt )
+        if err == nil {
+            if tt.notOk {
+                la.Truef( typ == nil, "got a type: %s", typ )
+            } else { la.Equal( tt.expct, typ ) }
+        } else { la.EqualErrors( tt.err, err ) }
+        la = la.Next()
     }
 }

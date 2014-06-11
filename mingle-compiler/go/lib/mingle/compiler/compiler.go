@@ -2,15 +2,13 @@ package compiler
 
 import (
     "fmt"
-//    "log"
+    "log"
     "bytes"
     "sort"
     "container/list"
     "bitgirder/objpath"
     "mingle/parser/tree"
-    "mingle/parser/lexer"
-    "mingle/parser/syntax"
-    "mingle/parser/loc"
+    "mingle/parser"
     "mingle/code"
     mgRct "mingle/reactor"
     interp "mingle/interpreter"
@@ -110,6 +108,10 @@ func NewCompilation() *Compilation {
     }
 }
 
+func ( c *Compilation ) logf( tmpl string, args ...interface{} ) {
+    log.Printf( tmpl, args... )
+}
+
 func ( c *Compilation ) validate() error {
     if c.extTypes == nil { c.extTypes = types.NewDefinitionMap() }
     return nil
@@ -144,7 +146,7 @@ func ( c *Compilation ) typeDeclsGet(
 }
 
 type Error struct {
-    Location *loc.Location
+    Location *parser.Location
     Message string
 }
 
@@ -152,9 +154,9 @@ func ( e *Error ) Error() string {
     return fmt.Sprintf( "%s: %s", e.Location, e.Message )
 }
 
-func locationFor( locVal interface{} ) *loc.Location {
+func locationFor( locVal interface{} ) *parser.Location {
     switch v := locVal.( type ) {
-    case *loc.Location: return v
+    case *parser.Location: return v
     case tree.Locatable: return v.Locate()
     }
     panic( implErrorf( "Can't get location for value of type: %T", locVal ) )
@@ -231,16 +233,16 @@ func ( bs *buildScope ) namespace() *mg.Namespace {
 }
 
 type typeResolution struct {
-    errLoc *loc.Location
+    errLoc *parser.Location
     aliasChain []*mg.QualifiedTypeName
 }
 
-func newTypeResolution( errLoc *loc.Location ) *typeResolution {
+func newTypeResolution( errLoc *parser.Location ) *typeResolution {
     return &typeResolution{ errLoc, []*mg.QualifiedTypeName{} }
 }
 
 func ( bs *buildScope ) validateQname(
-    qn *mg.QualifiedTypeName, nmLoc *loc.Location ) *mg.QualifiedTypeName {
+    qn *mg.QualifiedTypeName, nmLoc *parser.Location ) *mg.QualifiedTypeName {
     if bs.c.typeDecls.HasKey( qn ) { return qn }
     if bs.c.extTypes.HasKey( qn ) { return qn }
     bs.c.addErrorf( nmLoc, "Unresolved type: %s", qn )
@@ -256,7 +258,7 @@ func ( bs *buildScope ) resolveImport(
 }
 
 func ( bs *buildScope ) expandDeclaredTypeName( 
-    nm *mg.DeclaredTypeName, nmLoc *loc.Location ) *mg.QualifiedTypeName {
+    nm *mg.DeclaredTypeName, nmLoc *parser.Location ) *mg.QualifiedTypeName {
     qn := nm.ResolveIn( bs.namespace() )
     // order of these is important since final test reassigns to qn
     if bs.c.typeDecls.HasKey( qn ) { return qn }
@@ -270,32 +272,208 @@ func ( bs *buildScope ) expandDeclaredTypeName(
 }
 
 func ( bs *buildScope ) qnameFor(
-    nm syntax.TypeName, nmLoc *loc.Location ) *mg.QualifiedTypeName {
+    nm mg.TypeName, nmLoc *parser.Location ) *mg.QualifiedTypeName {
+
     switch v := nm.( type ) {
-    case *syntax.QualifiedTypeName:
-        return bs.validateQname( mg.ConvertSyntaxQname( v ), nmLoc )
     case *mg.QualifiedTypeName: return bs.validateQname( v, nmLoc )
-    case syntax.DeclaredTypeName:
-        dn := mg.ConvertSyntaxDeclaredTypeName( v )
-        return bs.expandDeclaredTypeName( dn, nmLoc )
     case *mg.DeclaredTypeName: return bs.expandDeclaredTypeName( v, nmLoc )
     }
     panic( implErrorf( "unhandled type name: %T", nm ) )
 }
 
+func ( bs *buildScope ) addRestrictionTargetTypeError(
+    qn *mg.QualifiedTypeName, 
+    rx parser.RestrictionSyntax, 
+    errLoc *parser.Location ) {
+
+    rxNm := ""
+    switch rx.( type ) {
+    case *parser.RangeRestrictionSyntax: rxNm = "range"
+    case *parser.RegexRestrictionSyntax: rxNm = "regex"
+    default: panic( libErrorf( "unhandled restriction: %T", rx ) )
+    }
+    bs.c.addErrorf( errLoc, "Invalid target type for %s restriction: %s", 
+        rxNm, qn )
+}
+
+func ( bs *buildScope ) resolveRegexRestriction( 
+    qn *mg.QualifiedTypeName, 
+    rx *parser.RegexRestrictionSyntax,
+    errLoc *parser.Location ) mg.ValueRestriction {
+
+    if qn.Equals( mg.QnameString ) { 
+        if rr, err := mg.NewRegexRestriction( rx.Pat ); err == nil { 
+            return rr 
+        } else {
+            bs.c.addError( rx.Loc, err.Error() )
+            return nil
+        }
+    }
+    bs.addRestrictionTargetTypeError( qn, rx, errLoc )
+    return nil
+}
+
+var rangeValTypeNames []*mg.QualifiedTypeName
+
+func init() {
+    rangeValTypeNames = []*mg.QualifiedTypeName{
+        mg.QnameString,
+        mg.QnameInt32,
+        mg.QnameInt64,
+        mg.QnameUint32,
+        mg.QnameUint64,
+        mg.QnameFloat32,
+        mg.QnameFloat64,
+        mg.QnameTimestamp,
+    }
+}
+
+func ( bs *buildScope ) setRangeNumValue(
+    valPtr *mg.Value,
+    rx *parser.NumRestrictionSyntax,
+    qn *mg.QualifiedTypeName,
+    bound string ) int {
+
+    num, err := mg.ParseNumber( rx.LiteralString(), qn )
+    if err == nil {
+        *valPtr = num
+        return 0
+    }
+    bs.c.addError( rx.Loc, err.Error() )
+    return 1
+}
+
+func ( bs *buildScope ) setRangeTimestampValue(
+    valPtr *mg.Value, str string, errLoc *parser.Location ) int {
+        
+    tm, err := mg.ParseTimestamp( str )
+    if err == nil {
+        *valPtr = tm
+        return 0
+    } 
+    bs.c.addError( errLoc, err.Error() )
+    return 1
+}
+
+func ( bs *buildScope ) setRangeStringValue(
+    valPtr *mg.Value,
+    rx *parser.StringRestrictionSyntax,
+    qn *mg.QualifiedTypeName,
+    errLoc *parser.Location,
+    bound string ) int {
+
+    switch {
+    case qn.Equals( mg.QnameString ):
+        *valPtr = mg.String( rx.Str )
+        return 0
+    case qn.Equals( mg.QnameTimestamp ):
+        return bs.setRangeTimestampValue( valPtr, rx.Str, errLoc )
+    }
+    bs.c.addErrorf( errLoc, "Got string as value for %s range", qn )
+    return 1
+}
+
+// bound is which bound to report in the error: "min" or "max"
+func ( bs *buildScope ) setRangeValue(
+    valPtr *mg.Value, 
+    rx parser.RestrictionSyntax,
+    qn *mg.QualifiedTypeName, 
+    errLoc *parser.Location,
+    bound string ) int {
+
+    switch v := rx.( type ) {
+    case *parser.NumRestrictionSyntax: 
+        return bs.setRangeNumValue( valPtr, v, qn, bound )
+    case *parser.StringRestrictionSyntax: 
+        return bs.setRangeStringValue( valPtr, v, qn, errLoc, bound )
+    }
+    panic( libErrorf( "unhandled restriction: %T", rx ) )
+}
+
+//func areAdjacentInts( min, max Value ) bool {
+//    switch minV := min.( type ) {
+//    case Int32: return int32( max.( Int32 ) ) - int32( minV ) == int32( 1 )
+//    case Uint32: return uint32( max.( Uint32 ) ) - uint32( minV ) == uint32( 1 )
+//    case Int64: return int64( max.( Int64 ) ) - int64( minV ) == int64( 1 )
+//    case Uint64: return uint64( max.( Uint64 ) ) - uint64( minV ) == uint64( 1 )
+//    }
+//    return false
+//}
+//
+//func checkRangeBounds( rr *RangeRestriction ) error {
+//    failed := false
+//    switch i := rr.Min.( Comparer ).Compare( rr.Max ); {
+//    case i == 0: failed = ! ( rr.MinClosed && rr.MaxClosed )
+//    case i > 0: failed = true
+//    case i < 0: 
+//        open := ! ( rr.MinClosed || rr.MaxClosed )
+//        failed = open && areAdjacentInts( rr.Min, rr.Max )
+//    }
+//    if failed { return &RestrictionTypeError{ "Unsatisfiable range" } }
+//    return nil
+//}
+
+func ( bs *buildScope ) setRangeValues(
+    rr *mg.RangeRestriction, 
+    rx *parser.RangeRestrictionSyntax, 
+    qn *mg.QualifiedTypeName,
+    errLoc *parser.Location ) bool {
+
+    fails := 0
+    if rx.Left != nil {
+        fails += bs.setRangeValue( &( rr.Min ), rx.Left, qn, errLoc, "min" )
+    }
+    if rx.Right != nil {
+        fails += bs.setRangeValue( &( rr.Max ), rx.Right, qn, errLoc, "max" ) 
+    }
+//    if ! ( rr.Min == nil || rr.Max == nil ) { 
+//        if ! bs.checkRangeBounds( rr, errLoc ) { fails++ }
+//    }
+    return fails == 0
+}
+
+func ( bs *buildScope ) resolveRangeRestriction(
+    qn *mg.QualifiedTypeName,
+    rx *parser.RangeRestrictionSyntax,
+    errLoc *parser.Location ) mg.ValueRestriction {
+
+    rr := &mg.RangeRestriction{ 
+        MinClosed: rx.LeftClosed, 
+        MaxClosed: rx.RightClosed,
+    }
+    for _, rvTypNm := range rangeValTypeNames {
+        if qn.Equals( rvTypNm ) {
+            if bs.setRangeValues( rr, rx, rvTypNm, errLoc ) { return rr }
+            return nil
+        }
+    }
+    bs.addRestrictionTargetTypeError( qn, rx, errLoc )
+    return nil
+}
+
+func ( bs *buildScope ) resolveRestriction(
+    qn *mg.QualifiedTypeName, 
+    rx parser.RestrictionSyntax,
+    errLoc *parser.Location ) mg.ValueRestriction {
+
+    switch v := rx.( type ) {
+    case *parser.RegexRestrictionSyntax: 
+        return bs.resolveRegexRestriction( qn, v, errLoc )
+    case *parser.RangeRestrictionSyntax: 
+        return bs.resolveRangeRestriction( qn, v, errLoc )
+    }
+    panic( libErrorf( "unhandled restriction: %T", rx ) )
+}
+
 func ( bs *buildScope ) getAtomicTypeReference( 
     qn *mg.QualifiedTypeName, 
-    typ *syntax.CompletableTypeReference,
+    rx parser.RestrictionSyntax,
     tr *typeResolution ) *mg.AtomicTypeReference {
+
     res := &mg.AtomicTypeReference{ Name: qn }
-    if sx := typ.Restriction; sx != nil {
-        if vr, err := mg.ResolveStandardRestriction( qn, sx ); err == nil {
-            res.Restriction = vr
-        } else if rte, ok := err.( *mg.RestrictionTypeError ); ok {
-            bs.c.addError( tr.errLoc, rte.Error() )
-            return nil
-        } else { panic( &implError{ err.Error() } ) }
-    }
+    if rx == nil { return res }
+    res.Restriction = bs.resolveRestriction( qn, rx, tr.errLoc )
+    if res.Restriction == nil { return nil }
     return res
 }
 
@@ -303,6 +481,7 @@ func ( bs *buildScope ) unalias(
     aliasVal interface{}, 
     aliasQn *mg.QualifiedTypeName, 
     tr *typeResolution ) mg.TypeReference {
+
     switch v := aliasVal.( type ) {
     case *tree.AliasDecl:
         return bs.c.buildScopeForNs( aliasQn.Namespace ).resolve( v.Target, tr )
@@ -347,23 +526,36 @@ func ( bs *buildScope ) aliasValFor(
     return alias, bs.addAlias( qn, tr )
 }
 
-func ( bs *buildScope ) completeType( 
-    typ *syntax.CompletableTypeReference,
-    tr *typeResolution ) mg.TypeReference {
+type typeCompletion struct {
+    bs *buildScope
+    tr *typeResolution
+}
 
-    qn := bs.qnameFor( typ.Name, tr.errLoc )
-    if qn == nil { return nil }
-    var base mg.TypeReference
-    aliasVal, aliasOk := bs.aliasValFor( qn, tr )
+func ( tc typeCompletion ) CompleteBaseType(
+    nm mg.TypeName,
+    rx parser.RestrictionSyntax,
+    l *parser.Location ) ( mg.TypeReference, bool, error ) {
+
+    qn := tc.bs.qnameFor( nm, tc.tr.errLoc )
+    if qn == nil { return nil, false, nil }
+    var res mg.TypeReference
+    aliasVal, aliasOk := tc.bs.aliasValFor( qn, tc.tr )
     if aliasOk {
         if aliasVal == nil { 
-            if at := bs.getAtomicTypeReference( qn, typ, tr ); at != nil {
-                base = at
+            if at := tc.bs.getAtomicTypeReference( qn, rx, tc.tr ); at != nil {
+                res = at
             }
-        } else { base = bs.unalias( aliasVal, qn, tr ) }
+        } else { res = tc.bs.unalias( aliasVal, qn, tc.tr ) }
     }
-    if base == nil { return nil }
-    res, err := mg.CompleteType( base, typ )
+    if res == nil { return nil, false, nil }
+    return res, true, nil
+}
+
+func ( bs *buildScope ) completeType( 
+    typ *parser.CompletableTypeReference,
+    tr *typeResolution ) mg.TypeReference {
+
+    res, err := typ.CompleteType( typeCompletion{ tr: tr, bs: bs } )
     if err == nil { return res }
     bs.c.addError( typ.ErrLoc, err.Error() )
     return nil
@@ -372,7 +564,7 @@ func ( bs *buildScope ) completeType(
 // This method may return non-nil even if some errors were encountered, to allow
 // further processing to continue
 func ( bs *buildScope ) resolve( 
-    typ *syntax.CompletableTypeReference,
+    typ *parser.CompletableTypeReference,
     tr *typeResolution ) mg.TypeReference {
     res := bs.completeType( typ, tr )
     if res != nil && baseTypeIsNull( res ) && ( ! isAtomic( res ) ) {
@@ -382,8 +574,8 @@ func ( bs *buildScope ) resolve(
 }
 
 func ( bs *buildScope ) resolveType( 
-    typ *syntax.CompletableTypeReference,
-    errLoc *loc.Location ) mg.TypeReference {
+    typ *parser.CompletableTypeReference,
+    errLoc *parser.Location ) mg.TypeReference {
     tr := newTypeResolution( errLoc )
     return bs.resolve( typ, tr )
 } 
@@ -409,7 +601,7 @@ func ( bc buildContext ) mustTypeInfo() *tree.TypeDeclInfo {
     panic( implErrorf( "no type info present for %s", bc.td.GetName() ) )
 }
 
-func ( bc buildContext ) superTypeRef() *syntax.CompletableTypeReference {
+func ( bc buildContext ) superTypeRef() *parser.CompletableTypeReference {
     if ti := bc.typeInfo(); ti != nil { return ti.SuperType }
     return nil
 }
@@ -435,7 +627,7 @@ func ( c *Compilation ) addImportByName(
     inNs *mg.Namespace,
     work map[ string ]interface{}, 
     res importNsMap,
-    errLoc *loc.Location ) {
+    errLoc *parser.Location ) {
     k := toAdd.ExternalForm()
     var prev interface{}
     var ok bool
@@ -956,7 +1148,7 @@ func ( c *Compilation ) buildOpDefs(
 }
 
 func ( c *Compilation ) validateAsSecurityDef(
-    proto *types.PrototypeDefinition, errLoc *loc.Location ) bool {
+    proto *types.PrototypeDefinition, errLoc *parser.Location ) bool {
     nm, flds := proto.Name, proto.Signature.Fields
     authFld := flds.Get( idAuthentication )
     if authFld == nil {
@@ -1038,8 +1230,8 @@ type prefixLeaf struct { exp tree.Expression }
 // 2nd return val indicates whether the first return val is an int type
 func numExprResTypeOf( 
     expctType mg.TypeReference, 
-    n *lexer.NumericToken,
-    errLoc *loc.Location,
+    n *parser.NumericToken,
+    errLoc *parser.Location,
     bs *buildScope ) ( mg.TypeReference, bool ) {
     if expctType == nil || qnameIn( expctType ).Equals( mg.QnameValue ) {
         if n.IsInt() { return mg.TypeInt64, true }
@@ -1058,9 +1250,9 @@ func numExprResTypeOf(
 }
 
 func asIntExpression(
-    n *lexer.NumericToken,
+    n *parser.NumericToken,
     resType mg.TypeReference,
-    errLoc *loc.Location,
+    errLoc *parser.Location,
     bs *buildScope ) *compiledExpression {
     res := &compiledExpression{ typ: resType }
     if n.IsInt() {
@@ -1086,9 +1278,9 @@ func asIntExpression(
 }
 
 func asFloatExpression(
-    n *lexer.NumericToken,
+    n *parser.NumericToken,
     resType mg.TypeReference,
-    errLoc *loc.Location,
+    errLoc *parser.Location,
     bs *buildScope ) *compiledExpression {
     res := &compiledExpression{ typ: resType }
     f, err := n.Float64(); 
@@ -1102,9 +1294,9 @@ func asFloatExpression(
 }
 
 func asNumberExpression(
-    n *lexer.NumericToken, 
+    n *parser.NumericToken, 
     expctType mg.TypeReference,
-    errLoc *loc.Location,
+    errLoc *parser.Location,
     bs *buildScope ) *compiledExpression {
     resType, takesInt := numExprResTypeOf( expctType, n, errLoc, bs )
     if resType == nil { return nil }
@@ -1114,7 +1306,7 @@ func asNumberExpression(
 
 func asStringExpression(
     str string,
-    strLoc *loc.Location,
+    strLoc *parser.Location,
     expctType mg.TypeReference,
     bs *buildScope ) *compiledExpression {
     resType := expctType
@@ -1126,7 +1318,7 @@ func asStringExpression(
         if tm, err := mg.ParseTimestamp( str ); err == nil {
             return &compiledExpression{ 
                 &code.Timestamp{ tm }, mg.TypeTimestamp }
-        } else if pe, ok := err.( *loc.ParseError ); ok { 
+        } else if pe, ok := err.( *parser.ParseError ); ok { 
             bs.c.addErrorf( strLoc, pe.Message )
             return nil
         } else { panic( &implError{ err.Error() } ) }
@@ -1136,8 +1328,8 @@ func asStringExpression(
 }
 
 func asBooleanExpression( 
-    kwd lexer.Keyword, 
-    errLoc *loc.Location,
+    kwd parser.Keyword, 
+    errLoc *parser.Location,
     expctType mg.TypeReference,
     bs *buildScope ) *compiledExpression {
     res := &compiledExpression{}
@@ -1153,8 +1345,8 @@ func asBooleanExpression(
         }
     }
     switch kwd {
-    case lexer.KeywordTrue: res.exp = code.Boolean( true )
-    case lexer.KeywordFalse: res.exp = code.Boolean( false )
+    case parser.KeywordTrue: res.exp = code.Boolean( true )
+    case parser.KeywordFalse: res.exp = code.Boolean( false )
     default:
         panic( implErrorf( "Invalid keyword as primary expression: %s", kwd ) )
     }
@@ -1163,7 +1355,7 @@ func asBooleanExpression(
 
 func asIdReferenceExpression(
     id *mg.Identifier,
-    errLoc *loc.Location,
+    errLoc *parser.Location,
     typ mg.TypeReference,
     bs *buildScope ) *compiledExpression {
     return &compiledExpression{ &code.IdentifierReference{ id }, typ }
@@ -1174,11 +1366,11 @@ func ( l *prefixLeaf ) compilePrimary(
     expctType mg.TypeReference, 
     bs *buildScope ) *compiledExpression {
     switch v := pe.Prim.( type ) {
-    case *lexer.NumericToken: 
+    case *parser.NumericToken: 
         return asNumberExpression( v, expctType, pe.PrimLoc, bs )
-    case lexer.StringToken: 
+    case parser.StringToken: 
         return asStringExpression( string( v ), pe.PrimLoc, expctType, bs )
-    case lexer.Keyword: 
+    case parser.Keyword: 
         return asBooleanExpression( v, pe.PrimLoc, expctType, bs )
     case *mg.Identifier:
         return asIdReferenceExpression( v, pe.PrimLoc, expctType, bs )
@@ -1189,7 +1381,7 @@ func ( l *prefixLeaf ) compilePrimary(
 
 func ( l *prefixLeaf ) compileNegation( 
     exp *compiledExpression, 
-    errLoc *loc.Location, 
+    errLoc *parser.Location, 
     bs *buildScope ) *compiledExpression {
     if baseTypeIsNum( exp.typ ) {
         return &compiledExpression{ &code.Negation{ exp.exp }, exp.typ }
@@ -1206,7 +1398,7 @@ func ( l *prefixLeaf ) compileUnary(
     if prim == nil { return nil }
     errLoc := exp.Exp.Locate()
     switch exp.Op {
-    case lexer.SpecialTokenMinus: return l.compileNegation( prim, errLoc, bs )
+    case parser.SpecialTokenMinus: return l.compileNegation( prim, errLoc, bs )
     }
     bs.c.addErrorf( exp.OpLoc, "Illegal unary op: %s", exp.Op )
     return nil
@@ -1216,7 +1408,7 @@ func ( l *prefixLeaf ) compileEnumAccess(
     enDef *types.EnumDefinition,
     expType mg.TypeReference,
     id *mg.Identifier,
-    idLoc *loc.Location,
+    idLoc *parser.Location,
     bs *buildScope ) *compiledExpression {
     if enVal := enDef.GetValue( id ); enVal != nil {
         return &compiledExpression{ &code.EnumValue{ enVal }, expType }
@@ -1231,7 +1423,7 @@ func ( l *prefixLeaf ) compileQualified(
     expctType mg.TypeReference,
     bs *buildScope ) *compiledExpression {
     if prim, ok := exp.Lhs.( *tree.PrimaryExpression ); ok {
-        if t, ok := prim.Prim.( *syntax.CompletableTypeReference ); ok {
+        if t, ok := prim.Prim.( *parser.CompletableTypeReference ); ok {
             if typ := bs.resolveType( t, prim.Locate() ); typ != nil {
                 if expctType == nil || typ.Equals( expctType ) {
                     if def := bs.c.typeDefForType( typ ); def != nil {
@@ -1321,7 +1513,7 @@ func castConstVal( val mg.Value, typ mg.TypeReference ) ( mg.Value, error ) {
 }
 
 func ( c *Compilation ) validateConstVal(
-    val mg.Value, typ mg.TypeReference, errLoc *loc.Location ) bool {
+    val mg.Value, typ mg.TypeReference, errLoc *parser.Location ) bool {
     if _, err := castConstVal( val, typ ); err != nil {
         if ve, ok := err.( *mg.ValueCastError ); ok {
             c.addError( errLoc, ve.Message() )
@@ -1334,7 +1526,7 @@ func ( c *Compilation ) validateConstVal(
 func ( c *Compilation ) evaluateConstant(
     exp *compiledExpression,
     expctType mg.TypeReference,
-    errLoc *loc.Location, 
+    errLoc *parser.Location, 
     bs *buildScope ) mg.Value {
     val, err := interp.Evaluate( exp.exp )
     if err == nil {

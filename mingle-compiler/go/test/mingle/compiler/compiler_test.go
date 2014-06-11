@@ -260,6 +260,7 @@ func TestCompiler( t *testing.T ) {
                 f23 Float64~(0.0,-1.0)
                 f24 Int32~("1",3]
                 f25 Int32~[0,"2")
+                f26 String~["aab", "aaa"]
             }
         ` ).
         expectError( 6, 1, "Invalid target type for range restriction" ).
@@ -272,7 +273,7 @@ func TestCompiler( t *testing.T ) {
         expectError( 13, 1, "Invalid target type for regex restriction" ).
         expectError( 14, 1, "Invalid target type for range restriction" ).
         expectError( 15, 1,"Unsatisfiable range" ).
-        expectError( 16, 1,"Invalid min value in range restriction: val: Invalid timestamp: [<input>, line 1, col 1]: Invalid RFC3339 time: \"2001-0x-22\"" ).
+        expectError( 16, 32,"Invalid min value in range restriction: val: Invalid timestamp: [<input>, line 1, col 1]: Invalid RFC3339 time: \"2001-0x-22\"" ).
         expectError( 17, 1,`error parsing regexp: missing closing ]: "[a-z"` ).
         expectError( 18, 1, "Unsatisfiable range" ).
         expectError( 19, 1, "Unsatisfiable range" ).

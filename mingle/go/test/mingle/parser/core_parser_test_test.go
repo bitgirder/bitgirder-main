@@ -36,24 +36,13 @@ func assertCoreParseError(
     } else { a.Fatal( err ) }
 }
 
-func assertCompletableTypeReference(
-    expct, act *CompletableTypeReference, a *assert.PathAsserter ) {
-
-    a.Descend( "ErrLoc" ).Equalf( expct.ErrLoc, act.ErrLoc,
-        "%s != %s", expct.ErrLoc, act.ErrLoc )
-    a.Descend( "Name" ).Equal( expct.Name, act.Name )
-    a.Descend( "Restriction" ).Equal( expct.Restriction, act.Restriction )
-    a.Descend( "ptrDepth" ).Equal( expct.ptrDepth, act.ptrDepth )
-    a.Descend( "quants" ).Equal( expct.quants, act.quants )
-}
-
 func assertCoreParse( cpt *CoreParseTest, a *assert.PathAsserter ) {
     if act, err := parseCoreParseTest( cpt, a ); err == nil {
         if cpt.Err == nil { 
             switch expct := cpt.Expect.( type ) {
             case *CompletableTypeReference: 
                 actRef := act.( *CompletableTypeReference )
-                assertCompletableTypeReference( expct, actRef, a )
+                AssertCompletableTypeReference( expct, actRef, a )
             default: a.Equal( cpt.Expect, act ) 
             }
         } else { a.Fatalf( "Got %s, expected error %#v", act, cpt.Err ) }

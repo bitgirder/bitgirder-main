@@ -820,7 +820,7 @@ func ( lx *Lexer ) recordEof(
 }
 
 // If this call returns and err == nil, eol may have been set to false, even if
-// a it was set to true by passWsAndComments(), if there is no synthLoc set.
+// it was set to true by passWsAndComments(), if there is no synthLoc set.
 func ( lx *Lexer ) doStrip() ( eol bool, tok Token, lc *Location, err error ) {
     if eol, err = lx.passWsAndComments(); err != nil { 
         if err == io.EOF {

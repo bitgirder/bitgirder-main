@@ -417,6 +417,15 @@ type NullableTypeReference struct {
     Type TypeReference
 }
 
+// later versions may hold the offending type as a field
+type NullableTypeError struct {}
+
+func ( nte *NullableTypeError ) Error() string { return "not a nullable type" }
+
+func NewNullableTypeError( typ TypeReference ) *NullableTypeError {
+    return &NullableTypeError{}
+}
+
 func IsNullableType( typ TypeReference ) bool {
     switch v := typ.( type ) {
     case *ListTypeReference: return true;
@@ -431,7 +440,7 @@ func IsNullableType( typ TypeReference ) bool {
 
 func MustNullableTypeReference( typ TypeReference ) *NullableTypeReference {
     if ! IsNullableType( typ ) {
-        panic( libErrorf( "not a nullable type (%T): %s", typ, typ ) )
+        panic( NewNullableTypeError( typ ) )
     }
     return &NullableTypeReference{ Type: typ }
 }
@@ -1343,58 +1352,44 @@ func newNumberSyntaxError( in string ) *NumberFormatError {
 func parseIntNumberInitial(
     s string,
     bitSize int,
-    numType TypeReference ) ( sInt int64, uInt uint64, err error ) {
+    numType *QualifiedTypeName ) ( sInt int64, uInt uint64, err error ) {
 
-    s = strings.TrimSpace( s )
-    if indx := strings.IndexAny( s, "eE." ); indx >= 0 {
-        var f float64
-        f, err = strconv.ParseFloat( s, 64 )
-        if err == nil { sInt, uInt  = int64( f ), uint64( f ) }
-    } else {
-        if numType == TypeUint32 || numType == TypeUint64 {
-            if len( s ) > 0 && s[ 0 ] == '-' {
-                err = newNumberRangeError( s )
-            } else {
-                uInt, err = strconv.ParseUint( s, 10, bitSize )
-                sInt = int64( uInt ) // do this even if err != nil
-            }
+    if numType.Equals( QnameUint32 ) || numType.Equals( QnameUint64 ) {
+        if len( s ) > 0 && s[ 0 ] == '-' {
+            err = newNumberRangeError( s )
         } else {
-            sInt, err = strconv.ParseInt( s, 10, bitSize )
-            uInt = uint64( sInt )
+            uInt, err = strconv.ParseUint( s, 10, bitSize )
+            sInt = int64( uInt ) // do this even if err != nil
         }
+    } else {
+        sInt, err = strconv.ParseInt( s, 10, bitSize )
+        uInt = uint64( sInt )
     }
     return
 }
 
 func parseIntNumber( 
-    s string, bitSize int, numTyp TypeReference ) ( Value, error ) {
+    s string, bitSize int, numTyp *QualifiedTypeName ) ( Value, error ) {
 
     sInt, uInt, parseErr := parseIntNumberInitial( s, bitSize, numTyp )
-    if parseErr == nil {
-        switch {
-        case numTyp.Equals( TypeInt32 ): return Int32( sInt ), nil
-        case numTyp.Equals( TypeUint32 ): return Uint32( uInt ), nil
-        case numTyp.Equals( TypeInt64 ): return Int64( sInt ), nil
-        case numTyp.Equals( TypeUint64 ): return Uint64( uInt ), nil
-        default: panic( libErrorf( "unhandled num type: %s", numTyp ) )
-        }
-    } 
-    switch err := parseErr.( type ) {
-//    case *strconv.NumError: return nil, valueCastErrorForNumError( path, err )
-    case *ValueCastError: return nil, err
+    if parseErr != nil { return nil, parseErr }
+    switch {
+    case numTyp.Equals( QnameInt32 ): return Int32( sInt ), nil
+    case numTyp.Equals( QnameUint32 ): return Uint32( uInt ), nil
+    case numTyp.Equals( QnameInt64 ): return Int64( sInt ), nil
+    case numTyp.Equals( QnameUint64 ): return Uint64( uInt ), nil
     }
-//    return nil, NewValueCastErrorf( path, parseErr.Error() )
-    return nil, parseErr
+    panic( libErrorf( "unhandled num type: %s", numTyp ) )
 }
 
 func parseFloatNumber(
-    s string, bitSize int, numTyp TypeReference ) ( Value, error ) {
+    s string, bitSize int, numTyp *QualifiedTypeName ) ( Value, error ) {
 
     f, err := strconv.ParseFloat( string( s ), bitSize )
     if err != nil { return nil, err }
     switch numTyp {
-    case TypeFloat32: return Float32( f ), nil
-    case TypeFloat64: return Float64( f ), nil
+    case QnameFloat32: return Float32( f ), nil
+    case QnameFloat64: return Float64( f ), nil
     }
     panic( libErrorf( "unhandled num type: %s", numTyp ) )
 }
@@ -1409,15 +1404,15 @@ func asParseNumberError( s string, err error ) error {
     return err
 }
 
-func ParseNumber( s string, typ TypeReference ) ( val Value, err error ) {
+func ParseNumber( s string, qn *QualifiedTypeName ) ( val Value, err error ) {
     switch {
-    case typ.Equals( TypeInt32 ): val, err = parseIntNumber( s, 32, typ )
-    case typ.Equals( TypeUint32 ): val, err = parseIntNumber( s, 32, typ )
-    case typ.Equals( TypeInt64 ): val, err = parseIntNumber( s, 64, typ )
-    case typ.Equals( TypeUint64 ): val, err = parseIntNumber( s, 64, typ )
-    case typ.Equals( TypeFloat32 ): val, err = parseFloatNumber( s, 32, typ )
-    case typ.Equals( TypeFloat64 ): val, err = parseFloatNumber( s, 64, typ )
-    default: panic( libErrorf( "unhandled number type: %s", typ ) )
+    case qn.Equals( QnameInt32 ): val, err = parseIntNumber( s, 32, qn )
+    case qn.Equals( QnameUint32 ): val, err = parseIntNumber( s, 32, qn )
+    case qn.Equals( QnameInt64 ): val, err = parseIntNumber( s, 64, qn )
+    case qn.Equals( QnameUint64 ): val, err = parseIntNumber( s, 64, qn )
+    case qn.Equals( QnameFloat32 ): val, err = parseFloatNumber( s, 32, qn )
+    case qn.Equals( QnameFloat64 ): val, err = parseFloatNumber( s, 64, qn )
+    default: panic( libErrorf( "unhandled number type: %s", qn ) )
     }
     if err != nil { err = asParseNumberError( s, err ) }
     return

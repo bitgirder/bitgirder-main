@@ -8,18 +8,16 @@ import (
     "bitgirder/assert"
     "bitgirder/objpath"
     mg "mingle"
-    "mingle/parser/loc"
-    "mingle/parser/syntax"
-    "mingle/parser/lexer"
+    "mingle/parser"
 )
 
 var mgDeclNm = mg.MustDeclaredTypeName
 var mgNs = mg.MustNamespace
 var mgId = mg.MustIdentifier
 
-func sxTyp( s string ) *syntax.CompletableTypeReference {
-    opts := &lexer.Options{ Reader: bytes.NewBufferString( s ) }
-    b := syntax.NewBuilder( lexer.New( opts ) )
+func sxTyp( s string ) *parser.CompletableTypeReference {
+    opts := &parser.Options{ Reader: bytes.NewBufferString( s ) }
+    b := parser.NewBuilder( parser.New( opts ) )
     typ, _, err := b.ExpectTypeReference( nil )
     if err != nil { panic( err ) }
     return typ
@@ -36,7 +34,7 @@ func keyedElts( args ...interface{} ) *KeyedElements {
 }
 
 type treeCheck struct {
-    *assert.Asserter
+    *assert.PathAsserter
     path objpath.PathNode
     t *testing.T
 }
@@ -50,7 +48,8 @@ func failTreeCheck( path objpath.PathNode, args []interface{}, t *testing.T ) {
 
 func newTreeCheck( path objpath.PathNode, t *testing.T ) *treeCheck {
     f := func( args ...interface{} ) { failTreeCheck( path, args, t ) }
-    return &treeCheck{ assert.AsAsserter( f ), path, t }
+    a := assert.AsAsserter( f )
+    return &treeCheck{ assert.NewPathAsserter( a ), path, t }
 }
 
 func ( t *treeCheck ) descend( node string ) *treeCheck {
@@ -110,40 +109,8 @@ func ( t *treeCheck ) equalNsDecl( ns1, ns2 *NamespaceDecl ) {
 func ( t *treeCheck ) equalTypeDeclInfo( i1, i2 *TypeDeclInfo ) {
     t.descend( "Name" ).Equal( i1.Name, i2.Name )
     t.descend( "NameLoc" ).Equal( i1.NameLoc, i2.NameLoc )
-    t.descend( "SuperType" ).Equal( i1.SuperType, i2.SuperType )
+    t.descend( "SuperType" ).equalType( i1.SuperType, i2.SuperType )
     t.descend( "SuperTypeLoc" ).Equal( i1.SuperTypeLoc, i2.SuperTypeLoc )
-}
-
-type quantAppender int
-
-func ( qa quantAppender ) AsListType( 
-    typ interface{}, allowsEmpty bool ) ( interface{}, error ) {
-
-    bb := typ.( *bytes.Buffer )
-    if allowsEmpty { bb.WriteString( "*" ) } else { bb.WriteString( "+" ) }
-    return bb, nil
-}
-
-func ( qa quantAppender ) AsNullableType( 
-    typ interface{} ) ( interface{}, error ) {
-
-    typ.( *bytes.Buffer ).WriteString( "?" )
-    return typ, nil
-}
-
-func ( qa quantAppender ) AsPointerType( 
-    typ interface{} ) ( interface{}, error ) {
-
-    res := &bytes.Buffer{}
-    res.WriteString( "&" )
-    res.WriteString( typ.( *bytes.Buffer ).String() )
-    return res, nil
-}
-
-func quantsFor( t *syntax.CompletableTypeReference ) string {
-    res, err := t.CompleteType( &bytes.Buffer{}, quantAppender( 1 ) )
-    if err != nil { panic( err ) }
-    return res.( *bytes.Buffer ).String()
 }
 
 // Checking right now is loose on restrictions, and we really only check that
@@ -151,12 +118,8 @@ func quantsFor( t *syntax.CompletableTypeReference ) string {
 // convert the non-nil restrictions to some string form and disregard their
 // locations, which in the expected versions are tied to an anonymous input
 // string
-func ( t *treeCheck ) equalType( t1, t2 *syntax.CompletableTypeReference ) {
-    t.descend( "Name" ).Equal( t1.Name, t2.Name )
-    t.descend( "(Quants)" ).Equal( quantsFor( t1 ), quantsFor( t2 ) )
-    rt := t.descend( "Restriction" )
-    r1, r2 := t1.Restriction, t2.Restriction
-    rt.True( ( r1 == nil && r2 == nil ) || ( ! ( r1 == nil || r2 == nil ) ) )
+func ( t *treeCheck ) equalType( t1, t2 *parser.CompletableTypeReference ) {
+    parser.AssertCompletableTypeReference( t1, t2, t.PathAsserter )
 }
 
 func ( t *treeCheck ) equalPrimary( p1, p2 *PrimaryExpression ) {
@@ -373,7 +336,7 @@ import ns1@v1/[ S1 ] - [ S2 ]`,
     } {
         if i, err := parseSource( "test-source", tt.src ); err == nil {
             t.Fatalf( "%d: Expected error %q in %q", i, tt.errMsg, tt.src )
-        } else if pe, ok := err.( *loc.ParseError ); ok {
+        } else if pe, ok := err.( *parser.ParseError ); ok {
             assert.Equal( tt.errMsg, pe.Message )
             assert.Equal( tt.line, pe.Loc.Line )
             assert.Equal( tt.col, pe.Loc.Col )
@@ -401,7 +364,7 @@ namespace ns1
 struct Struct1 {
 
     string1 String # this sure is a comment
-    string2 ns1:ns2@v2/String?
+    string2 &ns1:ns2@v2/String?
     string3 ns1@v1/String default "hello there"
     string4 ns1:ns2/String~"a*" default "aaaaa"
     string5 ns1/String~"^.*(a|b)$"?
@@ -491,11 +454,48 @@ namespace ns2
 
 var testParseResults = make( map[ string ]*NsUnit )
 
-func initResultTestSource1() {
-    lc1 := func( line, col int ) *loc.Location {
-        return &loc.Location{ Source: "testSource1", Line: line, Col: col }
+type typeRefModFunc func( *parser.CompletableTypeReference ) 
+
+func modTyp( 
+    t *parser.CompletableTypeReference,
+    f typeRefModFunc ) *parser.CompletableTypeReference {
+
+    f( t )
+    return t
+}
+
+func rxSetLoc( rx parser.RestrictionSyntax, l *parser.Location ) {
+    switch v := rx.( type ) {
+    case *parser.RegexRestrictionSyntax: v.Loc = l
+    case *parser.StringRestrictionSyntax: v.Loc = l
+    case *parser.NumRestrictionSyntax: v.Loc = l
+    default: panic( libErrorf( "unhandled restriction: %T", rx ) )
     }
-    sxTyp1 := func( s string, line, col int ) *syntax.CompletableTypeReference {
+}
+
+func typeWithRegexLoc( 
+    t *parser.CompletableTypeReference, 
+    l *parser.Location ) *parser.CompletableTypeReference {
+
+    rxSetLoc( t.Restriction, l )
+    return t
+}
+
+func typeWithRangeLoc(
+    t *parser.CompletableTypeReference,
+    locLeft, locRight *parser.Location ) *parser.CompletableTypeReference {
+
+    rx := t.Restriction.( *parser.RangeRestrictionSyntax )
+    if locLeft != nil { rxSetLoc( rx.Left, locLeft ) }
+    if locRight != nil { rxSetLoc( rx.Right, locRight ) }
+    return t
+}
+
+func initResultTestSource1() {
+    lc1 := func( line, col int ) *parser.Location {
+        return &parser.Location{ Source: "testSource1", Line: line, Col: col }
+    }
+    sxTyp1 := func( s string, line, col int ) *parser.CompletableTypeReference {
         res := sxTyp( s )
         res.ErrLoc = lc1( line, col )
         return res
@@ -541,93 +541,103 @@ func initResultTestSource1() {
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "string1" ), 
-                      Type: sxTyp( "String" ),
+                      Type: sxTyp1( "String", 17, 13 ),
                       NameLoc: lc1( 17, 5 ),
                       TypeLoc: lc1( 17, 13 ) },
                     { Name: mgId( "string2" ), 
-                      Type: sxTyp( "ns1:ns2@v2/String?" ),
+                      Type: sxTyp1( "&ns1:ns2@v2/String?", 18, 13 ),
                       NameLoc: lc1( 18, 5 ),
                       TypeLoc: lc1( 18, 13 ) },
                     { Name: mgId( "string3" ),
-                      Type: sxTyp( "ns1@v1/String" ),
+                      Type: sxTyp1( "ns1@v1/String", 19, 13 ),
                       NameLoc: lc1( 19, 5 ),
                       TypeLoc: lc1( 19, 13 ),
                       Default: &PrimaryExpression{
-                        Prim: lexer.StringToken( "hello there" ),
+                        Prim: parser.StringToken( "hello there" ),
                         PrimLoc: lc1( 19, 35 ),
                       } },
                     { Name: mgId( "string4" ),
-                      Type: sxTyp( `ns1:ns2@v1/String~"a*"` ),
+                      Type: typeWithRegexLoc(
+                        sxTyp1( `ns1:ns2@v1/String~"a*"`, 20, 13 ),
+                        lc1( 20, 28 ),
+                      ),
                       NameLoc: lc1( 20, 5 ),
                       TypeLoc: lc1( 20, 13 ),
                       Default: &PrimaryExpression{
-                        Prim: lexer.StringToken( "aaaaa" ),
+                        Prim: parser.StringToken( "aaaaa" ),
                         PrimLoc: lc1( 20, 41 ),
                       } },
                     { Name: mgId( "string5" ),
-                      Type: sxTyp( `ns1@v1/String~"^.*(a|b)$"?` ),
+                      Type: typeWithRegexLoc(
+                        sxTyp1( `ns1@v1/String~"^.*(a|b)$"?`, 21, 13 ),
+                        lc1( 21, 24 ),
+                      ),
                       NameLoc: lc1( 21, 5 ),
                       TypeLoc: lc1( 21, 13 ) },
                     { Name: mgId( "bool2" ),
-                      Type: sxTyp( "Boolean" ),
+                      Type: sxTyp1( "Boolean", 22, 11 ),
                       NameLoc: lc1( 22, 5 ),
                       TypeLoc: lc1( 22, 11 ),
                       Default: &PrimaryExpression{
-                        Prim: lexer.KeywordTrue,
+                        Prim: parser.KeywordTrue,
                         PrimLoc: lc1( 22, 27 ),
                       } },
                     { Name: mgId( "int2" ),
-                      Type: sxTyp( "Int64" ),
+                      Type: sxTyp1( "Int64", 25, 10 ),
                       NameLoc: lc1( 25, 5 ),
                       TypeLoc: lc1( 25, 10 ),
                       Default: &BinaryExpression{
                         Left: &PrimaryExpression{
-                            Prim: &lexer.NumericToken{ "1234", "", "", 0 },
+                            Prim: &parser.NumericToken{ "1234", "", "", 0 },
                             PrimLoc: lc1( 25, 24 ),
                         },
-                        Op: lexer.SpecialTokenPlus,
+                        Op: parser.SpecialTokenPlus,
                         OpLoc: lc1( 25, 29 ),
                         Right: &PrimaryExpression{
-                            Prim: &lexer.NumericToken{ "567", "", "", 0 },
+                            Prim: &parser.NumericToken{ "567", "", "", 0 },
                             PrimLoc: lc1( 25, 31 ),
                         },
                       } },
                     { Name: mgId( "int5" ),
-                      Type: sxTyp( "Int32~[0,)" ),
+                      Type: typeWithRangeLoc(
+                        sxTyp1( "Int32~[0,)", 26, 10 ),
+                        lc1( 26, 17 ),
+                        nil,
+                      ),
                       NameLoc: lc1( 26, 5 ),
                       TypeLoc: lc1( 26, 10 ),
                       Default: &PrimaryExpression{
-                        Prim: &lexer.NumericToken{ "1111", "", "", 0 },
+                        Prim: &parser.NumericToken{ "1111", "", "", 0 },
                         PrimLoc: lc1( 26, 29 ),
                       } },
                     { Name: mgId( "ints2" ),
-                      Type: sxTyp( "Int32+" ),
+                      Type: sxTyp1( "Int32+", 27, 11 ),
                       NameLoc: lc1( 27, 5 ),
                       TypeLoc: lc1( 27, 11 ),
                       Default: &ListExpression{
                         Start: lc1( 27, 26 ),
                         Elements: []Expression{
                             &PrimaryExpression{
-                                Prim: &lexer.NumericToken{ "1", "", "", 0 },
+                                Prim: &parser.NumericToken{ "1", "", "", 0 },
                                 PrimLoc: lc1( 27, 28 ),
                             },
                             &UnaryExpression{
-                                Op: lexer.SpecialTokenMinus,
+                                Op: parser.SpecialTokenMinus,
                                 OpLoc: lc1( 28, 9 ),
                                 Exp: &PrimaryExpression{
-                                    Prim: &lexer.NumericToken{ Int: "2" },
+                                    Prim: &parser.NumericToken{ Int: "2" },
                                     PrimLoc: lc1( 28, 10 ),
                                 },
                             },
                             &PrimaryExpression{
-                                Prim: &lexer.NumericToken{ "3", "", "", 0 },
+                                Prim: &parser.NumericToken{ "3", "", "", 0 },
                                 PrimLoc: lc1( 28, 13 ),
                             },
                             &UnaryExpression{
-                                Op: lexer.SpecialTokenMinus,
+                                Op: parser.SpecialTokenMinus,
                                 OpLoc: lc1( 28, 16 ),
                                 Exp: &PrimaryExpression{
-                                    Prim: &lexer.NumericToken{ Int: "4" },
+                                    Prim: &parser.NumericToken{ Int: "4" },
                                     PrimLoc: lc1( 28, 17 ),
                                 },
                             },
@@ -635,62 +645,66 @@ func initResultTestSource1() {
                       },
                     },
                     { Name: mgId( "ints3" ),
-                      Type: sxTyp( "Int32+" ),
+                      Type: sxTyp1( "Int32+", 30, 11 ),
                       NameLoc: lc1( 30, 5 ),
                       TypeLoc: lc1( 30, 11 ),
                       Default: &ListExpression{
                         Start: lc1( 30, 26 ),
                         Elements: []Expression{
                             &PrimaryExpression{
-                                Prim: &lexer.NumericToken{ "1", "", "", 0 },
+                                Prim: &parser.NumericToken{ "1", "", "", 0 },
                                 PrimLoc: lc1( 30, 28 ),
                             },
                             &PrimaryExpression{
-                                Prim: &lexer.NumericToken{ "2", "", "", 0 },
+                                Prim: &parser.NumericToken{ "2", "", "", 0 },
                                 PrimLoc: lc1( 30, 31 ),
                             },
                         },
                       },
                     },
                     { Name: mgId( "double1" ),
-                      Type: sxTyp( "Float64" ),
+                      Type: sxTyp1( "Float64", 31, 13 ),
                       NameLoc: lc1( 31, 5 ),
                       TypeLoc: lc1( 31, 13 ),
                       Default: &PrimaryExpression{
-                        Prim: &lexer.NumericToken{ "3", "1", "", 0 },
+                        Prim: &parser.NumericToken{ "3", "1", "", 0 },
                         PrimLoc: lc1( 31, 29 ),
                       } },
                     { Name: mgId( "double2" ),
-                      Type: sxTyp( "Float64~(-1e-10,3]?" ),
+                      Type: typeWithRangeLoc(
+                        sxTyp1( "Float64~(-1e-10,3]?", 32, 13 ),
+                        lc1( 32, 22 ),
+                        lc1( 32, 29 ),
+                      ),
                       NameLoc: lc1( 32, 5 ),
                       TypeLoc: lc1( 32, 13 ) },
                     { Name: mgId( "float1" ),
-                      Type: sxTyp( "Float32" ),
+                      Type: sxTyp1( "Float32", 33, 12 ),
                       NameLoc: lc1( 33, 5 ),
                       TypeLoc: lc1( 33, 12 ),
                       Default: &PrimaryExpression{
-                        Prim: &lexer.NumericToken{ "3", "2", "", 0 },
+                        Prim: &parser.NumericToken{ "3", "2", "", 0 },
                         PrimLoc: lc1( 33, 28 ),
                       } },
                     { Name: mgId( "float2" ), 
-                      Type: sxTyp( "Float32" ),
+                      Type: sxTyp1( "Float32", 34, 12 ),
                       NameLoc: lc1( 34, 5 ),
                       TypeLoc: lc1( 34, 12 ) },
                     { Name: mgId( "float3" ),
-                      Type: sxTyp( "Float32" ),
+                      Type: sxTyp1( "Float32", 34, 28 ),
                       NameLoc: lc1( 34, 21 ),
                       TypeLoc: lc1( 34, 28 ),
                       Default: &PrimaryExpression{
-                        Prim: &lexer.NumericToken{ "1", "2", "1", 'e' },
+                        Prim: &parser.NumericToken{ "1", "2", "1", 'e' },
                         PrimLoc: lc1( 34, 44 ),
                       } },
                     { Name: mgId( "float4" ), 
                       NameLoc: lc1( 34, 51 ),
-                      Type: sxTyp( "Float32" ),
+                      Type: sxTyp1( "Float32", 34, 58 ),
                       TypeLoc: lc1( 34, 58 ) },
                     { Name: mgId( "float5" ), 
                       NameLoc: lc1( 39, 5 ),
-                      Type: sxTyp( "Float32" ),
+                      Type: sxTyp1( "Float32", 39, 12 ),
                       TypeLoc: lc1( 39, 12 ) },
                 },
                 KeyedElements: keyedElts(),
@@ -704,7 +718,7 @@ func initResultTestSource1() {
                 Fields: []*FieldDecl{
                     { Name: mgId( "f1" ), 
                       NameLoc: lc1( 42, 30 ),
-                      Type: sxTyp( "String" ),
+                      Type: sxTyp1( "String", 42, 33 ),
                       TypeLoc: lc1( 42, 33 ) },
                 },
                 KeyedElements: keyedElts(),
@@ -722,29 +736,32 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Struct3" ),
                     NameLoc: lc1( 45, 8 ),
-                    SuperType: sxTyp1( "Struct1", 45, 17 ),
+                    SuperType: sxTyp1( "Struct1", 45, 18 ),
                     SuperTypeLoc: lc1( 45, 18 ),
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "string6" ), 
                       NameLoc: lc1( 47, 5 ),
-                      Type: sxTyp( "String?" ),
+                      Type: sxTyp1( "String?", 47, 13 ),
                       TypeLoc: lc1( 47, 13 ) },
                 },
                 KeyedElements: keyedElts(
                     "constructor", &ConstructorDecl{ 
                         Start: lc1( 49, 5 ),
-                        ArgType: sxTyp( "Int64" ),
+                        ArgType: sxTyp1( "Int64", 49, 19 ),
                         ArgTypeLoc: lc1( 49, 19 ),
                     },
                     "constructor", &ConstructorDecl{ 
                         Start: lc1( 50, 5 ),
-                        ArgType: sxTyp( "ns1@v1/Struct1" ),
+                        ArgType: sxTyp1( "ns1@v1/Struct1", 50, 19 ),
                         ArgTypeLoc: lc1( 50, 19 ),
                     },
                     "constructor", &ConstructorDecl{ 
                         Start: lc1( 51, 5 ),
-                        ArgType: sxTyp( `String~"^a+$"` ),
+                        ArgType: typeWithRegexLoc(
+                            sxTyp1( `String~"^a+$"`, 51, 19 ),
+                            lc1( 51, 26 ),
+                        ),
                         ArgTypeLoc: lc1( 51, 19 ),
                     },
                 ),
@@ -754,7 +771,7 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Struct4" ),
                     NameLoc: lc1( 54, 8 ),
-                    SuperType: sxTyp1( "Struct1", 54, 17 ),
+                    SuperType: sxTyp1( "Struct1", 54, 18 ),
                     SuperTypeLoc: lc1( 54, 18 ),
                 },
                 Fields: []*FieldDecl{},
@@ -765,7 +782,7 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Error1" ),
                     NameLoc: lc1( 56, 8 ),
-                    SuperType: sxTyp1( "StandardError", 56, 16 ),
+                    SuperType: sxTyp1( "StandardError", 56, 17 ),
                     SuperTypeLoc: lc1( 56, 17 ),
                 },
                 Fields: []*FieldDecl{},
@@ -780,7 +797,7 @@ func initResultTestSource1() {
                 Fields: []*FieldDecl{
                     { Name: mgId( "failTime" ), 
                       NameLoc: lc1( 57, 17 ),
-                      Type: sxTyp( "Int64" ),
+                      Type: sxTyp1( "Int64", 57, 26 ),
                       TypeLoc: lc1( 57, 26 ) },
                 },
                 KeyedElements: keyedElts(),
@@ -790,19 +807,19 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDeclNm( "Error3" ),
                     NameLoc: lc1( 59, 8 ),
-                    SuperType: sxTyp1( "Error1", 59, 16 ),
+                    SuperType: sxTyp1( "Error1", 59, 17 ),
                     SuperTypeLoc: lc1( 59, 17 ),
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "string2" ), 
                       NameLoc: lc1( 61, 5 ),
-                      Type: sxTyp( "String*" ),
+                      Type: sxTyp1( "String*", 61, 13 ),
                       TypeLoc: lc1( 61, 13 ) },
                 },
                 KeyedElements: keyedElts(
                     "constructor", &ConstructorDecl{ 
                         Start: lc1( 60, 5 ),
-                        ArgType: sxTyp( "F1" ),
+                        ArgType: sxTyp1( "F1", 60, 19 ),
                         ArgTypeLoc: lc1( 60, 19 ),
                     },
                 ),
@@ -821,7 +838,7 @@ func initResultTestSource1() {
                 Start: lc1( 66, 1 ),
                 Name: mgDeclNm( "Alias1" ),
                 NameLoc: lc1( 66, 7 ),
-                Target: sxTyp( "String?" ),
+                Target: sxTyp1( "String?", 66, 14 ),
                 TargetLoc: lc1( 66, 14 ),
             },
             &PrototypeDecl{
@@ -831,7 +848,10 @@ func initResultTestSource1() {
                 Sig: &CallSignature{
                     Start: lc1( 68, 17 ),
                     Fields: []*FieldDecl{},
-                    Return: sxTyp( `String~"abc"` ),
+                    Return: typeWithRegexLoc(
+                        sxTyp1( `String~"abc"`, 68, 21 ),
+                        lc1( 68, 28 ),
+                    ),
                     ReturnLoc: lc1( 68, 21 ),
                     Throws: []*ThrownType{},
                 },
@@ -845,13 +865,15 @@ func initResultTestSource1() {
                     Fields: []*FieldDecl{
                         { Name: mgId( "f1" ),
                           NameLoc: lc1( 69, 19 ),
-                          Type: sxTyp( "String" ),
+                          Type: sxTyp1( "String", 69, 22 ),
                           TypeLoc: lc1( 69, 22 ) },
                     },
-                    Return: sxTyp( "String" ),
+                    Return: sxTyp1( "String", 69, 32 ),
                     ReturnLoc: lc1( 69, 32 ),
                     Throws: []*ThrownType{
-                        { Type: sxTyp( "Error1" ), TypeLoc: lc1( 69, 46 ) },
+                        { Type: sxTyp1( "Error1", 69, 46 ), 
+                          TypeLoc: lc1( 69, 46 ),
+                        },
                     },
                 },
             },
@@ -864,18 +886,18 @@ func initResultTestSource1() {
                     Fields: []*FieldDecl{
                         { Name: mgId( "f1" ),
                           NameLoc: lc1( 70, 19 ),
-                          Type: sxTyp( "Struct1" ),
+                          Type: sxTyp1( "Struct1", 70, 22 ),
                           TypeLoc: lc1( 70, 22 ) },
                         { Name: mgId( "f2" ),
                           NameLoc: lc1( 70, 31 ),
-                          Type: sxTyp( "ns1@v1/String" ),
+                          Type: sxTyp1( "ns1@v1/String", 70, 34 ),
                           TypeLoc: lc1( 70, 34 ),
                           Default: &PrimaryExpression{
-                            Prim: lexer.StringToken( "hi" ),
+                            Prim: parser.StringToken( "hi" ),
                             PrimLoc: lc1( 70, 56 ),
                           } },
                     },
-                    Return: sxTyp( "Struct1?" ),
+                    Return: sxTyp1( "Struct1?", 70, 64 ),
                     ReturnLoc: lc1( 70, 64 ),
                 },
             },
@@ -891,7 +913,7 @@ func initResultTestSource1() {
                       Call: &CallSignature{
                         Start: lc1( 74, 11 ),
                         Fields: []*FieldDecl{},
-                        Return: sxTyp( "String*" ),
+                        Return: sxTyp1( "String*", 74, 15 ),
                         ReturnLoc: lc1( 74, 15 ),
                         Throws: []*ThrownType{},
                       },
@@ -903,35 +925,35 @@ func initResultTestSource1() {
                         Fields: []*FieldDecl{
                             { Name: mgId( "param1" ),
                               NameLoc: lc1( 76, 13 ),
-                              Type: sxTyp( "String" ),
+                              Type: sxTyp1( "String", 76, 20 ),
                               TypeLoc: lc1( 76, 20 ) },
                             { Name: mgId( "param2" ),
                               NameLoc: lc1( 77, 13 ),
-                              Type: sxTyp( "ns1@v1/Struct1?" ),
+                              Type: sxTyp1( "ns1@v1/Struct1?", 77, 20 ),
                               TypeLoc: lc1( 77, 20 ) },
                             { Name: mgId( "param3" ),
                               NameLoc: lc1( 78, 13 ),
-                              Type: sxTyp( "ns1:ns2@v1/Int64" ),
+                              Type: sxTyp1( "ns1:ns2@v1/Int64", 78, 20 ),
                               TypeLoc: lc1( 78, 20 ),
                               Default: &PrimaryExpression{
-                                Prim: &lexer.NumericToken{ Int: "12" },
+                                Prim: &parser.NumericToken{ Int: "12" },
                                 PrimLoc: lc1( 78, 42 ),
                               } },
                             { Name: mgId( "param4" ),
                               NameLoc: lc1( 79, 13 ),
-                              Type: sxTyp( "Alias1*" ),
+                              Type: sxTyp1( "Alias1*", 79, 20 ),
                               TypeLoc: lc1( 79, 20 ) },
                             { Name: mgId( "param5" ),
                               NameLoc: lc1( 80, 13 ),
-                              Type: sxTyp( "Alias2" ),
+                              Type: sxTyp1( "Alias2", 80, 20 ),
                               TypeLoc: lc1( 80, 20 ) },
                         },
-                        Return: sxTyp( "ns1@v1/Struct2" ),
+                        Return: sxTyp1( "ns1@v1/Struct2", 80, 30 ),
                         ReturnLoc: lc1( 80, 30 ),
                         Throws: []*ThrownType{
-                            { Type: sxTyp( "Error1" ),
+                            { Type: sxTyp1( "Error1", 81, 24 ),
                               TypeLoc: lc1( 81, 24 ) },
-                            { Type: sxTyp( "Error3" ),
+                            { Type: sxTyp1( "Error3", 81, 32 ),
                               TypeLoc: lc1( 81, 32 ) },
                         },
                       },
@@ -941,10 +963,10 @@ func initResultTestSource1() {
                       Call: &CallSignature{
                         Start: lc1( 83, 11 ),
                         Fields: []*FieldDecl{},
-                        Return: sxTyp( "Int64?" ),
+                        Return: sxTyp1( "Int64?", 83, 15 ),
                         ReturnLoc: lc1( 83, 15 ),
                         Throws: []*ThrownType{
-                            { Type: sxTyp( "Error2" ),
+                            { Type: sxTyp1( "Error2", 83, 29 ),
                               TypeLoc: lc1( 83, 29 ) },
                         },
                       },
@@ -988,7 +1010,7 @@ func initResultTestSource1() {
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "f1" ), 
-                      Type: sxTyp( "E1" ),
+                      Type: sxTyp1( "E1", 91, 8 ),
                       NameLoc: lc1( 91, 5 ),
                       TypeLoc: lc1( 91, 8 ),
                       Default: &QualifiedExpression{
@@ -1001,7 +1023,7 @@ func initResultTestSource1() {
                       },
                     },
                     { Name: mgId( "f2" ),
-                      Type: sxTyp( "String*" ),
+                      Type: sxTyp1( "String*", 92, 8 ),
                       NameLoc: lc1( 92, 5 ),
                       TypeLoc: lc1( 92, 8 ),
                       Default: &ListExpression{
@@ -1014,8 +1036,8 @@ func initResultTestSource1() {
             },
         },
     }
-    lc2 := func( line, col int ) *loc.Location {
-        return &loc.Location{ Source: "testSource2", Line: line, Col: col }
+    lc2 := func( line, col int ) *parser.Location {
+        return &parser.Location{ Source: "testSource2", Line: line, Col: col }
     }
     testParseResults[ "testSource2" ] = &NsUnit{
         SourceName: "testSource2",

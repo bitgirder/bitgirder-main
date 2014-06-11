@@ -154,11 +154,15 @@ struct Struct1 {
     string3 String default "hello there"
     string4 String~"a*" default "aaaaa"
     string5 String~"^.*(a|b)$"?
+    string6 String~[ "aaa", "aab" ]
     bool1 &Boolean?
     bool2 Boolean default true
     buf1 Buffer?
     timestamp1 &Timestamp?
     timestamp2 Timestamp default "2007-08-24T14:15:43.123450000-07:00"
+    timestamp3 Timestamp~[
+        "2007-08-24T14:15:43.123450000-07:00",
+        "2008-08-24T14:15:43.123450000-07:00" ]
     int1 Int64
     int2 Int64 default 1234
     int3 &Int64?
@@ -188,7 +192,7 @@ struct Struct2 {
 enum Enum1 { red, green, lightGrey }
 
 struct Struct3 < Struct1 {
-    string6 String?
+    string7 String?
     inst1 Struct2
     enum1 &Enum1?
     enum2 Enum1 default Enum1.green
@@ -429,6 +433,8 @@ service Service1 {
                         "string4", `mingle:core@v1/String~"a*"`, "aaaaa" ),
                     types.MakeFieldDef(
                         "string5", `mingle:core@v1/String~"^.*(a|b)$"?`, nil ),
+                    types.MakeFieldDef(
+                        "string6", `mingle:core@v1/String~["aaa","aab"]`, nil ),
                     types.MakeFieldDef( 
                         "bool1", "&mingle:core@v1/Boolean?", nil ),
                     types.MakeFieldDef( 
@@ -442,6 +448,9 @@ service Service1 {
                         mg.MustTimestamp( 
                             "2007-08-24T14:15:43.123450000-07:00" ),
                     ),
+                    types.MakeFieldDef(
+                        "timestamp3",
+                        `mingle:core@v1/Timestamp~["2007-08-24T14:15:43.123450000-07:00","2008-08-24T14:15:43.123450000-07:00"]`, nil ),
                     types.MakeFieldDef( "int1", "mingle:core@v1/Int64", nil ),
                     types.MakeFieldDef( 
                         "int2", "mingle:core@v1/Int64", int64( 1234 ) ),
@@ -494,7 +503,7 @@ service Service1 {
                 "ns1@v1/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
-                        "string6", "mingle:core@v1/String?", nil ),
+                        "string7", "mingle:core@v1/String?", nil ),
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
                     types.MakeFieldDef( "enum1", "&ns1@v1/Enum1?", nil ),
                     types.MakeFieldDef( 

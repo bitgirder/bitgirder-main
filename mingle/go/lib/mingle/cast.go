@@ -66,7 +66,9 @@ func castString(
 }
 
 func parseNumberForCast( 
-    s String, numTyp TypeReference, path objpath.PathNode ) ( Value, error ) {
+    s String, 
+    numTyp *QualifiedTypeName, 
+    path objpath.PathNode ) ( Value, error ) {
 
     val, err := ParseNumber( string( s ), numTyp )
     if ne, ok := err.( *NumberFormatError ); ok {
@@ -88,7 +90,7 @@ func castInt32(
     case Uint64: return Int32( int32( v ) ), nil
     case Float32: return Int32( int32( v ) ), nil
     case Float64: return Int32( int32( v ) ), nil
-    case String: return parseNumberForCast( v, TypeInt32, path )
+    case String: return parseNumberForCast( v, QnameInt32, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -106,7 +108,7 @@ func castInt64(
     case Uint64: return Int64( int64( v ) ), nil
     case Float32: return Int64( int64( v ) ), nil
     case Float64: return Int64( int64( v ) ), nil
-    case String: return parseNumberForCast( v, TypeInt64, path )
+    case String: return parseNumberForCast( v, QnameInt64, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -124,7 +126,7 @@ func castUint32(
     case Uint64: return Uint32( uint32( v ) ), nil
     case Float32: return Uint32( uint32( v ) ), nil
     case Float64: return Uint32( uint32( v ) ), nil
-    case String: return parseNumberForCast( v, TypeUint32, path )
+    case String: return parseNumberForCast( v, QnameUint32, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -142,7 +144,7 @@ func castUint64(
     case Uint64: return v, nil
     case Float32: return Uint64( uint64( v ) ), nil
     case Float64: return Uint64( uint64( v ) ), nil
-    case String: return parseNumberForCast( v, TypeUint64, path )
+    case String: return parseNumberForCast( v, QnameUint64, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -160,7 +162,7 @@ func castFloat32(
     case Uint64: return Float32( float32( v ) ), nil
     case Float32: return v, nil
     case Float64: return Float32( float32( v ) ), nil
-    case String: return parseNumberForCast( v, TypeFloat32, path )
+    case String: return parseNumberForCast( v, QnameFloat32, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -178,7 +180,7 @@ func castFloat64(
     case Uint64: return Float64( float64( v ) ), nil
     case Float32: return Float64( float64( v ) ), nil
     case Float64: return v, nil
-    case String: return parseNumberForCast( v, TypeFloat64, path )
+    case String: return parseNumberForCast( v, QnameFloat64, path )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }
