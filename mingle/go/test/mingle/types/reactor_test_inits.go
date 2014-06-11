@@ -2,6 +2,7 @@ package types
 
 import (
     mg "mingle"
+    "mingle/parser"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
@@ -17,7 +18,7 @@ func mustHeapVal( v interface{} ) *mg.HeapValue {
 func asType( val interface{} ) mg.TypeReference {
     switch v := val.( type ) {
     case mg.TypeReference: return v
-    case string: return mg.MustTypeReference( v )
+    case string: return parser.MustTypeReference( v )
     }
     panic( libErrorf( "Unhandled type reference: %T", val ) )
 }
@@ -28,7 +29,7 @@ func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
 
 func makeIdList( strs ...string ) []*mg.Identifier {
     res := make( []*mg.Identifier, len( strs ) )
-    for i, str := range strs { res[ i ] = mg.MustIdentifier( str ) }
+    for i, str := range strs { res[ i ] = parser.MustIdentifier( str ) }
     return res
 }
 
@@ -41,7 +42,7 @@ func ( rti *rtInit ) addTests( tests ...mgRct.ReactorTest ) {
 func ( rti *rtInit ) addBaseFieldCastTests() {
     p := mg.MakeTestIdPath
     qn1Str := "ns1@v1/S1"
-    qn1 := mg.MustQualifiedTypeName( qn1Str )
+    qn1 := parser.MustQualifiedTypeName( qn1Str )
     s1F1 := func( val interface{} ) *mg.Struct {
         return mg.MustStruct( qn1, "f1", val )
     }
@@ -107,7 +108,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
 }
 
 func ( rti *rtInit ) addFieldSetCastTests() {
-    id := mg.MustIdentifier
+    id := parser.MustIdentifier
     mkId := mg.MakeTestId
     p := mg.MakeTestIdPath
     dm := MakeV1DefMap(
@@ -184,7 +185,7 @@ func ( rti *rtInit ) addStructValCastTests() {
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
         MakeEnumDef( "ns1@v1/E1", "e" ),
     )
-    t1 := mg.MustTypeReference( "ns1@v1/S1" )
+    t1 := asType( "ns1@v1/S1" )
     addFail := func( val interface{}, err error ) {
         rti.addTests(
             &CastReactorTest{ 
@@ -228,7 +229,7 @@ func ( rti *rtInit ) addInferredStructCastTests() {
         rti.addTests(
             &CastReactorTest{
                 Map: dm,
-                Type: mg.MustTypeReference( "ns1@v1/S1" ),
+                Type: asType( "ns1@v1/S1" ),
                 In: in,
                 Expect: expct,
             },
@@ -413,7 +414,7 @@ func ( rti *rtInit ) addDeepCatchallTests() {
 
 func ( rti *rtInit ) addDefaultCastTests() {
     p := mg.MakeTestIdPath
-    qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
+    qn1 := parser.MustQualifiedTypeName( "ns1@v1/S1" )
     e1 := mg.MustEnum( "ns1@v1/E1", "c1" )
     deflPairs := []interface{}{
         "f1", int32( 0 ),
@@ -536,7 +537,7 @@ func ( rti *rtInit ) addDefaultPathTests() {
     p := mg.MakeTestIdPath
     idFact := mgRct.NewTestPointerIdFactory()
     mkTestId := mg.MakeTestId
-    qn1 := mg.MustQualifiedTypeName( "ns1@v1/S1" )
+    qn1 := parser.MustQualifiedTypeName( "ns1@v1/S1" )
     t1 := qn1.AsAtomicType()
     ss1 := mgRct.NewStructStartEvent( qn1 )
     fse := func( i int ) *mgRct.FieldStartEvent {
@@ -552,7 +553,7 @@ func ( rti *rtInit ) addDefaultPathTests() {
     apnd( fse( 1 ), p( 1 ), false )
     apnd( iv1, p( 1 ), false )
     apnd( fse( 2 ), p( 2 ), false )
-    fld2Typ := mg.MustTypeReference( "Int32*" ).( *mg.ListTypeReference )
+    fld2Typ := asType( "Int32*" ).( *mg.ListTypeReference )
     apnd( idFact.NextListStart( fld2Typ ), p( 2 ), false )
     apnd( iv1, p( 2, "0" ), false )
     apnd( iv1, p( 2, "1" ), false )
@@ -585,7 +586,7 @@ func ( sm *ServiceMaps ) BuildOpMap() *ServiceDefinitionMap {
 }
 
 func ( rti *rtInit ) addServiceRequestTests() {
-    id := mg.MustIdentifier
+    id := parser.MustIdentifier
     dm := MakeV1DefMap(
         MakeStructDef( "ns1@v1/S1", "",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
@@ -595,7 +596,7 @@ func ( rti *rtInit ) addServiceRequestTests() {
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
         MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
         &PrototypeDefinition{
-            Name: mg.MustQualifiedTypeName( "ns1@v1/Sec1" ),
+            Name: parser.MustQualifiedTypeName( "ns1@v1/Sec1" ),
             Signature: MakeCallSig(
                 []*FieldDefinition{
                     MakeFieldDef(
@@ -665,8 +666,10 @@ func ( rti *rtInit ) addServiceRequestTests() {
         ),
     )
     svcIds := mg.NewIdentifierMap();
-    svcIds.Put( id( "svc1" ), mg.MustQualifiedTypeName( "ns1@v1/Service1" ) )
-    svcIds.Put( id( "svc2" ), mg.MustQualifiedTypeName( "ns1@v1/Service2" ) )
+    svcIds.Put( id( "svc1" ), 
+        parser.MustQualifiedTypeName( "ns1@v1/Service1" ) )
+    svcIds.Put( id( "svc2" ), 
+        parser.MustQualifiedTypeName( "ns1@v1/Service2" ) )
     maps := &ServiceMaps{ Definitions: dm, ServiceIds: svcIds }
     s1Inst1 := mg.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     s2Inst1 := mg.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 1 ) )
@@ -830,25 +833,26 @@ func ( rti *rtInit ) addServiceRequestTests() {
     addErr(
         mkReq( "ns1@v2", "svc1", "op1", nil, nil ),
         mg.NewEndpointErrorNamespace( 
-            mg.MustNamespace( "ns1@v2" ), objpath.RootedAt( mg.IdNamespace ) ),
+            parser.MustNamespace( "ns1@v2" ), 
+            objpath.RootedAt( mg.IdNamespace ) ),
     )
     addErr(
         mkReq( "ns1@v1", "svc3", "op1", nil, nil ),
         mg.NewEndpointErrorService( 
-            mg.MustIdentifier( "svc3" ), objpath.RootedAt( mg.IdService ) ),
+            parser.MustIdentifier( "svc3" ), objpath.RootedAt( mg.IdService ) ),
     )
     addErr(
         mkReq( "ns1@v1", "svc1", "badOp", nil, nil ),
         mg.NewEndpointErrorOperation( 
-            mg.MustIdentifier( "badOp" ), objpath.RootedAt( mg.IdOperation ) ),
+            parser.MustIdentifier( "badOp" ), 
+            objpath.RootedAt( mg.IdOperation ) ),
     )
 }
 
 func ( rti *rtInit ) addServiceResponseTests() {
     opIdStr := "op1"
-    id := mg.MustIdentifier
-    mkTyp := mg.MustTypeReference
-    qn := mg.MustQualifiedTypeName
+    id := parser.MustIdentifier
+    qn := parser.MustQualifiedTypeName
     svcType := qn( "ns1@v1/Service1" )
     newRespTest := func( od *OperationDefinition ) *ServiceResponseTest {
         dm := MakeV1DefMap(
@@ -1079,7 +1083,7 @@ func ( rti *rtInit ) call() {
 }
 
 func init() {
-    reactorTestNs = mg.MustNamespace( "mingle:types@v1" )
+    reactorTestNs = parser.MustNamespace( "mingle:types@v1" )
     f := func( b *mgRct.ReactorTestSetBuilder ) { ( &rtInit{ b: b } ).call() }
     mgRct.AddTestInitializer( reactorTestNs, f )
 }

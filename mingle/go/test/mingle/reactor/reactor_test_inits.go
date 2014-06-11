@@ -2,41 +2,15 @@ package reactor
 
 import (
     mg "mingle"
+    "mingle/parser"
     "bitgirder/objpath"
     "fmt"
     "encoding/base64"
     "bytes"
 )
 
-var reactorTestNs *mg.Namespace
-
-var qname = mg.MustQualifiedTypeName
-
-func typeRef( val interface{} ) mg.TypeReference {
-    switch v := val.( type ) {
-    case mg.TypeReference: return v
-    case *mg.QualifiedTypeName: return &mg.AtomicTypeReference{ Name: v }
-    case string: return mg.MustTypeReference( v )
-    }
-    panic( libErrorf( "unhandled type ref input: %T", val ) )
-}
-
-func listTypeRef( val interface{} ) *mg.ListTypeReference {
-    return typeRef( val ).( *mg.ListTypeReference )
-}
-
-func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
-
-func ptrAlloc( typ mg.TypeReference, i int ) *ValueAllocationEvent {
-    return NewValueAllocationEvent( typ, ptrId( i ) )
-}
-
-func ptrRef( i int ) *ValueReferenceEvent {
-    return NewValueReferenceEvent( ptrId( i ) )
-}
-
 func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
-    qn := mg.MustQualifiedTypeName( "ns1@v1/S1" )
+    qn := parser.MustQualifiedTypeName( "ns1@v1/S1" )
     listStart := func() *ListStartEvent {
         return NewListStartEvent( mg.TypeOpaqueList, mg.PointerIdNull )
     }
@@ -169,7 +143,8 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         mk1( "Saw start of field 'f1' after value was built",
             evStartStruct1, NewEndEvent(), evStartField1,
         ),
-        mk1( "Expected field name or end of fields but got mingle:core@v1/Int64",
+        mk1( 
+            "Expected field name or end of fields but got mingle:core@v1/Int64",
             evStartStruct1, evValue1,
         ),
         mk1( 
@@ -346,7 +321,7 @@ func initPointerReferenceCheckTests( b *ReactorTestSetBuilder ) {
         return NewFieldStartEvent( id( i ) )
     }
     ival := NewValueEvent( mg.Int32( 1 ) )
-    qn := mg.MustQualifiedTypeName( "ns1@v1/S1" )
+    qn := parser.MustQualifiedTypeName( "ns1@v1/S1" )
     add := func( path objpath.PathNode, msg string, evs ...ReactorEvent ) {
         b.AddTests(
             &PointerEventCheckTest{
@@ -1038,9 +1013,9 @@ func initFieldOrderReactorTests( b *ReactorTestSetBuilder ) {
 }
 
 func initRequestTests( b *ReactorTestSetBuilder ) {
-    id := mg.MustIdentifier
+    id := parser.MustIdentifier
     idFact := NewTestPointerIdFactory()
-    ns1 := mg.MustNamespace( "ns1@v1" )
+    ns1 := parser.MustNamespace( "ns1@v1" )
     svc1 := id( "service1" )
     op1 := id( "op1" )
     params1 := mg.MustSymbolMap( "f1", int32( 1 ) )
@@ -1240,7 +1215,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
         &RequestReactorTest{
             Source: mg.MustStruct( "ns1@v1/S1" ),
             Error: mg.NewTypeCastError(
-                mg.TypeRequest, mg.MustTypeReference( "ns1@v1/S1" ), nil ),
+                mg.TypeRequest, typeRef( "ns1@v1/S1" ), nil ),
         },
     )
     createReqVcErr := func( 
@@ -1481,7 +1456,7 @@ func initResponseTests( b *ReactorTestSetBuilder ) {
     addFail(
         mg.MustStruct( "ns1@v1/Response" ),
         mg.NewTypeCastError( 
-            mg.TypeResponse, mg.MustTypeReference( "ns1@v1/Response" ), nil ),
+            mg.TypeResponse, typeRef( "ns1@v1/Response" ), nil ),
     )
     addFail(
         mg.MustSymbolMap( mg.IdResult, i32Val1, mg.IdError, err1 ),
@@ -1495,7 +1470,7 @@ func initServiceTests( b *ReactorTestSetBuilder ) {
     initResponseTests( b )
 }
 
-var crtPathDefault = objpath.RootedAt( mg.MustIdentifier( "inVal" ) )
+var crtPathDefault = objpath.RootedAt( parser.MustIdentifier( "inVal" ) )
 
 type crtInit struct {
     b *ReactorTestSetBuilder
@@ -1508,7 +1483,7 @@ type crtInit struct {
 
 func ( t *crtInit ) initStdVals() {
     t.buf1 = mg.Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
-    t.tm1 = mg.MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
+    t.tm1 = parser.MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
     t.map1 = mg.MustSymbolMap( "key1", 1, "key2", "val2" )
     t.en1 = mg.MustEnum( "ns1@v1/E1", "en-val1" )
     t.struct1 = mg.MustStruct( "ns1@v1/S1", "key1", "val1" )
@@ -1739,6 +1714,8 @@ func ( t *crtInit ) addStringTests() {
     t.addIdent( "abbbc", `String~"^ab+c$"?` )
     t.addIdent( nil, `String~"^ab+c$"?` )
     t.addIdent( "", `String~"^a*"?` )
+    t.addIdent( "ab", `String~["aa","ab"]` )
+    t.addIdent( "ab", `String~["aa","ac")` )
     t.addSucc( 
         mg.MustList( "123", 129 ), 
         mg.MustList( "123", "129" ),
@@ -1757,6 +1734,16 @@ func ( t *crtInit ) addStringTests() {
         "ab",
         `String~"^a*$"?`,
         "Value \"ab\" does not satisfy restriction \"^a*$\"",
+    )
+    t.addVcError(
+        "ac",
+        `String~["aa","ab"]`,
+        "Value \"ac\" does not satisfy restriction [\"aa\",\"ab\"]",
+    )
+    t.addVcError(
+        "ac",
+        `String~["aa","ac")`,
+        "Value \"ac\" does not satisfy restriction [\"aa\",\"ac\")",
     )
     t.addVcError0(
         mg.MustList( "a", "b" ),
@@ -1890,7 +1877,7 @@ func ( t *crtInit ) addTimeTests() {
     t.addSucc( t.tm1, t.tm1.Rfc3339Nano(), mg.TypeString )
     t.addSucc( t.tm1.Rfc3339Nano(), t.tm1, mg.TypeTimestamp )
     t.addVcError(
-        mg.MustTimestamp( "2012-01-01T00:00:00Z" ),
+        parser.MustTimestamp( "2012-01-01T00:00:00Z" ),
         `mingle:core@v1/Timestamp~` +
             `["2000-01-01T00:00:00Z","2001-01-01T00:00:00Z"]`,
         "Value 2012-01-01T00:00:00Z does not satisfy restriction " +
@@ -1935,13 +1922,13 @@ func ( t *crtInit ) addNullableTests() {
         }
     }
     typs = append( typs,
-        mg.MustTypeReference( "&Null?" ),
-        mg.MustTypeReference( "String?" ),
-        mg.MustTypeReference( "String*?" ),
-        mg.MustTypeReference( "&Int32?*?" ),
-        mg.MustTypeReference( "String+?" ),
-        mg.MustTypeReference( "&ns1@v1/T?" ),
-        mg.MustTypeReference( "ns1@v1/T*?" ),
+        typeRef( "&Null?" ),
+        typeRef( "String?" ),
+        typeRef( "String*?" ),
+        typeRef( "&Int32?*?" ),
+        typeRef( "String+?" ),
+        typeRef( "&ns1@v1/T?" ),
+        typeRef( "ns1@v1/T*?" ),
     )
     for _, typ := range typs { addNullSucc( nil, typ ) }
 }
@@ -2019,12 +2006,12 @@ func ( t *crtInit ) addListTests() {
     t.addSucc( 
         mg.MustList(), 
         mg.NewHeapValue( mg.MustList() ), 
-        mg.NewPointerTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+        mg.NewPointerTypeReference( typeRef( "&Int32*" ) ),
     )
     t.addSucc( 
         mg.NewHeapValue( mg.MustList() ), 
         mg.NewHeapValue( mg.MustList() ),
-        mg.NewPointerTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+        mg.NewPointerTypeReference( typeRef( "&Int32*" ) ),
     )
     t.addSucc( mg.NewHeapValue( mg.MustList() ), mg.MustList(), "&Int32*" )
     t.addSucc( nil, mg.NullVal, "Int32*?" )
@@ -2035,12 +2022,12 @@ func ( t *crtInit ) addListTests() {
     t.addSucc( 
         nil, 
         mg.NullVal,
-        mg.MustNullableTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+        mg.MustNullableTypeReference( typeRef( "&Int32*" ) ),
     )
     t.addSucc( 
         mg.NewHeapValue( mg.NullVal ), 
         mg.NullVal,
-        mg.MustNullableTypeReference( mg.MustTypeReference( "&Int32*" ) ),
+        mg.MustNullableTypeReference( typeRef( "&Int32*" ) ),
     )
 }
 
@@ -2055,8 +2042,8 @@ func ( t *crtInit ) addMapTests() {
     t.addSucc( s2, m2(), mg.TypeSymbolMap )
     l1 := mg.MustList()
     l2 := mg.MustList( m1(), m2() )
-    lt1 := mg.MustTypeReference( "SymbolMap*" )
-    lt2 := mg.MustTypeReference( "SymbolMap+" )
+    lt1 := typeRef( "SymbolMap*" )
+    lt2 := typeRef( "SymbolMap+" )
     t.addSucc( l1, l1, lt1 )
     t.addSucc( l2, l2, lt2 )
     t.addSucc(
@@ -2083,7 +2070,7 @@ func ( t *crtInit ) addMapTests() {
     t.addSucc( 
         mg.NewHeapValue( mg.NullVal ), 
         mg.NewHeapValue( mg.NullVal ),
-        mg.NewPointerTypeReference( mg.MustTypeReference( "SymbolMap?" ) ),
+        mg.NewPointerTypeReference( typeRef( "SymbolMap?" ) ),
     )
     t.addNullValueError( nil, "SymbolMap" )
     t.addNullValueError( nil, "&SymbolMap" )
@@ -2246,7 +2233,7 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
 //
 func ( t *crtInit ) addInterfacePointerHandlingTests() {
     qn := func( i int ) *mg.QualifiedTypeName {
-        return mg.MustQualifiedTypeName( fmt.Sprintf( "ns1@v1/S%d", i ) )
+        return parser.MustQualifiedTypeName( fmt.Sprintf( "ns1@v1/S%d", i ) )
     }
     typ := func( i int ) *mg.AtomicTypeReference {
         return &mg.AtomicTypeReference{ Name: qn( i ) }
@@ -2362,6 +2349,6 @@ func initReactorTests( b *ReactorTestSetBuilder ) {
 }
 
 func init() { 
-    reactorTestNs = mg.MustNamespace( "mingle:reactor@v1" )
+    reactorTestNs = parser.MustNamespace( "mingle:reactor@v1" )
     AddTestInitializer( reactorTestNs, initReactorTests ) 
 }

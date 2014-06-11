@@ -2,6 +2,7 @@ package reactor
 
 import (
     mg "mingle"
+    "mingle/parser"
     "bitgirder/assert"
     "bitgirder/stack"
     "bitgirder/objpath"
@@ -199,12 +200,12 @@ func ( t castInterfaceTyper ) FieldTypeFor(
 func newCastInterfaceImpl( c *ReactorTestCall ) *castInterfaceImpl {
     res := &castInterfaceImpl{ typers: mg.NewQnameMap(), c: c }
     m1 := castInterfaceTyper{ mg.NewIdentifierMap() }
-    m1.Put( mg.MustIdentifier( "f1" ), mg.TypeInt32 )
-    qn := mg.MustQualifiedTypeName
+    m1.Put( parser.MustIdentifier( "f1" ), mg.TypeInt32 )
+    qn := parser.MustQualifiedTypeName
     res.typers.Put( qn( "ns1@v1/T1" ), m1 )
     m2 := castInterfaceTyper{ mg.NewIdentifierMap() }
-    m2.Put( mg.MustIdentifier( "f1" ), mg.TypeInt32 )
-    m2.Put( mg.MustIdentifier( "f2" ), mg.MustTypeReference( "ns1@v1/T1" ) )
+    m2.Put( parser.MustIdentifier( "f1" ), mg.TypeInt32 )
+    m2.Put( parser.MustIdentifier( "f2" ), typeRef( "ns1@v1/T1" ) )
     res.typers.Put( qn( "ns1@v1/T2" ), m2 )
     return res
 }
@@ -230,7 +231,7 @@ func ( ci *castInterfaceImpl ) CastAtomic(
     if _, ok := v.( *mg.Null ); ok {
         return nil, fmt.Errorf( "Unexpected null val in cast impl" ), true
     }
-    if ! at.Equals( mg.MustTypeReference( "ns1@v1/S3" ) ) {
+    if ! at.Equals( typeRef( "ns1@v1/S3" ) ) {
         return nil, nil, false
     }
     if s, ok := v.( mg.String ); ok {
@@ -238,7 +239,8 @@ func ( ci *castInterfaceImpl ) CastAtomic(
         case "cast1": return mg.Int32( 1 ), nil, true
         case "cast2": return mg.Int32( -1 ), nil, true
         case "cast3":
-            return nil, mg.NewValueCastErrorf( path, "test-message-cast3" ), true
+            msg := "test-message-cast3"
+            return nil, mg.NewValueCastErrorf( path, msg ), true
         }
         return nil, mg.NewValueCastErrorf( path, "Unexpected val: %s", s ), true
     }
@@ -364,23 +366,22 @@ func ( c *castTestPointerHandling ) CastAtomic(
 func ( c *castTestPointerHandling ) FieldTypeFor(
     fld *mg.Identifier, path objpath.PathNode ) ( mg.TypeReference, error ) {
 
-    t := mg.MustTypeReference
     switch s := fld.ExternalForm(); s {
-    case "f0": return t( "Int32" ), nil
-    case "f1": return t( "&Int32" ), nil
-    case "f2": return t( "&Int32" ), nil
-    case "f3": return t( "&Int64" ), nil
-    case "f4": return t( "Int64" ), nil
-    case "f5": return t( "Int64*" ), nil
-    case "f6": return t( "Int32*" ), nil
-    case "f7": return t( "String*" ), nil
-    case "f8": return t( "&Int32*" ), nil
-    case "f9": return t( "ns1@v1/S2" ), nil
-    case "f10": return t( "ns1@v1/S2" ), nil
-    case "f11": return t( "&ns1@v1/S2" ), nil
-    case "f12": return t( "&Int64" ), nil
-    case "f13": return t( "&Int64" ), nil
-    case "f14": return t( "Int64" ), nil
+    case "f0": return typeRef( "Int32" ), nil
+    case "f1": return typeRef( "&Int32" ), nil
+    case "f2": return typeRef( "&Int32" ), nil
+    case "f3": return typeRef( "&Int64" ), nil
+    case "f4": return typeRef( "Int64" ), nil
+    case "f5": return typeRef( "Int64*" ), nil
+    case "f6": return typeRef( "Int32*" ), nil
+    case "f7": return typeRef( "String*" ), nil
+    case "f8": return typeRef( "&Int32*" ), nil
+    case "f9": return typeRef( "ns1@v1/S2" ), nil
+    case "f10": return typeRef( "ns1@v1/S2" ), nil
+    case "f11": return typeRef( "&ns1@v1/S2" ), nil
+    case "f12": return typeRef( "&Int64" ), nil
+    case "f13": return typeRef( "&Int64" ), nil
+    case "f14": return typeRef( "Int64" ), nil
     }
     return nil, rctErrorf( path, "unhandled field: %s", fld )
 }

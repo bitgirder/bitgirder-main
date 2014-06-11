@@ -2,6 +2,7 @@ package types
 
 import (
     mg "mingle"
+    "mingle/parser"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 //    "log"
@@ -25,8 +26,16 @@ var qnTypedParameterMap *mg.QualifiedTypeName
 var typTypedParameterMap *mg.AtomicTypeReference
 
 func init() {
-    qnTypedParameterMap = 
-        mg.MustQualifiedTypeName( "mingle:types@v1/TypedParameterMap" )
+    qnTypedParameterMap = &mg.QualifiedTypeName{
+        Namespace: &mg.Namespace{
+            Parts: []*mg.Identifier{
+                mg.NewIdentifierUnsafe( []string{ "mingle" } ),
+                mg.NewIdentifierUnsafe( []string{ "types" } ),
+            },
+            Version: mg.NewIdentifierUnsafe( []string{ "v1" } ),
+        },
+        Name: mg.NewDeclaredTypeNameUnsafe( "TypedParameterMap" ),
+    }
     typTypedParameterMap = qnTypedParameterMap.AsAtomicType()
 }
 
@@ -93,7 +102,7 @@ func completeCastEnum(
 func castEnumFromString( 
     s string, ed *EnumDefinition, path objpath.PathNode ) ( *mg.Enum, error ) {
 
-    id, err := mg.ParseIdentifier( s )
+    id, err := parser.ParseIdentifier( s )
     if err != nil {
         tmpl := "invalid enum value %q: %s"
         return nil, mg.NewValueCastErrorf( path, tmpl, s, err )

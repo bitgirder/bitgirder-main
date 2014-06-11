@@ -13,7 +13,7 @@ func CoreTypesV1() *DefinitionMap {
 }
 
 func asCoreV1Qn( nm string ) *mg.QualifiedTypeName {
-    return mg.MustDeclaredTypeName( nm ).ResolveIn( mg.CoreNsV1 )
+    return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( mg.CoreNsV1 )
 }
 
 func initCoreV1Prims() {
@@ -38,7 +38,7 @@ func initCoreV1StandardError() *StructDefinition {
 func newV1StandardError( 
     nm string, ns *mg.Namespace, stdErr *StructDefinition ) *StructDefinition {
     res := NewStructDefinition()
-    res.Name = mg.MustDeclaredTypeName( nm ).ResolveIn( ns )
+    res.Name = mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( ns )
     res.SuperType = stdErr.Name
     return res
 }

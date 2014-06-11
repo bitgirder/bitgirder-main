@@ -107,8 +107,110 @@ func AssertCompletableTypeReference(
     a.Descend( "quants" ).Equal( expct.quants, act.quants )
 }
 
-func MustQname( s string ) *mg.QualifiedTypeName {
+func MustIdentifier( s string ) *mg.Identifier {
+    id, err := ParseIdentifier( s )
+    if err == nil { return id }
+    panic( err )
+}
+
+func MustNamespace( s string ) *mg.Namespace {
+    ns, err := ParseNamespace( s )
+    if err == nil { return ns }
+    panic( err )
+}
+
+func MustDeclaredTypeName( s string ) *mg.DeclaredTypeName {
+    nm, err := ParseDeclaredTypeName( s )
+    if err == nil { return nm }
+    panic( err )
+}
+
+func MustQualifiedTypeName( s string ) *mg.QualifiedTypeName {
     qn, err := ParseQualifiedTypeName( s )
     if err == nil { return qn }
+    panic( err )
+}
+
+type unsafeTypeCompleter struct {}
+
+func ( tc *unsafeTypeCompleter ) resolveName( 
+    nm mg.TypeName ) *mg.QualifiedTypeName {
+
+    if qn, ok := nm.( *mg.QualifiedTypeName ); ok { return qn }
+    return nm.( *mg.DeclaredTypeName ).ResolveIn( mg.CoreNsV1 )
+}
+
+func ( tc *unsafeTypeCompleter ) setStringRestriction(
+    at *mg.AtomicTypeReference, rx *RegexRestrictionSyntax ) {
+
+    at.Restriction = mg.MustRegexRestriction( rx.Pat )
+}
+
+func ( tc *unsafeTypeCompleter ) setRangeValue(
+    valPtr *mg.Value,
+    qn *mg.QualifiedTypeName,
+    rx RestrictionSyntax ) {
+
+    sx, _ := rx.( *StringRestrictionSyntax )
+    nx, _ := rx.( *NumRestrictionSyntax )
+    switch {
+    case mg.IsNumericTypeName( qn ):
+        if num, err := mg.ParseNumber( nx.LiteralString(), qn ); err == nil {
+            *valPtr = num
+        } else { panic( err ) }
+    case qn.Equals( mg.QnameTimestamp ):
+        if tm, err := ParseTimestamp( sx.Str ); err == nil {
+            *valPtr = tm
+        } else { panic( err ) }
+    case qn.Equals( mg.QnameString ): *valPtr = mg.String( sx.Str )
+    default: panic( libErrorf( "unhandled range type: %s", qn ) )
+    }
+}
+
+func ( tc *unsafeTypeCompleter ) setRangeRestriction(
+    at *mg.AtomicTypeReference, rx *RangeRestrictionSyntax ) {
+
+    rng := &mg.RangeRestriction{}
+    rng.MinClosed = rx.LeftClosed
+    if l := rx.Left; l != nil { tc.setRangeValue( &( rng.Min ), at.Name, l ) }
+    if r := rx.Right; r != nil { tc.setRangeValue( &( rng.Max ), at.Name, r ) }
+    rng.MaxClosed = rx.RightClosed
+
+    at.Restriction = rng
+}
+
+func ( tc *unsafeTypeCompleter ) setRestriction(
+    at *mg.AtomicTypeReference, rx RestrictionSyntax ) {
+
+    if at.Name.Equals( mg.QnameString ) {
+        if regx, ok := rx.( *RegexRestrictionSyntax ); ok {
+            tc.setStringRestriction( at, regx )
+            return
+        }
+    }
+    tc.setRangeRestriction( at, rx.( *RangeRestrictionSyntax ) )
+}
+
+func ( tc *unsafeTypeCompleter ) CompleteBaseType(
+    nm mg.TypeName, 
+    rx RestrictionSyntax, 
+    errLoc *Location ) ( mg.TypeReference, bool, error ) {
+
+    at := &mg.AtomicTypeReference{ Name: tc.resolveName( nm ) }
+    if rx != nil { tc.setRestriction( at, rx ) }
+    return at, true, nil
+}
+
+func MustTypeReference( s string ) mg.TypeReference {
+    ct, err := ParseTypeReference( s )
+    if err != nil { panic( err ) }
+    res, err := ct.CompleteType( &unsafeTypeCompleter{} )
+    if err != nil { panic( err ) }
+    return res
+}
+
+func MustTimestamp( s string ) mg.Timestamp {
+    tm, err := ParseTimestamp( s )
+    if err == nil { return tm }
     panic( err )
 }

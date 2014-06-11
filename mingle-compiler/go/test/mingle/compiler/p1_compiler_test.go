@@ -9,10 +9,16 @@ import (
     "bitgirder/assert"
     "mingle/types"
     "mingle/parser/tree"
+    "mingle/parser"
 )
 
 var p1Sources []string
 var p1Defs []*types.DefinitionMap
+    
+var (
+    mkQn = parser.MustQualifiedTypeName
+    mkTyp = parser.MustTypeReference
+)
 
 func p1SourceNameFor( indx int ) string {
     return fmt.Sprintf( "test-source%d", indx )
@@ -395,8 +401,6 @@ service Service1 {
 }
 `,
     }
-    mkQn := mg.MustQualifiedTypeName
-    mkTyp := mg.MustTypeReference
     p1Defs = []*types.DefinitionMap{
         types.MakeDefMap(
             &types.AliasedTypeDefinition{
@@ -445,7 +449,7 @@ service Service1 {
                     types.MakeFieldDef(
                         "timestamp2", 
                         "mingle:core@v1/Timestamp",
-                        mg.MustTimestamp( 
+                        parser.MustTimestamp( 
                             "2007-08-24T14:15:43.123450000-07:00" ),
                     ),
                     types.MakeFieldDef(
@@ -513,9 +517,9 @@ service Service1 {
                     ),
                 },
                 []*types.ConstructorDefinition{
-                    { mg.MustTypeReference( "mingle:core@v1/Int64" ) },
-                    { mg.MustTypeReference( "ns1@v1/Struct1" ) },
-                    { mg.MustTypeReference( `mingle:core@v1/String~"^a+$"` ) },
+                    { mkTyp( "mingle:core@v1/Int64" ) },
+                    { mkTyp( "ns1@v1/Struct1" ) },
+                    { mkTyp( `mingle:core@v1/String~"^a+$"` ) },
                 },
             ),
             types.MakeStructDef(
@@ -719,7 +723,7 @@ service Service1 {
                         mg.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
                     types.MakeFieldDef( "f15", "mingle:core@v1/Timestamp",
-                        mg.MustTimestamp( 
+                        parser.MustTimestamp( 
                             "2007-08-24T14:15:43.123450000-07:00" ) ),
                     types.MakeFieldDef( 
                         "f16", "mingle:core@v1/String+",

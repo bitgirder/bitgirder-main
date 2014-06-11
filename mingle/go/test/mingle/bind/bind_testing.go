@@ -37,12 +37,12 @@ func rtTestsAddPrimitives( res []interface{} ) []interface{} {
         &RoundtripTest{
             Value: mgIntList( 3 ),
             Object: goIntList( 3 ),
-            Type: mg.MustTypeReference( "Int32*" ),
+            Type: parser.MustTypeReference( "Int32*" ),
         },
         &RoundtripTest{
             Value: mgIntList( 0 ),
             Object: goIntList( 0 ),
-            Type: mg.MustTypeReference( "Int32*" ),
+            Type: parser.MustTypeReference( "Int32*" ),
         },
         &RoundtripTest{
             Value: mg.MustList(
@@ -51,12 +51,12 @@ func rtTestsAddPrimitives( res []interface{} ) []interface{} {
                 mgIntList( 2 ),
             ),
             Object: [][]int32{ goIntList( 0 ), goIntList( 1 ), goIntList( 2 ) },
-            Type: mg.MustTypeReference( "Int32*+" ),
+            Type: parser.MustTypeReference( "Int32*+" ),
         },
         &RoundtripTest{
             Value: mg.MustList( mgIntList( 0 ), mg.NullVal, mgIntList( 2 ) ),
             Object: [][]int32{ goIntList( 0 ), nil, goIntList( 2 ) },
-            Type: mg.MustTypeReference( "Int32*?*" ),
+            Type: parser.MustTypeReference( "Int32*?*" ),
         },
         &UnbindErrorTest{
             Source: []mg.ReactorEvent{ mg.NewValueEvent( mg.Int64( 1 ) ), },
@@ -65,14 +65,14 @@ func rtTestsAddPrimitives( res []interface{} ) []interface{} {
         },
         &UnbindErrorTest{
             Source: []mg.ReactorEvent{ mg.NewValueEvent( mg.Int32( 1 ) ), },
-            Type: mg.MustTypeReference( "Int32*" ),
+            Type: parser.MustTypeReference( "Int32*" ),
             Error: NewUnbindError( nil, 
                 `expected list start but got [ type = *mingle.ValueEvent, value = 1 ]`,
             ),
         },
         &UnbindErrorTest{
             Source: []mg.ReactorEvent{ mg.NewValueEvent( mg.NullVal ) },
-            Type: mg.MustTypeReference( "Int32*" ),
+            Type: parser.MustTypeReference( "Int32*" ),
             Error: NewUnbindError( nil, 
                 `expected list start but got [ type = *mingle.ValueEvent, value = null ]`,
             ),
@@ -96,7 +96,7 @@ func rtTestsAddPrimitives( res []interface{} ) []interface{} {
                 mg.NewEndEvent(),
                 mg.NewValueEvent( mg.Int32( 1 ) ),
             },
-            Type: mg.MustTypeReference( "Int32**" ),
+            Type: parser.MustTypeReference( "Int32**" ),
             Error: NewUnbindError(
                 objpath.RootedAtList().SetIndex( 1 ),
                 `expected list start but got [ type = *mingle.ValueEvent, value = 1, path = [ 1 ] ]`,

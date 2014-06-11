@@ -3,13 +3,14 @@ package main
 import (
     "fmt"
     "mingle/testgen"
+    "mingle/parser"
     pt "mingle/parser/testing"
     mg "mingle"
 )
 
 func ptTyp( nm string ) *mg.QualifiedTypeName {
     str := fmt.Sprintf( "%s/%s", "mingle:parser:testing@v1", nm ) 
-    return mg.MustQualifiedTypeName( str )
+    return parser.MustQualifiedTypeName( str )
 }
 
 func idListAsValue( ids []pt.Identifier ) *mg.List {
@@ -55,7 +56,9 @@ func qnAsStruct( qn *pt.QualifiedTypeName ) *mg.Struct {
 }
 
 func asRangeValue( v interface{} ) mg.Value {
-    if tm, ok := v.( pt.Timestamp ); ok { v = mg.MustTimestamp( string( tm ) ) }
+    if tm, ok := v.( pt.Timestamp ); ok { 
+        v = parser.MustTimestamp( string( tm ) ) 
+    }
     return mg.MustValue( v )
 }
 

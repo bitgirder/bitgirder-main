@@ -64,12 +64,13 @@ func asUnrestrictedType( typ mg.TypeReference ) *mg.AtomicTypeReference {
 var (
     typeValList = &mg.ListTypeReference{ mg.TypeValue, true }
 
-    idAuthentication = mg.MustIdentifier( "authentication" )
+    idAuthentication = mg.NewIdentifierUnsafe( []string{ "authentication" } )
 
     structKeyedDefs = mg.NewIdentifierMap()
     serviceKeyedDefs = mg.NewIdentifierMap()
 
-    objpathConstExp = objpath.RootedAt( mg.MustIdentifier( "const-val" ) )
+    objpathConstExp = 
+        objpath.RootedAt( mg.NewIdentifierUnsafe( []string{ "const-val" } ) )
 )
 
 func init() {

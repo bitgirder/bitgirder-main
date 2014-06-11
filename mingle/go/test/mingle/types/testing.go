@@ -4,15 +4,16 @@ import (
     "reflect"
     "fmt"
     "sort"
+    "mingle/parser"
 //    "log"
     "bitgirder/assert"
     mg "mingle"
 )
 
 var (
-    mkQn = mg.MustQualifiedTypeName
-    mkId = mg.MustIdentifier
-    mkTyp = mg.MustTypeReference
+    mkQn = parser.MustQualifiedTypeName
+    mkId = parser.MustIdentifier
+    mkTyp = parser.MustTypeReference
 )
 
 func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
@@ -25,8 +26,8 @@ func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
 
 func MakeFieldDef( nm, typ string, defl interface{} ) *FieldDefinition {
     res := &FieldDefinition{
-        Name: mg.MustIdentifier( nm ),
-        Type: mg.MustTypeReference( typ ),
+        Name: parser.MustIdentifier( nm ),
+        Type: mkTyp( typ ),
     }
     if defl != nil { 
         if val, err := mg.AsValue( defl ); err == nil {
@@ -40,8 +41,8 @@ func MakeStructDef(
     qn, sprTyp string, flds []*FieldDefinition ) *StructDefinition {
     if flds == nil { flds = []*FieldDefinition{} }
     res := NewStructDefinition()
-    res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
+    res.Name = parser.MustQualifiedTypeName( qn )
+    if sprTyp != "" { res.SuperType = parser.MustQualifiedTypeName( sprTyp ) }
     for _, fld := range flds { res.Fields.MustAdd( fld ) }
     return res
 }
@@ -57,10 +58,10 @@ func MakeStructDef2(
 
 func MakeEnumDef( qn string, vals ...string ) *EnumDefinition {
     res := &EnumDefinition{
-        Name: mg.MustQualifiedTypeName( qn ),
+        Name: parser.MustQualifiedTypeName( qn ),
         Values: make( []*mg.Identifier, len( vals ) ),
     }
-    for i, val := range vals { res.Values[ i ] = mg.MustIdentifier( val ) }
+    for i, val := range vals { res.Values[ i ] = parser.MustIdentifier( val ) }
     return res
 }
 
@@ -70,9 +71,9 @@ func MakeCallSig(
     throws []string ) *CallSignature {
     res := NewCallSignature()
     for _, fld := range flds { res.Fields.MustAdd( fld ) }
-    res.Return = mg.MustTypeReference( retType )
+    res.Return = mkTyp( retType )
     for _, typ := range throws { 
-        res.Throws = append( res.Throws, mg.MustTypeReference( typ ) )
+        res.Throws = append( res.Throws, mkTyp( typ ) )
     }
     return res
 }
@@ -85,10 +86,10 @@ func MakeServiceDef(
     qn, sprTyp, secQn string,
     opDefs ...*OperationDefinition ) *ServiceDefinition {
     res := NewServiceDefinition()
-    res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
+    res.Name = parser.MustQualifiedTypeName( qn )
+    if sprTyp != "" { res.SuperType = parser.MustQualifiedTypeName( sprTyp ) }
     res.Operations = append( res.Operations, opDefs... )
-    if secQn != "" { res.Security = mg.MustQualifiedTypeName( secQn ) }
+    if secQn != "" { res.Security = parser.MustQualifiedTypeName( secQn ) }
     return res
 }
 

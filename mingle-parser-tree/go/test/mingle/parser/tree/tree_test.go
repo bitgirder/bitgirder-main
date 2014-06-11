@@ -11,9 +11,9 @@ import (
     "mingle/parser"
 )
 
-var mgDeclNm = mg.MustDeclaredTypeName
-var mgNs = mg.MustNamespace
-var mgId = mg.MustIdentifier
+var mgDeclNm = parser.MustDeclaredTypeName
+var mgNs = parser.MustNamespace
+var mgId = parser.MustIdentifier
 
 func sxTyp( s string ) *parser.CompletableTypeReference {
     opts := &parser.Options{ Reader: bytes.NewBufferString( s ) }
@@ -978,7 +978,7 @@ func initResultTestSource1() {
                 KeyedElements: keyedElts(
                     "security", &SecurityDecl{
                         Start: lc1( 85, 5 ),
-                        Name: mg.MustDeclaredTypeName( "Sec1" ),
+                        Name: parser.MustDeclaredTypeName( "Sec1" ),
                         NameLoc: lc1( 85, 15 ),
                     },
                 ),
@@ -1000,7 +1000,7 @@ func initResultTestSource1() {
                 KeyedElements: keyedElts(
                     "security", &SecurityDecl{
                         Start: lc1( 89, 20 ),
-                        Name: mg.MustDeclaredTypeName( "Sec1" ),
+                        Name: parser.MustDeclaredTypeName( "Sec1" ),
                         NameLoc: lc1( 89, 30 ),
                     },
                 ),

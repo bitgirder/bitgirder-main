@@ -2,10 +2,38 @@ package reactor
 
 import (
     mg "mingle"
+    "mingle/parser"
     "bitgirder/assert"
     "testing"
 //    "log"
 )
+
+var reactorTestNs *mg.Namespace
+
+var qname = parser.MustQualifiedTypeName
+
+func typeRef( val interface{} ) mg.TypeReference {
+    switch v := val.( type ) {
+    case mg.TypeReference: return v
+    case *mg.QualifiedTypeName: return &mg.AtomicTypeReference{ Name: v }
+    case string: return parser.MustTypeReference( v )
+    }
+    panic( libErrorf( "unhandled type ref input: %T", val ) )
+}
+
+func listTypeRef( val interface{} ) *mg.ListTypeReference {
+    return typeRef( val ).( *mg.ListTypeReference )
+}
+
+func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
+
+func ptrAlloc( typ mg.TypeReference, i int ) *ValueAllocationEvent {
+    return NewValueAllocationEvent( typ, ptrId( i ) )
+}
+
+func ptrRef( i int ) *ValueReferenceEvent {
+    return NewValueReferenceEvent( ptrId( i ) )
+}
 
 type ReactorTestCall struct {
     *assert.PathAsserter

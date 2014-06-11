@@ -8,7 +8,7 @@ import (
     "bitgirder/objpath"
 )
 
-var mkTyp = mg.MustTypeReference
+var mkTyp = parser.MustTypeReference
 
 type valueBindingImpl struct { val mg.Value }
 

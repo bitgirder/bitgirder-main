@@ -22,9 +22,9 @@ const (
 )
 
 var (
-    idVersion = mg.MustIdentifier( "version" )
-    IdConstructor = mg.MustIdentifier( "constructor" )
-    IdSecurity = mg.MustIdentifier( "security" )
+    idVersion = mg.NewIdentifierUnsafe( []string{ "version" } )
+    IdConstructor = mg.NewIdentifierUnsafe( []string{ "constructor" } )
+    IdSecurity = mg.NewIdentifierUnsafe( []string{ "security" } )
 
     typeDeclKwds = []parser.Keyword{ 
         kwdStruct, 

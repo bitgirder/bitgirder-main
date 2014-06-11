@@ -1388,9 +1388,9 @@ func parseFloatNumber(
 
     f, err := strconv.ParseFloat( string( s ), bitSize )
     if err != nil { return nil, err }
-    switch numTyp {
-    case QnameFloat32: return Float32( f ), nil
-    case QnameFloat64: return Float64( f ), nil
+    switch {
+    case numTyp.Equals( QnameFloat32 ): return Float32( f ), nil
+    case numTyp.Equals( QnameFloat64 ): return Float64( f ), nil
     }
     panic( libErrorf( "unhandled num type: %s", numTyp ) )
 }

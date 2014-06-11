@@ -2,6 +2,7 @@ package reactor
 
 import (
     mg "mingle"
+    "mingle/parser"
     "bitgirder/objpath"
     "bitgirder/pipeline"
 //    "log"
@@ -190,8 +191,8 @@ func ( sr *RequestReactor ) getFieldValueForString(
     reqFld requestFieldType ) ( res interface{}, err error ) {
 
     switch reqFld {
-    case reqFieldNs: res, err = mg.ParseNamespace( s )
-    case reqFieldSvc, reqFieldOp: res, err = mg.ParseIdentifier( s )
+    case reqFieldNs: res, err = parser.ParseNamespace( s )
+    case reqFieldSvc, reqFieldOp: res, err = parser.ParseIdentifier( s )
     default:
         panic( libErrorf( "Unhandled req fld type for string: %d", reqFld ) )
     }
