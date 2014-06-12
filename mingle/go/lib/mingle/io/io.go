@@ -3,13 +3,7 @@ package io
 import (
     mg "mingle"
     mgRct "mingle/reactor"
-//    "fmt"
-//    "bytes"
     "io"
-//    "bitgirder/objpath"
-//    "time"
-//    "log"
-//    bgio "bitgirder/io"
 )
 
 type BinWriter struct { *mg.BinWriter }
