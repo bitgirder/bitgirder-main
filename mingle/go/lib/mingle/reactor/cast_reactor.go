@@ -229,7 +229,7 @@ func ( cr *CastReactor ) processValueForListType(
     next ReactorEventProcessor ) error {
 
     if _, ok := ve.Val.( *mg.Null ); ok {
-        return mg.NewNullValueCastError( ve.GetPath() )
+        return newNullValueCastError( ve.GetPath() )
     }
     return mg.NewTypeCastErrorValue( callTyp, ve.Val, ve.GetPath() )
 }
