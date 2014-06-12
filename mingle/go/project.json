@@ -6,13 +6,7 @@
         "mingle/reactor",
         "mingle/io",
         "mingle/types",
-        "mingle/parser",
-        "mingle/parser/lexer", 
-        "mingle/parser/loc",
-        "mingle/parser/syntax"
-    ],
-    "test-packages": [
-        "mingle/parser/testing"
+        "mingle/parser"
     ],
     "test-commands": {
         "write-core-io-tests": {},
