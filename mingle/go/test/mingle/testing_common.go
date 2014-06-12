@@ -5,7 +5,34 @@ import (
     "bitgirder/objpath"
     "fmt"
     "strconv"
+    "time"
 )
+
+func MustTimestamp( s string ) Timestamp {
+    tm, err := time.Parse( time.RFC3339Nano, s )
+    if err != nil { panic( err ) }
+    return Timestamp( tm )
+}
+
+func mkId( parts ...string ) *Identifier { return NewIdentifierUnsafe( parts ) }
+
+func mkNs( ids ...*Identifier ) *Namespace {
+    return &Namespace{ Version: ids[ 0 ], Parts: ids[ 1 : ] }
+}
+
+var mkDeclNm = NewDeclaredTypeNameUnsafe
+
+func mkQn( ns *Namespace, nm *DeclaredTypeName ) *QualifiedTypeName {
+    return &QualifiedTypeName{ Namespace: ns, Name: nm }
+}
+
+func ns1V1Qn( nm string ) *QualifiedTypeName {
+    return mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( nm ) )
+}
+
+func ns1V1At( nm string ) *AtomicTypeReference {
+    return &AtomicTypeReference{ Name: ns1V1Qn( nm ) }
+}
 
 type CyclicTestValues struct {
     S1 ValuePointer
@@ -17,8 +44,8 @@ type CyclicTestValues struct {
 
 func NewCyclicValues() *CyclicTestValues {
     res := &CyclicTestValues{}
-    qn1 := qname( "ns1@v1/S1" )
-    fldK := MustIdentifier( "k" )
+    qn1 := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "S1" ) )
+    fldK := mkId( "k" )
     res.S1 = NewHeapValue( NewStruct( qn1 ) )
     res.S2 = NewHeapValue( NewStruct( qn1 ) )
     res.S1.Dereference().( *Struct ).Fields.Put( fldK, res.S2 )
@@ -184,19 +211,7 @@ func EqualPaths( expct, act objpath.PathNode, a assert.Failer ) {
     )
 }
 
-func typeRef( s string ) TypeReference { return MustTypeReference( s ) }
-
-var qname = MustQualifiedTypeName
-
-func atomicRef( s string ) *AtomicTypeReference {
-    return typeRef( s ).( *AtomicTypeReference )
-}
-
-var id = MustIdentifier
-
-func MakeTestId( i int ) *Identifier {
-    return MustIdentifier( fmt.Sprintf( "f%d", i ) )
-}
+func MakeTestId( i int ) *Identifier { return mkId( fmt.Sprintf( "f%d", i ) ) }
 
 func mustInt( s string ) int {
     res, err := strconv.Atoi( s )

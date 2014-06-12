@@ -624,7 +624,7 @@ func NewResponseReactor(
     iface ResponseReactorInterface ) *mgRct.ResponseReactor {
 
     resTyp := opDef.Signature.Return
-    qn := mg.TypeNameIn( resTyp ).( *mg.QualifiedTypeName )
+    qn := mg.TypeNameIn( resTyp )
     if ! defs.HasKey( qn ) {
         tmpl := "operation '%s' declares unrecognized return type: %s"
         panic( libErrorf( tmpl, opDef.Name, resTyp ) )

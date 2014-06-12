@@ -68,9 +68,7 @@ func canThrowErrorOfType(
     dm *DefinitionMap ) ( mg.TypeReference, bool ) {
 
     for _, typ := range sig.Throws {
-        if thrownQn, ok := mg.TypeNameIn( typ ).( *mg.QualifiedTypeName ); ok {
-            if canAssignType( thrownQn, qn, dm ) { return typ, true }
-        }
+        if canAssignType( mg.TypeNameIn( typ ), qn, dm ) { return typ, true }
     }
     return nil, false
 }

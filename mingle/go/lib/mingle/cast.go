@@ -209,10 +209,11 @@ func castTimestamp(
     switch v := mgVal.( type ) {
     case Timestamp: return v, nil
     case String:
-        tm, err := ParseTimestamp( string( v ) )
-        if err == nil { return tm, nil }
-        msg := "Invalid timestamp: %s"
-        return nil, NewValueCastErrorf( path, msg, err.Error() )
+//        tm, err := ParseTimestamp( string( v ) )
+//        if err == nil { return tm, nil }
+//        msg := "Invalid timestamp: %s"
+//        return nil, NewValueCastErrorf( path, msg, err.Error() )
+        return nil, NewValueCastError( path, "castTimestamp() unimplemented" )
     }
     return nil, NewTypeCastErrorValue( callTyp, mgVal, path )
 }

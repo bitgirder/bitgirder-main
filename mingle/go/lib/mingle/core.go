@@ -53,19 +53,6 @@ func MustIdentifierFormatString( nm string ) IdentifierFormat {
 var IdentifierFormats = 
     []IdentifierFormat{ LcUnderscore, LcHyphenated, LcCamelCapped }
 
-// Marker for (Identifier|string)
-type IdentifierInitializer interface{}
-
-func asIdentifier( id IdentifierInitializer ) ( *Identifier, error ) {
-    switch v := id.( type ) {
-    case string: return MustIdentifier( v ), nil
-    case *Identifier: 
-        if v == nil { panic( libErrorf( "nil identifier" ) ) }
-        return v, nil
-    }
-    return nil, fmt.Errorf( "Unhandled id initializer: %v", id )
-}
-
 type Identifier struct {
     parts []string
 }
@@ -136,6 +123,12 @@ func ( id *Identifier ) Compare( id2 *Identifier ) int {
 
 func ( id *Identifier ) Equals( id2 *Identifier ) bool {
     return id2 != nil && id.Compare( id2 ) == 0
+}
+
+func ( id *Identifier ) dup() *Identifier {
+    res := &Identifier{ parts: make( []string, len( id.parts ) ) }
+    for i, part := range id.parts { res.parts[ i ] = part }
+    return res
 }
 
 type idSort []*Identifier
@@ -434,7 +427,8 @@ func IsNullableType( typ TypeReference ) bool {
     case *AtomicTypeReference:
         if ! v.Name.Namespace.Equals( CoreNsV1 ) { return false }
         return ! ( v.Name.Equals( QnameBoolean ) || 
-                   v.Name.Equals( QnameTimestamp ) || IsNumericType( v ) )
+                   v.Name.Equals( QnameTimestamp ) || 
+                   IsNumericTypeName( v.Name ) )
     }
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
@@ -484,28 +478,6 @@ func ( pt *PointerTypeReference ) String() string { return pt.ExternalForm() }
 
 func ( pt *PointerTypeReference ) typeRefImpl() {}
 
-func TypeNameIn( typ TypeReference ) TypeName {
-    switch v := typ.( type ) {
-    case *AtomicTypeReference: return v.Name
-    case *ListTypeReference: return TypeNameIn( v.ElementType )
-    case *NullableTypeReference: return TypeNameIn( v.Type )
-    case *PointerTypeReference: return TypeNameIn( v.Type )
-    }
-    panic( fmt.Errorf( "Unhandled type reference: %T", typ ) )
-}
-
-// Marker for (TypeReference|string)
-type TypeReferenceInitializer interface{}
-
-func asTypeReference( typ TypeReferenceInitializer ) TypeReference {
-    switch v := typ.( type ) {
-    case string: return MustTypeReference( v )
-    case TypeReference: return v
-    case *QualifiedTypeName: return &AtomicTypeReference{ Name: v }
-    }
-    panic( libErrorf( "Unhandled type ref initializer: %T", typ ) )
-}
-
 func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     switch v := ref.( type ) {
     case *AtomicTypeReference: return v
@@ -514,6 +486,10 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     case *PointerTypeReference: return AtomicTypeIn( v.Type )
     }
     panic( fmt.Errorf( "No atomic type in %s (%T)", ref, ref ) )
+}
+
+func TypeNameIn( typ TypeReference ) *QualifiedTypeName {
+    return AtomicTypeIn( typ ).Name
 }
 
 type PointerId uint64
@@ -947,8 +923,10 @@ func createSymbolMapEntry(
     pairs []interface{}, idx int ) ( fld *Identifier, val Value, err error ) {
 
     fldIdx, valIdx := idx, idx + 1
-    if fld, err = asIdentifier( pairs[ fldIdx ] ); err != nil { 
-        err = makePairError( err, fldIdx )
+    fldIdVal, ok := pairs[ fldIdx ], false
+    if fld, ok = fldIdVal.( *Identifier ); ! ok {
+        err = makePairError(
+            fmt.Errorf( "invalid key type: %T", fldIdVal ), idx )
         return
     }
     if val, err = AsValue( pairs[ valIdx ] ); err != nil { 
@@ -985,54 +963,12 @@ func MustSymbolMap( pairs ...interface{} ) *SymbolMap {
     return res
 }
 
-type SymbolMapAccessor struct {
-    m *SymbolMap
-    path objpath.PathNode
-}
-
-func NewSymbolMapAccessor( 
-    m *SymbolMap, path objpath.PathNode ) *SymbolMapAccessor {
-    return &SymbolMapAccessor{ m, path }
-}
-
-func ( m *SymbolMapAccessor ) GetMap() *SymbolMap { return m.m }
-
-func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
-    if acc.path == nil { return objpath.RootedAt( fld ) }
-    return acc.path.Descend( fld )
-}
-
-func ( acc *SymbolMapAccessor ) GetValueById( 
-    id *Identifier ) ( Value, error ) {
-
-    if val := acc.m.Get( id ); val != nil { return val, nil }
-    return nil, NewValueCastError( acc.descend( id ), "value is null" )
-}
-
-func ( acc *SymbolMapAccessor ) GetValueByString( id string ) ( Value, error ) {
-    return acc.GetValueById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustValueById( id *Identifier ) Value {
-    val, err := acc.GetValueById( id )
-    if err != nil { panic( err ) }
-    return val
-}
-
-func ( acc *SymbolMapAccessor ) MustValueByString( id string ) Value {
-    return acc.MustValueById( MustIdentifier( id ) )
-}
-
 type Enum struct {
     Type *QualifiedTypeName
     Value *Identifier
 }
 
 func ( e *Enum ) valImpl() {}
-
-func MustEnum( typ, val string ) *Enum {
-    return &Enum{ MustQualifiedTypeName( typ ), MustIdentifier( val ) }
-}
 
 // In the go code we deal with *Struct, but even though these are go pointers,
 // they correspond to struct values in the mingle runtime. 
@@ -1048,24 +984,16 @@ func NewStruct( typ *QualifiedTypeName ) *Struct {
 func ( s *Struct ) valImpl() {}
 
 func CreateStruct(
-    typ interface{}, pairs ...interface{} ) ( *Struct, error ) {
-    res := new( Struct )
-    switch v := typ.( type ) {
-    case *QualifiedTypeName: res.Type = v
-    case string: 
-        if qn, err := ParseQualifiedTypeName( v ); err == nil {
-            res.Type = qn
-        } else { return nil, err }
-    default: return nil, libErrorf( "Not a qname: %s", typ )
-    }
+    typ *QualifiedTypeName, pairs ...interface{} ) ( *Struct, error ) {
+
+    res := &Struct{ Type: typ }
     if flds, err := CreateSymbolMap( pairs... ); err == nil {
         res.Fields = flds
     } else { return nil, err }
     return res, nil
 }
 
-func MustStruct( 
-    typ TypeReferenceInitializer, pairs ...interface{} ) *Struct {
+func MustStruct( typ *QualifiedTypeName, pairs ...interface{} ) *Struct {
     res, err := CreateStruct( typ, pairs... )
     if err != nil { panic( err ) }
     return res
@@ -1074,7 +1002,9 @@ func MustStruct(
 type idPath objpath.PathNode // elts are *Identifier
 
 var idPathRootVal idPath
-func init() { idPathRootVal = objpath.RootedAt( MustIdentifier( "val" ) ) }
+func init() { 
+    idPathRootVal = objpath.RootedAt( NewIdentifierUnsafe( []string{ "val" } ) )
+}
 
 var idPathFormatter objpath.Formatter
 
@@ -1311,13 +1241,11 @@ func canAssignPointerType( from TypeReference, to *PointerTypeReference ) bool {
     return from.Equals( to )
 }
 
+// A simple rigid check. Because lists are mutable, both element types and
+// emptiability must match, other changes would be allowed in one side of the
+// assignment that could not be allowed by the other
 func canAssignListType( from TypeReference, to *ListTypeReference ) bool {
-    if f, ok := from.( *ListTypeReference ); ok {
-        if f.ElementType.Equals( to.ElementType ) {
-            return to.AllowsEmpty || ( ! f.AllowsEmpty )
-        }
-    }
-    return false
+    return from.Equals( to )
 }
 
 func canAssignType( from, to TypeReference, relaxRestrictions bool ) bool {

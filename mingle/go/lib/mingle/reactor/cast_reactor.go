@@ -147,7 +147,7 @@ func ( cr *CastReactor ) valueEventForAtomicCast(
 
     mv, err, ok := cr.iface.CastAtomic( ve.Val, at, ve.GetPath() )
     if ! ok { 
-        mv, err = mg.CastAtomicWithCallType( ve.Val, at, callTyp, ve.GetPath() ) 
+        mv, err = castAtomicWithCallType( ve.Val, at, callTyp, ve.GetPath() ) 
     }
     if err != nil { return err, nil }
     res := CopyEvent( ve, true ).( *ValueEvent )

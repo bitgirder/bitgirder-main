@@ -46,6 +46,8 @@ func ( b* binIoRoundtripTestBuilder ) setVal(
 }
 
 func ( b *binIoRoundtripTestBuilder ) addValueTests() {
+    ns1V1 := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    ns1V1T1 := mkQn( ns1V1, mkDeclNm( "T1" ) )
     b.setVal( "null-val", NullVal )
     b.setVal( "string-empty", String( "" ) )
     b.setVal( "string-val1", String( "hello" ) )
@@ -78,7 +80,10 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "float64-smallest-nonzero",
         Float64( math.SmallestNonzeroFloat64 ) )
     b.setVal( "time-val1", MustTimestamp( "2013-10-19T02:47:00-08:00" ) )
-    b.setVal( "enum-val1", MustEnum( "ns1@v1/E1", "val1" ) )
+    b.setVal( "enum-val1", &Enum{ 
+        Type: mkQn( ns1V1, mkDeclNm( "E1" ) ),
+        Value: mkId( "val1" ),
+    } )
     b.setVal( "symmap-empty", MustSymbolMap() )
     b.setVal( "val-ptr", NewHeapValue( Int32( 1 ) ) )
 
@@ -87,25 +92,26 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
 
     b.setVal( "symmap-flat", 
         MustSymbolMap( 
-            "k1", int32( 1 ), 
-            "k2", int32( 2 ),
-            "k3", NewHeapValue( Int32( int32( 1 ) ) ),
+            mkId( "k1" ), int32( 1 ), 
+            mkId( "k2" ), int32( 2 ),
+            mkId( "k3" ), NewHeapValue( Int32( int32( 1 ) ) ),
         ),
     )
 
     b.setVal( "symmap-with-refs",
         MustSymbolMap(
-            "k1", val1Ptr, 
-            "k2", val1Ptr,
-            "k3", MustList( val1Ptr, val1Ptr ),
+            mkId( "k1" ), val1Ptr, 
+            mkId( "k2" ), val1Ptr,
+            mkId( "k3" ), MustList( val1Ptr, val1Ptr ),
         ),
     )
 
     b.setVal( "symmap-nested",
-        MustSymbolMap( "k1", MustSymbolMap( "kk1", int32( 1 ) ) ) )
+        MustSymbolMap( mkId( "k1" ), 
+            MustSymbolMap( mkId( "kk1" ), int32( 1 ) ) ) )
 
-    b.setVal( "struct-empty", MustStruct( "ns1@v1/T1" ) )
-    b.setVal( "struct-flat", MustStruct( "ns1@v1/T1", "k1", int32( 1 ) ) )
+    b.setVal( "struct-empty", MustStruct( ns1V1T1 ) )
+    b.setVal( "struct-flat", MustStruct( ns1V1T1, mkId( "k1" ), int32( 1 ) ) )
     b.setVal( "list-empty", MustList() )
     b.setVal( "list-scalars", MustList( int32( 1 ), "hello" ) )
 
@@ -127,11 +133,12 @@ func ( b *binIoRoundtripTestBuilder ) addPathTests() {
     setPath := func( nm string, p objpath.PathNode ) objpath.PathNode {
         return b.setVal( nm, p ).( objpath.PathNode )
     }
-    p1 := setPath( "p1", objpath.RootedAt( id( "id1" ) ) )
-    p2 := setPath( "p2", p1.Descend( id( "id2" ) ) )
+    id := func( i int ) *Identifier { return mkId( fmt.Sprintf( "id%d", i ) ) }
+    p1 := setPath( "p1", objpath.RootedAt( id( 1 ) ) )
+    p2 := setPath( "p2", p1.Descend( id( 2 ) ) )
     p3 := setPath( "p3", p2.StartList().Next().Next() )
-    setPath( "p4", p3.Descend( id( "id3" ) ) )
-    setPath( "p5", objpath.RootedAtList().Descend( id( "id1" ) ) )
+    setPath( "p4", p3.Descend( id( 3 ) ) )
+    setPath( "p5", objpath.RootedAtList().Descend( id( 1 ) ) )
 }
 
 func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
@@ -141,31 +148,107 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
         simplNm := fqNm[ lastDot + 1 : ]
         b.setVal( fmt.Sprintf( "%s/%s", simplNm, ef ), ef )
     }
-    set( id( "id1" ) )
-    set( id( "id1-id2" ) )
+    set( mkId( "id1" ) )
+    set( mkId( "id1", "id2" ) )
     set( PointerIdNull )
     set( PointerId( uint64( 1 ) ) )
-    set( MustNamespace( "ns1@v1" ) )
-    set( MustNamespace( "ns1:ns2@v1" ) )
-    set( MustDeclaredTypeName( "T1" ) )
-    set( MustQualifiedTypeName( "ns1:ns2@v1/T1" ) )
-    set( MustTypeReference( `String~"a"` ) )
-    set( MustTypeReference( `String~["a","b"]` ) )
-    set( MustTypeReference( 
-         `Timestamp~["2012-01-01T00:00:00Z","2012-02-01T00:00:00Z"]` ) )
-    set( MustTypeReference( "Int32~(0,10)" ) )
-    set( MustTypeReference( "Int64~[0,10]" ) )
-    set( MustTypeReference( "Uint32~(0,10)" ) )
-    set( MustTypeReference( "Uint64~[0,10]" ) )
-    set( MustTypeReference( "Float32~(0.0,1.0]" ) )
-    set( MustTypeReference( "Float64~[0.0,1.0)" ) )
-    set( MustTypeReference( "Float64~(,)" ) )
-    set( MustTypeReference( "ns1@v1/T1" ) )
-    set( MustTypeReference( "ns1@v1/T1+" ) )
-    set( MustTypeReference( "ns1@v1/T1*" ) )
-    set( MustTypeReference( "ns1@v1/T1*?" ) )
-    set( MustTypeReference( "&ns1@v1/T1?" ) )
-    set( MustTypeReference( "&ns1@v1/T1?+?*" ) )
+    ns1V1 := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    set( ns1V1 )
+    ns1ns2V1 := mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) )
+    set( ns1ns2V1 )
+    set( mkDeclNm( "T1" ) )
+    set( mkQn( ns1ns2V1, mkDeclNm( "T1" ) ) )
+    mkV1Typ := func( nm string, rx ValueRestriction ) *AtomicTypeReference {
+        ns := mkNs( mkId( "v1" ), mkId( "mingle" ), mkId( "core" ) )
+        qn := mkQn( ns, mkDeclNm( nm ) )
+        at := &AtomicTypeReference{ Name: qn }
+        if rx != nil { at.Restriction = rx }
+        return at
+    }
+    set( mkV1Typ( "String", MustRegexRestriction( "a" ) ) )
+    set( 
+        mkV1Typ( 
+            "String", 
+            &RangeRestriction{ true, String( "a" ), String( "b" ), true },
+        ),
+    )
+    set( 
+        mkV1Typ( 
+            "Timestamp",
+            &RangeRestriction{
+                true,
+                MustTimestamp( "2012-01-01T00:00:00Z" ),
+                MustTimestamp( "2012-02-01T00:00:00Z" ),
+                true,
+            },
+        ),
+    )
+    set( 
+        mkV1Typ(
+            "Int32",
+            &RangeRestriction{ false, Int32( 0 ), Int32( 10 ), false },
+        ),
+    )
+    set(
+        mkV1Typ(
+            "Int64",
+            &RangeRestriction{ true, Int64( 0 ), Int64( 10 ), true },
+        ),
+    )
+    set( 
+        mkV1Typ(
+            "Uint32",
+            &RangeRestriction{ false, Uint32( 0 ), Uint32( 10 ), false },
+        ),
+    )
+    set( 
+        mkV1Typ( 
+            "Uint64",
+            &RangeRestriction{ true, Uint64( 0 ), Uint64( 0 ), true },
+        ),
+    )
+    set(
+        mkV1Typ(
+            "Float32",
+            &RangeRestriction{ false, Float32( 0.0 ), Float32( 1.0 ), true },
+        ),
+    )
+    set( 
+        mkV1Typ(
+            "Float64",
+            &RangeRestriction{ true, Float64( 0.0 ), Float64( 1.0 ), false },
+        ),
+    )
+    set( 
+        mkV1Typ(
+            "Float64",
+            &RangeRestriction{ MinClosed: false, MaxClosed: false },
+        ),
+    )
+    typNs1V1T1 := mkQn( ns1V1, mkDeclNm( "T1" ) ).AsAtomicType()
+    set( typNs1V1T1 )
+    set( &ListTypeReference{ ElementType: typNs1V1T1, AllowsEmpty: false } )
+    set( &ListTypeReference{ ElementType: typNs1V1T1, AllowsEmpty: true } )
+    set( 
+        &NullableTypeReference{
+            &ListTypeReference{ ElementType: typNs1V1T1, AllowsEmpty: true },
+        },
+    )
+    set( NewPointerTypeReference( typNs1V1T1 ) )
+    set( &NullableTypeReference{ NewPointerTypeReference( typNs1V1T1 ) } )
+    set( 
+        &ListTypeReference{
+            AllowsEmpty: true,
+            ElementType: &NullableTypeReference{
+                &ListTypeReference{
+                    AllowsEmpty: false,
+                    ElementType: &NullableTypeReference{
+                        NewPointerTypeReference( typNs1V1T1 ),
+                    },
+                },
+            },
+        },
+    )
 }
 
 func addBinIoRoundtripTests( tests []interface{} ) []interface{} {
@@ -184,12 +267,13 @@ type BinIoSequenceRoundtripTest struct {
 }
 
 func addBinIoSequenceRoundtripTests( tests []interface{} ) []interface{} {
+    ns1V1S1 := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "S1" ) )
     return append( tests,
         &BinIoSequenceRoundtripTest{
             Name: "struct-sequence",
             Seq: []Value{
-                MustStruct( "ns1@v1/S1" ),
-                MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+                MustStruct( ns1V1S1 ),
+                MustStruct( ns1V1S1, mkId( "f1" ), int32( 1 ) ),
             },
         },
     )
@@ -231,6 +315,8 @@ func makeBinIoInvalidDataTest( data ...interface{} ) []byte {
 }
 
 func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
+    qnNsV1S := mkQn( mkNs( mkId( "v1" ), mkId( "ns" ) ), mkDeclNm( "S" ) )
+    idF1 := mkId( "f1" )
     return append( tests, 
         &BinIoInvalidDataTest{
             Name: "unexpected-top-level-type-code",
@@ -242,8 +328,8 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             ErrMsg: `[offset 39]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
                 IoTypeCodeStruct, 
-                    int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
-                IoTypeCodeField, MustIdentifier( "f1" ), binIoInvalidTypeCode,
+                    int32( -1 ), qnNsV1S,
+                IoTypeCodeField, idF1, binIoInvalidTypeCode,
             ),
         },
         &BinIoInvalidDataTest{
@@ -251,11 +337,14 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             ErrMsg: `[offset 104]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
                 IoTypeCodeStruct, 
-                    int32( -1 ), MustQualifiedTypeName( "ns@v1/S" ),
-                IoTypeCodeField, MustIdentifier( "f1" ),
+                    int32( -1 ), qnNsV1S,
+                IoTypeCodeField, idF1,
                 IoTypeCodeList, 
                     uint64( 1 ), // pointer id
-                    MustTypeReference( "Int32*" ), // type
+                    &ListTypeReference{
+                        AllowsEmpty: true,
+                        ElementType: TypeInt32,
+                    }, // type
                     int32( -1 ), // size
                 IoTypeCodeInt32, int32( 10 ), // an okay list val
                 binIoInvalidTypeCode,

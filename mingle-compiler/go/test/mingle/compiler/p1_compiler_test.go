@@ -513,7 +513,7 @@ service Service1 {
                     types.MakeFieldDef( 
                         "enum2",
                         "ns1@v1/Enum1",
-                        mg.MustEnum( "ns1@v1/Enum1", "green" ),
+                        parser.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
                 },
                 []*types.ConstructorDefinition{
@@ -720,7 +720,7 @@ service Service1 {
                     types.MakeFieldDef( 
                         "f13", `mingle:core@v1/String~"a"`, "a" ),
                     types.MakeFieldDef( "f14", "ns1@v1/Enum1",
-                        mg.MustEnum( "ns1@v1/Enum1", "green" ),
+                        parser.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
                     types.MakeFieldDef( "f15", "mingle:core@v1/Timestamp",
                         parser.MustTimestamp( 

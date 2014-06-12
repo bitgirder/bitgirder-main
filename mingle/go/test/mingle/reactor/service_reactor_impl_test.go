@@ -2,6 +2,7 @@ package reactor
 
 import (
     mg "mingle"
+    "mingle/parser"
     "testing"
     "bitgirder/objpath"
     "bitgirder/assert"
@@ -40,7 +41,8 @@ func ( t serviceReactorImplTest ) makeErr( path objpath.PathNode ) error {
 }
 
 func ( t serviceReactorImplTest ) getProcessor(
-    path objpath.PathNode, id *mg.Identifier ) ( ReactorEventProcessor, error ) {
+    path objpath.PathNode, 
+    id *mg.Identifier ) ( ReactorEventProcessor, error ) {
 
     if t.failOn.Equals( id ) { return nil, t.makeErr( path ) }
     return DiscardProcessor, nil
@@ -73,20 +75,24 @@ func ( t serviceReactorImplTest ) GetResultReactor(
 func ( t serviceReactorImplTest ) callWith( rct ReactorEventProcessor ) {
     pip := InitReactorPipeline( rct )
     err := VisitValue( t.in, pip )
-    errExpct := mg.NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" )
+    errExpct := 
+        mg.NewValueCastError( objpath.RootedAt( t.failOn ), "test-error" )
     t.EqualErrors( errExpct, err )
 }
 
 func TestRequestReactorImplErrors( t *testing.T ) {
     a := assert.NewPathAsserter( t )
-    in := mg.MustStruct( mg.QnameRequest,
+    in := parser.MustStruct( mg.QnameRequest,
         "namespace", "ns1@v1",
         "service", "svc1",
         "operation", "op1",
-        "parameters", mg.MustSymbolMap( "p1", 1 ),
+        "parameters", parser.MustSymbolMap( "p1", 1 ),
         "authentication", 1,
     )
-    for _, failOn := range []*mg.Identifier{ mg.IdAuthentication, mg.IdParameters } {
+    for _, failOn := range []*mg.Identifier{ 
+        mg.IdAuthentication, 
+        mg.IdParameters,
+    } {
         test := serviceReactorImplTest{ 
             PathAsserter: a.Descend( failOn ), 
             failOn: failOn,
@@ -105,6 +111,6 @@ func TestResponseReactorImplErrors( t *testing.T ) {
         }
         test.callWith( NewResponseReactor( test ) )
     }
-    chk( mg.IdResult, mg.MustSymbolMap( "result", 1 ) )
-    chk( mg.IdError, mg.MustSymbolMap( "error", 1 ) )
+    chk( mg.IdResult, parser.MustSymbolMap( "result", 1 ) )
+    chk( mg.IdError, parser.MustSymbolMap( "error", 1 ) )
 }

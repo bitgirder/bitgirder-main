@@ -214,3 +214,34 @@ func MustTimestamp( s string ) mg.Timestamp {
     if err == nil { return tm }
     panic( err )
 }
+
+func mustAsQname( val interface{} ) *mg.QualifiedTypeName {
+    if qn, ok := val.( *mg.QualifiedTypeName ); ok { return qn }
+    return MustQualifiedTypeName( val.( string ) )
+}
+
+func mustAsId( val interface{} ) *mg.Identifier {
+    if id, ok := val.( *mg.Identifier ); ok { return id }
+    return MustIdentifier( val.( string ) )
+}
+
+func mustMapPairs( pairs []interface{} ) []interface{} {
+    res := make( []interface{}, len( pairs ) )
+    for i, e := 0, len( res ); i < e; i += 2 {
+        res[ i ] = mustAsId( pairs[ i ] )
+        res[ i + 1 ] = pairs[ i + 1 ]
+    }
+    return res
+}
+
+func MustSymbolMap( pairs ...interface{} ) *mg.SymbolMap {
+    return mg.MustSymbolMap( mustMapPairs( pairs )... )
+}
+
+func MustStruct( typ interface{}, pairs ...interface{} ) *mg.Struct {
+    return mg.MustStruct( mustAsQname( typ ), mustMapPairs( pairs )... )
+}
+
+func MustEnum( typ interface{}, val interface{} ) *mg.Enum {
+    return &mg.Enum{ Type: mustAsQname( typ ), Value: mustAsId( val ) }
+}

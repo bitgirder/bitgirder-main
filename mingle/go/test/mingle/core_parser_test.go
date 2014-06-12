@@ -3,12 +3,7 @@ package mingle
 import (
     "testing"
     "bitgirder/assert"
-    "fmt"
     "time"
-    "mingle/parser/loc"
-    "mingle/parser/lexer"
-    "mingle/parser/syntax"
-    pt "mingle/parser/testing"
 //    "log"
 )
 
@@ -30,194 +25,6 @@ func assertEqualityTests(
     }
 }
 
-func parseCore( cpt *pt.CoreParseTest ) ( interface{}, error ) {
-    switch cpt.TestType {
-    case pt.TestTypeIdentifier: return ParseIdentifier( cpt.In )
-    case pt.TestTypeNamespace: return ParseNamespace( cpt.In )
-    case pt.TestTypeDeclaredTypeName: return ParseDeclaredTypeName( cpt.In )
-    case pt.TestTypeQualifiedTypeName: return ParseQualifiedTypeName( cpt.In )
-    case pt.TestTypeTypeReference: return ParseTypeReference( cpt.In )
-    }
-    panic( fmt.Errorf( "Unhandled TestType: %s", cpt.TestType ) )
-}
-
-func assertCoreParseError( 
-    cpt *pt.CoreParseTest, err error, a *assert.PathAsserter ) {
-    switch v := cpt.Err.( type ) {
-    case nil: a.Fatal( err )
-    case *pt.ParseErrorExpect:
-        if pErr, ok := err.( *loc.ParseError ); ok {
-            a.Descend( "Col" ).Equal( v.Col, pErr.Loc.Col )
-            a.Descend( "Message" ).Equal( v.Message, pErr.Message )
-        } else { a.Fatal( err ) }
-    case pt.RestrictionErrorExpect:
-        a.Equal( &RestrictionTypeError{ string( v ) }, err )
-    default: panic( fmt.Errorf( "Unhandled error expectation type %T", v ) )
-    }
-}
-
-func convertPtIdentifier( id pt.Identifier ) *Identifier {
-    return &Identifier{ []string( id ) }
-}
-
-func convertPtIdentifiers( ids []pt.Identifier ) []*Identifier {
-    res := make( []*Identifier, len( ids ) )
-    for i, part := range ids { res[ i ] = convertPtIdentifier( part ) }
-    return res
-}
-
-func convertPtNamespace( ns *pt.Namespace ) *Namespace {
-    return &Namespace{
-        Version: convertPtIdentifier( ns.Version ),
-        Parts: convertPtIdentifiers( ns.Parts ),
-    }
-}
-
-func convertPtDeclTypeName( nm pt.DeclaredTypeName ) *DeclaredTypeName {
-    return &DeclaredTypeName{ string( nm ) }
-}
-
-func convertPtQualifiedTypeName( nm *pt.QualifiedTypeName ) *QualifiedTypeName {
-    return &QualifiedTypeName{
-        Namespace: convertPtNamespace( nm.Namespace ),
-        Name: convertPtDeclTypeName( nm.Name ),
-    }
-}
-
-func convertPtRangeVal( data interface{} ) Value {
-    switch v := data.( type ) {
-    case nil: return Value( nil )
-    case int32: return Int32( v )
-    case int64: return Int64( v )
-    case uint32: return Uint32( v )
-    case uint64: return Uint64( v )
-    case float32: return Float32( v )
-    case float64: return Float64( v )
-    case string: return String( v )
-    case pt.Timestamp: return MustTimestamp( string( v ) )
-    }
-    panic( fmt.Errorf( "Unhandled pt range val type %T", data ) )
-}
-
-func convertPtRangeRestriction( rr *pt.RangeRestriction ) *RangeRestriction {
-    return &RangeRestriction{
-        MinClosed: rr.MinClosed,
-        Min: convertPtRangeVal( rr.Min ),
-        Max: convertPtRangeVal( rr.Max ),
-        MaxClosed: rr.MaxClosed,
-    }
-}
-
-func convertPtRestriction( rVal interface{} ) ValueRestriction {
-    switch r := rVal.( type ) {
-    case pt.RegexRestriction: 
-        res, err := NewRegexRestriction( string( r ) )
-        if err != nil { panic( err ) }
-        return res
-    case *pt.RangeRestriction: return convertPtRangeRestriction( r )
-    case nil: return nil
-    }
-    panic( fmt.Errorf( "Unhandled pt restriction type %T", rVal ) )
-}
-
-func convertPtTypeReference( tVal interface{} ) TypeReference {
-    switch t := tVal.( type ) {
-    case *pt.AtomicTypeReference: 
-        return &AtomicTypeReference{
-            Name: convertPtVal( t.Name ).( *QualifiedTypeName ),
-            Restriction: convertPtRestriction( t.Restriction ),
-        }
-    case *pt.ListTypeReference:
-        return &ListTypeReference{ 
-            ElementType: convertPtTypeReference( t.ElementType ),
-            AllowsEmpty: t.AllowsEmpty,
-        }
-    case *pt.NullableTypeReference:
-        return MustNullableTypeReference( convertPtTypeReference( t.Type ) )
-    case *pt.PointerTypeReference:
-        return NewPointerTypeReference( convertPtTypeReference( t.Type ) )
-    }
-    panic( fmt.Errorf( "Unhandled pt type reference type %T", tVal ) )
-}
-
-func convertPtVal( val interface{} ) interface{} {
-    switch v := val.( type ) {
-    case pt.Identifier: return convertPtIdentifier( v )
-    case *pt.Namespace: return convertPtNamespace( v )
-    case pt.DeclaredTypeName: return convertPtDeclTypeName( v )
-    case *pt.QualifiedTypeName: return convertPtQualifiedTypeName( v )
-    case *pt.AtomicTypeReference, 
-         *pt.ListTypeReference,
-         *pt.NullableTypeReference,
-         *pt.PointerTypeReference: 
-        return convertPtTypeReference( v )
-    }
-    panic( fmt.Errorf( "Unhandled pt val type (%T)", val ) )
-}
-
-func assertExternalForm( ext string, val interface{}, a *assert.PathAsserter ) {
-    if v, ok := val.( extFormer ); ok {
-        a.Equal( ext, v.ExternalForm() )
-    } else { a.Fatalf( "Not an external former: %T", val ) }
-}
-
-func debugType( typ TypeReference ) string {
-    switch v := typ.( type ) {
-    case *AtomicTypeReference:
-        return fmt.Sprintf( "atomic( %s )", v.ExternalForm() )
-    case *ListTypeReference:
-        return fmt.Sprintf( "list( %s, %t )", 
-            debugType( v.ElementType ), v.AllowsEmpty )
-    case *NullableTypeReference: 
-        return fmt.Sprintf( "nullable( %s )", debugType( v.Type ) )
-    case *PointerTypeReference:
-        return fmt.Sprintf( "pointer( %s )", debugType( v.Type ) )
-    }
-    panic( libErrorf( "unhandled type: %T", typ ) )
-}
-
-func assertCoreParse( cpt *pt.CoreParseTest, a *assert.PathAsserter ) {
-    if cpt.TestType == pt.TestTypeString || cpt.TestType == pt.TestTypeNumber { 
-        return 
-    }
-    if val, err := parseCore( cpt ); err == nil {
-        if cpt.Err == nil {
-            conv := convertPtVal( cpt.Expect )
-//            if _, okConv := conv.( TypeReference ); okConv {
-//                a.Logf( "conv: %s, val: %s",
-//                    debugType( conv.( TypeReference ) ),
-//                    debugType( val.( TypeReference ) ) )
-//            }
-            a.Equal( conv, val )
-            if ext := cpt.ExternalForm; ext != "" { 
-                assertExternalForm( ext, conv, a.Descend( "ExternalForm" ) )
-            }
-        } else { a.Fatalf( "Expected parse failure: %#v", cpt.Err ) }
-    } else { assertCoreParseError( cpt, err, a.Descend( "Err" ) ) }
-}
-
-func TestCoreParser( t *testing.T ) {
-    a := assert.NewPathAsserter( t ).StartList()
-    for _, cpt := range pt.CoreParseTests {
-//        a.Logf( "Starting with input %q", cpt.In )
-        assertCoreParse( cpt, a )
-        a = a.Next()
-    }
-}
-
-func TestIdentifierMustPanic( t *testing.T ) {
-    errExpct := &pt.ParseErrorExpect{ 
-        5, "Illegal start of identifier part: \"$\" (U+0024)" }
-    pt.AssertParsePanic( 
-        errExpct, t, func() { MustIdentifier( "bad-$ident" ) } )
-}
-
-func TestIdentifierStringer( t *testing.T ) {
-    if id, err := ParseIdentifier( "test-id" ); err == nil {
-        assert.Equal( "test-id", id.String() )
-    } else { t.Fatal( err ) }
-}
-
 func assertIdComp( id1, id2 *Identifier, expctCmp int, t *testing.T ) {
     if id2 != nil {
         cmp := id1.Compare( id2 )
@@ -227,15 +34,12 @@ func assertIdComp( id1, id2 *Identifier, expctCmp int, t *testing.T ) {
 }
 
 func TestIdentifierComparison( t *testing.T ) {
-    id1A := MustIdentifier( "id-a" )
-    id1B := MustIdentifier( "idA" )
-    id2 := MustIdentifier( "idB" )
-    assertIdComp( id1A, nil, -1, t )
-    assertIdComp( id1A, id1B, 0, t )
-    assertIdComp( id1A, id1A, 0, t )
-    assertIdComp( id1B, id1A, 0, t )
-    assertIdComp( id1A, id2, -1, t )
-    assertIdComp( id2, id1A, 1, t )
+    idA := mkId( "id", "a" )
+    idB := mkId( "id", "b" )
+    assertIdComp( idA, nil, -1, t )
+    assertIdComp( idA, idA, 0, t )
+    assertIdComp( idA, idB, -1, t )
+    assertIdComp( idB, idA, 1, t )
 }
 
 func assertIdentFormat(
@@ -245,65 +49,49 @@ func assertIdentFormat(
 }
 
 func TestIdentifierFormatting( t *testing.T ) {
-    id := MustIdentifier( "test-id-a-b-c" )
+    id := mkId( "test", "id", "a", "b", "c" )
     assertIdentFormat( id, LcHyphenated, "test-id-a-b-c", t )
     assertIdentFormat( id, LcUnderscore, "test_id_a_b_c", t )
     assertIdentFormat( id, LcCamelCapped, "testIdABC", t )
-    id2 := MustIdentifier( "test" )
+    id2 := mkId( "test" )
     for _, idFmt := range IdentifierFormats {
         assertIdentFormat( id2, idFmt, "test", t )
     }
 }
 
 func TestNamespaceStringer( t *testing.T ) {
-    ns := MustNamespace( "ns1:ns2@v1" )
+    ns := mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) )
     assert.Equal( "ns1:ns2@v1", ns.String() )
 }
 
-func TestNamespaceMustPanic( t *testing.T ) {
-    errExpct := &pt.ParseErrorExpect{ 9, `Expected ':' or '@' but found: END` }
-    pt.AssertParsePanic( errExpct, t, func() { MustNamespace( "not-a-ns" ) } )
-}
-
 func TestNamespaceEquality( t *testing.T ) {
-    ns1A := MustNamespace( "ns1@v1" )
-    ns1B := MustNamespace( "ns1@v1" )
+    ns1A := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    ns1B := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    ns2 := mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) )
     tests := []equalityTest{
         equalityTest{ ns1A, ns1A, true },
         equalityTest{ ns1A, ns1B, true },
-    }
-    ns2 := MustNamespace( "ns1:ns2@v1" )
-    strs := []string { "ns1@v2", "ns2@v1", "ns1:ns3@v1", "ns1:ns2@v2" }
-    for _, str := range strs {
-        ns := MustNamespace( str )
-        tests = append( tests, equalityTest{ ns1A, ns, false } )
-        tests = append( tests, equalityTest{ ns2, ns, false } )
+        equalityTest{ ns1A, ns2, false },
+        equalityTest{ ns2, ns1A, false },
     }
     f := func( a, b interface{} ) bool {
-            return a.( *Namespace ).Equals( b.( *Namespace ) )
-         }
+        return a.( *Namespace ).Equals( b.( *Namespace ) )
+    }
     assertEqualityTests( f, t, tests... )
     assertEquality( ns1A, nil, ns1A.Equals( nil ), false, t )
 }
 
-func TestDeclaredTypeNameMustPanic( t *testing.T ) {
-    errExpct := &pt.ParseErrorExpect{ 
-        1, "Illegal type name start: \"a\" (U+0061)" }
-    pt.AssertParsePanic( 
-        errExpct, t, func() { MustDeclaredTypeName( "aBad" ) } )
-}
-
 func TestDeclaredTypeNameStringer( t *testing.T ) {
     str := "TypeName"
-    dt := MustDeclaredTypeName( str )
+    dt := mkDeclNm( str )
     assert.Equal( str, dt.ExternalForm() )
     assert.Equal( str, dt.String() )
 }
 
 func TestDeclaredTypeNameEquality( t *testing.T ) {
-    nm1A := MustDeclaredTypeName( "T1" )
-    nm1B := MustDeclaredTypeName( "T1" )
-    nm2 := MustDeclaredTypeName( "T2" )
+    nm1A := mkDeclNm( "T1" )
+    nm1B := mkDeclNm( "T1" )
+    nm2 := mkDeclNm( "T2" )
     assertEqualityTests(
         func( a, b interface{} ) bool {
             return a.( *DeclaredTypeName ).Equals( b.( *DeclaredTypeName ) )
@@ -318,24 +106,17 @@ func TestDeclaredTypeNameEquality( t *testing.T ) {
     assertEquality( nm1A, nil, nm1A.Equals( nil ), false, t )
 }
 
-func TestQualifiedTypeNameMustPanic( t *testing.T ) {
-    errExpct := &pt.ParseErrorExpect{ 
-        7, "Expected type path but found: END" }
-    pt.AssertParsePanic( 
-        errExpct, t, func() { MustQualifiedTypeName( "ns1@v1" ) } )
-}
-
 // Also gives coverage of MustQualifiedTypeName()
 func TestQualifiedTypeNameStringer( t *testing.T ) {
+    qn := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
     str := "ns1@v1/T1"
-    qn := MustQualifiedTypeName( str )
     assert.Equal( str, qn.String() )
     assert.Equal( str, qn.ExternalForm() )
 }
 
 func TestQualifiedTypeNameEquality( t *testing.T ) {
-    nm1A := MustQualifiedTypeName( "ns1@v1/T1" )
-    nm1B := MustQualifiedTypeName( "ns1@v1/T1" )
+    nm1A := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
+    nm1B := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
     assertEquality( nm1A, nil, nm1A.Equals( nil ), false, t )
     assertEqualityTests(
         func( a, b interface{} ) bool {
@@ -344,174 +125,88 @@ func TestQualifiedTypeNameEquality( t *testing.T ) {
         t,
         equalityTest{ nm1A, nm1A, true },
         equalityTest{ nm1A, nm1B, true },
-        equalityTest{ nm1A, MustQualifiedTypeName( "ns1@v1/T2" ), false },
-        equalityTest{ nm1A, MustQualifiedTypeName( "ns1@v2/T1" ), false },
-        equalityTest{ nm1A, MustQualifiedTypeName( "ns2@v1/T1" ), false },
-        equalityTest{ nm1A, MustQualifiedTypeName( "ns1:ns2@v1/T1" ), false },
         equalityTest{ 
-            MustQualifiedTypeName( "ns1:ns2@v1/T1" ),
-            MustQualifiedTypeName( "ns1:ns2@v1/T1" ),
+            nm1A, 
+            mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T2" ) ),
+            false,
+        },
+        equalityTest{ 
+            nm1A, 
+            mkQn( mkNs( mkId( "v2" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) ),
+            false,
+        },
+        equalityTest{ 
+            nm1A, 
+            mkQn( mkNs( mkId( "v1" ), mkId( "ns2" ) ), mkDeclNm( "T1" ) ),
+            false,
+        },
+        equalityTest{ 
+            nm1A, 
+            mkQn( 
+                mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) ), 
+                mkDeclNm( "T1" ),
+            ),
+            false,
+        },
+        equalityTest{ 
+            mkQn( 
+                mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) ), 
+                mkDeclNm( "T1" ),
+            ),
+            mkQn( 
+                mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) ), 
+                mkDeclNm( "T1" ),
+            ),
             true,
         },
     )
 }
 
-// Used to test just the syntax (not semantics) of parsing type restrictions.
-// Technically this could be in mingle/parser/syntax tests, not in here, but the
-// assertions themselves are simplified by being able to easily parse and assert
-// equality of things like the base type reference. Rather than duplicate that
-// in mingle/parser/syntax just to aid in testing though, we carry out the tests
-// here in this package.
-type restrictionSyntaxTest struct {
-    str string
-    typ string
-    restriction syntax.RestrictionSyntax
-    *testing.T // set before call()
-}
-
-func ( t *restrictionSyntaxTest ) call() {
-    if ctr, _, err := parseCompletableTypeReference( t.str ); err == nil {
-        assert.Equal( t.restriction, ctr.Restriction )
-    } else { t.Fatal( err ) }
-}
-
-// This is meant to cover things specific to the parser itself, namely the
-// placement of parse locations; things like parse errors and interpretation of
-// valid/invalid ranges of standard types is covered by the type reference tests
-// in modelParseTests
-func TestTypeReferenceRestrictionSyntax( t *testing.T ) {
-    // quick func to create an expected (l)ocation by (c)olumn
-    lc := func( col int ) *loc.Location {
-        return &loc.Location{ 1, col, loc.ParseSourceInput }
-    }
-    tests := []*restrictionSyntaxTest{
-        &restrictionSyntaxTest{
-            str: "String1~\"^a+$\"",
-            typ: "String1",
-            restriction: &syntax.RegexRestrictionSyntax{ "^a+$", lc( 9 ) },
-        },
-        &restrictionSyntaxTest{
-            str: "String1 ~\n\t\"a*\"?",
-            typ: "String1?",
-            restriction: &syntax.RegexRestrictionSyntax{ 
-                Pat: "a*", 
-                Loc: &loc.Location{ 2, 2, loc.ParseSourceInput },
-            },
-        },
-        &restrictionSyntaxTest{
-            str: "ns1:ns2@v1/String~\"B*\"",
-            typ: "ns1:ns2@v1/String",
-            restriction: &syntax.RegexRestrictionSyntax{ "B*", lc( 19 ) },
-        },
-        &restrictionSyntaxTest{
-            str: "ns1:ns2@v1/String~\"a|b*\"*+",
-            typ: "ns1:ns2@v1/String*+",
-            restriction: &syntax.RegexRestrictionSyntax{ "a|b*", lc( 19 ) },
-        },
-        &restrictionSyntaxTest{
-            str: "mingle:core@v1/String~\"a$\"",
-            typ: "mingle:core@v1/String",
-            restriction: &syntax.RegexRestrictionSyntax{ "a$", lc( 23 ) },
-        },
-        &restrictionSyntaxTest{
-            str: "Num~[1,2]",
-            typ: "Num",
-            restriction: &syntax.RangeRestrictionSyntax{
-                true,
-                &syntax.NumRestrictionSyntax{ 
-                    false, &lexer.NumericToken{ Int: "1" }, lc( 6 ) },
-                &syntax.NumRestrictionSyntax{ 
-                    false, &lexer.NumericToken{ Int: "2" }, lc( 8 ) },
-                true,
-            },
-        },
-        &restrictionSyntaxTest{
-            str: "Num~[-1,+2]",
-            typ: "Num",
-            restriction: &syntax.RangeRestrictionSyntax{
-                true,
-                &syntax.NumRestrictionSyntax{ 
-                    true, &lexer.NumericToken{ Int: "1" }, lc( 6 ) },
-                &syntax.NumRestrictionSyntax{ 
-                    false, &lexer.NumericToken{ Int: "2" }, lc( 9 ) },
-                true,
-            },
-        },
-        &restrictionSyntaxTest{
-            str: "Num~(,8.0e3]?*",
-            typ: "Num?*",
-            restriction: &syntax.RangeRestrictionSyntax{
-                false,
-                nil,
-                &syntax.NumRestrictionSyntax{ 
-                    false, &lexer.NumericToken{ "8", "0", "3", 'e' }, lc( 7 ) },
-                true,
-            },
-        },
-        &restrictionSyntaxTest{
-            str: "Num~( 8, )",
-            typ: "Num",
-            restriction: &syntax.RangeRestrictionSyntax{
-                false,
-                &syntax.NumRestrictionSyntax{ 
-                    false, &lexer.NumericToken{ "8", "", "", 0 }, lc( 7 ) },
-                nil,
-                false,
-            },
-        },
-        &restrictionSyntaxTest{
-            str: "Num~(-100,100)?",
-            typ: "Num?",
-            restriction: &syntax.RangeRestrictionSyntax{
-                false,
-                &syntax.NumRestrictionSyntax{ 
-                    true, &lexer.NumericToken{ Int: "100" }, lc( 6 ) },
-                &syntax.NumRestrictionSyntax{ 
-                    false, &lexer.NumericToken{ Int: "100" }, lc( 11 ) },
-                false,
-            },
-        },
-        &restrictionSyntaxTest{
-            str: "Num~(,)",
-            typ: "Num",
-            restriction: 
-                &syntax.RangeRestrictionSyntax{ false, nil, nil, false },
-        },
-        &restrictionSyntaxTest{
-            str: "Str~[\"a\",\"aaaa\")",
-            typ: "Str",
-            restriction: &syntax.RangeRestrictionSyntax{
-                true,
-                &syntax.StringRestrictionSyntax{ "a", lc( 6 ) },
-                &syntax.StringRestrictionSyntax{ "aaaa", lc( 10 ) },
-                false,
-            },
-        },
-    }
-    for _, test := range tests { 
-        test.T = t
-        test.call()
-    }
-}
-
 func TestTypeReferenceStringer( t *testing.T ) {
-    chk := func( extForm string ) {
-        ref := MustTypeReference( extForm )
-        assert.Equal( extForm, ref.String() )
-        assert.Equal( extForm, ref.ExternalForm() )
+    chk := func( extForm string, typ TypeReference ) {
+        assert.Equal( extForm, typ.String() )
+        assert.Equal( extForm, typ.ExternalForm() )
     }
-    for _, quant := range []string{ "", "*", "+", "*++" } {
-        chk( "ns1@v1/T1" + quant )
-    }
-    chk( "&ns1@v1/T1" )
-    chk( "&ns1@v1/T1?" )
-    chk( "&ns1@v1/T1?**+" )
-}
-
-func TestMustTypeReferencePanic( t *testing.T ) {
-    errExpct := 
-        &pt.ParseErrorExpect{ 7, "Expected type path but found: END" }
-    pt.AssertParsePanic( errExpct, t, func() { MustTypeReference( "ns1@v1" ) } )
+    qn := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
+    at := &AtomicTypeReference{ Name: qn }
+    ptr := NewPointerTypeReference( at )
+    chk( "ns1@v1/T1", at )
+    chk( 
+        "ns1@v1/T1*", 
+        &ListTypeReference{ ElementType: at, AllowsEmpty: true },
+    )
+    chk( 
+        "ns1@v1/T1+",
+        &ListTypeReference{ ElementType: at, AllowsEmpty: false },
+    )
+    chk( 
+        "ns1@v1/T1*++",
+        &ListTypeReference{ 
+            ElementType: &ListTypeReference{
+                ElementType: &ListTypeReference{
+                    ElementType: at,
+                    AllowsEmpty: true,
+                },
+                AllowsEmpty: false,
+            },
+            AllowsEmpty: false,
+        },
+    )
+    chk( "&ns1@v1/T1", ptr )
+    chk( "&ns1@v1/T1?", &NullableTypeReference{ ptr } )
+    chk(
+        "&ns1@v1/T1?**+",
+        &ListTypeReference{
+            ElementType: &ListTypeReference{
+                ElementType: &ListTypeReference{
+                    ElementType: &NullableTypeReference{ ptr },
+                    AllowsEmpty: true,
+                },
+                AllowsEmpty: true,
+            },
+            AllowsEmpty: false,
+        },
+    )
 }
 
 func TestTimestampStrings( t *testing.T ) {
@@ -519,30 +214,4 @@ func TestTimestampStrings( t *testing.T ) {
     mgTm := Timestamp( tm )
     assert.Equal( tm.Format( time.RFC3339Nano ), mgTm.String() )
     assert.Equal( tm.Format( time.RFC3339Nano ), mgTm.Rfc3339Nano() )
-}
-
-func TestTimestampParse( t *testing.T ) {
-    f := func( src, expct string ) {
-        tm := MustTimestamp( src )
-        if expct == "" { expct = src }
-        assert.Equal( expct, tm.Rfc3339Nano() )
-    }
-    f( Now().Rfc3339Nano(), "" )
-    f( "2012-01-01T12:00:00Z", "" )
-    f( "2012-01-01T12:00:00+07:00", "" )
-    f( "2012-01-01T12:00:00-07:00", "" )
-    f( "2012-01-01T12:00:00+00:00", "2012-01-01T12:00:00Z" )
-}
-
-func TestTimestampParseFail( t *testing.T ) {
-    str := "2012-01-10X12:00:00"
-    if _, err := ParseTimestamp( str ); err == nil {
-        t.Fatalf( "Was able to parse: %q", str )
-    } else {
-        pe := err.( *loc.ParseError )
-        assert.Equal( 
-            fmt.Sprintf( "Invalid RFC3339 time: %q", str ), pe.Message )
-        assert.Equal( 1, pe.Loc.Line )
-        assert.Equal( 1, pe.Loc.Col )
-    }
 }

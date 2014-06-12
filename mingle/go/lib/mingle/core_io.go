@@ -6,7 +6,7 @@ import (
     "io"
     "bitgirder/objpath"
     "time"
-    "log"
+//    "log"
     bgio "bitgirder/io"
 )
 
@@ -215,7 +215,6 @@ func ( w *BinWriter ) writeRangeValue( val Value ) error {
     switch val.( type ) {
     case nil, Null, String, Int32, Int64, Uint32, Uint64, Float32, Float64,
          Timestamp:
-        log.Printf( "writing range val: %T", val )
         return w.WriteScalarValue( val )
     }
     panic( libErrorf( "unhandled range val: %T", val ) )

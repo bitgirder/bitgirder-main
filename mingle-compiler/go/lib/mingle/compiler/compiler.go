@@ -28,7 +28,7 @@ func formatKeyedDef( id *mg.Identifier ) string {
 }
 
 func qnameIn( typ mg.TypeReference ) *mg.QualifiedTypeName {
-    return mg.TypeNameIn( typ ).( *mg.QualifiedTypeName )
+    return mg.TypeNameIn( typ )
 }
 
 func baseTypeIsNull( typ mg.TypeReference ) bool {

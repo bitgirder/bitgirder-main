@@ -18,12 +18,12 @@ func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
         &ValueBuildTest{
             Val: mg.MustList(
                 int32( 1 ),
-                mg.MustSymbolMap( 
+                parser.MustSymbolMap( 
                     "f1", int32( 1 ),
                     "f2", mg.MustList( "hello" ),
                 ),
                 mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
-                mg.NewHeapValue( mg.MustStruct( "ns1@v1/S1" ) ),
+                mg.NewHeapValue( parser.MustStruct( "ns1@v1/S1" ) ),
             ),
             Source: CopySource(
                 []ReactorEvent{
@@ -49,21 +49,21 @@ func initValueBuildZeroRefTests( b *ReactorTestSetBuilder ) {
 }
 
 func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
-    s1 := mg.MustStruct( "ns1@v1/S1",
+    s1 := parser.MustStruct( "ns1@v1/S1",
         "val1", mg.String( "hello" ),
         "list1", mg.MustList(),
-        "map1", mg.MustSymbolMap(),
-        "struct1", mg.MustStruct( "ns1@v1/S2" ),
+        "map1", parser.MustSymbolMap(),
+        "struct1", parser.MustStruct( "ns1@v1/S2" ),
     )
     addTest := func( v mg.Value ) { b.AddTests( &ValueBuildTest{ Val: v } ) }
     addTest( mg.String( "hello" ) )
     addTest( mg.MustList() )
     addTest( mg.MustList( 1, 2, 3 ) )
     addTest( mg.MustList( 1, mg.MustList(), mg.MustList( 1, 2 ) ) )
-    addTest( mg.MustSymbolMap() )
-    addTest( mg.MustSymbolMap( "f1", "v1", "f2", mg.MustList(), "f3", s1 ) )
+    addTest( parser.MustSymbolMap() )
+    addTest( parser.MustSymbolMap( "f1", "v1", "f2", mg.MustList(), "f3", s1 ) )
     addTest( s1 )
-    addTest( mg.MustStruct( "ns1@v1/S3" ) )
+    addTest( parser.MustStruct( "ns1@v1/S3" ) )
     addTest( mg.NewHeapValue( mg.String( "hello" ) ) )
     addTest( mg.NewHeapValue( mg.MustList() ) )
     addTest( 
@@ -80,14 +80,15 @@ func initValueBuildReactorTests( b *ReactorTestSetBuilder ) {
     addTest( mg.NewHeapValue( s1 ) )
     addTest( 
         mg.NewHeapValue(
-            mg.MustStruct( "ns1@v1/S1",
+            parser.MustStruct( "ns1@v1/S1",
                 "f1", mg.Int32( 1 ),
                 "f2", mg.NewHeapValue( mg.Int32( 2 ) ),
                 "f3", 
                     mg.NewHeapValue( 
                         mg.MustList( mg.NewHeapValue( mg.Int32( 1 ) ) ) ),
                 "f4", mg.NewHeapValue( 
-                    mg.MustSymbolMap( "g1", mg.NullVal, "g2", mg.Int32( 1 ) ) ),
+                    parser.MustSymbolMap( 
+                        "g1", mg.NullVal, "g2", mg.Int32( 1 ) ) ),
             ),
         ),
     )
@@ -241,7 +242,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         "start of mingle:core@v1/Value?*",
     )
     addAllocFail( NewMapStartEvent( ptrId( 1 ) ), "mingle:core@v1/SymbolMap" )
-    addAllocFail( NewValueEvent( mg.MustStruct( "ns1@v1/S1" ) ),
+    addAllocFail( NewValueEvent( parser.MustStruct( "ns1@v1/S1" ) ),
         "ns1@v1/S1" )
     addAllocFail( 
         ptrAlloc( mg.TypeInt32, 2 ), 
@@ -310,7 +311,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         mk1(
             "allocation of &ns1@v1/S1 followed by ns1@v1/S2",
             ptrAlloc( typeRef( "ns1@v1/S1" ), 1 ),
-            NewValueEvent( mg.MustStruct( "ns1@v1/S2" ) ),
+            NewValueEvent( parser.MustStruct( "ns1@v1/S2" ) ),
         ),
     )
 }
@@ -593,11 +594,11 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
     val1 := NewValueEvent( i1 )
     t1, t2 := qname( "ns1@v1/S1" ), qname( "ns1@v1/S2" )
     ss1, ss2 := NewStructStartEvent( t1 ), NewStructStartEvent( t2 )
-    ss2Val1 := mg.MustStruct( t2, ids[ 0 ], i1 )
+    ss2Val1 := parser.MustStruct( t2, ids[ 0 ], i1 )
     // expct sequences for instance of ns1@v1/S1 by field f0 ...
     fldVals := []mg.Value{
         i1,
-        mg.MustSymbolMap( ids[ 0 ], i1, ids[ 1 ], ss2Val1 ),
+        parser.MustSymbolMap( ids[ 0 ], i1, ids[ 1 ], ss2Val1 ),
         mg.MustList( i1, i1 ),
         ss2Val1,
         i1,
@@ -607,7 +608,7 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
         for _, fldNum := range ord {
             pairs = append( pairs, ids[ fldNum ], fldVals[ fldNum ] )
         }
-        return mg.MustStruct( t1, pairs... )
+        return parser.MustStruct( t1, pairs... )
     }
     // val sequences for fields f0 ...
     fldEvs := [][]ReactorEvent {
@@ -682,9 +683,9 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
             Orders: []FieldOrderReactorTestOrder{
                 testOrderWithIds( t1, ids[ 1 ], ids[ 0 ], ids[ 2 ] ),
             },
-            Expect: mg.MustStruct( t1,
+            Expect: parser.MustStruct( t1,
                 ids[ 0 ], i1,
-                ids[ 1 ], mg.MustStruct( t1,
+                ids[ 1 ], parser.MustStruct( t1,
                     ids[ 2 ], mg.MustList( i1 ),
                     ids[ 1 ], i1,
                 ),
@@ -707,14 +708,14 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
     addTest2( mg.MustList(), idFact.NextValueListStart(), NewEndEvent() )
     addTest2( 
         mg.MustList( i1 ), idFact.NextValueListStart(), val1, NewEndEvent() )
-    addTest2( mg.MustSymbolMap(), idFact.NextMapStart(), NewEndEvent() )
+    addTest2( parser.MustSymbolMap(), idFact.NextMapStart(), NewEndEvent() )
     addTest2( 
-        mg.MustSymbolMap( ids[ 0 ], i1 ), 
+        parser.MustSymbolMap( ids[ 0 ], i1 ), 
         idFact.NextMapStart(), flds[ 0 ], val1, NewEndEvent(),
     )
-    addTest2( mg.MustStruct( ss1.Type ), ss1, NewEndEvent() )
+    addTest2( parser.MustStruct( ss1.Type ), ss1, NewEndEvent() )
     addTest2( 
-        mg.MustStruct( ss1.Type, ids[ 0 ], i1 ),
+        parser.MustStruct( ss1.Type, ids[ 0 ], i1 ),
         ss1, flds[ 0 ], val1, NewEndEvent(),
     )
 }
@@ -745,7 +746,7 @@ func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
         for _, fld := range flds {
             pairs = append( pairs, fldId( fld ), mg.Int32( fld ) )
         }
-        return mg.MustStruct( t1, pairs... )
+        return parser.MustStruct( t1, pairs... )
     }
     addSucc := func( flds ...int ) {
         b.AddTests(
@@ -1018,9 +1019,9 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     ns1 := parser.MustNamespace( "ns1@v1" )
     svc1 := id( "service1" )
     op1 := id( "op1" )
-    params1 := mg.MustSymbolMap( "f1", int32( 1 ) )
+    params1 := parser.MustSymbolMap( "f1", int32( 1 ) )
     authQn := qname( "ns1@v1/Auth1" )
-    auth1 := mg.MustStruct( authQn, "f1", int32( 1 ) )
+    auth1 := parser.MustStruct( authQn, "f1", int32( 1 ) )
     evFldNs := NewFieldStartEvent( mg.IdNamespace )
     evFldSvc := NewFieldStartEvent( mg.IdService )
     evFldOp := NewFieldStartEvent( mg.IdOperation )
@@ -1092,7 +1093,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
         }
         if params != nil { pairs = append( pairs, mg.IdParameters, params ) }
         if auth != nil { pairs = append( pairs, mg.IdAuthentication, auth ) }
-        return mg.MustStruct( mg.QnameRequest, pairs... )
+        return parser.MustStruct( mg.QnameRequest, pairs... )
     }
     addSucc2 := func( src interface{}, authExpct mg.Value ) {
         b.AddTests(
@@ -1151,20 +1152,25 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
             pairs = append( pairs, mg.IdParameters, paramsIn ) 
         }
         if auth != nil { pairs = append( pairs, mg.IdAuthentication, auth ) }
-        t.Source = mg.MustStruct( mg.QnameRequest, pairs... )
+        t.Source = parser.MustStruct( mg.QnameRequest, pairs... )
         b.AddTests( t )
     }
     pathParams := objpath.RootedAt( mg.IdParameters )
     evsEmptyParams := []EventExpectation{ 
         { idFact.NextMapStart(), pathParams }, { NewEndEvent(), pathParams } }
     pathAuth := objpath.RootedAt( mg.IdAuthentication )
-    addPathSucc( nil, mg.MustSymbolMap(), evsEmptyParams, nil, nil )
+    addPathSucc( nil, parser.MustSymbolMap(), evsEmptyParams, nil, nil )
     addPathSucc( 
-        mg.MustSymbolMap(), mg.MustSymbolMap(), evsEmptyParams, nil, nil )
+        parser.MustSymbolMap(), 
+        parser.MustSymbolMap(), 
+        evsEmptyParams, 
+        nil, 
+        nil,
+    )
     idF1 := id( "f1" )
     addPathSucc(
-        mg.MustSymbolMap( idF1, mg.Int32( 1 ) ),
-        mg.MustSymbolMap( idF1, mg.Int32( 1 ) ),
+        parser.MustSymbolMap( idF1, mg.Int32( 1 ) ),
+        parser.MustSymbolMap( idF1, mg.Int32( 1 ) ),
         []EventExpectation{
             { idFact.NextMapStart(), pathParams },
             { evFldF1, pathParams.Descend( idF1 ) },
@@ -1174,11 +1180,11 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
         nil, nil,
     )
     addPathSucc( 
-        nil, mg.MustSymbolMap(), evsEmptyParams,
+        nil, parser.MustSymbolMap(), evsEmptyParams,
         mg.Int32( 1 ), []EventExpectation{ { i32Val1, pathAuth } },
     )
     addPathSucc(
-        nil, mg.MustSymbolMap(), evsEmptyParams,
+        nil, parser.MustSymbolMap(), evsEmptyParams,
         auth1, []EventExpectation{
             { NewStructStartEvent( authQn ), pathAuth },
             { evFldF1, pathAuth.Descend( idF1 ) },
@@ -1204,7 +1210,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
             Service: svc1,
             Operation: op1,
             Parameters: mg.EmptySymbolMap(),
-            Source: mg.MustStruct( mg.QnameRequest,
+            Source: parser.MustStruct( mg.QnameRequest,
                 mg.IdNamespace, nsBuf( ns1 ),
                 mg.IdService, idBuf( svc1 ),
                 mg.IdOperation, idBuf( op1 ),
@@ -1213,7 +1219,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     )
     b.AddTests(
         &RequestReactorTest{
-            Source: mg.MustStruct( "ns1@v1/S1" ),
+            Source: parser.MustStruct( "ns1@v1/S1" ),
             Error: mg.NewTypeCastError(
                 mg.TypeRequest, typeRef( "ns1@v1/S1" ), nil ),
         },
@@ -1232,28 +1238,29 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
         b.AddTests( createReqVcErr( val, path, msg ) )
     }
     addReqVcErr(
-        mg.MustSymbolMap( mg.IdNamespace, true ), 
+        parser.MustSymbolMap( mg.IdNamespace, true ), 
         objpath.RootedAt( mg.IdNamespace ),
         "invalid value: mingle:core@v1/Boolean",
     )
     addReqVcErr(
-        mg.MustSymbolMap( mg.IdNamespace, mg.MustSymbolMap() ),
+        parser.MustSymbolMap( mg.IdNamespace, parser.MustSymbolMap() ),
         objpath.RootedAt( mg.IdNamespace ),
         "invalid value: mingle:core@v1/SymbolMap",
     )
     addReqVcErr(
-        mg.MustSymbolMap( mg.IdNamespace, mg.MustStruct( "ns1@v1/S1" ) ),
+        parser.MustSymbolMap( 
+            mg.IdNamespace, parser.MustStruct( "ns1@v1/S1" ) ),
         objpath.RootedAt( mg.IdNamespace ),
         "invalid value: ns1@v1/S1",
     )
     addReqVcErr(
-        mg.MustSymbolMap( mg.IdNamespace, mg.MustList() ),
+        parser.MustSymbolMap( mg.IdNamespace, mg.MustList() ),
         objpath.RootedAt( mg.IdNamespace ),
         "invalid value: mingle:core@v1/Value?*",
     )
     func() {
         test := createReqVcErr(
-            mg.MustSymbolMap( 
+            parser.MustSymbolMap( 
                 mg.IdNamespace, ns1.ExternalForm(), mg.IdService, true ),
             objpath.RootedAt( mg.IdService ),
             "invalid value: mingle:core@v1/Boolean",
@@ -1263,7 +1270,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     }()
     func() {
         test := createReqVcErr(
-            mg.MustSymbolMap( 
+            parser.MustSymbolMap( 
                 mg.IdNamespace, ns1.ExternalForm(),
                 mg.IdService, svc1.ExternalForm(),
                 mg.IdOperation, true,
@@ -1276,7 +1283,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     }()
     b.AddTests(
         &RequestReactorTest{
-            Source: mg.MustSymbolMap(
+            Source: parser.MustSymbolMap(
                 mg.IdNamespace, ns1.ExternalForm(),
                 mg.IdService, svc1.ExternalForm(),
                 mg.IdOperation, op1.ExternalForm(),
@@ -1299,7 +1306,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
         pairs ...interface{} ) *RequestReactorTest {
 
         return createReqVcErr(
-            mg.MustSymbolMap( pairs... ), objpath.RootedAt( path ), msg )
+            parser.MustSymbolMap( pairs... ), objpath.RootedAt( path ), msg )
     }
     addBinRdErr := func( 
         path *mg.Identifier, msg string, pairs ...interface{} ) {
@@ -1333,14 +1340,14 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
         b.AddTests( test )
     }()
     addReqVcErr(
-        mg.MustSymbolMap( mg.IdNamespace, "ns1::ns2" ),
+        parser.MustSymbolMap( mg.IdNamespace, "ns1::ns2" ),
         objpath.RootedAt( mg.IdNamespace ),
         "[<input>, line 1, col 5]: Illegal start of identifier part: \":\" " +
         "(U+003A)",
     )
     func() {
         test := createReqVcErr(
-            mg.MustSymbolMap( 
+            parser.MustSymbolMap( 
                 mg.IdNamespace, ns1.ExternalForm(), mg.IdService, "2bad" ),
             objpath.RootedAt( mg.IdService ),
             "[<input>, line 1, col 1]: Illegal start of identifier part: " +
@@ -1351,7 +1358,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     }()
     func() {
         test := createReqVcErr(
-            mg.MustSymbolMap(
+            parser.MustSymbolMap(
                 mg.IdNamespace, ns1.ExternalForm(),
                 mg.IdService, svc1.ExternalForm(),
                 mg.IdOperation, "2bad",
@@ -1366,7 +1373,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     t1Bad := qname( "foo@v1/Request" )
     b.AddTests(
         &RequestReactorTest{
-            Source: mg.MustStruct( t1Bad ),
+            Source: parser.MustStruct( t1Bad ),
             Error: mg.NewTypeCastError(
                 mg.TypeRequest, t1Bad.AsAtomicType(), nil ),
         },
@@ -1378,7 +1385,7 @@ func initRequestTests( b *ReactorTestSetBuilder ) {
     // right required fields.
     b.AddTests(
         &RequestReactorTest{
-            Source: mg.MustSymbolMap( 
+            Source: parser.MustSymbolMap( 
                 mg.IdNamespace, ns1.ExternalForm(),
                 mg.IdOperation, op1.ExternalForm(),
             ),
@@ -1397,30 +1404,30 @@ func initResponseTests( b *ReactorTestSetBuilder ) {
             &ResponseReactorTest{ In: in, ResVal: res, ErrVal: err } )
     }
     i32Val1 := mg.Int32( 1 )
-    err1 := mg.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
-    addSucc( mg.MustStruct( mg.QnameResponse ), nil, nil )
-    addSucc( mg.MustSymbolMap(), nil, nil )
-    addSucc( mg.MustSymbolMap( mg.IdResult, mg.NullVal ), mg.NullVal, nil )
-    addSucc( mg.MustSymbolMap( mg.IdResult, i32Val1 ), i32Val1, nil )
-    addSucc( mg.MustSymbolMap( mg.IdError, mg.NullVal ), nil, mg.NullVal )
-    addSucc( mg.MustSymbolMap( mg.IdError, err1 ), nil, err1 )
-    addSucc( mg.MustSymbolMap( mg.IdError, int32( 1 ) ), nil, i32Val1 )
+    err1 := parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) )
+    addSucc( parser.MustStruct( mg.QnameResponse ), nil, nil )
+    addSucc( parser.MustSymbolMap(), nil, nil )
+    addSucc( parser.MustSymbolMap( mg.IdResult, mg.NullVal ), mg.NullVal, nil )
+    addSucc( parser.MustSymbolMap( mg.IdResult, i32Val1 ), i32Val1, nil )
+    addSucc( parser.MustSymbolMap( mg.IdError, mg.NullVal ), nil, mg.NullVal )
+    addSucc( parser.MustSymbolMap( mg.IdError, err1 ), nil, err1 )
+    addSucc( parser.MustSymbolMap( mg.IdError, int32( 1 ) ), nil, i32Val1 )
     pathRes := objpath.RootedAt( mg.IdResult )
     pathResF1 := pathRes.Descend( id( 1 ) )
     pathErr := objpath.RootedAt( mg.IdError )
     pathErrF1 := pathErr.Descend( id( 1 ) )
     b.AddTests(
         &ResponseReactorTest{
-            In: mg.MustStruct( mg.QnameResponse, "result", int32( 1 ) ),
+            In: parser.MustStruct( mg.QnameResponse, "result", int32( 1 ) ),
             ResVal: i32Val1,
             ResEvents: []EventExpectation{ 
                 { NewValueEvent( i32Val1 ), pathRes },
             },
         },
         &ResponseReactorTest{
-            In: mg.MustSymbolMap( 
-                "result", mg.MustSymbolMap( "f1", int32( 1 ) ) ),
-            ResVal: mg.MustSymbolMap( "f1", int32( 1 ) ),
+            In: parser.MustSymbolMap( 
+                "result", parser.MustSymbolMap( "f1", int32( 1 ) ) ),
+            ResVal: parser.MustSymbolMap( "f1", int32( 1 ) ),
             ResEvents: []EventExpectation{
                 { idFact.NextMapStart(), pathRes },
                 { NewFieldStartEvent( id( 1 ) ), pathResF1 },
@@ -1429,14 +1436,14 @@ func initResponseTests( b *ReactorTestSetBuilder ) {
             },
         },
         &ResponseReactorTest{
-            In: mg.MustSymbolMap( "error", int32( 1 ) ),
+            In: parser.MustSymbolMap( "error", int32( 1 ) ),
             ErrVal: i32Val1,
             ErrEvents: []EventExpectation{ 
                 { NewValueEvent( i32Val1 ), pathErr },
             },
         },
         &ResponseReactorTest{
-            In: mg.MustSymbolMap( "error", err1 ),
+            In: parser.MustSymbolMap( "error", err1 ),
             ErrVal: err1,
             ErrEvents: []EventExpectation{
                 { NewStructStartEvent( err1.Type ), pathErr },
@@ -1454,12 +1461,12 @@ func initResponseTests( b *ReactorTestSetBuilder ) {
         mg.NewUnrecognizedFieldError( nil, id( 1 ) ),
     )
     addFail(
-        mg.MustStruct( "ns1@v1/Response" ),
+        parser.MustStruct( "ns1@v1/Response" ),
         mg.NewTypeCastError( 
             mg.TypeResponse, typeRef( "ns1@v1/Response" ), nil ),
     )
     addFail(
-        mg.MustSymbolMap( mg.IdResult, i32Val1, mg.IdError, err1 ),
+        parser.MustSymbolMap( mg.IdResult, i32Val1, mg.IdError, err1 ),
         mg.NewValueCastError( 
             nil, "response has both a result and an error value" ),
     )
@@ -1484,9 +1491,9 @@ type crtInit struct {
 func ( t *crtInit ) initStdVals() {
     t.buf1 = mg.Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
     t.tm1 = parser.MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
-    t.map1 = mg.MustSymbolMap( "key1", 1, "key2", "val2" )
-    t.en1 = mg.MustEnum( "ns1@v1/E1", "en-val1" )
-    t.struct1 = mg.MustStruct( "ns1@v1/S1", "key1", "val1" )
+    t.map1 = parser.MustSymbolMap( "key1", 1, "key2", "val2" )
+    t.en1 = parser.MustEnum( "ns1@v1/E1", "en-val1" )
+    t.struct1 = parser.MustStruct( "ns1@v1/S1", "key1", "val1" )
 }
 
 func ( t *crtInit ) addCrt( crt *CastReactorTest ) { t.b.AddTests( crt ) }
@@ -1773,7 +1780,7 @@ func ( t *crtInit ) addIdentityNumTests() {
         { val: mg.Float32( 1.0 ), str: "1", typ: mg.TypeFloat32 },
         { val: mg.Float64( 1.0 ), str: "1", typ: mg.TypeFloat64 },
     }
-    s1 := mg.MustStruct( "ns1@v1/S1" )
+    s1 := parser.MustStruct( "ns1@v1/S1" )
     for _, numCtx := range numTests {
         t.addSucc( numCtx.val, numCtx.str, mg.TypeString )
         t.addSucc( numCtx.str, numCtx.val, numCtx.typ )
@@ -1960,7 +1967,7 @@ func ( t *crtInit ) addListTests() {
         mg.MustList( "1", nil, "hi" ),
         "String?*",
     )
-    s1 := mg.MustStruct( "ns1@v1/S1" )
+    s1 := parser.MustStruct( "ns1@v1/S1" )
     t.addSucc(
         []interface{}{ s1, mg.NewHeapValue( s1 ), nil },
         mg.MustList( mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), mg.NullVal ),
@@ -2033,7 +2040,9 @@ func ( t *crtInit ) addListTests() {
 
 func ( t *crtInit ) addMapTests() {
     m1 := mg.MustSymbolMap
-    m2 := func() *mg.SymbolMap { return mg.MustSymbolMap( "f1", int32( 1 ) ) }
+    m2 := func() *mg.SymbolMap { 
+        return parser.MustSymbolMap( "f1", int32( 1 ) ) 
+    }
     t.addSucc( m1(), m1(), mg.TypeSymbolMap )
     t.addSucc( m1(), m1(), mg.TypeValue )
     t.addSucc( m2(), m2(), mg.TypeSymbolMap )
@@ -2047,8 +2056,8 @@ func ( t *crtInit ) addMapTests() {
     t.addSucc( l1, l1, lt1 )
     t.addSucc( l2, l2, lt2 )
     t.addSucc(
-        mg.MustSymbolMap( "f1", mg.NullVal ), 
-        mg.MustSymbolMap( "f1", mg.NullVal ), 
+        parser.MustSymbolMap( "f1", mg.NullVal ), 
+        parser.MustSymbolMap( "f1", mg.NullVal ), 
         mg.TypeValue,
     )
     t.addSucc( mg.MustList( s2, s2 ), mg.MustList( m2(), m2() ), lt2 )
@@ -2060,7 +2069,8 @@ func ( t *crtInit ) addMapTests() {
         lt2,
         crtPathDefault.StartList().SetIndex( 1 ),
     )
-    nester := mg.MustSymbolMap( "f1", mg.MustSymbolMap( "f2", int32( 1 ) ) )
+    nester := 
+        parser.MustSymbolMap( "f1", parser.MustSymbolMap( "f2", int32( 1 ) ) )
     t.addSucc( nester, nester, mg.TypeSymbolMap )
     t.addSucc( m1(), mg.NewHeapValue( m1() ), "&SymbolMap" )
     t.addSucc( mg.NewHeapValue( m1() ), mg.NewHeapValue( m1() ), "&SymbolMap" )
@@ -2080,11 +2090,11 @@ func ( t *crtInit ) addMapTests() {
 func ( t *crtInit ) addStructTests() {
     qn1 := qname( "ns1@v1/T1" )
     t1 := qn1.AsAtomicType()
-    s1 := mg.MustStruct( qn1 )
-    s2 := mg.MustStruct( qn1, "f1", int32( 1 ) )
+    s1 := parser.MustStruct( qn1 )
+    s2 := parser.MustStruct( qn1, "f1", int32( 1 ) )
     qn2 := qname( "ns1@v1/T2" )
     t2 := qn2.AsAtomicType()
-    s3 := mg.MustStruct( qn2,
+    s3 := parser.MustStruct( qn2,
         "f1", int32( 1 ),
         "f2", s1,
         "f3", s2,
@@ -2098,7 +2108,7 @@ func ( t *crtInit ) addStructTests() {
     l1 := mg.MustList( s1, s2 )
     t.addSucc( l1, l1, &mg.ListTypeReference{ t1, false } )
     t.addSucc( l1, l1, &mg.ListTypeReference{ t1, true } )
-    s4 := mg.MustStruct( "ns1@v1/T4", "f1", mg.NullVal )
+    s4 := parser.MustStruct( "ns1@v1/T4", "f1", mg.NullVal )
     t.addSucc( s4, s4, s4.Type )
     f1 := func( in interface{}, inTyp interface{} ) {
         t.addTcError0(
@@ -2133,12 +2143,12 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
     }
     t1 := qname( "ns1@v1/T1" )
     t2 := qname( "ns1@v1/T2" )
-    s1 := mg.MustStruct( t1, "f1", int32( 1 ) )
-    addSucc( mg.MustStruct( t1, "f1", "1" ), s1, t1 )
-    addSucc( mg.MustSymbolMap( "f1", "1" ), s1, t1 )
+    s1 := parser.MustStruct( t1, "f1", int32( 1 ) )
+    addSucc( parser.MustStruct( t1, "f1", "1" ), s1, t1 )
+    addSucc( parser.MustSymbolMap( "f1", "1" ), s1, t1 )
     addSucc( "cast1", int32( 1 ), "ns1@v1/S3" )
     addSucc( "cast2", int32( -1 ), "ns1@v1/S3" )
-    s1Sub1 := mg.MustStruct( "ns1@v1/T1Sub1" )
+    s1Sub1 := parser.MustStruct( "ns1@v1/T1Sub1" )
     addSucc( s1Sub1, s1Sub1, "ns1@v1/T1" )
     addSucc( 
         mg.MustList( "cast1", "cast2" ), 
@@ -2146,7 +2156,7 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
         "ns1@v1/S3*",
     )
     addSucc( nil, nil, "&ns1@v1/S3?" )
-    arb := mg.MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
+    arb := parser.MustStruct( "ns1@v1/Arbitrary", "f1", int32( 1 ) )
     addSucc( arb, arb, arb.Type )
     add( t.createTcError( int32( 1 ), "ns1@v1/S3", mg.TypeInt32 ) )
     add( t.createTcError( arb, "ns1@v1/S1", arb.Type ) )
@@ -2178,22 +2188,22 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
             "test-message-cast3",
         ),
     )
-    s2InFlds := 
-        mg.MustSymbolMap( "f1", "1", "f2", mg.MustSymbolMap( "f1", "1" ) )
-    s2 := mg.MustStruct( t2, "f1", int32( 1 ), "f2", s1 )
+    s2InFlds := parser.MustSymbolMap( 
+        "f1", "1", "f2", parser.MustSymbolMap( "f1", "1" ) )
+    s2 := parser.MustStruct( t2, "f1", int32( 1 ), "f2", s1 )
     addSucc( &mg.Struct{ Type: t2, Fields: s2InFlds }, s2, t2 )
     addSucc( s2InFlds, s2, t2 )
-    add( t.createTcError( mg.MustStruct( t2, "f1", int32( 1 ) ), t1, t2 ) )
+    add( t.createTcError( parser.MustStruct( t2, "f1", int32( 1 ) ), t1, t2 ) )
     add( 
         t.createTcError0(
-            mg.MustStruct( t1, "f1", mg.MustList( 1, 2 ) ),
+            parser.MustStruct( t1, "f1", mg.MustList( 1, 2 ) ),
             mg.TypeInt32,
             mg.TypeOpaqueList,
             t1,
             crtPathDefault.Descend( mg.MakeTestId( 1 ) ),
         ),
     )
-    extraFlds1 := mg.MustSymbolMap( "f1", int32( 1 ), "x1", int32( 0 ) )
+    extraFlds1 := parser.MustSymbolMap( "f1", int32( 1 ), "x1", int32( 0 ) )
     failExtra1 := func( val interface{} ) {
         msg := "unrecognized field: x1"
         add( t.createVcError0( val, t1, crtPathDefault, msg ) )
@@ -2203,7 +2213,7 @@ func ( t *crtInit ) addInterfaceImplBasicTests() {
     failTyp := qname( "ns1@v1/FailType" )
     add(
         t.createVcError0(
-            mg.MustStruct( failTyp ), 
+            parser.MustStruct( failTyp ), 
             failTyp, 
             crtPathDefault,
             "test-message-fail-type",
@@ -2286,7 +2296,7 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
                     NewEndEvent(),
                 },
             ),
-            Expect: mg.MustStruct( qn( 1 ),
+            Expect: parser.MustStruct( qn( 1 ),
                 "f0", mg.Int32( int32( 1 ) ),
                 "f1", mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
                 "f2", mg.NewHeapValue( mg.Int32( int32( 2 ) ) ),
@@ -2299,9 +2309,9 @@ func ( t *crtInit ) addInterfacePointerHandlingTests() {
                     mg.NewHeapValue( mg.Int32( int32( 0 ) ) ),
                     mg.NewHeapValue( mg.Int32( int32( 1 ) ) ),
                 ),
-                "f9", mg.MustStruct( qn( 2 ) ),
-                "f10", mg.MustStruct( qn( 2 ) ),
-                "f11", mg.NewHeapValue( mg.MustStruct( qn( 2 ) ) ),
+                "f9", parser.MustStruct( qn( 2 ) ),
+                "f10", parser.MustStruct( qn( 2 ) ),
+                "f11", mg.NewHeapValue( parser.MustStruct( qn( 2 ) ) ),
                 "f12", hv12,
                 "f13", hv12,
                 "f14", mg.Int64( int64( 12 ) ),
