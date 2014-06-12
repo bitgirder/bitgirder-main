@@ -587,7 +587,7 @@ func ( bs *buildScope ) completeType(
 
     res, err := typ.CompleteType( typeCompletion{ tr: tr, bs: bs } )
     if err == nil { return res }
-    bs.c.addError( typ.ErrLoc, err.Error() )
+    bs.c.addError( typ.Loc, err.Error() )
     return nil
 }
 
@@ -757,7 +757,7 @@ func ( c *Compilation ) canAddSubTypeToBuildOrder(
     ti := bc.mustTypeInfo()
     c.ignoreErrors = true
     defer func() { c.ignoreErrors = false }()
-    typ := bc.scope.resolveType( ti.SuperType, ti.SuperTypeLoc )
+    typ := bc.scope.resolveType( ti.SuperType, ti.SuperType.Loc )
     if typ == nil { return true }
     qn := qnameIn( typ )
     return seen.HasKey( qn ) || bc.scope.c.extTypes.HasKey( qn )
@@ -874,7 +874,7 @@ func ( c *Compilation ) getAliasBuildOrder(
 func ( c *Compilation ) buildAliasedType( bc buildContext ) {
     ad, bs := bc.td.( *tree.AliasDecl ), bc.scope
     qn := bc.qname()
-    tr := newTypeResolution( ad.TargetLoc )
+    tr := newTypeResolution( ad.Target.Loc )
     if ! bs.addAlias( qn, tr ) {
         panic( implErrorf( "Failed to add initial alias to chain: %s", qn ) )
     }
@@ -893,11 +893,11 @@ func ( c *Compilation ) buildAliasedTypes( ctxs []buildContext ) {
 func ( c *Compilation ) getSuperType(
     ti *tree.TypeDeclInfo, bs *buildScope ) *mg.QualifiedTypeName {
     if ti.SuperType == nil { return nil }
-    res := bs.resolveType( ti.SuperType, ti.SuperTypeLoc )
+    res := bs.resolveType( ti.SuperType, ti.SuperType.Loc )
     if res == nil { return nil }
     if at, ok := res.( *mg.AtomicTypeReference ); ok { return at.Name } 
     c.addErrorf( 
-        ti.SuperTypeLoc, "Non-atomic supertype for %s: %s", ti.Name, res )
+        ti.SuperType.Loc, "Non-atomic supertype for %s: %s", ti.Name, res )
     return nil
 }
 
@@ -963,12 +963,12 @@ func ( c *Compilation ) buildFieldDefinition(
     fldDecl *tree.FieldDecl,
     bs *buildScope ) *types.FieldDefinition {
     res := &types.FieldDefinition{ Name: fldDecl.Name }
-    if res.Type = bs.resolveType( fldDecl.Type, fldDecl.TypeLoc );
+    if res.Type = bs.resolveType( fldDecl.Type, fldDecl.Type.Loc );
        res.Type == nil {
         return nil
     }
     if baseTypeIsNull( res.Type ) {
-        c.addError( fldDecl.TypeLoc, "Null type not allowed here" )
+        c.addError( fldDecl.Type.Loc, "Null type not allowed here" )
         return nil
     }
     return res
@@ -1048,7 +1048,7 @@ func ( c *Compilation ) processConstructor(
     consDecl *tree.ConstructorDecl,
     seen map[ string ]bool,
     bs *buildScope ) *types.ConstructorDefinition {
-    typ := bs.resolveType( consDecl.ArgType, consDecl.ArgTypeLoc )
+    typ := bs.resolveType( consDecl.ArgType, consDecl.ArgType.Loc )
     if typ == nil { return nil }
     keyStr := typ.ExternalForm()
     if _, hadPrev := seen[ keyStr ]; hadPrev {
@@ -1126,11 +1126,11 @@ func ( c *Compilation ) buildCallSignature(
     decl *tree.CallSignature, bs *buildScope ) *types.CallSignature {
     res, ok := types.NewCallSignature(), true
     ok = c.setCallSignatureFields( decl, res, bs ) && ok
-    if retTyp := bs.resolveType( decl.Return, decl.ReturnLoc ); retTyp == nil {
+    if retTyp := bs.resolveType( decl.Return, decl.Return.Loc ); retTyp == nil {
         ok = false
     } else { res.Return = retTyp }
     for _, thrown := range decl.Throws {
-        if thrownTyp := bs.resolveType( thrown.Type, thrown.TypeLoc );
+        if thrownTyp := bs.resolveType( thrown.Type, thrown.Type.Loc );
            thrownTyp == nil {
             ok = false
         } else { res.Throws = append( res.Throws, thrownTyp ) }

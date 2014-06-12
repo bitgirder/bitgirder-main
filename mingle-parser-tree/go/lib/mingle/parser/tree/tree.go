@@ -177,7 +177,6 @@ func ( le *ListExpression ) Locate() *parser.Location { return le.Start }
 type ConstructorDecl struct {
     Start *parser.Location
     ArgType *parser.CompletableTypeReference
-    ArgTypeLoc *parser.Location
 }
 
 func ( cd *ConstructorDecl ) Locate() *parser.Location { return cd.Start }
@@ -186,7 +185,6 @@ type FieldDecl struct {
     Name *mg.Identifier
     NameLoc *parser.Location
     Type *parser.CompletableTypeReference
-    TypeLoc *parser.Location
     Default Expression
 }
 
@@ -236,7 +234,6 @@ type TypeDeclInfo struct {
     Name *mg.DeclaredTypeName
     NameLoc *parser.Location
     SuperType *parser.CompletableTypeReference
-    SuperTypeLoc *parser.Location
 }
 
 func ( i *TypeDeclInfo ) Locate() *parser.Location { return i.NameLoc }
@@ -279,7 +276,6 @@ type AliasDecl struct {
     Name *mg.DeclaredTypeName
     NameLoc *parser.Location
     Target *parser.CompletableTypeReference
-    TargetLoc *parser.Location
 }
 
 func ( ad *AliasDecl ) GetName() *mg.DeclaredTypeName { return ad.Name }
@@ -287,16 +283,14 @@ func ( ad *AliasDecl ) Locate() *parser.Location { return ad.Start }
 
 type ThrownType struct {
     Type *parser.CompletableTypeReference
-    TypeLoc *parser.Location
 }
 
-func ( tt *ThrownType ) Locate() *parser.Location { return tt.TypeLoc }
+func ( tt *ThrownType ) Locate() *parser.Location { return tt.Type.Loc }
 
 type CallSignature struct {
     Start *parser.Location
     Fields []*FieldDecl
     Return *parser.CompletableTypeReference
-    ReturnLoc *parser.Location
     Throws []*ThrownType
 }
 func ( cs *CallSignature ) Locate() *parser.Location { return cs.Start }
@@ -479,7 +473,8 @@ func ( p *parse ) expectTypeName() ( mg.TypeName, *parser.Location, error ) {
 }
 
 func ( p *parse ) expectTypeReference() (
-    *parser.CompletableTypeReference, *parser.Location, error ) {
+    *parser.CompletableTypeReference, error ) {
+
     return p.ExpectTypeReference( p.verDefl )
 }
 
@@ -643,9 +638,7 @@ func ( p *parse ) expectTypeDeclInfo() ( info *TypeDeclInfo, err error ) {
     }
     var tn *parser.TokenNode
     if tn, err = p.PollSpecial( parser.SpecialTokenLessThan ); err == nil {
-        if tn != nil {
-            info.SuperType, info.SuperTypeLoc, err = p.expectTypeReference()
-        }
+        if tn != nil { info.SuperType, err = p.expectTypeReference() }
     }
     return
 }
@@ -659,9 +652,7 @@ func ( p *parse ) expectConstructorDecl(
     lc *parser.Location ) ( cd *ConstructorDecl, err error ) {
     cd = &ConstructorDecl{ Start: lc }
     if _, err = p.passOpenParen(); err != nil { return }
-    if cd.ArgType, cd.ArgTypeLoc, err = p.expectTypeReference(); err != nil { 
-        return 
-    }
+    if cd.ArgType, err = p.expectTypeReference(); err != nil { return }
     if _, err = p.passCloseParen(); err != nil { return }
     return
 }
@@ -716,10 +707,10 @@ func ( p *parse ) expectCompositeUnaryExpression(
 }
 
 func ( p *parse ) expectQualifiedAccessExpression( 
-    typ *parser.CompletableTypeReference,
-    lc *parser.Location ) ( *QualifiedExpression, error ) {
+    typ *parser.CompletableTypeReference ) ( *QualifiedExpression, error ) {
+
     var err error
-    pe := &PrimaryExpression{ Prim: typ, PrimLoc: lc }
+    pe := &PrimaryExpression{ Prim: typ, PrimLoc: typ.Loc }
     res := &QualifiedExpression{ Lhs: pe }
     if _, err = p.ExpectSpecial( tkPeriod ); err != nil { return nil, err }
     if res.Id, res.IdLoc, err = p.expectIdentifier(); err != nil {
@@ -737,8 +728,8 @@ func ( p *parse ) expectIdentifiedExpression() ( Expression, error ) {
         pe.Prim, pe.PrimLoc, err = p.expectIdentifier()
         return pe, nil
     case *mg.DeclaredTypeName: 
-        if typ, lc, err := p.expectTypeReference(); err == nil {
-            return p.expectQualifiedAccessExpression( typ, lc )
+        if typ, err := p.expectTypeReference(); err == nil {
+            return p.expectQualifiedAccessExpression( typ )
         } else { return nil, err }
     }
     return nil, nil
@@ -819,7 +810,7 @@ func ( p *parse ) expectFieldDecl(
     ends *fieldEnds ) ( fd *FieldDecl, sawEnd bool, err error ) {
     fd = new( FieldDecl )
     if fd.Name, fd.NameLoc, err = p.expectIdentifier(); err != nil { return }
-    if fd.Type, fd.TypeLoc, err = p.expectTypeReference(); err != nil { return }
+    if fd.Type, err = p.expectTypeReference(); err != nil { return }
     var kwd parser.Keyword
     if kwd, err = p.pollKeyword( kwdDefault ); err != nil { return }
     if kwd != "" {
@@ -897,7 +888,7 @@ func ( p *parse ) expectAliasDecl(
     if ad.Name, ad.NameLoc, err = p.expectDeclaredTypeName(); err != nil { 
         return
     }
-    ad.Target, ad.TargetLoc, err = p.expectTypeReference()
+    ad.Target, err = p.expectTypeReference()
     _, err = p.passStatementEnd()
     return
 }
@@ -925,7 +916,7 @@ func ( p *parse ) collectCallFields( cs *CallSignature ) ( err error ) {
 
 func ( p *parse ) expectThrownType() ( tt *ThrownType, err error ) {
     tt = new( ThrownType )
-    tt.Type, tt.TypeLoc, err = p.expectTypeReference()
+    tt.Type, err = p.expectTypeReference()
     return
 }
 
@@ -951,9 +942,7 @@ func ( p *parse ) expectCallSignature() ( cs *CallSignature, err error ) {
     }
     if cs.Start, err = p.passOpenParen(); err != nil { return }
     if err = p.collectCallFields( cs ); err != nil { return }
-    if cs.Return, cs.ReturnLoc, err = p.expectTypeReference(); err != nil {
-        return
-    }
+    if cs.Return, err = p.expectTypeReference(); err != nil { return }
     if _, err = p.PollSpecial( tkComma ); err != nil { return }
     err = p.collectCallThrownTypes( cs )
     _, err = p.passStatementEnd()

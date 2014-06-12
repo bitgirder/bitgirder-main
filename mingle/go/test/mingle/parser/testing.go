@@ -98,8 +98,8 @@ func AssertCompletableTypeReference(
         a.Truef( act == nil, "expected nil, got %s", act )
         return
     }
-    a.Descend( "ErrLoc" ).Equalf( expct.ErrLoc, act.ErrLoc,
-        "%s != %s", expct.ErrLoc, act.ErrLoc )
+    a.Descend( "Loc" ).Equalf( expct.Loc, act.Loc,
+        "%s != %s", expct.Loc, act.Loc )
     a.Descend( "Name" ).Equal( expct.Name, act.Name )
     assertRestriction( 
         expct.Restriction, act.Restriction, a.Descend( "Restriction" ) )

@@ -53,7 +53,7 @@ func ( st *syntaxBuildTester ) expectSynthEnd() {
 }
 
 func ( st *syntaxBuildTester ) expectTypeReference() *CompletableTypeReference {
-    ref, _, err := st.sb.ExpectTypeReference( nil )
+    ref, err := st.sb.ExpectTypeReference( nil )
     if err != nil { st.Fatal( err ) }
     return ref
 }
@@ -145,7 +145,7 @@ func assertScopedVersion(
     switch call {
     case "ns": val, _, err = sb.ExpectNamespace( scope )
     case "qn": val, _, err = sb.ExpectQualifiedTypeName( scope )
-    case "type": val, _, err = sb.ExpectTypeReference( scope )
+    case "type": val, err = sb.ExpectTypeReference( scope )
     default: t.Fatalf( "Unhandled call: %s", call )
     }
     if err != nil { 
@@ -228,28 +228,28 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
     }
     for _, s := range []struct { in string; ref *CompletableTypeReference }{
         { "A", &CompletableTypeReference{ 
-            ErrLoc: lc( 1 ), Name: nmA, quants: emptyQuants } },
+            Loc: lc( 1 ), Name: nmA, quants: emptyQuants } },
         { "A+", &CompletableTypeReference{ 
-            ErrLoc: lc( 1 ), Name: nmA, quants: quants } },
+            Loc: lc( 1 ), Name: nmA, quants: quants } },
         { `A~"a"+`, &CompletableTypeReference{ 
-            ErrLoc: lc( 1 ), Name: nmA, Restriction: regex, quants: quants } },
+            Loc: lc( 1 ), Name: nmA, Restriction: regex, quants: quants } },
         { `A~"a"`, &CompletableTypeReference{ 
-            ErrLoc: lc( 1 ), 
+            Loc: lc( 1 ), 
             Name: nmA, 
             Restriction: regex, 
             quants: emptyQuants },
         },
         { `A~[0,1]+`, &CompletableTypeReference{ 
-            ErrLoc: lc( 1 ), Name: nmA, Restriction: rng, quants: quants } },
+            Loc: lc( 1 ), Name: nmA, Restriction: rng, quants: quants } },
         { `A~[0,1]`, &CompletableTypeReference{ 
-            ErrLoc: lc( 1 ),
+            Loc: lc( 1 ),
             Name: nmA, 
             Restriction: rng, 
             quants: emptyQuants },
         },
     } {
         st := newSyntaxBuildTester( s.in + "\n", false, t )
-        if ref, _, err := st.sb.ExpectTypeReference( nil ); err == nil {
+        if ref, err := st.sb.ExpectTypeReference( nil ); err == nil {
             assert.Equal( s.ref, ref )
         } else { t.Fatal( err ) }
         st.expectSynthEnd()

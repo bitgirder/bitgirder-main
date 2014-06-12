@@ -306,7 +306,7 @@ func init() {
         in, ext string, expect *CompletableTypeReference ) *CoreParseTest {
 
         if expect.quants == nil { expect.quants = []SpecialToken{} }
-        if expect.ErrLoc == nil { expect.ErrLoc = loc( 1 ) }
+        if expect.Loc == nil { expect.Loc = loc( 1 ) }
         if ext == "" { ext = in }
         return &CoreParseTest{ 
             In: in, 

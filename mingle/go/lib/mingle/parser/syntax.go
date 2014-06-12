@@ -542,7 +542,7 @@ func ( sb *Builder ) pollTypeRefRestriction() (
 }
 
 type CompletableTypeReference struct {
-    ErrLoc *Location
+    Loc *Location
     Name mg.TypeName
     Restriction RestrictionSyntax
     ptrDepth int
@@ -560,7 +560,7 @@ type TypeCompleter interface {
 func ( t *CompletableTypeReference ) CompleteType( 
     tc TypeCompleter ) ( mg.TypeReference, error ) {
 
-    res, ok, err := tc.CompleteBaseType( t.Name, t.Restriction, t.ErrLoc )
+    res, ok, err := tc.CompleteBaseType( t.Name, t.Restriction, t.Loc )
     if ! ( ok && err == nil ) { return nil, err }
     for i := 0; i < t.ptrDepth; i++ { res = mg.NewPointerTypeReference( res ) }
     for _, quant := range t.quants {
@@ -585,9 +585,7 @@ func ( t *CompletableTypeReference ) CompleteType(
 // ending statements with a synthetic end token, just as lexer does with
 // numbers, strings, etc.
 func ( sb *Builder ) ExpectTypeReference(
-    verDefl *mg.Identifier ) ( ref *CompletableTypeReference, 
-                               l *Location,
-                               err error ) {
+    verDefl *mg.Identifier ) ( ref *CompletableTypeReference, err error ) {
 
     tmp := &CompletableTypeReference{}
     var ptrLoc, nmLoc *Location
@@ -597,8 +595,7 @@ func ( sb *Builder ) ExpectTypeReference(
     }
     if tmp.Restriction, err = sb.pollTypeRefRestriction(); err != nil { return }
     if tmp.quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }
-    if ptrLoc == nil { tmp.ErrLoc = nmLoc } else { tmp.ErrLoc = ptrLoc }
-    l = tmp.ErrLoc
+    if ptrLoc == nil { tmp.Loc = nmLoc } else { tmp.Loc = ptrLoc }
     ref = tmp
     return
 }
