@@ -396,14 +396,14 @@ func TestUnreadOfNonSynthAfterExplicitSetSynthCancelsSynth( t *testing.T ) {
 
 func TestExternalIdsNotAsKeywords( t *testing.T ) {
     // first check our baseline: that namespace is normally a keyword
-    lx := New( &Options{ Reader: bytes.NewBufferString( "namespace" ) } )
+    lx := NewLexer( &LexerOptions{ Reader: bytes.NewBufferString( "namespace" ) } )
     if tok, _, err := lx.ReadToken(); err == nil {
         assert.Equal( KeywordNamespace, tok )
     } else { t.Fatal( err ) }
     opts :=
-        &Options{ 
+        &LexerOptions{ 
             IsExternal: true, Reader: bytes.NewBufferString( "namespace" ) }
-    lx = New( opts )
+    lx = NewLexer( opts )
     if tok, _, err := lx.ReadToken(); err == nil {
         assert.Equal( id( "namespace" ), tok.( *mg.Identifier ) )
     } else { t.Fatal( err ) }

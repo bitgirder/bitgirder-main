@@ -16,12 +16,12 @@ type syntaxBuildTester struct {
 }
 
 func newSyntaxBuilder( in string, strip bool ) *Builder {
-    opts := &Options{
+    opts := &LexerOptions{
         Reader: bytes.NewBufferString( in ),
         SourceName: ParseSourceInput,
         Strip: strip,
     }
-    return NewBuilder( New( opts ) )
+    return NewBuilder( NewLexer( opts ) )
 }
 
 func newSyntaxBuildTester( 
@@ -179,12 +179,12 @@ func TestSkipWsOrCommentsAtEnd( t *testing.T ) {
 func TestTokenExpectsWithStripVariants( t *testing.T ) {
     in := " + + # stuff \n3\n \t id # more stuff\n #leading stuff\n\tName1"
     for _, strip := range []bool{ true, false } {
-        opts := &Options{
+        opts := &LexerOptions{
             Reader: bytes.NewBufferString( in ), 
             Strip: strip,
             SourceName: ParseSourceInput,
         }
-        lx := New( opts )
+        lx := NewLexer( opts )
         st := &syntaxBuildTester{ T: t, sb: NewBuilder( lx ) }
         skip := func() {
             if ! strip {

@@ -33,8 +33,8 @@ func AssertParseError(
 }
 
 func newTestLexer( in string, strip bool ) *Lexer {
-    return New(
-        &Options{
+    return NewLexer(
+        &LexerOptions{
             Reader: bytes.NewBufferString( in ),
             SourceName: ParseSourceInput,
             Strip: strip,

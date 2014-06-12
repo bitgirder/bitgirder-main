@@ -16,8 +16,8 @@ var mgNs = parser.MustNamespace
 var mgId = parser.MustIdentifier
 
 func sxTyp( s string ) *parser.CompletableTypeReference {
-    opts := &parser.Options{ Reader: bytes.NewBufferString( s ) }
-    b := parser.NewBuilder( parser.New( opts ) )
+    opts := &parser.LexerOptions{ Reader: bytes.NewBufferString( s ) }
+    b := parser.NewBuilder( parser.NewLexer( opts ) )
     typ, _, err := b.ExpectTypeReference( nil )
     if err != nil { panic( err ) }
     return typ

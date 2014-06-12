@@ -47,12 +47,12 @@ type Builder struct {
 func NewBuilder( lx *Lexer ) *Builder { return &Builder{ lx: lx } }
 
 func newSyntaxBuilderExt( s string ) *Builder {
-    opts := &Options{
+    opts := &LexerOptions{
         Reader: bytes.NewBufferString( s ),
         SourceName: ParseSourceInput,
         IsExternal: true,
     }
-    return NewBuilder( New( opts ) )
+    return NewBuilder( NewLexer( opts ) )
 }
 
 type tokenExpectType int

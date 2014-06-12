@@ -1,9 +1,3 @@
-- change parser.New() to parser.NewLexer()
-
-- change parser.Builder to parser.SyntaxBuilder
-
-- change parser.Options to parser.LexerOptions
-
 - parser tree doesn't need explicit type reference source locs now that
   CompletableTypeReference has them itself
 

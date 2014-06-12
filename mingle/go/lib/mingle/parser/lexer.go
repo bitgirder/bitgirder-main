@@ -958,14 +958,14 @@ func ( lx *Lexer ) ReadNumber() ( Token, *Location, error ) {
     })
 }
 
-type Options struct {
+type LexerOptions struct {
     SourceName string
     Reader io.Reader
     IsExternal bool
     Strip bool
 }
 
-func New( opts *Options ) *Lexer {
+func NewLexer( opts *LexerOptions ) *Lexer {
     return &Lexer{ 
         reader: bufio.NewReader( opts.Reader ), 
         line: 1,

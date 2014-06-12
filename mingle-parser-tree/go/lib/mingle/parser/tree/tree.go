@@ -1056,7 +1056,7 @@ func ( p *parse ) expectNsUnit( srcNm string ) ( u *NsUnit, err error ) {
 }
 
 func ParseSource( srcNm string, r io.Reader ) ( *NsUnit, error ) {
-    opts := &parser.Options{ Reader: r, SourceName: srcNm, Strip: true }
-    lx := parser.New( opts )
+    opts := &parser.LexerOptions{ Reader: r, SourceName: srcNm, Strip: true }
+    lx := parser.NewLexer( opts )
     return (&parse{ Builder: parser.NewBuilder( lx ) }).expectNsUnit( srcNm )
 }
