@@ -358,28 +358,30 @@ func init() {
             &CompletableTypeReference{ Name: qnNs1V1T1, ptrDepth: 2 } ),
         typRefSucc( "&T1", 
             &CompletableTypeReference{ Name: qnNs1V1T1.Name, ptrDepth: 1 } ),
-        typRefSucc( "&(&ns1@v1/T1)?",
-            &CompletableTypeReference{
-            },
-        ),
-        typRefSucc( "&(&&ns1@v1/T1*)",
-            &CompletableTypeReference{
-            },
-        ),
-        typRefSucc( "&(ns1@v1/T1*)",
-            &CompletableTypeReference{
-            },
-        ),
-        typRefSucc( "&(((ns1@v1/T1))*)",
-            &CompletableTypeReference{
-            },
-        ),
-        typRefSucc( "(((ns1@v1/T1))*)",
-            &CompletableTypeReference{
-            },
-        typRefSucc( "(  (\t(ns1@v1/T1\r)\n  \r\n  )*)",
-            &CompletableTypeReference{
-            },
+//        typRefSucc( "&(&ns1@v1/T1)?",
+//            &CompletableTypeReference{
+//            },
+//        ),
+//        typRefSucc( "&(&&ns1@v1/T1*)",
+//            &CompletableTypeReference{
+//            },
+//        ),
+//        typRefSucc( "&(ns1@v1/T1*)",
+//            &CompletableTypeReference{
+//            },
+//        ),
+//        typRefSucc( "&(((ns1@v1/T1))*)",
+//            &CompletableTypeReference{
+//            },
+//        ),
+//        typRefSucc( "(((ns1@v1/T1))*)",
+//            &CompletableTypeReference{
+//            },
+//        ),
+//        typRefSucc( "(  (\t(ns1@v1/T1\r)\n  \r\n  )*)",
+//            &CompletableTypeReference{
+//            },
+//        ),
         typRefSucc( `&&ns1@v1/T1~".*"`, 
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
@@ -415,11 +417,11 @@ func init() {
         typRefFail( "&ns1", 5, "Expected ':' or '@' but found: END" ),
         typRefFail( "&&+", 3, 
             "Expected identifier or declared type name but found: +" ),
-        typRefFail( "()", 1, "Empty type" ),
-        typRefFail( "&(ns1@v1/T1", 2, `Unmatched "("` ),
-        typRefFail( "&{ns1@v1/T1}", 2, "STUB" ),
-        typRefFail( "(&(ns1@v1/T1)", 3, `Unmatched "("` ),
-        typRefFail( "(ns1@v1/T1))", 12, `Unmatchd ")"` ),
+//        typRefFail( "()", 1, "Empty type" ),
+//        typRefFail( "&(ns1@v1/T1", 2, `Unmatched "("` ),
+//        typRefFail( "&{ns1@v1/T1}", 2, "STUB" ),
+//        typRefFail( "(&(ns1@v1/T1)", 3, `Unmatched "("` ),
+//        typRefFail( "(ns1@v1/T1))", 12, `Unmatchd ")"` ),
         typRefFail( "ns1@v1/T1~", 11, "Unexpected end of input" ),
         typRefFail( `ns1@v1/~"s*"`, 8, 
             `Illegal type name start: "~" (U+007E)` ),
