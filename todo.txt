@@ -4,3 +4,5 @@
 
 - add checked constructors for creating type references from outside mg package
   (CreateAtomicUnsafe..., etc)
+
+- make list adds check type (and add AddUnsafe())
