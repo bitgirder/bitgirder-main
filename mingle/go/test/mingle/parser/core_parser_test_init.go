@@ -303,14 +303,12 @@ func init() {
         return &Location{ Source: ParseSourceInput, Line: 1, Col: col }
     }
     typRefSucc := func( 
-        in, ext string, expect *CompletableTypeReference ) *CoreParseTest {
+        in string, expect *CompletableTypeReference ) *CoreParseTest {
 
         if expect.quants == nil { expect.quants = []SpecialToken{} }
         if expect.Loc == nil { expect.Loc = loc( 1 ) }
-        if ext == "" { ext = in }
         return &CoreParseTest{ 
             In: in, 
-            ExternalForm: ext,
             Expect: expect, 
             TestType: TestTypeTypeReference,
         }
@@ -320,25 +318,21 @@ func init() {
         return &RegexRestrictionSyntax{ Pat: s, Loc: loc( col ) }
     }
     CoreParseTests = append( CoreParseTests,
-        typRefSucc( "ns1@v1/T1", "", 
-            &CompletableTypeReference{ Name: qnNs1V1T1 },
-        ),
-        typRefSucc( "T1", "", 
-            &CompletableTypeReference{ Name: qnNs1V1T1.Name },
-        ),
-        typRefSucc( "ns1@v1/T1*", "", 
+        typRefSucc( "ns1@v1/T1", &CompletableTypeReference{ Name: qnNs1V1T1 } ),
+        typRefSucc( "T1", &CompletableTypeReference{ Name: qnNs1V1T1.Name } ),
+        typRefSucc( "ns1@v1/T1*", 
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
                 quants: strToQuants( "*" ),
             },
         ),
-        typRefSucc( "ns1@v1/T1*+?", "", 
+        typRefSucc( "ns1@v1/T1*+?", 
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
                 quants: strToQuants( "*+?" ),
            },
         ),
-        typRefSucc( `ns1@v1/T1~"^a+$"`, "",
+        typRefSucc( `ns1@v1/T1~"^a+$"`, 
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
                 Restriction: rx( "^a+$", 11 ),
@@ -346,33 +340,54 @@ func init() {
         ),
         typRefSucc(
             `ns1@v1/T1~"a\t\f\b\r\n\"\\\u0061\ud834\udd1e"`,
-            "ns1@v1/T1~\"a\\t\\f\\b\\r\\n\\\"\\\\a𝄞\"",
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
                 Restriction: rx( "a\t\f\b\r\n\"\\a\U0001d11e", 11 ),
             },
         ),
-        typRefSucc( `ns1@v1/T1~"^a+$"*+`, "",
+        typRefSucc( `ns1@v1/T1~"^a+$"*+`,
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
                 Restriction: rx( "^a+$", 11 ),
                 quants: strToQuants( "*+" ),
             },
         ),
-        typRefSucc( "&ns1@v1/T1", "", 
+        typRefSucc( "&ns1@v1/T1", 
             &CompletableTypeReference{ Name: qnNs1V1T1, ptrDepth: 1 } ),
-        typRefSucc( "&&ns1@v1/T1", "",
+        typRefSucc( "&&ns1@v1/T1", 
             &CompletableTypeReference{ Name: qnNs1V1T1, ptrDepth: 2 } ),
-        typRefSucc( "&T1", "",
+        typRefSucc( "&T1", 
             &CompletableTypeReference{ Name: qnNs1V1T1.Name, ptrDepth: 1 } ),
-        typRefSucc( `&&ns1@v1/T1~".*"`, "",
+        typRefSucc( "&(&ns1@v1/T1)?",
+            &CompletableTypeReference{
+            },
+        ),
+        typRefSucc( "&(&&ns1@v1/T1*)",
+            &CompletableTypeReference{
+            },
+        ),
+        typRefSucc( "&(ns1@v1/T1*)",
+            &CompletableTypeReference{
+            },
+        ),
+        typRefSucc( "&(((ns1@v1/T1))*)",
+            &CompletableTypeReference{
+            },
+        ),
+        typRefSucc( "(((ns1@v1/T1))*)",
+            &CompletableTypeReference{
+            },
+        typRefSucc( "(  (\t(ns1@v1/T1\r)\n  \r\n  )*)",
+            &CompletableTypeReference{
+            },
+        typRefSucc( `&&ns1@v1/T1~".*"`, 
             &CompletableTypeReference{
                 Name: qnNs1V1T1,
                 Restriction: rx( ".*", 13 ),
                 ptrDepth: 2,
             },
         ),
-        typRefSucc( "&ns1@v1/T1*+", "", 
+        typRefSucc( "&ns1@v1/T1*+", 
             &CompletableTypeReference{ 
                 Name: qnNs1V1T1, 
                 quants: strToQuants( "*+" ),
@@ -400,6 +415,11 @@ func init() {
         typRefFail( "&ns1", 5, "Expected ':' or '@' but found: END" ),
         typRefFail( "&&+", 3, 
             "Expected identifier or declared type name but found: +" ),
+        typRefFail( "()", 1, "Empty type" ),
+        typRefFail( "&(ns1@v1/T1", 2, `Unmatched "("` ),
+        typRefFail( "&{ns1@v1/T1}", 2, "STUB" ),
+        typRefFail( "(&(ns1@v1/T1)", 3, `Unmatched "("` ),
+        typRefFail( "(ns1@v1/T1))", 12, `Unmatchd ")"` ),
         typRefFail( "ns1@v1/T1~", 11, "Unexpected end of input" ),
         typRefFail( `ns1@v1/~"s*"`, 8, 
             `Illegal type name start: "~" (U+007E)` ),
