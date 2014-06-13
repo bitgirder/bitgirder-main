@@ -52,7 +52,7 @@ func ( sr *StructuralReactor ) descForEvent( ev ReactorEvent ) string {
     case *MapStartEvent: return mg.TypeSymbolMap.ExternalForm()
     case *EndEvent: return "end"
     case *ValueEvent: return mg.TypeOf( v.Val ).ExternalForm()
-    case *ValueAllocationEvent: return "allocation of &" + v.Type.ExternalForm()
+    case *ValueAllocationEvent: return "allocation of " + v.Type.ExternalForm()
     case *ValueReferenceEvent: return "reference"
     case *FieldStartEvent: return sr.sawDescFor( v.Field )
     case *StructStartEvent: return sr.sawDescFor( v.Type )
@@ -196,7 +196,7 @@ func ( sr *StructuralReactor ) checkEventForList(
 func ( sr *StructuralReactor ) allocError(
     expct mg.TypeReference, ev ReactorEvent ) error {
     
-    return rctErrorf( nil, "allocation of &%s followed by %s",
+    return rctErrorf( nil, "allocation of %s followed by %s",
         expct, sr.descForEvent( ev ) )
 }
 

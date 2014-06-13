@@ -149,7 +149,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
             evStartStruct1, evValue1,
         ),
         mk1( 
-            "Expected field name or end of fields but got allocation of &mingle:core@v1/Int64",
+            "Expected field name or end of fields but got allocation of mingle:core@v1/Int64",
             evStartStruct1, evValuePtr1,
         ),
         mk1( "Expected field name or end of fields but got reference",
@@ -173,7 +173,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         ),
         mk2( "Expected struct but got mingle:core@v1/Int64", 
             ReactorTopTypeStruct, evValue1 ),
-        mk2( "Expected struct but got allocation of &mingle:core@v1/Int64", 
+        mk2( "Expected struct but got allocation of mingle:core@v1/Int64", 
             ReactorTopTypeStruct, evValuePtr1 ),
         mk2( "Expected struct but got start of mingle:core@v1/Value?*", 
             ReactorTopTypeStruct, evListStart,
@@ -231,7 +231,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     )
     addAllocFail := func( ev ReactorEvent, errStr string ) {
         s := fmt.Sprintf( 
-            "allocation of &mingle:core@v1/Int32 followed by %s", errStr )
+            "allocation of mingle:core@v1/Int32 followed by %s", errStr )
         b.AddTests( mk1( s, ptrAlloc( mg.TypeInt32, 1 ), ev ) )
     }
     addAllocFail( NewValueEvent( mg.Int64( int64( 1 ) ) ), 
@@ -246,13 +246,13 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         "ns1@v1/S1" )
     addAllocFail( 
         ptrAlloc( mg.TypeInt32, 2 ), 
-        "allocation of &mingle:core@v1/Int32" )
+        "allocation of mingle:core@v1/Int32" )
     b.AddTests(
-        mk1( "allocation of &&mingle:core@v1/Int32 followed by allocation of &&mingle:core@v1/Int64",
+        mk1( "allocation of &(mingle:core@v1/Int32) followed by allocation of &(mingle:core@v1/Int64)",
             ptrAlloc( typeRef( "&Int32" ), 1 ),
             ptrAlloc( typeRef( "&Int64" ), 2 ),
         ),
-        mk1( "allocation of &&mingle:core@v1/Int32 followed by allocation of &mingle:core@v1/Int64",
+        mk1( "allocation of &(mingle:core@v1/Int32) followed by allocation of mingle:core@v1/Int64",
             ptrAlloc( typeRef( "&Int32" ), 1 ),
             ptrAlloc( typeRef( "Int64" ), 2 ),
         ),
@@ -268,7 +268,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
           ev: NewValueEvent( mg.Int64( int64( 1 ) ) ),
         },
         { expctTyp: "Int32",
-          saw: "allocation of &mingle:core@v1/Int32",
+          saw: "allocation of mingle:core@v1/Int32",
           ev: ptrAlloc( mg.TypeInt32, 1 ),
         },
         { expctTyp: "Int32", 
@@ -280,7 +280,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
           ev: NewValueEvent( mg.Int32( int32( 1 ) ) ),
         },
         { expctTyp: "&Int32",
-          saw: "allocation of &mingle:core@v1/Int64",
+          saw: "allocation of mingle:core@v1/Int64",
           ev: ptrAlloc( mg.TypeInt64, 2 ),
         },
         { expctTyp: "SymbolMap",
@@ -304,12 +304,12 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     )
     b.AddTests(
         mk1(
-            "allocation of &mingle:core@v1/SymbolMap followed by mingle:core@v1/Int32",
+            "allocation of mingle:core@v1/SymbolMap followed by mingle:core@v1/Int32",
             ptrAlloc( mg.TypeSymbolMap, 1 ),
             NewValueEvent( mg.Int32( int32( 1 ) ) ),
         ),
         mk1(
-            "allocation of &ns1@v1/S1 followed by ns1@v1/S2",
+            "allocation of ns1@v1/S1 followed by ns1@v1/S2",
             ptrAlloc( typeRef( "ns1@v1/S1" ), 1 ),
             NewValueEvent( parser.MustStruct( "ns1@v1/S2" ) ),
         ),

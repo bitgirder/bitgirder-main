@@ -1180,10 +1180,11 @@ func TestTypeReferenceStringer( t *testing.T ) {
             AllowsEmpty: false,
         },
     )
-    chk( "&ns1@v1/T1", ptr )
-    chk( "&ns1@v1/T1?", &NullableTypeReference{ ptr } )
+    chk( "&(ns1@v1/T1)", ptr )
+    chk( "&(&(ns1@v1/T1))", NewPointerTypeReference( ptr ) )
+    chk( "&(ns1@v1/T1)?", &NullableTypeReference{ ptr } )
     chk(
-        "&ns1@v1/T1?**+",
+        "&(ns1@v1/T1)?**+",
         &ListTypeReference{
             ElementType: &ListTypeReference{
                 ElementType: &ListTypeReference{
@@ -1194,6 +1195,12 @@ func TestTypeReferenceStringer( t *testing.T ) {
             },
             AllowsEmpty: false,
         },
+    )
+    chk(
+        "&(&(ns1@v1/T1)*)",
+        NewPointerTypeReference(
+            &ListTypeReference{ ElementType: ptr, AllowsEmpty: true },
+        ),
     )
 }
 

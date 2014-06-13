@@ -426,14 +426,15 @@ func TestCompiler( t *testing.T ) {
         expectError( 9, 58, "Expected mingle:core@v1/String but got number" ).
         expectError( 10, 34, "Expected mingle:core@v1/Int32 but got float" ).
         expectError( 11, 34, "Expected mingle:core@v1/Int32 but got boolean" ).
-        expectError( 12, 36, "Expected &mingle:core@v1/Int32? but got string" ).
+        expectError( 12, 36, 
+            "Expected &(mingle:core@v1/Int32)? but got string" ).
         expectError( 13, 47, "Expected mingle:core@v1/Int32 but got string" ).
         expectError( 13, 52, "Expected mingle:core@v1/Int32 but got boolean" ).
         expectError( 13, 58, "Expected mingle:core@v1/Int32 but got float" ).
         expectError( 14, 36,
             "Expected mingle:core@v1/Float32 but got boolean" ).
         expectError( 15, 39,
-            "Expected &mingle:core@v1/Float32? but got string" ).
+            "Expected &(mingle:core@v1/Float32)? but got string" ).
         expectError( 16, 45, 
             "Expected mingle:core@v1/Float32 but got boolean" ).
         expectError( 16, 51, "Expected mingle:core@v1/Float32 but got string" ).
