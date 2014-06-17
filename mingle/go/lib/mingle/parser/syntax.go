@@ -541,12 +541,35 @@ func ( sb *Builder ) pollTypeRefRestriction() (
     return
 }
 
+type AtomicTypeExpression struct {
+    Name mg.TypeName
+    NameLoc *Location
+    Restriction RestrictionSyntax
+}
+
+type PointerTypeExpression struct {
+    Loc *Location
+    Expression interface{}
+}
+
+type ListTypeExpression struct {
+    Loc *Location
+    Expression interface{}
+    AllowsEmpty bool
+}
+
+type NullableTypeExpression struct {
+    Loc *Location
+    Expression interface{}
+}
+
 type CompletableTypeReference struct {
     Loc *Location
     Name mg.TypeName
     Restriction RestrictionSyntax
     ptrDepth int
     quants quantList
+    Expression interface{}
 }
 
 type TypeCompleter interface {
@@ -579,6 +602,32 @@ func ( t *CompletableTypeReference ) CompleteType(
     return res, nil
 }
 
+func ( t *CompletableTypeReference ) buildExpressions() {
+    base := &AtomicTypeExpression{ Name: t.Name }
+    if t.Restriction != nil { base.Restriction = t.Restriction }
+    t.Expression = base
+    for i, e := 0, t.ptrDepth; i < e; i++ {
+        t.Expression = &PointerTypeExpression{ Expression: t.Expression }
+    }
+    for _, quant := range t.quants {
+        switch quant {
+        case SpecialTokenAsterisk:
+            t.Expression = &ListTypeExpression{
+                Expression: t.Expression,
+                AllowsEmpty: true,
+            }
+        case SpecialTokenPlus:
+            t.Expression = &ListTypeExpression{
+                Expression: t.Expression,
+                AllowsEmpty: false,
+            }
+        case SpecialTokenQuestionMark:
+            t.Expression = &NullableTypeExpression{ Expression: t.Expression }
+        default: panic( libErrorf( "unhandled quant: %s", quant ) )
+        }
+    }
+}
+
 // In addition to returning a type ref, this method will, via its helper
 // methods, ensure that sb.SetSynthEnd() is called after the token that
 // completes the type reference, effectively making type references capable of
@@ -597,6 +646,7 @@ func ( sb *Builder ) ExpectTypeReference(
     if tmp.quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }
     if ptrLoc == nil { tmp.Loc = nmLoc } else { tmp.Loc = ptrLoc }
     ref = tmp
+    ref.buildExpressions()
     return
 }
 

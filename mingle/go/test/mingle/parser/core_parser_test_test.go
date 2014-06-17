@@ -37,6 +37,7 @@ func assertCoreParseError(
 }
 
 func assertCoreParse( cpt *CoreParseTest, a *assert.PathAsserter ) {
+    a.Logf( "parsing %q (%s)", cpt.In, cpt.TestType )
     if act, err := parseCoreParseTest( cpt, a ); err == nil {
         if cpt.Err == nil { 
             switch expct := cpt.Expect.( type ) {

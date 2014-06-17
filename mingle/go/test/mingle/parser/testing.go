@@ -98,13 +98,14 @@ func AssertCompletableTypeReference(
         a.Truef( act == nil, "expected nil, got %s", act )
         return
     }
-    a.Descend( "Loc" ).Equalf( expct.Loc, act.Loc,
-        "%s != %s", expct.Loc, act.Loc )
-    a.Descend( "Name" ).Equal( expct.Name, act.Name )
-    assertRestriction( 
-        expct.Restriction, act.Restriction, a.Descend( "Restriction" ) )
-    a.Descend( "ptrDepth" ).Equal( expct.ptrDepth, act.ptrDepth )
-    a.Descend( "quants" ).Equal( expct.quants, act.quants )
+//    a.Descend( "Loc" ).Equalf( expct.Loc, act.Loc,
+//        "%s != %s", expct.Loc, act.Loc )
+//    a.Descend( "Name" ).Equal( expct.Name, act.Name )
+//    assertRestriction( 
+//        expct.Restriction, act.Restriction, a.Descend( "Restriction" ) )
+//    a.Descend( "ptrDepth" ).Equal( expct.ptrDepth, act.ptrDepth )
+//    a.Descend( "quants" ).Equal( expct.quants, act.quants )
+    a.Equal( expct.Expression, act.Expression )
 }
 
 func MustIdentifier( s string ) *mg.Identifier {

@@ -210,9 +210,8 @@ func TestTokenExpectsWithStripVariants( t *testing.T ) {
 }
 
 func TestTypeReferenceSetsSynth( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
     nmA := makeTypeName( "A" )
-    quants := quantList( []SpecialToken{ SpecialTokenPlus } )
-    emptyQuants := quantList( []SpecialToken{} )
     lc := func( col int ) *Location {
         return &Location{ Line: 1, Source: ParseSourceInput, Col: col }
     }
@@ -227,30 +226,77 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
         RightClosed: true,
     }
     for _, s := range []struct { in string; ref *CompletableTypeReference }{
-        { "A", &CompletableTypeReference{ 
-            Loc: lc( 1 ), Name: nmA, quants: emptyQuants } },
-        { "A+", &CompletableTypeReference{ 
-            Loc: lc( 1 ), Name: nmA, quants: quants } },
-        { `A~"a"+`, &CompletableTypeReference{ 
-            Loc: lc( 1 ), Name: nmA, Restriction: regex, quants: quants } },
-        { `A~"a"`, &CompletableTypeReference{ 
-            Loc: lc( 1 ), 
-            Name: nmA, 
-            Restriction: regex, 
-            quants: emptyQuants },
+        { 
+            "A", 
+            &CompletableTypeReference{ 
+                Expression: &AtomicTypeExpression{
+                    Name: nmA,
+//                    NameLoc: lc( 1 ),
+                },
+            },
         },
-        { `A~[0,1]+`, &CompletableTypeReference{ 
-            Loc: lc( 1 ), Name: nmA, Restriction: rng, quants: quants } },
-        { `A~[0,1]`, &CompletableTypeReference{ 
-            Loc: lc( 1 ),
-            Name: nmA, 
-            Restriction: rng, 
-            quants: emptyQuants },
+        { 
+            "A+", 
+            &CompletableTypeReference{ 
+                Expression: &ListTypeExpression{
+                    Expression: &AtomicTypeExpression{
+                        Name: nmA,
+//                        NameLoc: lc( 1 ),
+                    },
+                    AllowsEmpty: false,
+                },
+            },
+        },
+        { 
+            `A~"a"+`, 
+            &CompletableTypeReference{ 
+                Expression: &ListTypeExpression{
+                    Expression: &AtomicTypeExpression{
+                        Name: nmA,
+//                        NameLoc: lc( 1 ),
+                        Restriction: regex,
+                    },
+                    AllowsEmpty: false,
+                },
+            },
+        },
+        { 
+            `A~"a"`, 
+            &CompletableTypeReference{ 
+                Expression: &AtomicTypeExpression{
+                    Name: nmA,
+//                    NameLoc: lc( 1 ),
+                    Restriction: regex, 
+                },
+            },
+        },
+        { 
+            `A~[0,1]+`, 
+            &CompletableTypeReference{ 
+                Expression: &ListTypeExpression{
+                    Expression: &AtomicTypeExpression{
+                        Name: nmA,
+//                        NameLoc: lc( 1 ),
+                        Restriction: rng,
+                    },
+                    AllowsEmpty: false,
+                },
+            },
+        },
+        { 
+            `A~[0,1]`, 
+            &CompletableTypeReference{ 
+                Expression: &AtomicTypeExpression{
+//                    NameLoc: lc( 1 ),
+                    Name: nmA, 
+                    Restriction: rng, 
+                },
+            },
         },
     } {
         st := newSyntaxBuildTester( s.in + "\n", false, t )
         if ref, err := st.sb.ExpectTypeReference( nil ); err == nil {
-            assert.Equal( s.ref, ref )
+            AssertCompletableTypeReference( s.ref, ref, a )
         } else { t.Fatal( err ) }
         st.expectSynthEnd()
         st.expectToken( "any", WhitespaceToken( []byte( "\n" ) ) )
