@@ -285,7 +285,7 @@ type ThrownType struct {
     Type *parser.CompletableTypeReference
 }
 
-func ( tt *ThrownType ) Locate() *parser.Location { return tt.Type.Loc }
+func ( tt *ThrownType ) Locate() *parser.Location { return tt.Type.Location() }
 
 type CallSignature struct {
     Start *parser.Location
@@ -710,7 +710,7 @@ func ( p *parse ) expectQualifiedAccessExpression(
     typ *parser.CompletableTypeReference ) ( *QualifiedExpression, error ) {
 
     var err error
-    pe := &PrimaryExpression{ Prim: typ, PrimLoc: typ.Loc }
+    pe := &PrimaryExpression{ Prim: typ, PrimLoc: typ.Location() }
     res := &QualifiedExpression{ Lhs: pe }
     if _, err = p.ExpectSpecial( tkPeriod ); err != nil { return nil, err }
     if res.Id, res.IdLoc, err = p.expectIdentifier(); err != nil {

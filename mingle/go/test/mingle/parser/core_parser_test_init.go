@@ -305,8 +305,6 @@ func init() {
     typRefSucc := func( 
         in string, expect *CompletableTypeReference ) *CoreParseTest {
 
-        if expect.quants == nil { expect.quants = []SpecialToken{} }
-        if expect.Loc == nil { expect.Loc = loc( 1 ) }
         return &CoreParseTest{ 
             In: in, 
             Expect: expect, 

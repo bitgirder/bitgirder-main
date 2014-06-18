@@ -132,7 +132,9 @@ func assertScopedVersionIn(
     case *mg.Namespace: assert.Equal( verExpct, v.Version )
     case *mg.QualifiedTypeName: 
         assertScopedVersionIn( v.Namespace, verExpct, t )
-    case *CompletableTypeReference: assertScopedVersionIn( v.Name, verExpct, t )
+    case *CompletableTypeReference: 
+        nm := atomicExpressionIn( v.Expression ).Name
+        assertScopedVersionIn( nm, verExpct, t )
     default: t.Fatalf( "No version to check in %v", val )
     }
 }

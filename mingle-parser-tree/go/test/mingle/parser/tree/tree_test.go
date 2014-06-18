@@ -446,46 +446,6 @@ namespace ns2
 
 var testParseResults = make( map[ string ]*NsUnit )
 
-type typeRefModFunc func( *parser.CompletableTypeReference ) 
-
-func modTyp( 
-    t *parser.CompletableTypeReference,
-    f typeRefModFunc ) *parser.CompletableTypeReference {
-
-    f( t )
-    return t
-}
-
-func rxSetLoc( rx parser.RestrictionSyntax, l *parser.Location ) {
-    switch v := rx.( type ) {
-    case *parser.RegexRestrictionSyntax: v.Loc = l
-    case *parser.StringRestrictionSyntax: v.Loc = l
-    case *parser.NumRestrictionSyntax: v.Loc = l
-    default: panic( libErrorf( "unhandled restriction: %T", rx ) )
-    }
-}
-
-func typeWithRegexLoc( 
-    t *parser.CompletableTypeReference, 
-    l *parser.Location ) *parser.CompletableTypeReference {
-
-    rxSetLoc( t.Restriction, l )
-    return t
-}
-
-func typeWithRangeLoc(
-    t *parser.CompletableTypeReference,
-    locLeft, locRight *parser.Location ) *parser.CompletableTypeReference {
-
-    rx := t.Restriction.( *parser.RangeRestrictionSyntax )
-
-    rx.Loc = locLeft.Dup()
-    rx.Loc.Col--
-    if locLeft != nil { rxSetLoc( rx.Left, locLeft ) }
-    if locRight != nil { rxSetLoc( rx.Right, locRight ) }
-    return t
-}
-
 func sxAtomic( nm mg.TypeName,
                rx parser.RestrictionSyntax, 
                lc *parser.Location ) *parser.AtomicTypeExpression {
