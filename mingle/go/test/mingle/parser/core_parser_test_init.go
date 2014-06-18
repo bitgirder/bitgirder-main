@@ -307,6 +307,7 @@ func init() {
             &CompletableTypeReference{ 
                 Expression: &AtomicTypeExpression{
                     Name: qnNs1V1T1,
+                    NameLoc: loc( 1 ),
                 },
             },
         ),
@@ -314,14 +315,17 @@ func init() {
             &CompletableTypeReference{
                 Expression: &AtomicTypeExpression{
                     Name: qnNs1V1T1.Name,
+                    NameLoc: loc( 1 ),
                 },
             },
         ),
         typRefSucc( "ns1@v1/T1*", 
             &CompletableTypeReference{
                 Expression: &ListTypeExpression{
+                    Loc: loc( 10 ),
                     Expression: &AtomicTypeExpression{
                         Name: qnNs1V1T1,
+                        NameLoc: loc( 1 ),
                     },
                     AllowsEmpty: true,
                 },
@@ -330,10 +334,14 @@ func init() {
         typRefSucc( "ns1@v1/T1*+?", 
             &CompletableTypeReference{
                 Expression: &NullableTypeExpression{
+                    Loc: loc( 12 ),
                     Expression: &ListTypeExpression{
+                        Loc: loc( 11 ),
                         Expression: &ListTypeExpression{
+                            Loc: loc( 10 ),
                             Expression: &AtomicTypeExpression{
                                 Name: qnNs1V1T1,
+                                NameLoc: loc( 1 ),
                             },
                             AllowsEmpty: true,
                         },
@@ -346,6 +354,7 @@ func init() {
             &CompletableTypeReference{
                 Expression: &AtomicTypeExpression{
                     Name: qnNs1V1T1,
+                    NameLoc: loc( 1 ),
                     Restriction: rx( "^a+$", 11 ),
                 },
             },
@@ -355,6 +364,7 @@ func init() {
             &CompletableTypeReference{
                 Expression: &AtomicTypeExpression{
                     Name: qnNs1V1T1,
+                    NameLoc: loc( 1 ),
                     Restriction: rx( "a\t\f\b\r\n\"\\a\U0001d11e", 11 ),
                 },
             },
@@ -362,9 +372,12 @@ func init() {
         typRefSucc( `ns1@v1/T1~"^a+$"*+`,
             &CompletableTypeReference{
                 Expression: &ListTypeExpression{
+                    Loc: loc( 18 ),
                     Expression: &ListTypeExpression{
+                        Loc: loc( 17 ),
                         Expression: &AtomicTypeExpression{
                             Name: qnNs1V1T1,
+                            NameLoc: loc( 1 ),
                             Restriction: rx( "^a+$", 11 ),
                         },
                         AllowsEmpty: true,
@@ -376,8 +389,10 @@ func init() {
         typRefSucc( "&ns1@v1/T1", 
             &CompletableTypeReference{ 
                 Expression: &PointerTypeExpression{
+                    Loc: loc( 1 ),
                     Expression: &AtomicTypeExpression{
                         Name: qnNs1V1T1,
+                        NameLoc: loc( 2 ),
                     },
                 },
             },
@@ -385,8 +400,13 @@ func init() {
         typRefSucc( "&&ns1@v1/T1", 
             &CompletableTypeReference{ 
                 Expression: &PointerTypeExpression{
+                    Loc: loc( 1 ),
                     Expression: &PointerTypeExpression{
-                        Expression: &AtomicTypeExpression{ Name: qnNs1V1T1 },
+                        Loc: loc( 2 ),
+                        Expression: &AtomicTypeExpression{ 
+                            Name: qnNs1V1T1,
+                            NameLoc: loc( 3 ),
+                        },
                     },
                 },
             },
@@ -394,7 +414,11 @@ func init() {
         typRefSucc( "&T1", 
             &CompletableTypeReference{ 
                 Expression: &PointerTypeExpression{
-                    Expression: &AtomicTypeExpression{ Name: qnNs1V1T1.Name },
+                    Loc: loc( 1 ),
+                    Expression: &AtomicTypeExpression{ 
+                        Name: qnNs1V1T1.Name,
+                        NameLoc: loc( 2 ),
+                    },
                 },
             },
         ),
@@ -429,9 +453,12 @@ func init() {
         typRefSucc( `&&ns1@v1/T1~".*"`, 
             &CompletableTypeReference{
                 Expression: &PointerTypeExpression{
+                    Loc: loc( 1 ),
                     Expression: &PointerTypeExpression{
+                        Loc: loc( 2 ),
                         Expression: &AtomicTypeExpression{
                             Name: qnNs1V1T1,
+                            NameLoc: loc( 3 ),
                             Restriction: rx( ".*", 13 ),
                         },
                     },
@@ -441,10 +468,14 @@ func init() {
         typRefSucc( "&ns1@v1/T1*+", 
             &CompletableTypeReference{ 
                 Expression: &ListTypeExpression{
+                    Loc: loc( 12 ),
                     Expression: &ListTypeExpression{
+                        Loc: loc( 11 ),
                         Expression: &PointerTypeExpression{
+                            Loc: loc( 1 ),
                             Expression: &AtomicTypeExpression{ 
                                 Name: qnNs1V1T1,
+                                NameLoc: loc( 2 ),
                             },
                         },
                         AllowsEmpty: true,

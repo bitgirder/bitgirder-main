@@ -450,8 +450,7 @@ func sxAtomic( nm mg.TypeName,
                rx parser.RestrictionSyntax, 
                lc *parser.Location ) *parser.AtomicTypeExpression {
     
-    at := &parser.AtomicTypeExpression{ Name: nm }
-//    at.NameLoc = lc
+    at := &parser.AtomicTypeExpression{ Name: nm, NameLoc: lc }
     if rx != nil { at.Restriction = rx }
     return at
 }
@@ -514,11 +513,13 @@ func initResultTestSource1() {
                     { Name: mgId( "string2" ), 
                       Type: &parser.CompletableTypeReference{
                         Expression: &parser.NullableTypeExpression{
+                            Loc: lc1( 18, 31 ),
                             Expression: &parser.PointerTypeExpression{
+                                Loc: lc1( 18, 13 ),
                                 Expression: sxAtomic(
                                     mgQn( "ns1:ns2@v2/String" ),
                                     nil,
-                                    lc1( 18, 13 ),
+                                    lc1( 18, 14 ),
                                 ),
                             },
                         },
@@ -550,6 +551,7 @@ func initResultTestSource1() {
                         Name: mgId( "string5" ),
                         Type: &parser.CompletableTypeReference{
                             Expression: &parser.NullableTypeExpression{
+                                Loc: lc1( 21, 35 ),
                                 Expression: sxAtomic(
                                     mgQn( "ns1@v1/String" ),
                                     &parser.RegexRestrictionSyntax{
@@ -614,6 +616,7 @@ func initResultTestSource1() {
                     { Name: mgId( "ints2" ),
                       Type: &parser.CompletableTypeReference{
                         Expression: &parser.ListTypeExpression{
+                            Loc: lc1( 27, 16 ),
                             Expression: 
                                 sxAtomic( mgDn( "Int32" ), nil, lc1( 27, 11 ) ),
                             AllowsEmpty: false,
@@ -653,6 +656,7 @@ func initResultTestSource1() {
                     { Name: mgId( "ints3" ),
                       Type: &parser.CompletableTypeReference{
                         Expression: &parser.ListTypeExpression{
+                            Loc: lc1( 30, 16 ),
                             Expression: 
                                 sxAtomic( mgDn( "Int32" ), nil, lc1( 30, 11 ) ),
                             AllowsEmpty: false,
@@ -685,6 +689,7 @@ func initResultTestSource1() {
                         Name: mgId( "double2" ),
                         Type: &parser.CompletableTypeReference{
                             Expression: &parser.NullableTypeExpression{
+                                Loc: lc1( 32, 31 ),
                                 Expression: sxAtomic(
                                     mgDn( "Float64" ),
                                     &parser.RangeRestrictionSyntax{
@@ -783,6 +788,7 @@ func initResultTestSource1() {
                       NameLoc: lc1( 47, 5 ),
                       Type: &parser.CompletableTypeReference{
                         Expression: &parser.NullableTypeExpression{
+                            Loc: lc1( 47, 19 ),
                             Expression: sxAtomic( 
                                 mgDn( "String" ), 
                                 nil, 
@@ -873,6 +879,7 @@ func initResultTestSource1() {
                       NameLoc: lc1( 61, 5 ),
                       Type: &parser.CompletableTypeReference{
                         Expression: &parser.ListTypeExpression{
+                            Loc: lc1( 61, 19 ),
                             Expression: sxAtomic( 
                                 mgDn( "String" ),
                                 nil,
@@ -907,6 +914,7 @@ func initResultTestSource1() {
                 NameLoc: lc1( 66, 7 ),
                 Target: &parser.CompletableTypeReference{
                     Expression: &parser.NullableTypeExpression{
+                        Loc: lc1( 66, 20 ),
                         Expression: sxAtomic( 
                             mgDn( "String" ), 
                             nil,
@@ -984,6 +992,7 @@ func initResultTestSource1() {
                     },
                     Return: &parser.CompletableTypeReference{
                         Expression: &parser.NullableTypeExpression{
+                            Loc: lc1( 70, 71 ),
                             Expression: sxAtomic(
                                 mgDn( "Struct1" ),
                                 nil,
@@ -1007,6 +1016,7 @@ func initResultTestSource1() {
                         Fields: []*FieldDecl{},
                         Return: &parser.CompletableTypeReference{
                             Expression: &parser.ListTypeExpression{
+                                Loc: lc1( 74, 21 ),
                                 Expression: sxAtomic(
                                     mgDn( "String" ),
                                     nil,
@@ -1032,6 +1042,7 @@ func initResultTestSource1() {
                               NameLoc: lc1( 77, 13 ),
                               Type: &parser.CompletableTypeReference{
                                 Expression: &parser.NullableTypeExpression{
+                                    Loc: lc1( 77, 34 ),
                                     Expression: sxAtomic(
                                         mgQn( "ns1@v1/Struct1" ),
                                         nil, 
@@ -1055,6 +1066,7 @@ func initResultTestSource1() {
                               NameLoc: lc1( 79, 13 ),
                               Type: &parser.CompletableTypeReference{
                                 Expression: &parser.ListTypeExpression{
+                                    Loc: lc1( 79, 26 ),
                                     Expression: sxAtomic(
                                         mgDn( "Alias1" ),
                                         nil,
@@ -1090,6 +1102,7 @@ func initResultTestSource1() {
                         Fields: []*FieldDecl{},
                         Return: &parser.CompletableTypeReference{
                             Expression: &parser.NullableTypeExpression{
+                                Loc: lc1( 83, 20 ),
                                 Expression: sxAtomic(
                                     mgDn( "Int64" ),
                                     nil,
@@ -1157,6 +1170,7 @@ func initResultTestSource1() {
                     { Name: mgId( "f2" ),
                       Type: &parser.CompletableTypeReference{
                         Expression: &parser.ListTypeExpression{
+                            Loc: lc1( 92, 14 ),
                             Expression: sxAtomic(
                                 mgDn( "String" ),
                                 nil,

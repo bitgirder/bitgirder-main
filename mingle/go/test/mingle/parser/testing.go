@@ -94,40 +94,43 @@ func assertRestriction( expct, act RestrictionSyntax, a *assert.PathAsserter ) {
 func assertAtomicTypeExpression(
     expct *AtomicTypeExpression, v interface{}, a *assert.PathAsserter ) {
 
+    a = a.Descend( "Restriction" )
     act, ok := v.( *AtomicTypeExpression )
     a.Truef( ok, "not atomic: %T", v )
     a.Descend( "Name" ).Equal( expct.Name, act.Name )
     a.Descend( "NameLoc" ).Equal( expct.NameLoc, act.NameLoc )
-    assertRestriction( expct.Restriction, act.Restriction,
-        a.Descend( "Restriction" ) )
+    assertRestriction( expct.Restriction, act.Restriction, a )
 }
 
 func assertListTypeExpression(
     expct *ListTypeExpression, v interface{}, a *assert.PathAsserter ) {
 
+    a = a.Descend( "listTyp" )
     act, ok := v.( *ListTypeExpression )
     a.Truef( ok, "not list type: %T", v )
+    a.Descend( "Loc" ).Equal( expct.Loc, act.Loc )
     a.Descend( "AllowsEmpty" ).Equal( expct.AllowsEmpty, act.AllowsEmpty )
-    assertEqualExpression( expct.Expression, act.Expression,
-        a.Descend( "Expression" ) )
+    assertEqualExpression( expct.Expression, act.Expression, a )
 }
 
 func assertNullableTypeExpression(
     expct *NullableTypeExpression, v interface{}, a *assert.PathAsserter ) {
 
+    a = a.Descend( "nullTyp" )
     act, ok := v.( *NullableTypeExpression )
     a.Truef( ok, "not nullable type: %T", v )
-    assertEqualExpression( expct.Expression, act.Expression,
-        a.Descend( "Expression" ) )
+    a.Descend( "Loc" ).Equal( expct.Loc, act.Loc )
+    assertEqualExpression( expct.Expression, act.Expression, a )
 }
 
 func assertPointerTypeExpression(
     expct *PointerTypeExpression, v interface{}, a *assert.PathAsserter ) {
 
+    a = a.Descend( "ptrTyp" )
     act, ok := v.( *PointerTypeExpression )
     a.Truef( ok, "not a pointer type: %T", v )
-    assertEqualExpression( expct.Expression, act.Expression,
-        a.Descend( "Expression" ) )
+    a.Descend( "Loc" ).Equal( expct.Loc, act.Loc )
+    assertEqualExpression( expct.Expression, act.Expression, a )
 }
 
 func assertEqualExpression( expct, act interface{}, a *assert.PathAsserter ) {
@@ -147,8 +150,7 @@ func AssertCompletableTypeReference(
         a.Truef( act == nil, "expected nil, got %s", act )
         return
     }
-    assertEqualExpression( expct.Expression, act.Expression, 
-        a.Descend( "Expression" ) )
+    assertEqualExpression( expct.Expression, act.Expression, a )
 }
 
 func MustIdentifier( s string ) *mg.Identifier {

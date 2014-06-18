@@ -233,7 +233,7 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             &CompletableTypeReference{ 
                 Expression: &AtomicTypeExpression{
                     Name: nmA,
-//                    NameLoc: lc( 1 ),
+                    NameLoc: lc( 1 ),
                 },
             },
         },
@@ -241,9 +241,10 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             "A+", 
             &CompletableTypeReference{ 
                 Expression: &ListTypeExpression{
+                    Loc: lc( 2 ),
                     Expression: &AtomicTypeExpression{
                         Name: nmA,
-//                        NameLoc: lc( 1 ),
+                        NameLoc: lc( 1 ),
                     },
                     AllowsEmpty: false,
                 },
@@ -253,9 +254,10 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             `A~"a"+`, 
             &CompletableTypeReference{ 
                 Expression: &ListTypeExpression{
+                    Loc: lc( 6 ),
                     Expression: &AtomicTypeExpression{
                         Name: nmA,
-//                        NameLoc: lc( 1 ),
+                        NameLoc: lc( 1 ),
                         Restriction: regex,
                     },
                     AllowsEmpty: false,
@@ -267,7 +269,7 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             &CompletableTypeReference{ 
                 Expression: &AtomicTypeExpression{
                     Name: nmA,
-//                    NameLoc: lc( 1 ),
+                    NameLoc: lc( 1 ),
                     Restriction: regex, 
                 },
             },
@@ -276,9 +278,10 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             `A~[0,1]+`, 
             &CompletableTypeReference{ 
                 Expression: &ListTypeExpression{
+                    Loc: lc( 8 ),
                     Expression: &AtomicTypeExpression{
                         Name: nmA,
-//                        NameLoc: lc( 1 ),
+                        NameLoc: lc( 1 ),
                         Restriction: rng,
                     },
                     AllowsEmpty: false,
@@ -289,7 +292,7 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
             `A~[0,1]`, 
             &CompletableTypeReference{ 
                 Expression: &AtomicTypeExpression{
-//                    NameLoc: lc( 1 ),
+                    NameLoc: lc( 1 ),
                     Name: nmA, 
                     Restriction: rng, 
                 },
