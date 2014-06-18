@@ -31,19 +31,6 @@ type CoreParseTest struct {
 
 var CoreParseTests = []*CoreParseTest{}
 
-func strToQuants( s string ) quantList {
-    res := make( []SpecialToken, len( s ) )
-    for i, c := range s {
-        switch c {
-        case '*': res[ i ] = SpecialTokenAsterisk
-        case '+': res[ i ] = SpecialTokenPlus
-        case '?': res[ i ] = SpecialTokenQuestionMark
-        default: panic( libErrorf( "unhandled quant: %s", c ) )
-        }
-    }
-    return res
-}
-
 func init() {
     failPe := func( 
         in string, 

@@ -446,16 +446,6 @@ func applyTypeCompletion(
     panic( libErrorf( "unhandled type exp: %T", e ) )
 }
 
-type TypeQuantifier int
-
-const (
-    TypeQuantifierNullable = TypeQuantifier( iota )
-    TypeQuantifierList
-    TypeQuantifierNonEmptyList
-)
-
-type quantList []SpecialToken
-
 var quantToks []SpecialToken
 
 func init() {
@@ -464,41 +454,6 @@ func init() {
         SpecialTokenAsterisk,
         SpecialTokenQuestionMark,
     }
-}
-
-func ( sb *Builder ) appendQuantToken( 
-    quants []SpecialToken, 
-    tn *TokenNode ) ( []SpecialToken, error ) {
-
-    st := tn.SpecialToken()
-    if l := len( quants ); l > 0 {
-        prev := quants[ l - 1 ]
-        if st == SpecialTokenQuestionMark &&
-           prev == SpecialTokenQuestionMark {
-            msg := "a nullable type cannot itself be made nullable"
-            return nil, &ParseError{ msg, tn.Loc }
-        }
-    }
-    quants = append( quants, tn.SpecialToken() ) 
-    sb.SetSynthEnd()
-    return quants, nil
-}
-
-func ( sb *Builder ) expectTypeRefQuantCompleter() ( 
-    quantList, error ) {
-    quants := make( []SpecialToken, 0, 2 )
-    for loop := true; sb.HasTokens() && loop; {
-        var tn *TokenNode
-        var err error
-        if tn, err = sb.PollSpecial( quantToks... ); err == nil {
-            if loop = tn != nil; loop {
-                if quants, err = sb.appendQuantToken( quants, tn ); err != nil {
-                    return nil, err
-                }
-            }
-        } else { return nil, err }
-    }
-    return quantList( quants ), nil
 }
 
 var rangeClosers []SpecialToken
@@ -644,48 +599,6 @@ func ( sb *Builder ) pollTypeRefRestriction() (
     return
 }
 
-func ( t *CompletableTypeReference ) CompleteType( 
-    tc TypeCompleter ) ( mg.TypeReference, error ) {
-
-    at := atomicExpressionIn( t.Expression )
-    res, ok, err := tc.CompleteBaseType( at.Name, at.Restriction, at.NameLoc )
-    if ! ( ok && err == nil ) { return nil, err }
-    return applyTypeCompletion( t.Expression, res )
-}
-
-func ( t *CompletableTypeReference ) buildExpressions(
-    nm mg.TypeName,
-    nmLoc *Location,
-    rx RestrictionSyntax,
-    ptrDepth int,
-    quants quantList ) {
-    
-    base := &AtomicTypeExpression{ Name: nm }
-//    base.NameLoc = nmLoc
-    if rx != nil { base.Restriction = rx }
-    t.Expression = base
-    for i, e := 0, ptrDepth; i < e; i++ {
-        t.Expression = &PointerTypeExpression{ Expression: t.Expression }
-    }
-    for _, quant := range quants {
-        switch quant {
-        case SpecialTokenAsterisk:
-            t.Expression = &ListTypeExpression{
-                Expression: t.Expression,
-                AllowsEmpty: true,
-            }
-        case SpecialTokenPlus:
-            t.Expression = &ListTypeExpression{
-                Expression: t.Expression,
-                AllowsEmpty: false,
-            }
-        case SpecialTokenQuestionMark:
-            t.Expression = &NullableTypeExpression{ Expression: t.Expression }
-        default: panic( libErrorf( "unhandled quant: %s", quant ) )
-        }
-    }
-}
-
 func canStartAtomicType( tn *TokenNode ) bool {
     switch tn.Token.( type ) {
     case *mg.Identifier, *mg.DeclaredTypeName: return true
@@ -725,6 +638,28 @@ func ( sb *Builder ) expectTypeExpressionBase(
     return nil, sb.ErrorTokenUnexpected( "type reference", tn )
 }
 
+func ( sb *Builder ) pollTypeExpression( 
+    verDefl *mg.Identifier ) ( interface{}, error ) {
+
+    if err := sb.SkipWsOrComments(); err != nil { return nil, err }
+    base, err := sb.expectTypeExpressionBase( verDefl );
+    if err != nil { return nil, err }
+    return sb.applyTypeQuantifiers( base )
+}
+
+// In addition to returning a type ref, this method will, via its helper
+// methods, ensure that sb.SetSynthEnd() is called after the token that
+// completes the type reference, effectively making type references capable of
+// ending statements with a synthetic end token, just as lexer does with
+// numbers, strings, etc.
+func ( sb *Builder ) ExpectTypeReference(
+    verDefl *mg.Identifier ) ( ref *CompletableTypeReference, err error ) {
+
+    ref = &CompletableTypeReference{}
+    ref.Expression, err = sb.pollTypeExpression( verDefl )
+    return 
+}
+
 func ( sb *Builder ) applyTypeQuantifier( 
     e interface{}, tn *TokenNode ) ( interface{}, error ) {
 
@@ -757,40 +692,13 @@ func ( sb *Builder ) applyTypeQuantifiers(
     return e, nil
 }
 
-func ( sb *Builder ) pollTypeExpression( 
-    verDefl *mg.Identifier ) ( interface{}, error ) {
+func ( t *CompletableTypeReference ) CompleteType( 
+    tc TypeCompleter ) ( mg.TypeReference, error ) {
 
-    if err := sb.SkipWsOrComments(); err != nil { return nil, err }
-    base, err := sb.expectTypeExpressionBase( verDefl );
-    if err != nil { return nil, err }
-    return sb.applyTypeQuantifiers( base )
-}
-
-// In addition to returning a type ref, this method will, via its helper
-// methods, ensure that sb.SetSynthEnd() is called after the token that
-// completes the type reference, effectively making type references capable of
-// ending statements with a synthetic end token, just as lexer does with
-// numbers, strings, etc.
-func ( sb *Builder ) ExpectTypeReference(
-    verDefl *mg.Identifier ) ( ref *CompletableTypeReference, err error ) {
-
-    ref = &CompletableTypeReference{}
-    ref.Expression, err = sb.pollTypeExpression( verDefl )
-//    sb.SetSynthEnd()
-    return 
-//    tmp := &CompletableTypeReference{}
-//    var nmLoc *Location
-//    var ptrDepth int
-//    var nm mg.TypeName
-//    var rx RestrictionSyntax
-//    var quants quantList
-//    if ptrDepth, _, err = sb.pollPointerDepth(); err != nil { return }
-//    if nm, nmLoc, err = sb.ExpectTypeName( verDefl ); err != nil { return }
-//    if rx, err = sb.pollTypeRefRestriction(); err != nil { return }
-//    if quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }
-//    ref = tmp
-//    ref.buildExpressions( nm, nmLoc, rx, ptrDepth, quants )
-//    return
+    at := atomicExpressionIn( t.Expression )
+    res, ok, err := tc.CompleteBaseType( at.Name, at.Restriction, at.NameLoc )
+    if ! ( ok && err == nil ) { return nil, err }
+    return applyTypeCompletion( t.Expression, res )
 }
 
 // meant for string/num restriction only right now
