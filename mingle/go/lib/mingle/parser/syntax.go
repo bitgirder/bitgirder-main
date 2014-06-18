@@ -344,6 +344,108 @@ func ( sb *Builder ) ExpectTypeName(
     return
 }
 
+type AtomicTypeExpression struct {
+    Name mg.TypeName
+    NameLoc *Location
+    Restriction RestrictionSyntax
+}
+
+type PointerTypeExpression struct {
+    Loc *Location
+    Expression interface{}
+}
+
+type ListTypeExpression struct {
+    Loc *Location
+    Expression interface{}
+    AllowsEmpty bool
+}
+
+type NullableTypeExpression struct {
+    Loc *Location
+    Expression interface{}
+}
+
+func atomicExpressionIn( e interface{} ) *AtomicTypeExpression {
+    switch v := e.( type ) {
+    case *AtomicTypeExpression: return v
+    case *ListTypeExpression: return atomicExpressionIn( v.Expression )
+    case *NullableTypeExpression: return atomicExpressionIn( v.Expression )
+    case *PointerTypeExpression: return atomicExpressionIn( v.Expression )
+    }
+    panic( libErrorf( "unhandled expression: %T", e ) )
+}
+
+func locationOfExpression( e interface{} ) *Location {
+    switch v := e.( type ) {
+    case *AtomicTypeExpression: return v.NameLoc
+    case *ListTypeExpression: return v.Loc
+    case *NullableTypeExpression: return v.Loc
+    case *PointerTypeExpression: return v.Loc
+    }
+    panic( libErrorf( "unhandled type exp: %T", e ) )
+}
+
+type CompletableTypeReference struct {
+    Expression interface{}
+}
+
+func ( t *CompletableTypeReference ) Location() *Location {
+    return locationOfExpression( t.Expression )
+}
+
+type TypeCompleter interface {
+
+    CompleteBaseType ( 
+        mg.TypeName, 
+        RestrictionSyntax, 
+        *Location ) ( mg.TypeReference, bool, error )
+}
+
+func applyListTypeCompletion(
+    e *ListTypeExpression, 
+    atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
+        
+    et, err := applyTypeCompletion( e.Expression, atRepl )
+    if err != nil { return nil, err }
+    lt := &mg.ListTypeReference{ ElementType: et, AllowsEmpty: e.AllowsEmpty }
+    return lt, nil
+}
+
+func applyNullableTypeCompletion( 
+    e *NullableTypeExpression, 
+    atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
+
+    nt, err := applyTypeCompletion( e.Expression, atRepl )
+    if err != nil { return nil, err }
+    if mg.IsNullableType( nt ) {
+        return mg.MustNullableTypeReference( nt ), nil
+    } 
+    return nil, mg.NewNullableTypeError( nt )
+}
+
+func applyPointerTypeCompletion( 
+    e *PointerTypeExpression, 
+    atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
+
+    pt, err := applyTypeCompletion( e.Expression, atRepl )
+    if err != nil { return nil, err }
+    return mg.NewPointerTypeReference( pt ), nil
+}
+
+func applyTypeCompletion( 
+    e interface{}, atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
+
+    switch v := e.( type ) {
+    case *AtomicTypeExpression: return atRepl, nil
+    case *ListTypeExpression: return applyListTypeCompletion( v, atRepl )
+    case *NullableTypeExpression: 
+        return applyNullableTypeCompletion( v, atRepl )
+    case *PointerTypeExpression: return applyPointerTypeCompletion( v, atRepl )
+    }
+    panic( libErrorf( "unhandled type exp: %T", e ) )
+}
+
 type TypeQuantifier int
 
 const (
@@ -521,6 +623,7 @@ func ( sb *Builder ) completeRangeRestriction(
 
 func ( sb *Builder ) pollTypeRefRestriction() (
     sx RestrictionSyntax, err error ) {
+
     if err = sb.SkipWsOrComments(); err != nil { return }
     var tn *TokenNode
     if tn, err = sb.PollSpecial( SpecialTokenTilde ); 
@@ -539,108 +642,6 @@ func ( sb *Builder ) pollTypeRefRestriction() (
         }
     } else { sb.SetSynthEnd() }
     return
-}
-
-type AtomicTypeExpression struct {
-    Name mg.TypeName
-    NameLoc *Location
-    Restriction RestrictionSyntax
-}
-
-type PointerTypeExpression struct {
-    Loc *Location
-    Expression interface{}
-}
-
-type ListTypeExpression struct {
-    Loc *Location
-    Expression interface{}
-    AllowsEmpty bool
-}
-
-type NullableTypeExpression struct {
-    Loc *Location
-    Expression interface{}
-}
-
-func atomicExpressionIn( e interface{} ) *AtomicTypeExpression {
-    switch v := e.( type ) {
-    case *AtomicTypeExpression: return v
-    case *ListTypeExpression: return atomicExpressionIn( v.Expression )
-    case *NullableTypeExpression: return atomicExpressionIn( v.Expression )
-    case *PointerTypeExpression: return atomicExpressionIn( v.Expression )
-    }
-    panic( libErrorf( "unhandled expression: %T", e ) )
-}
-
-func locationOfExpression( e interface{} ) *Location {
-    switch v := e.( type ) {
-    case *AtomicTypeExpression: return v.NameLoc
-    case *ListTypeExpression: return v.Loc
-    case *NullableTypeExpression: return v.Loc
-    case *PointerTypeExpression: return v.Loc
-    }
-    panic( libErrorf( "unhandled type exp: %T", e ) )
-}
-
-type CompletableTypeReference struct {
-    Expression interface{}
-}
-
-func ( t *CompletableTypeReference ) Location() *Location {
-    return locationOfExpression( t.Expression )
-}
-
-type TypeCompleter interface {
-
-    CompleteBaseType ( 
-        mg.TypeName, 
-        RestrictionSyntax, 
-        *Location ) ( mg.TypeReference, bool, error )
-}
-
-func applyListTypeCompletion(
-    e *ListTypeExpression, 
-    atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
-        
-    et, err := applyTypeCompletion( e.Expression, atRepl )
-    if err != nil { return nil, err }
-    lt := &mg.ListTypeReference{ ElementType: et, AllowsEmpty: e.AllowsEmpty }
-    return lt, nil
-}
-
-func applyNullableTypeCompletion( 
-    e *NullableTypeExpression, 
-    atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
-
-    nt, err := applyTypeCompletion( e.Expression, atRepl )
-    if err != nil { return nil, err }
-    if mg.IsNullableType( nt ) {
-        return mg.MustNullableTypeReference( nt ), nil
-    } 
-    return nil, mg.NewNullableTypeError( nt )
-}
-
-func applyPointerTypeCompletion( 
-    e *PointerTypeExpression, 
-    atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
-
-    pt, err := applyTypeCompletion( e.Expression, atRepl )
-    if err != nil { return nil, err }
-    return mg.NewPointerTypeReference( pt ), nil
-}
-
-func applyTypeCompletion( 
-    e interface{}, atRepl mg.TypeReference ) ( mg.TypeReference, error ) {
-
-    switch v := e.( type ) {
-    case *AtomicTypeExpression: return atRepl, nil
-    case *ListTypeExpression: return applyListTypeCompletion( v, atRepl )
-    case *NullableTypeExpression: 
-        return applyNullableTypeCompletion( v, atRepl )
-    case *PointerTypeExpression: return applyPointerTypeCompletion( v, atRepl )
-    }
-    panic( libErrorf( "unhandled type exp: %T", e ) )
 }
 
 func ( t *CompletableTypeReference ) CompleteType( 
@@ -685,6 +686,86 @@ func ( t *CompletableTypeReference ) buildExpressions(
     }
 }
 
+func canStartAtomicType( tn *TokenNode ) bool {
+    switch tn.Token.( type ) {
+    case *mg.Identifier, *mg.DeclaredTypeName: return true
+    }
+    return false
+}
+
+func ( sb *Builder ) expectAtomicTypeExpression(
+    verDefl *mg.Identifier ) ( *AtomicTypeExpression, error ) {
+
+//    nm, nmLoc, err := sb.ExpectTypeName( verDefl )
+    nm, _, err := sb.ExpectTypeName( verDefl )
+    if err != nil { return nil, err }
+//    res := &AtomicTypeExpression{ Name: nm, NameLoc: nmLoc }
+    res := &AtomicTypeExpression{ Name: nm }
+    if res.Restriction, err = sb.pollTypeRefRestriction(); err != nil { 
+        return nil, err
+    }
+    return res, nil
+}
+
+func ( sb *Builder ) expectTypeExpressionBase(
+    verDefl *mg.Identifier ) ( interface{}, error ) {
+
+    tn, err := sb.PeekToken()
+    if err != nil { return nil, err }
+    if tn.IsSpecial( SpecialTokenAmpersand ) {
+        sb.MustNextToken()
+        if err := sb.CheckUnexpectedEnd(); err != nil { return nil, err }
+        e, err := sb.expectTypeExpressionBase( verDefl )
+        if err != nil { return nil, err }
+        return &PointerTypeExpression{ nil, e }, nil
+    }
+    if canStartAtomicType( tn ) { 
+        return sb.expectAtomicTypeExpression( verDefl ) 
+    }
+    return nil, sb.ErrorTokenUnexpected( "type reference", tn )
+}
+
+func ( sb *Builder ) applyTypeQuantifier( 
+    e interface{}, tn *TokenNode ) ( interface{}, error ) {
+
+    var err error
+    switch tn.SpecialToken() {
+    case SpecialTokenAsterisk: e = &ListTypeExpression{ nil, e, true }
+    case SpecialTokenPlus: e = &ListTypeExpression{ nil, e, false }
+    case SpecialTokenQuestionMark:
+        if _, ok := e.( *NullableTypeExpression ); ok {
+            msg := "a nullable type cannot itself be made nullable"
+            err = &ParseError{ msg, tn.Loc }
+        } else { e = &NullableTypeExpression{ nil, e } }
+    default: err = sb.ErrorTokenUnexpected( "type quantifier", tn )
+    }
+    if err != nil { return nil, err }
+    sb.SetSynthEnd()
+    return e, nil
+}
+
+func ( sb *Builder ) applyTypeQuantifiers( 
+    e interface{} ) ( interface{}, error ) {
+
+    for loop := true; sb.HasTokens() && loop; {
+        tn, err := sb.PollSpecial( quantToks... )
+        if err != nil { return nil, err }
+        if loop = tn != nil; ! loop { break }
+        e, err = sb.applyTypeQuantifier( e, tn )
+        if err != nil { return nil, err }
+    }
+    return e, nil
+}
+
+func ( sb *Builder ) pollTypeExpression( 
+    verDefl *mg.Identifier ) ( interface{}, error ) {
+
+    if err := sb.SkipWsOrComments(); err != nil { return nil, err }
+    base, err := sb.expectTypeExpressionBase( verDefl );
+    if err != nil { return nil, err }
+    return sb.applyTypeQuantifiers( base )
+}
+
 // In addition to returning a type ref, this method will, via its helper
 // methods, ensure that sb.SetSynthEnd() is called after the token that
 // completes the type reference, effectively making type references capable of
@@ -693,19 +774,23 @@ func ( t *CompletableTypeReference ) buildExpressions(
 func ( sb *Builder ) ExpectTypeReference(
     verDefl *mg.Identifier ) ( ref *CompletableTypeReference, err error ) {
 
-    tmp := &CompletableTypeReference{}
-    var nmLoc *Location
-    var ptrDepth int
-    var nm mg.TypeName
-    var rx RestrictionSyntax
-    var quants quantList
-    if ptrDepth, _, err = sb.pollPointerDepth(); err != nil { return }
-    if nm, nmLoc, err = sb.ExpectTypeName( verDefl ); err != nil { return }
-    if rx, err = sb.pollTypeRefRestriction(); err != nil { return }
-    if quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }
-    ref = tmp
-    ref.buildExpressions( nm, nmLoc, rx, ptrDepth, quants )
-    return
+    ref = &CompletableTypeReference{}
+    ref.Expression, err = sb.pollTypeExpression( verDefl )
+//    sb.SetSynthEnd()
+    return 
+//    tmp := &CompletableTypeReference{}
+//    var nmLoc *Location
+//    var ptrDepth int
+//    var nm mg.TypeName
+//    var rx RestrictionSyntax
+//    var quants quantList
+//    if ptrDepth, _, err = sb.pollPointerDepth(); err != nil { return }
+//    if nm, nmLoc, err = sb.ExpectTypeName( verDefl ); err != nil { return }
+//    if rx, err = sb.pollTypeRefRestriction(); err != nil { return }
+//    if quants, err = sb.expectTypeRefQuantCompleter(); err != nil { return }
+//    ref = tmp
+//    ref.buildExpressions( nm, nmLoc, rx, ptrDepth, quants )
+//    return
 }
 
 // meant for string/num restriction only right now
