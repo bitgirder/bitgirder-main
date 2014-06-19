@@ -376,11 +376,12 @@ func atomicExpressionIn( e interface{} ) *AtomicTypeExpression {
     panic( libErrorf( "unhandled expression: %T", e ) )
 }
 
-func locationOfExpression( e interface{} ) *Location {
+func headLocationOfExpression( e interface{} ) *Location {
     switch v := e.( type ) {
     case *AtomicTypeExpression: return v.NameLoc
-    case *ListTypeExpression: return v.Loc
-    case *NullableTypeExpression: return v.Loc
+    case *ListTypeExpression: return headLocationOfExpression( v.Expression )
+    case *NullableTypeExpression: 
+        return headLocationOfExpression( v.Expression )
     case *PointerTypeExpression: return v.Loc
     }
     panic( libErrorf( "unhandled type exp: %T", e ) )
@@ -391,7 +392,7 @@ type CompletableTypeReference struct {
 }
 
 func ( t *CompletableTypeReference ) Location() *Location {
-    return locationOfExpression( t.Expression )
+    return headLocationOfExpression( t.Expression )
 }
 
 type TypeCompleter interface {
