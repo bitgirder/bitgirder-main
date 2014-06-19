@@ -1,7 +1,5 @@
 - consider adding MingleIdentifier, MingleNamespace as addressable value types 
 
-- add tests for parenthesized type expressions
-
 - add checked constructors for creating type references from outside mg package
   (CreateAtomicUnsafe..., etc)
 

@@ -130,14 +130,18 @@ func ( sb *Builder ) implNextToken(
     return tn, err
 }
 
-func ( sb *Builder ) nextToken() ( *TokenNode, error ) {
+func ( sb *Builder ) nextTokenNode() ( *TokenNode, error ) {
     return sb.implNextToken( "", tokenExpectAny )
 }
 
+func ( sb *Builder ) mustNextTokenNode() *TokenNode {
+    tn, err := sb.nextTokenNode()
+    if err == nil { return tn }
+    panic( err )
+}
+
 func ( sb *Builder ) MustNextToken() Token {
-    tn, err := sb.nextToken()
-    if err != nil { panic( err ) }
-    return tn.Token
+    return sb.mustNextTokenNode().Token
 }
 
 func ( sb *Builder ) peekUnexpectedTokenErrorNode() *TokenNode {
@@ -422,6 +426,17 @@ func init() {
     }
 }
 
+// next token is known to be SpecialTokenAmpersand
+func ( sb *Builder ) expectPointerTypeExpression(
+    verDefl *mg.Identifier ) ( *PointerTypeExpression, error ) {
+
+    tn := sb.mustNextTokenNode()
+    if err := sb.CheckUnexpectedEnd(); err != nil { return nil, err }
+    e, err := sb.expectTypeExpressionBase( verDefl )
+    if err != nil { return nil, err }
+    return &PointerTypeExpression{ tn.Loc, e }, nil
+}
+
 // removes and returns next token if it is '+' or '-', returning true if it was
 // '-', false if it was anything other than '-' (not necessarily '+'); if '+' or
 // '-' is seen
@@ -457,7 +472,7 @@ func ( sb *Builder ) expectRestrictionSyntax() (
     pmTok, neg, err := sb.PollPlusMinus()
     if err != nil { return nil, err }
     var tn *TokenNode
-    if tn, err = sb.nextToken(); err != nil { return nil, err }
+    if tn, err = sb.nextTokenNode(); err != nil { return nil, err }
     if tn == nil { return nil, sb.errorUnexpectedEnd() }
     if s, ok := tn.Token.( StringToken ); ok { 
         // string ok unless we want num
@@ -541,7 +556,7 @@ func ( sb *Builder ) pollTypeRefRestriction() (
     if tn, err = sb.PollSpecial( SpecialTokenTilde ); 
         err == nil && tn != nil {
         if err = sb.SkipWsOrComments(); err != nil { return }
-        if tn, err = sb.nextToken(); err != nil { return }
+        if tn, err = sb.nextTokenNode(); err != nil { return }
         if IsSpecial( tn.Token, SpecialTokenOpenParen ) || 
            IsSpecial( tn.Token, SpecialTokenOpenBracket ) {
             sx, err = sb.completeRangeRestriction( tn )
@@ -575,20 +590,42 @@ func ( sb *Builder ) expectAtomicTypeExpression(
     return res, nil
 }
 
+func ( sb *Builder ) pollCloseParen() ( bool, error ) {
+    if err := sb.SkipWsOrComments(); err != nil { return false, err }
+    if ! sb.HasTokens() { return false, nil }
+    tn, err := sb.PeekToken()
+    if err != nil { return false, err }
+    res := tn.IsSpecial( SpecialTokenCloseParen )
+    if res { sb.mustNextTokenNode() }
+    return res, nil
+}
+
+func ( sb *Builder ) expectGroupedTypeExpression(
+    verDefl *mg.Identifier ) ( interface{}, error ) {
+
+    openNode := sb.mustNextTokenNode() // '('
+    if err := sb.SkipWsOrComments(); err != nil { return nil, err }
+    res, err := sb.pollTypeExpression( verDefl )
+    if err != nil { return nil, err }
+    ok, err := sb.pollCloseParen()
+    if err != nil { return nil, err }
+    if ok { return res, nil }
+    return nil, &ParseError{ `Unmatched "("`, openNode.Loc }
+}
+
 func ( sb *Builder ) expectTypeExpressionBase(
     verDefl *mg.Identifier ) ( interface{}, error ) {
 
     tn, err := sb.PeekToken()
     if err != nil { return nil, err }
     if tn.IsSpecial( SpecialTokenAmpersand ) {
-        sb.MustNextToken()
-        if err := sb.CheckUnexpectedEnd(); err != nil { return nil, err }
-        e, err := sb.expectTypeExpressionBase( verDefl )
-        if err != nil { return nil, err }
-        return &PointerTypeExpression{ tn.Loc, e }, nil
+        return sb.expectPointerTypeExpression( verDefl )
     }
     if canStartAtomicType( tn ) { 
         return sb.expectAtomicTypeExpression( verDefl ) 
+    }
+    if tn.IsSpecial( SpecialTokenOpenParen ) {
+        return sb.expectGroupedTypeExpression( verDefl )
     }
     return nil, sb.ErrorTokenUnexpected( "type reference", tn )
 }

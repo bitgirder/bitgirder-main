@@ -422,34 +422,124 @@ func init() {
                 },
             },
         ),
-//        typRefSucc( "&(&ns1@v1/T1)?",
-//            &CompletableTypeReference{
-//            },
-//        ),
-//        typRefSucc( "&(&&ns1@v1/T1*)",
-//            &CompletableTypeReference{
-//            },
-//        ),
-//        typRefSucc( "&(ns1@v1/T1*)",
-//            &CompletableTypeReference{
-//            },
-//        ),
-//        typRefSucc( "&(ns1@v1/T1*)*?",
-//            &CompletableTypeReference{
-//            },
-//        ),
-//        typRefSucc( "&(((ns1@v1/T1))*+)",
-//            &CompletableTypeReference{
-//            },
-//        ),
-//        typRefSucc( "(((ns1@v1/T1))*)",
-//            &CompletableTypeReference{
-//            },
-//        ),
-//        typRefSucc( "(  (\t(ns1@v1/T1\r)\n  \r\n  )*)",
-//            &CompletableTypeReference{
-//            },
-//        ),
+        typRefSucc( "&(&ns1@v1/T1)?",
+            &CompletableTypeReference{
+                Expression: &NullableTypeExpression{
+                    Loc: loc( 14 ),
+                    Expression: &PointerTypeExpression{
+                        Loc: loc( 1 ),
+                        Expression: &PointerTypeExpression{
+                            Loc: loc( 3 ),
+                            Expression: &AtomicTypeExpression{
+                                Name: qnNs1V1T1,
+                                NameLoc: loc( 4 ),
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+        typRefSucc( "&(ns1@v1/T1*)",
+            &CompletableTypeReference{
+                Expression: &PointerTypeExpression{
+                    Loc: loc( 1 ),
+                    Expression: &ListTypeExpression{
+                        Loc: loc( 12 ),
+                        AllowsEmpty: true,
+                        Expression: &AtomicTypeExpression{
+                            Name: qnNs1V1T1,
+                            NameLoc: loc( 3 ),
+                        },
+                    },
+                },
+            },
+        ),
+        typRefSucc( "&(&&ns1@v1/T1*)",
+            &CompletableTypeReference{
+                Expression: &PointerTypeExpression{
+                    Loc: loc( 1 ),
+                    Expression: &ListTypeExpression{
+                        Loc: loc( 14 ),
+                        AllowsEmpty: true,
+                        Expression: &PointerTypeExpression{
+                            Loc: loc( 3 ),
+                            Expression: &PointerTypeExpression{
+                                Loc: loc( 4 ),
+                                Expression: &AtomicTypeExpression{
+                                    Name: qnNs1V1T1,
+                                    NameLoc: loc( 5 ),
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+        typRefSucc( "&(ns1@v1/T1*)*?",
+            &CompletableTypeReference{
+                Expression: &NullableTypeExpression{
+                    Loc: loc( 15 ),
+                    Expression: &ListTypeExpression{
+                        Loc: loc( 14 ),
+                        AllowsEmpty: true,
+                        Expression: &PointerTypeExpression{
+                            Loc: loc( 1 ),
+                            Expression: &ListTypeExpression{
+                                Loc: loc( 12 ),
+                                AllowsEmpty: true,
+                                Expression: &AtomicTypeExpression{
+                                    Name: qnNs1V1T1,
+                                    NameLoc: loc( 3 ),
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+        typRefSucc( "&(((ns1@v1/T1))*+)",
+            &CompletableTypeReference{
+                Expression: &PointerTypeExpression{
+                    Loc: loc( 1 ),
+                    Expression: &ListTypeExpression{
+                        Loc: loc( 17 ),
+                        AllowsEmpty: false,
+                        Expression: &ListTypeExpression{
+                            Loc: loc( 16 ),
+                            AllowsEmpty: true,
+                            Expression: &AtomicTypeExpression{
+                                Name: qnNs1V1T1,
+                                NameLoc: loc( 5 ),
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+        typRefSucc( "(((ns1@v1/T1))*)",
+            &CompletableTypeReference{
+                Expression: &ListTypeExpression{
+                    Loc: loc( 15 ),
+                    AllowsEmpty: true,
+                    Expression: &AtomicTypeExpression{
+                        Name: qnNs1V1T1,
+                        NameLoc: loc( 4 ),
+                    },
+                },
+            },
+        ),
+        typRefSucc( "(  (\t(ns1@v1/T1\t)  \t  )*)",
+            &CompletableTypeReference{
+                Expression: &ListTypeExpression{
+                    Loc: loc( 24 ),
+                    AllowsEmpty: true,
+                    Expression: &AtomicTypeExpression{
+                        Name: qnNs1V1T1,
+                        NameLoc: loc( 7 ),
+                    },
+                },
+            },
+        ),
         typRefSucc( `&&ns1@v1/T1~".*"`, 
             &CompletableTypeReference{
                 Expression: &PointerTypeExpression{
@@ -503,11 +593,12 @@ func init() {
         typRefFail( "&&&&", 5, "Unexpected end of input" ),
         typRefFail( "&ns1", 5, "Expected ':' or '@' but found: END" ),
         typRefFail( "&&+", 3, "Expected type reference but found: +" ),
-//        typRefFail( "()", 1, "Empty type" ),
-//        typRefFail( "&(ns1@v1/T1", 2, `Unmatched "("` ),
-//        typRefFail( "&{ns1@v1/T1}", 2, "STUB" ),
-//        typRefFail( "(&(ns1@v1/T1)", 3, `Unmatched "("` ),
-//        typRefFail( "(ns1@v1/T1))", 12, `Unmatchd ")"` ),
+        typRefFail( "()", 2, "Expected type reference but found: )" ),
+        typRefFail( "(   )", 5, "Expected type reference but found: )" ),
+        typRefFail( "&(ns1@v1/T1", 2, `Unmatched "("` ),
+        typRefFail( "&{ns1@v1/T1}", 2, "Expected type reference but found: {" ),
+        typRefFail( "(&(ns1@v1/T1)", 1, `Unmatched "("` ),
+        typRefFail( "(ns1@v1/T1))", 12, "Unexpected token: )" ),
         typRefFail( "ns1@v1/T1~", 11, "Unexpected end of input" ),
         typRefFail( `ns1@v1/~"s*"`, 8, 
             `Illegal type name start: "~" (U+007E)` ),

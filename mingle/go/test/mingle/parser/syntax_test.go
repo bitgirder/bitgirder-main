@@ -33,7 +33,7 @@ func ( st *syntaxBuildTester ) expectToken( call string, expct Token ) {
     var tn *TokenNode
     var err error
     switch call {
-    case "any": tn, err = st.sb.nextToken()
+    case "any": tn, err = st.sb.nextTokenNode()
     case "expect-special": 
         tn, err = st.sb.ExpectSpecial( expct.( SpecialToken ) )
     case "poll-special": 
@@ -102,8 +102,8 @@ func TestExpectSpecialMulti( t *testing.T ) {
 
 func TestTokenUnexpectedEndOfInput( t *testing.T ) {
     sb := newSyntaxBuilder( "a", false )
-    sb.nextToken()
-    if _, err := sb.nextToken(); err == nil {
+    sb.nextTokenNode()
+    if _, err := sb.nextTokenNode(); err == nil {
         t.Fatal( "Expected error" )
     } else {
         if pe, ok := err.( *ParseError ); ok {
@@ -115,7 +115,7 @@ func TestTokenUnexpectedEndOfInput( t *testing.T ) {
 
 func TestTokenListTrailingTokenError( t *testing.T ) {
     sb := newSyntaxBuilder( "a+", false )
-    sb.nextToken()
+    sb.nextTokenNode()
     if err := sb.CheckTrailingToken(); err == nil {
         t.Fatalf( "Expected error" )
     } else {
@@ -295,6 +295,43 @@ func TestTypeReferenceSetsSynth( t *testing.T ) {
                     NameLoc: lc( 1 ),
                     Name: nmA, 
                     Restriction: rng, 
+                },
+            },
+        },
+        {
+            `&A*`,
+            &CompletableTypeReference{
+                Expression: &ListTypeExpression{
+                    Loc: lc( 3 ),
+                    AllowsEmpty: true,
+                    Expression: &PointerTypeExpression{
+                        Loc: lc( 1 ),
+                        Expression: &AtomicTypeExpression{
+                            Name: nmA,
+                            NameLoc: lc( 2 ),
+                        },
+                    },
+                },
+            },
+        },
+        {
+            `(A)`,
+            &CompletableTypeReference{
+                Expression: &AtomicTypeExpression{
+                    Name: nmA,
+                    NameLoc: lc( 2 ),
+                },
+            },
+        },
+        {
+            `&(A)`,
+            &CompletableTypeReference{
+                Expression: &PointerTypeExpression{
+                    Loc: lc( 1 ),
+                    Expression: &AtomicTypeExpression{
+                        Name: nmA,
+                        NameLoc: lc( 3 ),
+                    },
                 },
             },
         },
