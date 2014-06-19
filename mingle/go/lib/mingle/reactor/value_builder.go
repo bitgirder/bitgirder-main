@@ -129,7 +129,7 @@ func ( va *valueAccumulator ) acceptValue( acc interface{}, val mg.Value ) bool 
     case *valPtrAcc: v.val = mg.NewHeapValue( val ); return true
     case *mapAcc: v.setValue( val ); return false
     case *structAcc: v.flds.setValue( val ); return false
-    case *listAcc: v.l.Add( val ); return false
+    case *listAcc: v.l.AddUnsafe( val ); return false
     }
     panic( libErrorf( "unhandled acc: %T", acc ) )
 }

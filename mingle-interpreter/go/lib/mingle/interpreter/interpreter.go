@@ -27,10 +27,10 @@ func ( ctx *context ) failEvalf( tmpl string, argv ...interface{} ) error {
 }
 
 func evalListVal( lv *code.ListValue, ctx *context ) ( *mg.List, error ) {
-    res := mg.MakeList( len( lv.Values ) )
+    res := mg.NewList( mg.TypeOpaqueList )
     for _, eltVal := range lv.Values {
         if evRes, err := evaluate( eltVal, ctx ); err == nil {
-            res.Add( evRes )
+            res.AddUnsafe( evRes )
         } else { return nil, err }
     }
     return res, nil

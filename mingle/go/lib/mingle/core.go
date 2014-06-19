@@ -816,9 +816,6 @@ func NewListValues( vals []Value ) *List {
     return &List{ vals: vals, Type: TypeOpaqueList }
 }
 
-// returns a list starting with size sz; calls to Add() will grow the list
-func MakeList( sz int ) *List { return NewListValues( make( []Value, 0, sz ) ) }
-
 // if we allow immutable lists later we can have this return a fixed immutable
 // empty instance
 func EmptyList() *List { return NewList( TypeOpaqueList ) }
@@ -827,7 +824,7 @@ func ( l *List ) Address() PointerId {
     return UnsafeToPointerId( unsafe.Pointer( l ) ) 
 }
 
-func ( l *List ) Add( val Value ) { l.vals = append( l.vals, val ) }
+func ( l *List ) AddUnsafe( val Value ) { l.vals = append( l.vals, val ) }
 
 func ( l *List ) valImpl() {}
 

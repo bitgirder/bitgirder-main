@@ -1,6 +1,1 @@
-- consider adding MingleIdentifier, MingleNamespace as addressable value types 
-
-- add checked constructors for creating type references from outside mg package
-  (CreateAtomicUnsafe..., etc)
-
-- make list adds check type (and add AddUnsafe())
+- move mingle-interpreter into mingle-compiler as an internal const evaluator
