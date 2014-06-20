@@ -242,7 +242,7 @@ func ( rti *rtInit ) addInferredStructCastTests() {
 }
 
 func ( rti *rtInit ) addSchemaCastTests() {
-    schema1Nil := &mg.NullableTypeReference{ asType( "ns1@v1/Schema1" ) }
+    schema1Nil := asType( "&ns1@v1/Schema1?" )
     mgId := parser.MustIdentifier
     dm := MakeV1DefMap(
         MakeSchemaDef( 
@@ -334,11 +334,58 @@ func ( rti *rtInit ) addSchemaCastTests() {
         "ns1@v1/Schema1",
     )
     addSucc( 
+        mg.NewHeapValue(
+            parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+        ),
+        mg.NewHeapValue(
+            parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+        ),
+        schema1Nil,
+    )
+    addSucc( 
         parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
-        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+        mg.NewHeapValue(
+            parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+        ),
         schema1Nil,
     )
     addSucc( mg.NullVal, mg.NullVal, schema1Nil )
+    addSucc(
+        parser.MustStruct( "ns1@v1/S2",
+            "f1", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+            "f2", mg.NewHeapValue(
+                parser.MustStruct( "ns1@v1/S1", 
+                    "f1", int32( 1 ), 
+                    "f2", int32( 1 ),
+                ),
+            ),
+        ),
+        parser.MustStruct( "ns1@v1/S2",
+            "f1", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+            "f2", mg.NewHeapValue(
+                parser.MustStruct( "ns1@v1/S1", 
+                    "f1", int32( 1 ), 
+                    "f2", int32( 1 ),
+                ),
+            ),
+        ),
+        "ns1@v1/Schema2",
+    )
     addSucc(
         parser.MustStruct( "ns1@v1/S2",
             "f1", parser.MustStruct( "ns1@v1/S1", 
@@ -355,9 +402,11 @@ func ( rti *rtInit ) addSchemaCastTests() {
                 "f1", int32( 1 ), 
                 "f2", int32( 1 ),
             ),
-            "f2", parser.MustStruct( "ns1@v1/S1", 
-                "f1", int32( 1 ), 
-                "f2", int32( 1 ),
+            "f2", mg.NewHeapValue(
+                parser.MustStruct( "ns1@v1/S1", 
+                    "f1", int32( 1 ), 
+                    "f2", int32( 1 ),
+                ),
             ),
         ),
         "ns1@v1/Schema2",
@@ -369,7 +418,8 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         parser.MustSymbolMap(
             "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
-            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+            "f2", mg.NewHeapValue(
+                parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ) ),
         ),
         "ns1@v1/Schema2",
     )
@@ -380,7 +430,8 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         parser.MustSymbolMap(
             "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
-            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
+            "f2", mg.NewHeapValue(
+                parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ) ),
         ),
         "ns1@v1/Schema2",
     )
