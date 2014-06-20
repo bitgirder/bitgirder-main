@@ -15,14 +15,6 @@ func mustHeapVal( v interface{} ) *mg.HeapValue {
     return mg.NewHeapValue( mg.MustValue( v ) )
 }
 
-func asType( val interface{} ) mg.TypeReference {
-    switch v := val.( type ) {
-    case mg.TypeReference: return v
-    case string: return parser.MustTypeReference( v )
-    }
-    panic( libErrorf( "Unhandled type reference: %T", val ) )
-}
-
 func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
     return mg.NewTypeCastError( asType( expct ), asType( act ), p )
 }
@@ -249,6 +241,190 @@ func ( rti *rtInit ) addInferredStructCastTests() {
     )
 }
 
+func ( rti *rtInit ) addSchemaCastTests() {
+    schema1Nil := &mg.NullableTypeReference{ asType( "ns1@v1/Schema1" ) }
+    mgId := parser.MustIdentifier
+    dm := MakeV1DefMap(
+        MakeSchemaDef( 
+            "ns1@v1/Schema1", 
+            []*FieldDefinition{
+                MakeFieldDef( "f1", "Int32", nil ),
+            },
+        ),
+        MakeSchemaDef(
+            "ns1@v1/Schema2",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
+                MakeFieldDef( "f2", schema1Nil, nil ),
+            },
+        ),
+        MakeStructDef(
+            "ns1@v1/S1",
+            "",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", "Int32", nil ),
+                MakeFieldDef( "f2", "Int32", nil ),
+            },
+        ),
+        MakeStructDef(
+            "ns1@v1/S2",
+            "",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
+                MakeFieldDef( "f2", schema1Nil, nil ),
+            },
+        ),
+        MakeStructDef(
+            "ns1@v1/S3",
+            "",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", "Int32", nil ),
+                MakeFieldDef( "f2", "Int64", nil ),
+            },
+        ),
+    )
+    addSucc := func( in, expct mg.Value, typ interface{} ) {
+        rti.addTests(
+            &CastReactorTest{
+                Map: dm,
+                Type: asType( typ ),
+                In: in,
+                Expect: expct,
+            },
+        )
+    }
+    addSucc( 
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+        "ns1@v1/Schema1",
+    )
+    addSucc( 
+        parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ), "f2", int64( 1 ) ),
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+        "ns1@v1/Schema1",
+    )
+    addSucc( 
+        parser.MustSymbolMap( "f1", int32( 1 ) ),
+        parser.MustSymbolMap( "f1", int32( 1 ) ),
+        "ns1@v1/Schema1",
+    )
+    addSucc( 
+        parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+        parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+        "ns1@v1/Schema1",
+    )
+    addSucc( 
+        parser.MustSymbolMap( "f1", int64( 1 ), "f2", int64( 1 ) ),
+        parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
+        "ns1@v1/Schema1",
+    )
+    addSucc( 
+        mg.NewHeapValue( parser.MustSymbolMap( "f1", int64( 1 ) ) ),
+        mg.NewHeapValue( parser.MustSymbolMap( "f1", int32( 1 ) ) ),
+        "&ns1@v1/Schema1",
+    )
+    addSucc(
+        parser.MustSymbolMap( "f1", int64( 1 ) ),
+        mg.NewHeapValue( parser.MustSymbolMap( "f1", int32( 1 ) ) ),
+        "&ns1@v1/Schema1",
+    )
+    addSucc( 
+        mg.NewHeapValue( parser.MustSymbolMap( "f1", int64( 1 ) ) ),
+        parser.MustSymbolMap( "f1", int32( 1 ) ),
+        "ns1@v1/Schema1",
+    )
+    addSucc( 
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+        schema1Nil,
+    )
+    addSucc( mg.NullVal, mg.NullVal, schema1Nil )
+    addSucc(
+        parser.MustStruct( "ns1@v1/S2",
+            "f1", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+            "f2", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+        ),
+        parser.MustStruct( "ns1@v1/S2",
+            "f1", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+            "f2", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
+            ),
+        ),
+        "ns1@v1/Schema2",
+    )
+    addSucc(
+        parser.MustSymbolMap(
+            "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+        ),
+        parser.MustSymbolMap(
+            "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+        ),
+        "ns1@v1/Schema2",
+    )
+    addSucc(
+        parser.MustSymbolMap(
+            "f1", parser.MustSymbolMap( "f1", int64( 1 ), "f2", int64( 1 ) ),
+            "f2", parser.MustSymbolMap( "f1", int64( 1 ), "f2", int64( 1 ) ),
+        ),
+        parser.MustSymbolMap(
+            "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
+            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
+        ),
+        "ns1@v1/Schema2",
+    )
+    addFail := func( in mg.Value, typ interface{}, err error ) {
+        rti.addTests(
+            &CastReactorTest{ Map: dm, In: in, Type: asType( typ ), Err: err },
+        )
+    }
+    addFail(
+        parser.MustSymbolMap(),
+        "ns1@v1/Schema1",
+        mg.NewMissingFieldsError( nil, []*mg.Identifier{ mgId( "f1" ) } ),
+    )
+    addFail(
+        parser.MustSymbolMap(
+            "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+            "f2", parser.MustSymbolMap( "f2", int32( 1 ) ),
+        ),
+        "ns1@v1/Schema2",
+        mg.NewMissingFieldsError(
+            mg.MakeTestIdPath( 2 ),
+            []*mg.Identifier{ mgId( "f1" ) },
+        ),
+    )
+    addFail( 
+        mg.Int32( int32( 1 ) ),
+        "ns1@v1/Schema1",
+        newTcErr( "ns1@v1/Schema1", mg.TypeInt32, nil ),
+    )
+    addFail( 
+        parser.MustStruct( "ns1@v1/S3", "f1", int32( 1 ), "f2", int64( 1 ) ),
+        "ns1@v1/Schema2",
+        newTcErr( "ns1@v1/Schema2", "ns1@v1/S3", nil ),
+    )
+    addFail(
+        parser.MustSymbolMap(
+            "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
+            "f2", int32( 1 ),
+        ),
+        "ns1@v1/Schema2",
+        newTcErr( "ns1@v1/Schema1", mg.TypeInt32, mg.MakeTestIdPath( 2 ) ),
+    )
+}
+
 func ( rti *rtInit ) addEnumValCastTests() {
     dm := MakeV1DefMap(
         MakeStructDef( "ns1@v1/S1", "", []*FieldDefinition{} ),
@@ -310,7 +486,7 @@ func ( rti *rtInit ) addEnumValCastTests() {
     addFail( 
         parser.MustStruct( "ns1@v1/E1" ), 
         "ns1@v1/E1", 
-        vcErr( "not a struct type: ns1@v1/E1" ),
+        vcErr( "not a type with fields: ns1@v1/E1" ),
     )
     addFail( 
         int32( 1 ), "ns1@v1/E1+", newTcErr( "ns1@v1/E1+", mg.TypeInt32, nil ) )
@@ -1079,6 +1255,7 @@ func ( rti *rtInit ) call() {
     rti.addFieldSetCastTests()
     rti.addStructValCastTests() 
     rti.addInferredStructCastTests()
+    rti.addSchemaCastTests()
     rti.addEnumValCastTests()
     rti.addDeepCatchallTests()
     rti.addDefaultCastTests()

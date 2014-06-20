@@ -194,11 +194,11 @@ func equalValues( expct, act Value, f assert.Failer, chkMap valPtrCheckMap ) {
     checkEqualValues( expct, act, a, chkMap )
 }
 
-func EqualWireValues( expct, act Value, f assert.Failer ) {
+func AssertEqualWireValues( expct, act Value, f assert.Failer ) {
     equalValues( expct, act, f, make( map[ PointerId ] Addressed ) )
 }
 
-func EqualValues( expct, act Value, f assert.Failer ) {
+func AssertEqualValues( expct, act Value, f assert.Failer ) {
     equalValues( expct, act, f, nil )
 }
 

@@ -945,7 +945,7 @@ type numberParseTest struct {
 func ( t *numberParseTest ) call() {
 //    t.Logf( "parsing %q as %s", t.in, t.typ )
     if act, err := ParseNumber( t.in, t.typ ); err == nil {
-        EqualValues( t.out, act, t )
+        AssertEqualValues( t.out, act, t )
     } else { t.EqualErrors( t.err, err ) }
 }
 
@@ -1215,4 +1215,146 @@ func TestCastValueErrorFormatting( t *testing.T ) {
     path := objpath.RootedAt( mkId( "f1" ) )
     err := NewValueCastErrorf( path, "Blah %s", "X" )
     assert.Equal( "f1: Blah X", err.Error() )
+}
+
+func TestEqualValues( t *testing.T ) {
+    m1 := MustSymbolMap( mkId( "f1" ), int32( 1 ) )
+    m2 := MustSymbolMap( mkId( "f1" ), int32( 2 ) )
+    m3 := MustSymbolMap( mkId( "f1" ), int32( 1 ), mkId( "f2" ), int32( 2 ) )
+    la := assert.NewListPathAsserter( t )
+    for _, t := range []struct{ v1, v2 interface{}; eq bool } {
+        { true, true, true },
+        { true, false, false },
+        { NullVal, NullVal, true },
+        { int32( 0 ), int32( 0 ), true },
+        { int32( 0 ), int32( 1 ), false },
+        { int64( 0 ), int64( 0 ), true },
+        { int64( 0 ), int64( 1 ), false },
+        { uint32( 0 ), uint32( 0 ), true },
+        { uint32( 0 ), uint32( 1 ), false },
+        { uint64( 0 ), uint64( 0 ), true },
+        { uint64( 0 ), uint64( 1 ), false },
+        { float32( 0 ), float32( 0 ), true },
+        { float32( 0 ), float32( 1 ), false },
+        { float64( 0 ), float64( 0 ), true },
+        { float64( 0 ), float64( 1 ), false },
+        { int32( 0 ), int64( 0 ), false }, // not re-checking all mismatches
+        { []byte{}, []byte{}, true },
+        { []byte{ 0 }, []byte{ 0 }, true },
+        { []byte{ 1 }, []byte{ 0 }, false },
+        { "a", "a", true },
+        { "a", "b", false },
+        { "a", int32( 1 ), false },
+        {
+            MustTimestamp( "2014-01-01T00:00:00Z" ),
+            MustTimestamp( "2014-01-01T00:00:00Z" ),
+            true,
+        },
+        {
+            MustTimestamp( "2014-01-01T00:00:00Z" ),
+            MustTimestamp( "2014-01-02T00:00:00Z" ),
+            false,
+        },
+        { 
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            true,
+        },
+        { 
+            &Enum{ ns1V1Qn( "E2" ), mkId( "v1" ) },
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            false,
+        },
+        { 
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v2" ) },
+            false,
+        },
+        { EmptySymbolMap(), EmptySymbolMap(), true },
+        { m1, EmptySymbolMap(), false },
+        { m1, m1, true },
+        { m1, m2, false },
+        { m1, m3, false },
+        { 
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            true,
+        },
+        { 
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            &Struct{ ns1V1Qn( "S2" ), m1 },
+            false,
+        },
+        { 
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            &Struct{ ns1V1Qn( "S1" ), m2 },
+            false,
+        },
+        { EmptyList(), EmptyList(), true },
+        {
+            EmptyList(),
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            false,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            true,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 2 ) },
+            },
+            false,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeInt64, true },
+                []Value{ Int64( 0 ), Int64( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            false,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeValue, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            false,
+        },
+        { NewHeapValue( Int32( 1 ) ), NewHeapValue( Int32( 1 ) ), true },
+        { NewHeapValue( Int32( 1 ) ), NewHeapValue( Int32( 0 ) ), false },
+        { NewHeapValue( Int32( 1 ) ), NewHeapValue( Int64( 1 ) ), false },
+    } {
+        chk := func( v1, v2 Value ) {
+            act := EqualValues( v1, v2 )
+            la.Equalf( t.eq, act, "%s == %s: %t, expct: %t",
+                QuoteValue( v1 ), QuoteValue( v2 ), act, t.eq )
+        }
+        v1, v2 := MustValue( t.v1 ), MustValue( t.v2 )
+        chk( v1, v2 )
+        chk( v2, v1 )
+        la = la.Next()
+    }
 }

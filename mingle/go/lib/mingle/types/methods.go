@@ -2,6 +2,7 @@ package types
 
 import (
     mg "mingle"
+    "log"
 )
 
 func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
@@ -54,10 +55,22 @@ func canAssignToStruct(
     return false
 }
 
+func canAssignToSchema(
+    targ *SchemaDefinition, def Definition, dm *DefinitionMap ) bool {
+
+    if sd, ok := def.( *StructDefinition ); ok {
+        log.Printf( "checking whether %s satisfies schema %s", 
+            sd.Name, targ.Name )
+        return sd.SatisfiesSchema( targ )
+    }
+    return false
+}
+
 func canAssignType( t1, t2 *mg.QualifiedTypeName, dm *DefinitionMap ) bool {
     d1, d2 := dm.MustGet( t1 ), dm.MustGet( t2 )
     switch v1 := d1.( type ) {
     case *StructDefinition: return canAssignToStruct( v1, d2, dm )
+    case *SchemaDefinition: return canAssignToSchema( v1, d2, dm )
     }
     return false
 }

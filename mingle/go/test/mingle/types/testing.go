@@ -16,6 +16,14 @@ var (
     mkTyp = parser.MustTypeReference
 )
 
+func asType( val interface{} ) mg.TypeReference {
+    switch v := val.( type ) {
+    case mg.TypeReference: return v
+    case string: return parser.MustTypeReference( v )
+    }
+    panic( libErrorf( "Unhandled type reference: %T", val ) )
+}
+
 func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
     res := make( []*mg.Identifier, 0, m.Len() )
     m.EachPair( func( id *mg.Identifier, _ interface{} ) {
@@ -24,16 +32,25 @@ func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
     return res
 }
 
-func MakeFieldDef( nm, typ string, defl interface{} ) *FieldDefinition {
-    res := &FieldDefinition{
-        Name: parser.MustIdentifier( nm ),
-        Type: mkTyp( typ ),
-    }
+func MakeFieldDef( 
+    nm string, typ interface{}, defl interface{} ) *FieldDefinition {
+
+    res := &FieldDefinition{ Name: mkId( nm ), Type: asType( typ ) }
     if defl != nil { 
         if val, err := mg.AsValue( defl ); err == nil {
             res.Default = val
         } else { panic( err ) }
     }
+    return res
+}
+
+func buildFieldSet( fs *FieldSet, flds []*FieldDefinition ) {
+    for _, fld := range flds { fs.MustAdd( fld ) }
+}
+
+func MakeFieldSet( flds ...*FieldDefinition ) *FieldSet {
+    res := NewFieldSet()
+    buildFieldSet( res, flds )
     return res
 }
 
@@ -43,7 +60,7 @@ func MakeStructDef(
     res := NewStructDefinition()
     res.Name = parser.MustQualifiedTypeName( qn )
     if sprTyp != "" { res.SuperType = parser.MustQualifiedTypeName( sprTyp ) }
-    for _, fld := range flds { res.Fields.MustAdd( fld ) }
+    buildFieldSet( res.Fields, flds )
     return res
 }
 
@@ -53,6 +70,13 @@ func MakeStructDef2(
     cons []*ConstructorDefinition ) *StructDefinition {
     res := MakeStructDef( qn, sprTyp, flds )
     res.Constructors = append( res.Constructors, cons... )
+    return res
+}
+
+func MakeSchemaDef( qn string, flds []*FieldDefinition ) *SchemaDefinition {
+    res := NewSchemaDefinition()
+    res.Name = mkQn( qn )
+    buildFieldSet( res.Fields, flds )
     return res
 }
 
@@ -165,7 +189,7 @@ func ( a *DefAsserter ) assertIdSets( ids1, ids2 []*mg.Identifier ) {
 func ( a *DefAsserter ) assertFieldDef( fd1, fd2 *FieldDefinition ) {
     a.descend( "(Name)" ).Equal( fd1.Name, fd2.Name )
     a.descend( "(Type)" ).equalTypeRef( fd1.Type, fd2.Type )
-    mg.EqualValues( fd1.Default, fd2.Default, a.descend( "(Default)" ) )
+    mg.AssertEqualValues( fd1.Default, fd2.Default, a.descend( "(Default)" ) )
 }
 
 // First check that both have same field sets, then check field by field

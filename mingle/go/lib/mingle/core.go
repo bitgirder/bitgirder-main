@@ -733,6 +733,61 @@ func ( hv *HeapValue ) Address() PointerId {
     return UnsafeToPointerId( unsafe.Pointer( hv ) )
 }
 
+func equalMaps( m1, m2 *SymbolMap ) bool {
+    if m1.Len() != m2.Len() { return false }
+    res := true
+    m1.EachPair( func( fld *Identifier, val Value ) {
+        if ! res { return }
+        if val2, ok := m2.GetOk( fld ); ok {
+            res = EqualValues( val, val2 )
+        } else { res = false }
+    })
+    return res
+}
+
+func equalStructs( s1, s2 *Struct ) bool {
+    return s1.Type.Equals( s2.Type ) && equalMaps( s1.Fields, s2.Fields )
+}
+
+func equalLists( l1, l2 *List ) bool {
+    if ! l1.Type.Equals( l2.Type ) { return false }
+    if len( l1.vals ) != len( l2.vals ) { return false }
+    for i, v1 := range l1.vals {
+        if ! EqualValues( v1, l2.vals[ i ] ) { return false }
+    }
+    return true
+}
+
+func EqualValues( v1, v2 Value ) bool {
+    switch v := v1.( type ) {
+    case *Null: if _, ok := v2.( *Null ); ok { return true }
+    case Boolean: if b, ok := v2.( Boolean ); ok { return v == b }
+    case Int32: if i, ok := v2.( Int32 ); ok { return v == i }
+    case Uint32: if i, ok := v2.( Uint32 ); ok { return v == i }
+    case Int64: if i, ok := v2.( Int64 ); ok { return v == i }
+    case Uint64: if i, ok := v2.( Uint64 ); ok { return v == i }
+    case Float32: if i, ok := v2.( Float32 ); ok { return v == i }
+    case Float64: if i, ok := v2.( Float64 ); ok { return v == i }
+    case Buffer: if b, ok := v2.( Buffer ); ok { return bytes.Equal( v, b ) }
+    case String: if s, ok := v2.( String ); ok { return v == s }
+    case Timestamp:
+        if t, ok := v2.( Timestamp ); ok { return v.Compare( t ) == 0 }
+    case *Enum: 
+        if e, ok := v2.( *Enum ); ok { 
+            return v.Type.Equals( e.Type ) && v.Value.Equals( e.Value )
+        }
+    case *SymbolMap: 
+        if m, ok := v2.( *SymbolMap ); ok { return equalMaps( v, m ) }
+    case *Struct: if s, ok := v2.( *Struct ); ok { return equalStructs( v, s ) }
+    case *List: if l, ok := v2.( *List ); ok { return equalLists( v, l ) }
+    case ValuePointer: 
+        if p, ok := v2.( ValuePointer ); ok { 
+            return EqualValues( v.Dereference(), p.Dereference() )
+        }
+    }
+    return false
+}
+
 func asListValue( inVals []interface{}, path goValPath ) ( *List, error ) {
     vals := make( []Value, len( inVals ) )
     lp := path.StartList()

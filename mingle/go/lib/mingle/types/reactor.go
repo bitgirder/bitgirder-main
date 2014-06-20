@@ -10,14 +10,22 @@ import (
     "bitgirder/pipeline"
 )
 
-func notAStructError( p objpath.PathNode, qn *mg.QualifiedTypeName ) error {
-    return mg.NewValueCastErrorf( p, "not a struct type: %s", qn )
+func notAFieldSetTypeError( 
+    p objpath.PathNode, qn *mg.QualifiedTypeName ) error {
+
+    return mg.NewValueCastErrorf( p, "not a type with fields: %s", qn )
 }
 
 func newUnrecognizedTypeError(
     p objpath.PathNode, qn *mg.QualifiedTypeName ) error {
 
     return mg.NewValueCastErrorf( p, "unrecognized type: %s", qn )
+}
+
+func asMapStartEvent( ev mgRct.ReactorEvent ) *mgRct.MapStartEvent {
+    res := mgRct.NewMapStartEvent( mg.PointerIdNull ) 
+    res.SetPath( ev.GetPath() )
+    return res
 }
 
 // A synthetic type which we use along with a mingle.CastReactor to cast request
@@ -44,6 +52,7 @@ type defMapCastIface struct { dm *DefinitionMap }
 func ( ci defMapCastIface ) InferStructFor( qn *mg.QualifiedTypeName ) bool {
     if def, ok := ci.dm.GetOk( qn ); ok {
         if _, ok = def.( *StructDefinition ); ok { return true }
+        if _, ok = def.( *SchemaDefinition ); ok { return true }
     }
     return false
 }
@@ -58,6 +67,7 @@ func ( ci defMapCastIface ) AllowAssignment(
 type fieldTyper struct { 
     flds []*FieldSet 
     dm *DefinitionMap
+    ignoreUnrecognized bool
 }
 
 func ( ft fieldTyper ) FieldTypeFor(
@@ -66,25 +76,48 @@ func ( ft fieldTyper ) FieldTypeFor(
     for _, flds := range ft.flds {
         if fd := flds.Get( fld ); fd != nil { return fd.Type, nil }
     }
+    if ft.ignoreUnrecognized { return mg.TypeValue, nil }
     return nil, mg.NewUnrecognizedFieldError( path, fld )
+}
+
+func ( ci defMapCastIface ) fieldTyperForStruct(
+    def *StructDefinition, path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
+
+    flds := make( []*FieldSet, 0, 2 )
+    for nm := def.Name; nm != nil; {
+        if def, ok := ci.dm.GetOk( nm ); ok {
+            if sd, ok := def.( *StructDefinition ); ok {
+                flds = append( flds, sd.Fields )
+                nm = sd.GetSuperType()
+                continue
+            } else { return nil, notAFieldSetTypeError( path, nm ) } 
+        }
+        nm = nil
+    }
+    return fieldTyper{ flds: flds, dm: ci.dm }, nil
+}
+
+func ( ci defMapCastIface ) fieldTyperForSchema( 
+    sd *SchemaDefinition ) fieldTyper {
+
+    return fieldTyper{ 
+        flds: []*FieldSet{ sd.Fields }, 
+        dm: ci.dm,
+        ignoreUnrecognized: true,
+    }
 }
 
 func ( ci defMapCastIface ) FieldTyperFor(
     qn *mg.QualifiedTypeName, 
     path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
 
-    flds := make( []*FieldSet, 0, 2 )
-    for nm := qn; nm != nil; {
-        if def, ok := ci.dm.GetOk( nm ); ok {
-            if sd, ok := def.( *StructDefinition ); ok {
-                flds = append( flds, sd.Fields )
-                nm = sd.GetSuperType()
-                continue
-            } else { return nil, notAStructError( path, nm ) } 
+    if def, ok := ci.dm.GetOk( qn ); ok {
+        switch v := def.( type ) {
+        case *StructDefinition: return ci.fieldTyperForStruct( v, path )
+        case *SchemaDefinition: return ci.fieldTyperForSchema( v ), nil
+        default: return nil, notAFieldSetTypeError( path, qn )
         }
-        nm = nil
     }
-    if len( flds ) > 0 { return fieldTyper{ flds: flds, dm: ci.dm }, nil }
     tmpl := "no field type info for type %s"
     return nil, mg.NewValueCastErrorf( path, tmpl, qn )
 }
@@ -152,10 +185,11 @@ func fieldSetsForTypeInDefMap(
     path objpath.PathNode ) ( []*FieldSet, error ) {
 
     if def, ok := dm.GetOk( qn ); ok {
-        if sd, ok := def.( *StructDefinition ); ok {
-            return collectFieldSets( sd, dm ), nil
+        switch v := def.( type ) {
+        case *StructDefinition: return collectFieldSets( v, dm ), nil
+        case *SchemaDefinition: return []*FieldSet{ v.Fields }, nil
+        default: return nil, notAFieldSetTypeError( path, qn )
         } 
-        return nil, notAStructError( path, qn )
     } 
     return nil, newUnrecognizedTypeError( path, qn )
 }
@@ -209,19 +243,28 @@ func ( cr *castReactor ) newFieldCtx( flds []*FieldSet ) *fieldCtx {
     return res
 }
 
-func ( cr *castReactor ) startStruct( ss *mgRct.StructStartEvent ) error {
+func ( cr *castReactor ) startStruct( 
+    ss *mgRct.StructStartEvent ) ( mgRct.ReactorEvent, error ) {
+
     flds, err := cr.fsg.getFieldSets( ss.Type, ss.GetPath() )
-    if err != nil { return err }
+    if err != nil { return nil, err }
     if flds != nil { cr.stack.Push( cr.newFieldCtx( flds ) ) }
-    return nil
+    if def, ok := cr.dm.GetOk( ss.Type ); ok {
+        if _, ok := def.( *SchemaDefinition ); ok {
+            return asMapStartEvent( ss ), nil
+        }
+    } 
+    return ss, nil
 }
 
 // We don't re-check here that fld is actually part of the defined field set or
 // since the upstream defMapCastIface will have validated that already
-func ( cr *castReactor ) startField( fs *mgRct.FieldStartEvent ) error {
-    if cr.stack.IsEmpty() { return nil }
+func ( cr *castReactor ) startField( 
+    fs *mgRct.FieldStartEvent ) ( mgRct.ReactorEvent, error ) {
+
+    if cr.stack.IsEmpty() { return fs, nil }
     cr.stack.Peek().( *fieldCtx ).await.Delete( fs.Field )
-    return nil
+    return fs, nil
 }
 
 func feedDefault( 
@@ -267,19 +310,23 @@ func createMissingFieldsError( p objpath.PathNode, fldCtx *fieldCtx ) error {
 }
 
 func ( cr *castReactor ) end( 
-    ev *mgRct.EndEvent, next mgRct.ReactorEventProcessor ) error {
-    if cr.stack.IsEmpty() { return nil }
+    ev *mgRct.EndEvent, 
+    next mgRct.ReactorEventProcessor ) ( mgRct.ReactorEvent, error ) {
+
+    if cr.stack.IsEmpty() { return ev, nil }
     fldCtx := cr.stack.Peek().( *fieldCtx )
     if fldCtx.depth > 0 {
         fldCtx.depth--
-        return nil
+        return ev, nil
     }
     cr.stack.Pop()
     p := ev.GetPath()
-    if err := processDefaults( fldCtx, p, next ); err != nil { return err }
+    if err := processDefaults( fldCtx, p, next ); err != nil { return nil, err }
     fldCtx.removeOptFields()
-    if fldCtx.await.Len() > 0 { return createMissingFieldsError( p, fldCtx ) }
-    return nil
+    if fldCtx.await.Len() > 0 { 
+        return nil, createMissingFieldsError( p, fldCtx ) 
+    }
+    return ev, nil
 }
 
 func ( cr *castReactor ) startContainer() error {
@@ -292,35 +339,41 @@ func ( cr *castReactor ) startContainer() error {
 // and that the type is actually an enum. We don't actually check the enum value
 // here though, and leave that for CastAtomic. Any other values aren't checked
 // here and are left to CastAtomic or to the upstream processor.
-func ( cr *castReactor ) valueEvent( ve *mgRct.ValueEvent ) error {
+func ( cr *castReactor ) valueEvent( 
+    ve *mgRct.ValueEvent ) ( mgRct.ReactorEvent, error ) {
+
     if en, ok := ve.Val.( *mg.Enum ); ok {
         if def, ok := cr.dm.GetOk( en.Type ); ok {
-            if _, ok := def.( *EnumDefinition ); ok { return nil }
+            if _, ok := def.( *EnumDefinition ); ok { return ve, nil }
             tmpl := "not an enum type: %s"
-            return mg.NewValueCastErrorf( ve.GetPath(), tmpl, en.Type )
+            return nil, mg.NewValueCastErrorf( ve.GetPath(), tmpl, en.Type )
         } 
-        return newUnrecognizedTypeError( ve.GetPath(), en.Type )
+        return nil, newUnrecognizedTypeError( ve.GetPath(), en.Type )
     }
-    return nil
+    return ve, nil
 }
 
 func ( cr *castReactor ) prepareProcessEvent(
-    ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) error {
+    ev mgRct.ReactorEvent, 
+    next mgRct.ReactorEventProcessor ) ( mgRct.ReactorEvent, error ) {
     
     switch v := ev.( type ) {
     case *mgRct.StructStartEvent: return cr.startStruct( v )
     case *mgRct.FieldStartEvent: return cr.startField( v )
     case *mgRct.ValueEvent: return cr.valueEvent( v )
     case *mgRct.EndEvent: return cr.end( v, next )
-    case *mgRct.ListStartEvent, *mgRct.MapStartEvent: return cr.startContainer()
-    case *mgRct.ValueAllocationEvent, *mgRct.ValueReferenceEvent: return nil
+    case *mgRct.ListStartEvent, *mgRct.MapStartEvent: 
+        return ev, cr.startContainer()
+    case *mgRct.ValueAllocationEvent, *mgRct.ValueReferenceEvent: return ev, nil
     }
     panic( libErrorf( "unhandled event: %T", ev ) )
 }
 
 func ( cr *castReactor ) ProcessEvent( 
     ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) error {
-    if err := cr.prepareProcessEvent( ev, next ); err != nil { return err }
+
+    ev, err := cr.prepareProcessEvent( ev, next )
+    if err != nil { return err }
     return next.ProcessEvent( ev )
 }
 
@@ -479,10 +532,7 @@ type parametersReactor struct { rep mgRct.ReactorEventProcessor }
 func ( pr parametersReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     ev2 := ev
     if ss, ok := ev.( *mgRct.StructStartEvent ); ok {
-        if ss.Type.Equals( qnTypedParameterMap ) { 
-            ev2 = mgRct.NewMapStartEvent( mg.PointerIdNull ) 
-            ev2.SetPath( ev.GetPath() )
-        }
+        if ss.Type.Equals( qnTypedParameterMap ) { ev2 = asMapStartEvent( ev ) }
     }
     return pr.rep.ProcessEvent( ev2 )
 }

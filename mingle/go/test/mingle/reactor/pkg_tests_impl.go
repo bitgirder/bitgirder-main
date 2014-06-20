@@ -22,7 +22,7 @@ func ( t *ValueBuildTest ) Call( c *ReactorTestCall ) {
         err = VisitValue( t.Val, pip )
     } else { err = FeedSource( t.Source, pip ) }
     if err == nil {
-        mg.EqualWireValues( t.Val, vb.GetValue(), c.PathAsserter )
+        mg.AssertEqualWireValues( t.Val, vb.GetValue(), c.PathAsserter )
     } else { c.Fatal( err ) }
 }
 
@@ -142,7 +142,7 @@ func ( t *FieldOrderReactorTest ) Call( c *ReactorTestCall ) {
 //    pip := InitReactorPipeline( ordRct, NewDebugReactor( c ), chk, vb )
     pip := InitReactorPipeline( ordRct, chk, vb )
     AssertFeedEventSource( eventSliceSource( t.Source ), pip, c )
-    mg.EqualWireValues( t.Expect, vb.GetValue(), c.PathAsserter )
+    mg.AssertEqualWireValues( t.Expect, vb.GetValue(), c.PathAsserter )
 }
 
 func ( t *FieldOrderMissingFieldsTest ) assertMissingFieldsError(
@@ -497,7 +497,7 @@ func ( t *CastReactorTest ) Call( c *ReactorTestCall ) {
         }
         c.Logf( "got val: %s", mg.QuoteValue( vb.GetValue() ) )
 //        mg.EqualWireValues( ct.Expect, vb.GetValue(), c.PathAsserter )
-        mg.EqualValues( t.Expect, vb.GetValue(), c.PathAsserter )
+        mg.AssertEqualValues( t.Expect, vb.GetValue(), c.PathAsserter )
     } else { AssertCastError( t.Err, err, c.PathAsserter ) }
 }
 
@@ -512,7 +512,7 @@ func CheckBuiltValue(
         a.Falsef( vb == nil, 
             "expecting value %s but value builder is nil", 
             mg.QuoteValue( expct ) )
-        mg.EqualWireValues( expct, vb.GetValue(), a ) 
+        mg.AssertEqualWireValues( expct, vb.GetValue(), a ) 
     }
 }
 

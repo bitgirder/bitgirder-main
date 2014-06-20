@@ -100,6 +100,14 @@ func ( fd *FieldDefinition ) GetDefault() mg.Value {
     return fd.Default // may still be nil
 }
 
+func ( fd *FieldDefinition ) Equals( fd2 *FieldDefinition ) bool {
+    if ! fd.Name.Equals( fd2.Name ) { return false }
+    if ! fd.Type.Equals( fd2.Type ) { return false }
+    if fd.Default == nil { return fd2.Default == nil }
+    if fd2.Default == nil { return false }
+    return mg.EqualValues( fd.Default, fd2.Default )
+}
+
 type FieldSet struct {
     flds *mg.IdentifierMap
 }
@@ -135,6 +143,17 @@ func ( fs *FieldSet ) EachDefinition( f func( fd *FieldDefinition ) ) {
     fs.flds.EachPair( func( id *mg.Identifier, fd interface{} ) {
         f( fd.( *FieldDefinition ) )
     })
+}
+
+func ( fs *FieldSet ) ContainsFields( fs2 *FieldSet ) bool {
+    res := true
+    fs2.EachDefinition( func( fd *FieldDefinition ) {
+        if ! res { return }
+        if fd2 := fs.Get( fd.Name ); fd2 == nil {
+            res = false
+        } else { res = fd.Equals( fd2 ) }
+    })
+    return res
 }
 
 type FieldContainer interface { GetFields() *FieldSet }
@@ -188,6 +207,21 @@ func ( sd *StructDefinition ) GetSuperType() *mg.QualifiedTypeName {
 }
 
 func ( sd *StructDefinition ) GetFields() *FieldSet { return sd.Fields }
+
+func ( sd *StructDefinition ) SatisfiesSchema( sc *SchemaDefinition ) bool {
+    return sd.Fields.ContainsFields( sc.Fields )
+}
+
+type SchemaDefinition struct {
+    Name *mg.QualifiedTypeName
+    Fields *FieldSet
+}
+
+func NewSchemaDefinition() *SchemaDefinition {
+    return &SchemaDefinition{ Fields: NewFieldSet() }
+}
+
+func ( sd *SchemaDefinition ) GetName() *mg.QualifiedTypeName { return sd.Name }
 
 type AliasedTypeDefinition struct {
     Name *mg.QualifiedTypeName

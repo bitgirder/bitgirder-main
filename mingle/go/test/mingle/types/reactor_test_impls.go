@@ -11,9 +11,10 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     rct := NewCastReactorDefinitionMap( t.Type, t.Map )
     vb := mgRct.NewValueBuilder()
     pip := mgRct.InitReactorPipeline( rct, vb )
+    c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         mgRct.CheckNoError( t.Err, c )
-        mg.EqualValues( t.Expect, vb.GetValue(), c )
+        mg.AssertEqualValues( t.Expect, vb.GetValue(), c )
     } else { 
         cae := mg.CastErrorAssert{ 
             ErrExpect: t.Err, ErrAct: err, PathAsserter: c.PathAsserter }

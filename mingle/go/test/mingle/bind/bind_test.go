@@ -173,7 +173,7 @@ func ( c *roundtripTestCall ) unbindFromValue( val mg.Value ) interface{} {
 func ( c *roundtripTestCall ) call() {
     c.binder = NewBinder()
     val := c.bindToValue()
-    mg.EqualValues( c.rt.Value, val, c )
+    mg.AssertEqualValues( c.rt.Value, val, c )
     goVal2 := c.unbindFromValue( val )
     c.Equal( c.rt.Object, goVal2 )
 }

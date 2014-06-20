@@ -15,7 +15,7 @@ func assertWriteValue( wr *BinWriter, val mg.Value, a *assert.PathAsserter ) {
 
 func assertReadValue( rd *BinReader, expct mg.Value, a *assert.PathAsserter ) {
     if act, err := rd.ReadValue(); err == nil {
-        mg.EqualWireValues( expct, act, a )
+        mg.AssertEqualWireValues( expct, act, a )
     } else { a.Fatalf( "read val failed: %s", err ) }
 }
 

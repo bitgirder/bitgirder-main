@@ -23,7 +23,7 @@ func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
 func assertReadScalar( expct Value, rd *BinReader, a *assert.PathAsserter ) {
     if tc, err := rd.ReadTypeCode(); err == nil {
         if act, err := rd.ReadScalarValue( tc ); err == nil {
-            EqualValues( expct, act, a )
+            AssertEqualValues( expct, act, a )
         } else {
             a.Fatalf( "couldn't read act: %s", err )
         }
