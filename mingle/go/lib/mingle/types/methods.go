@@ -5,25 +5,6 @@ import (
     "log"
 )
 
-func collectFieldSets( sd *StructDefinition, dm *DefinitionMap ) []*FieldSet {
-    flds := make( []*FieldSet, 0, 2 )
-    for {
-        flds = append( flds, sd.Fields )
-        spr := sd.GetSuperType()
-        if spr == nil { break }
-        if def, ok := dm.GetOk( spr ); ok {
-            if sd, ok = def.( *StructDefinition ); ! ok {
-                tmpl := "super type %s of %s is not a struct"
-                panic( libErrorf( tmpl, spr, sd.GetName() ) )
-            }
-        } else {
-            tmpl := "can't find super type %s of %s"
-            panic( libErrorf( tmpl, spr, sd.GetName() ) )
-        }
-    }
-    return flds
-}
-
 // returns the *PrototypeDefinition matching secQn, but does not check that it
 // is otherwise valid as a security prototype
 func expectProtoDef( 
@@ -48,11 +29,7 @@ func canAssignToStruct(
 
     sd, ok := def.( *StructDefinition )
     if ! ok { return false }
-    if targ.GetName().Equals( sd.GetName() ) { return true }
-    if spr := sd.SuperType; spr != nil {
-        return canAssignToStruct( targ, dm.MustGet( spr ), dm )
-    }
-    return false
+    return targ.GetName().Equals( sd.GetName() ) 
 }
 
 func canAssignToSchema(

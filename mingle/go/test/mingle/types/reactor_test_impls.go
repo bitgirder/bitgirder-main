@@ -10,10 +10,16 @@ import (
 func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     rct := NewCastReactorDefinitionMap( t.Type, t.Map )
     vb := mgRct.NewValueBuilder()
-    pip := mgRct.InitReactorPipeline( rct, vb )
+    dbg := func( pref string ) mgRct.ReactorEventProcessor {
+        res := mgRct.NewDebugReactor( c )
+        res.Label = pref
+        return res
+    }
+    pip := mgRct.InitReactorPipeline( dbg( "top" ), rct, dbg( "vb" ), vb )
     c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         mgRct.CheckNoError( t.Err, c )
+        c.Logf( "got %s", mg.QuoteValue( vb.GetValue() ) )
         mg.AssertEqualValues( t.Expect, vb.GetValue(), c )
     } else { 
         cae := mg.CastErrorAssert{ 

@@ -39,7 +39,6 @@ func newV1StandardError(
     nm string, ns *mg.Namespace, stdErr *StructDefinition ) *StructDefinition {
     res := NewStructDefinition()
     res.Name = mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( ns )
-    res.SuperType = stdErr.Name
     return res
 }
 

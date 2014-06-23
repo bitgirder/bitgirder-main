@@ -87,6 +87,8 @@ type CastReactor struct {
 
     CastingList func( le *ListStartEvent, lt *mg.ListTypeReference ) error
 
+    ShouldSuppressAllocation func( typ mg.TypeReference ) bool
+
     AllocationSuppressed func( ve *ValueAllocationEvent ) error
 
     ProcessValueReference func( 
@@ -284,10 +286,18 @@ func ( cr *CastReactor ) processValueAllocationWithPointerType(
     return cr.sendAllocEvent( ev2, next )
 }
 
+func ( cr *CastReactor ) shouldSuppressAllocation( typ mg.TypeReference ) bool {
+    log.Printf( "checking whether to suppress allocation of %s", typ )
+    if cr.ShouldSuppressAllocation == nil { return true }
+    return cr.ShouldSuppressAllocation( typ )
+}
+
 func ( cr *CastReactor ) processValueAllocationWithoutPointerType(
     ev *ValueAllocationEvent,
     typ mg.TypeReference,
     next ReactorEventProcessor ) error {
+
+    if ! cr.shouldSuppressAllocation( typ ) { return next.ProcessEvent( ev ) }
 
     if ev.Id != mg.PointerIdNull && cr.AllocationSuppressed != nil {
         if err := cr.AllocationSuppressed( ev ); err != nil { return err }

@@ -69,11 +69,6 @@ func ( m *DefinitionMap ) EachDefinition( f func( d Definition ) ) {
     )
 }
 
-type Descendant interface { 
-    // Can return nil to indicate no super type
-    GetSuperType() *mg.QualifiedTypeName
-}
-
 type Definition interface {
     GetName() *mg.QualifiedTypeName
 }
@@ -186,7 +181,6 @@ type ConstructorDefinition struct { Type mg.TypeReference }
 
 type StructDefinition struct {
     Name *mg.QualifiedTypeName
-    SuperType *mg.QualifiedTypeName
     Fields *FieldSet
     Constructors []*ConstructorDefinition
 }
@@ -200,10 +194,6 @@ func NewStructDefinition() *StructDefinition {
 
 func ( sd *StructDefinition ) GetName() *mg.QualifiedTypeName {
     return sd.Name
-}
-
-func ( sd *StructDefinition ) GetSuperType() *mg.QualifiedTypeName {
-    return sd.SuperType
 }
 
 func ( sd *StructDefinition ) GetFields() *FieldSet { return sd.Fields }
@@ -276,7 +266,6 @@ func OpDefsByName( defs []*OperationDefinition ) *mg.IdentifierMap {
 
 type ServiceDefinition struct {
     Name *mg.QualifiedTypeName
-    SuperType *mg.QualifiedTypeName
     Operations []*OperationDefinition
     Security *mg.QualifiedTypeName
 }
@@ -287,10 +276,6 @@ func NewServiceDefinition() *ServiceDefinition {
 
 func ( sd *ServiceDefinition ) GetName() *mg.QualifiedTypeName {
     return sd.Name
-}
-
-func ( sd *ServiceDefinition ) GetSuperType() *mg.QualifiedTypeName {
-    return sd.SuperType
 }
 
 func ( sd *ServiceDefinition ) findOperation( 

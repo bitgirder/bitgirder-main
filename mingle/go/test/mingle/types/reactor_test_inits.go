@@ -41,7 +41,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     s1DefMap := func( typ string ) *DefinitionMap {
         fld := MakeFieldDef( "f1", typ, nil )
         return MakeV1DefMap( 
-            MakeStructDef( qn1Str, "", []*FieldDefinition{ fld } ) )
+            MakeStructDef( qn1Str, []*FieldDefinition{ fld } ) )
     }
     s1F1Add := func( in, expct interface{}, typ string, err error ) {
         t := &CastReactorTest{ 
@@ -106,22 +106,21 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     dm := MakeV1DefMap(
         MakeStructDef(
             "ns1@v1/S1",
-            "",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
         ),
         MakeStructDef(
             "ns1@v1/S2",
-            "ns1@v1/S1",
-            []*FieldDefinition{ MakeFieldDef( "f2", "Int32", nil ) },
+            []*FieldDefinition{ 
+                MakeFieldDef( "f1", "Int32", nil ),
+                MakeFieldDef( "f2", "Int32", nil ),
+            },
         ),
         MakeStructDef(
             "ns1@v1/S3",
-            "",
             []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) },
         ),
         MakeStructDef(
             "ns1@v1/S4",
-            "",
             []*FieldDefinition{ MakeFieldDef( "f1", "&ns1@v1/S1?", nil ) },
         ),
     )
@@ -140,9 +139,6 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     addSucc( parser.MustStruct( "ns1@v1/S3", "f1", mustHeapVal( int32( 1 ) ) ) )
     s1Inst1 := mustHeapVal( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
     addSucc( parser.MustStruct( "ns1@v1/S4", "f1", s1Inst1 ) )
-    s2Inst1 := mustHeapVal(
-        parser.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
-    addSucc( parser.MustStruct( "ns1@v1/S4", "f1", s2Inst1 ) )
     addFail(
         parser.MustStruct( "ns1@v1/S1" ),
         mg.NewMissingFieldsError( nil, makeIdList( "f1" ) ),
@@ -174,7 +170,7 @@ func ( rti *rtInit ) addFieldSetCastTests() {
 
 func ( rti *rtInit ) addStructValCastTests() {
     dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", "",
+        MakeStructDef( "ns1@v1/S1",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
         MakeEnumDef( "ns1@v1/E1", "e" ),
     )
@@ -206,7 +202,6 @@ func ( rti *rtInit ) addInferredStructCastTests() {
     dm := MakeV1DefMap(
         MakeStructDef(
             "ns1@v1/S1",
-            "",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "&Int32?", nil ),
                 MakeFieldDef( "f2", "&ns1@v1/S2?", nil ),
@@ -214,7 +209,6 @@ func ( rti *rtInit ) addInferredStructCastTests() {
         ),
         MakeStructDef(
             "ns1@v1/S2",
-            "",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
         ),
     )
@@ -242,7 +236,7 @@ func ( rti *rtInit ) addInferredStructCastTests() {
 }
 
 func ( rti *rtInit ) addSchemaCastTests() {
-    schema1Nil := asType( "&ns1@v1/Schema1?" )
+    schema1Nil := &mg.NullableTypeReference{ mkTyp( "ns1@v1/Schema1" ) }
     mgId := parser.MustIdentifier
     dm := MakeV1DefMap(
         MakeSchemaDef( 
@@ -260,7 +254,6 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         MakeStructDef(
             "ns1@v1/S1",
-            "",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "Int32", nil ),
                 MakeFieldDef( "f2", "Int32", nil ),
@@ -268,7 +261,6 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         MakeStructDef(
             "ns1@v1/S2",
-            "",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
                 MakeFieldDef( "f2", schema1Nil, nil ),
@@ -276,7 +268,6 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         MakeStructDef(
             "ns1@v1/S3",
-            "",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "Int32", nil ),
                 MakeFieldDef( "f2", "Int64", nil ),
@@ -321,16 +312,6 @@ func ( rti *rtInit ) addSchemaCastTests() {
     addSucc( 
         mg.NewHeapValue( parser.MustSymbolMap( "f1", int64( 1 ) ) ),
         mg.NewHeapValue( parser.MustSymbolMap( "f1", int32( 1 ) ) ),
-        "&ns1@v1/Schema1",
-    )
-    addSucc(
-        parser.MustSymbolMap( "f1", int64( 1 ) ),
-        mg.NewHeapValue( parser.MustSymbolMap( "f1", int32( 1 ) ) ),
-        "&ns1@v1/Schema1",
-    )
-    addSucc( 
-        mg.NewHeapValue( parser.MustSymbolMap( "f1", int64( 1 ) ) ),
-        parser.MustSymbolMap( "f1", int32( 1 ) ),
         "ns1@v1/Schema1",
     )
     addSucc( 
@@ -350,12 +331,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
     )
     addSucc( 
         parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
-        mg.NewHeapValue(
-            parser.MustStruct( "ns1@v1/S1", 
-                "f1", int32( 1 ), 
-                "f2", int32( 1 ),
-            ),
-        ),
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
         schema1Nil,
     )
     addSucc( mg.NullVal, mg.NullVal, schema1Nil )
@@ -402,11 +378,9 @@ func ( rti *rtInit ) addSchemaCastTests() {
                 "f1", int32( 1 ), 
                 "f2", int32( 1 ),
             ),
-            "f2", mg.NewHeapValue(
-                parser.MustStruct( "ns1@v1/S1", 
-                    "f1", int32( 1 ), 
-                    "f2", int32( 1 ),
-                ),
+            "f2", parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), 
+                "f2", int32( 1 ),
             ),
         ),
         "ns1@v1/Schema2",
@@ -418,8 +392,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         parser.MustSymbolMap(
             "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
-            "f2", mg.NewHeapValue(
-                parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ) ),
+            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
         ),
         "ns1@v1/Schema2",
     )
@@ -430,10 +403,37 @@ func ( rti *rtInit ) addSchemaCastTests() {
         ),
         parser.MustSymbolMap(
             "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
-            "f2", mg.NewHeapValue(
-                parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ) ),
+            "f2", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int64( 1 ) ),
         ),
         "ns1@v1/Schema2",
+    )
+    addSucc(
+        mg.MustList( 
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+            parser.MustSymbolMap( "f1", int64( 1 ) ),
+        ),
+        mg.MustList( 
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+        ),
+        "ns1@v1/Schema1*",
+    )
+    addSucc(
+        mg.MustList(
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+            parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), "f2", int32( 2 ) ),
+            parser.MustStruct( "ns1@v1/S3", 
+                "f1", int32( 1 ), "f2", int64( 2 ) ),
+        ),
+        mg.MustList(
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+            parser.MustStruct( "ns1@v1/S1", 
+                "f1", int32( 1 ), "f2", int32( 2 ) ),
+            parser.MustStruct( "ns1@v1/S3", 
+                "f1", int32( 1 ), "f2", int64( 2 ) ),
+        ),
+        "ns1@v1/Schema1*",
     )
     addFail := func( in mg.Value, typ interface{}, err error ) {
         rti.addTests(
@@ -467,6 +467,21 @@ func ( rti *rtInit ) addSchemaCastTests() {
         newTcErr( "ns1@v1/Schema2", "ns1@v1/S3", nil ),
     )
     addFail(
+        mg.MustList(
+            parser.MustStruct( "ns1@v1/S2",
+                "f1", parser.MustStruct( "ns1@v1/S1", 
+                    "f1", int32( 1 ), 
+                    "f2", int32( 1 ),
+                ),
+            ),
+            parser.MustStruct( "ns1@v1/S3", 
+                "f1", int32( 1 ), "f2", int64( 1 ),
+            ),
+        ),
+        "ns1@v1/Schema2*",
+        newTcErr( "ns1@v1/Schema2", "ns1@v1/S3", mg.MakeTestIdPath( "1" ) ),
+    )
+    addFail(
         parser.MustSymbolMap(
             "f1", parser.MustSymbolMap( "f1", int32( 1 ), "f2", int32( 1 ) ),
             "f2", int32( 1 ),
@@ -478,7 +493,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
 
 func ( rti *rtInit ) addEnumValCastTests() {
     dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", "", []*FieldDefinition{} ),
+        MakeStructDef( "ns1@v1/S1", []*FieldDefinition{} ),
         MakeEnumDef( "ns1@v1/E1", "c1", "c2" ),
         MakeEnumDef( "ns1@v1/E2", "c1", "c2" ),
     )
@@ -569,12 +584,12 @@ func ( rti *rtInit ) addEnumValCastTests() {
 // when nested in various ways
 func ( rti *rtInit ) addDeepCatchallTests() {
     dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", "",
+        MakeStructDef( "ns1@v1/S1",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "Int32", int32( 1 ) ),
             },
         ),
-        MakeStructDef( "ns1@v1/S2", "",
+        MakeStructDef( "ns1@v1/S2",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "ns1@v1/S1", nil ),
                 MakeFieldDef( "f2", "ns1@v1/E1", nil ),
@@ -663,16 +678,16 @@ func ( rti *rtInit ) addDefaultCastTests() {
         )
     }
     dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", "", s1Flds ),
-        MakeStructDef( "ns1@v1/S2", "",
+        MakeStructDef( "ns1@v1/S1", s1Flds ),
+        MakeStructDef( "ns1@v1/S2",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "Int32", nil ),
                 MakeFieldDef( "f2", "Int32", mg.Int32( int32( 1 ) ) ),
             },
         ),
-        MakeStructDef( "ns1@v1/S3", "",
+        MakeStructDef( "ns1@v1/S3",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32*", nil ) } ),
-        MakeStructDef( "ns1@v1/S4", "",
+        MakeStructDef( "ns1@v1/S4",
             []*FieldDefinition{ 
                 MakeFieldDef( "f1", "ns1@v1/S1", nil ),
                 MakeFieldDef( "f2", "Int32", int32( 1 ) ),
@@ -754,7 +769,7 @@ func ( rti *rtInit ) addDefaultCastTests() {
 
 func ( rti *rtInit ) addDefaultPathTests() {
     dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", "",
+        MakeStructDef( "ns1@v1/S1",
             []*FieldDefinition{
                 MakeFieldDef( "f1", "Int32", nil ),
                 MakeFieldDef( "f2", "Int32*", nil ),
@@ -817,11 +832,11 @@ func ( sm *ServiceMaps ) BuildOpMap() *ServiceDefinitionMap {
 func ( rti *rtInit ) addServiceRequestTests() {
     id := parser.MustIdentifier
     dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", "",
+        MakeStructDef( "ns1@v1/S1",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
-        MakeStructDef( "ns1@v1/S2", "ns1@v1/S1",
-            []*FieldDefinition{ MakeFieldDef( "f2", "Int32", nil ) } ),
-        MakeStructDef( "ns1@v1/Auth1", "",
+        MakeSchemaDef( "ns1@v1/Schema1",
+            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
+        MakeStructDef( "ns1@v1/Auth1",
             []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
         MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
         &PrototypeDefinition{
@@ -838,8 +853,22 @@ func ( rti *rtInit ) addServiceRequestTests() {
                 []string{},
             ),
         },
+        &PrototypeDefinition{
+            Name: parser.MustQualifiedTypeName( "ns1@v1/SecSchema1" ),
+            Signature: MakeCallSig(
+                []*FieldDefinition{
+                    MakeFieldDef(
+                        "authentication",
+                        "ns1@v1/Schema1",
+                        nil,
+                    ),
+                },
+                "Null",
+                []string{},
+            ),
+        },
         MakeServiceDef(
-            "ns1@v1/Service1", "", "",
+            "ns1@v1/Service1", "",
             MakeOpDef( "op1",
                 MakeCallSig(
                     []*FieldDefinition{ MakeFieldDef( "p1", "&Int32?", nil ) },
@@ -868,9 +897,18 @@ func ( rti *rtInit ) addServiceRequestTests() {
                     []string{},
                 ),
             ),
+            MakeOpDef( "op5",
+                MakeCallSig(
+                    []*FieldDefinition{
+                        MakeFieldDef( "p1", "ns1@v1/Schema1", nil ),
+                    },
+                    "Null",
+                    []string{},
+                ),
+            ),
         ),
         MakeServiceDef(
-            "ns1@v1/Service2", "", "ns1@v1/Sec1",
+            "ns1@v1/Service2", "ns1@v1/Sec1",
             MakeOpDef( "op1",
                 MakeCallSig(
                     []*FieldDefinition{
@@ -893,17 +931,24 @@ func ( rti *rtInit ) addServiceRequestTests() {
                 ),
             ),
         ),
+        MakeServiceDef(
+            "ns1@v1/Service3", "ns1@v1/SecSchema1",
+            MakeOpDef( "op1",
+                MakeCallSig( []*FieldDefinition{}, "Null", []string{} ),
+            ),
+        ),
     )
     svcIds := mg.NewIdentifierMap();
     svcIds.Put( id( "svc1" ), 
         parser.MustQualifiedTypeName( "ns1@v1/Service1" ) )
     svcIds.Put( id( "svc2" ), 
         parser.MustQualifiedTypeName( "ns1@v1/Service2" ) )
+    svcIds.Put( id( "svc3" ),
+        parser.MustQualifiedTypeName( "ns1@v1/Service3" ) )
     maps := &ServiceMaps{ Definitions: dm, ServiceIds: svcIds }
     s1Inst1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
-    s2Inst1 := 
-        parser.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 1 ) )
     addSucc := func( in mg.Value, params *mg.SymbolMap, auth mg.Value ) {
+        if params == nil { params = mg.EmptySymbolMap() }
         rti.addTests(
             &ServiceRequestTest{
                 Maps: maps,
@@ -1017,7 +1062,67 @@ func ( rti *rtInit ) addServiceRequestTests() {
         )
     }
     mkOp4Succ( s1Inst1 )
-    mkOp4Succ( s2Inst1 )
+    addSucc(
+        mkReq( 
+            "ns1@v1", "svc1", "op5",
+            parser.MustSymbolMap( 
+                "p1", parser.MustSymbolMap( "f1", int32( 1 ) ),
+            ),
+            nil,
+        ),
+        parser.MustSymbolMap( "p1", parser.MustSymbolMap( "f1", int32( 1 ) ) ),
+        nil,
+    )
+    addSucc(
+        mkReq(
+            "ns1@v1", "svc1", "op5",
+            parser.MustSymbolMap(
+                "p1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            ),
+            nil,
+        ),
+        parser.MustSymbolMap(
+            "p1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
+        nil,
+    )
+    addErr(
+        mkReq(
+            "ns1@v1", "svc1", "op5",
+            parser.MustSymbolMap( "p1", mg.EmptySymbolMap() ),
+            nil,
+        ),
+        mg.NewMissingFieldsError(
+            pathParams.Descend( parser.MustIdentifier( "p1" ) ),
+            []*mg.Identifier{ parser.MustIdentifier( "f1" ) },
+        ),
+    )
+    addSucc(
+        mkReq( 
+            "ns1@v1", "svc3", "op1",
+            nil,
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+        ),
+        nil,
+        parser.MustSymbolMap( "f1", int32( 1 ) ),
+    )
+    addSucc(
+        mkReq( 
+            "ns1@v1", "svc3", "op1",
+            nil,
+            parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        ),
+        nil,
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+    )
+    addErr(
+        mkReq( 
+            "ns1@v1", "svc3", "op1",
+            nil,
+            parser.MustSymbolMap(),
+        ),
+        mg.NewMissingFieldsError(
+            pathAuth, []*mg.Identifier{ parser.MustIdentifier( "f1" ) } ),
+    )
     addErr(
         mkReq( "ns1@v1", "svc2", "op1", parser.MustSymbolMap(), nil ),
         mg.NewMissingFieldsError( 
@@ -1069,9 +1174,9 @@ func ( rti *rtInit ) addServiceRequestTests() {
             objpath.RootedAt( mg.IdNamespace ) ),
     )
     addErr(
-        mkReq( "ns1@v1", "svc3", "op1", nil, nil ),
+        mkReq( "ns1@v1", "svc4", "op1", nil, nil ),
         mg.NewEndpointErrorService( 
-            parser.MustIdentifier( "svc3" ), objpath.RootedAt( mg.IdService ) ),
+            parser.MustIdentifier( "svc4" ), objpath.RootedAt( mg.IdService ) ),
     )
     addErr(
         mkReq( "ns1@v1", "svc1", "badOp", nil, nil ),
@@ -1090,39 +1195,24 @@ func ( rti *rtInit ) addServiceResponseTests() {
         dm := MakeV1DefMap(
             MakeStructDef( 
                 "ns1@v1/S1", 
-                "", 
                 []*FieldDefinition{ 
                     MakeFieldDef( "f1", "&Int32?", nil ),
                     MakeFieldDef( "f2", "&ns1@v1/S1?", nil ),
                 },
             ),
-            MakeStructDef(
-                "ns1@v1/S2",
-                "ns1@v1/S1",
-                []*FieldDefinition{ MakeFieldDef( "f3", "&Int32?", nil ) },
+            MakeSchemaDef( "ns1@v1/Schema1",
+                []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) },
             ),
             MakeStructDef(
                 "ns1@v1/Err1",
-                "",
                 []*FieldDefinition{
                     MakeFieldDef( "f1", "&Int32?", nil ),
                     MakeFieldDef( "f2", "&ns1@v1/S1?", nil ),
                 },
             ),
             MakeStructDef(
-                "ns1@v1/Err2",
-                "ns1@v1/Err1",
-                []*FieldDefinition{ MakeFieldDef( "f3", "&Int32?", nil ) },
-            ),
-            MakeStructDef(
                 "ns1@v1/SecErr1",
-                "",
                 []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) },
-            ),
-            MakeStructDef(
-                "ns1@v1/SecErr2",
-                "ns1@v1/SecErr1",
-                []*FieldDefinition{ MakeFieldDef( "f2", "&Int32?", nil ) },
             ),
             MakeEnumDef( "ns1@v1/E1", "e1" ),
             &PrototypeDefinition{
@@ -1135,7 +1225,7 @@ func ( rti *rtInit ) addServiceResponseTests() {
                     []string{ "ns1@v1/SecErr1" },
                 ),
             },
-            MakeServiceDef( svcType.ExternalForm(), "", "ns1@v1/Sec1", od ),
+            MakeServiceDef( svcType.ExternalForm(), "ns1@v1/Sec1", od ),
         )
         return &ServiceResponseTest{ 
             Definitions: dm,
@@ -1175,22 +1265,25 @@ func ( rti *rtInit ) addServiceResponseTests() {
     en1 := parser.MustEnum( "ns1@v1/E1", "e1" )
     addResSucc( en1, en1, "ns1@v1/E1" )
     addResSucc( "e1", en1, "ns1@v1/E1" )
+    addResSucc( 
+        parser.MustSymbolMap( "f1", mustHeapVal( int32( 1 ) ) ),
+        parser.MustSymbolMap( "f1", mustHeapVal( int32( 1 ) ) ),
+        "ns1@v1/Schema1",
+    )
+    addResSucc(
+        parser.MustStruct( "ns1@v1/S1", "f1", mustHeapVal( int32( 1 ) ) ),
+        parser.MustStruct( "ns1@v1/S1", "f1", mustHeapVal( int32( 1 ) ) ),
+        "ns1@v1/Schema1",
+    )
     i1HeapVal := func() *mg.HeapValue { return mustHeapVal( int32( 1 ) ) }
     s1 := parser.MustStruct( "ns1@v1/S1", "f1", i1HeapVal() )
     addResSucc( s1, s1, "ns1@v1/S1" )
-    s2 := parser.MustStruct( "ns1@v1/S2", "f1", i1HeapVal(), "f3", i1HeapVal() )
-    addResSucc( s2, s2, "ns1@v1/S1" )
     err1 := parser.MustStruct( "ns1@v1/Err1", "f1", i1HeapVal() )
     addErrSucc( err1, err1, "ns1@v1/Err1" )
     addErrSucc( err1, err1, "ns1@v1/Err1", "ns1@v1/SomeOtherErr" )
-    err2 := parser.MustStruct( "ns1@v1/Err2", "f3", i1HeapVal() )
-    addErrSucc( err2, err2, "ns1@v1/Err1" )
     secErr1 := parser.MustStruct( "ns1@v1/SecErr1", "f1", i1HeapVal() )
     addErrSucc( secErr1, secErr1 )
     addErrSucc( secErr1, secErr1, "ns1@v1/Err1" )
-    secErr2 := parser.MustStruct( "ns1@v1/SecErr2", "f2", i1HeapVal() )
-    addErrSucc( secErr2, secErr2 )
-    addErrSucc( secErr2, secErr2, "ns1@v1/Err1" )
     // We're not really checking here that the error values are correct as
     // mingle struct values (most should have at least a 'message' field), only
     // that the types are allowed by the response cast even when not explicitly

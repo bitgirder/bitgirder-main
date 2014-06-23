@@ -65,7 +65,7 @@ func ( ci defMapCastIface ) AllowAssignment(
 }
 
 type fieldTyper struct { 
-    flds []*FieldSet 
+    flds *FieldSet 
     dm *DefinitionMap
     ignoreUnrecognized bool
 }
@@ -73,9 +73,7 @@ type fieldTyper struct {
 func ( ft fieldTyper ) FieldTypeFor(
     fld *mg.Identifier, path objpath.PathNode ) ( mg.TypeReference, error ) {
 
-    for _, flds := range ft.flds {
-        if fd := flds.Get( fld ); fd != nil { return fd.Type, nil }
-    }
+    if fd := ft.flds.Get( fld ); fd != nil { return fd.Type, nil }
     if ft.ignoreUnrecognized { return mg.TypeValue, nil }
     return nil, mg.NewUnrecognizedFieldError( path, fld )
 }
@@ -83,28 +81,13 @@ func ( ft fieldTyper ) FieldTypeFor(
 func ( ci defMapCastIface ) fieldTyperForStruct(
     def *StructDefinition, path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
 
-    flds := make( []*FieldSet, 0, 2 )
-    for nm := def.Name; nm != nil; {
-        if def, ok := ci.dm.GetOk( nm ); ok {
-            if sd, ok := def.( *StructDefinition ); ok {
-                flds = append( flds, sd.Fields )
-                nm = sd.GetSuperType()
-                continue
-            } else { return nil, notAFieldSetTypeError( path, nm ) } 
-        }
-        nm = nil
-    }
-    return fieldTyper{ flds: flds, dm: ci.dm }, nil
+    return fieldTyper{ flds: def.Fields, dm: ci.dm }, nil
 }
 
 func ( ci defMapCastIface ) fieldTyperForSchema( 
     sd *SchemaDefinition ) fieldTyper {
 
-    return fieldTyper{ 
-        flds: []*FieldSet{ sd.Fields }, 
-        dm: ci.dm,
-        ignoreUnrecognized: true,
-    }
+    return fieldTyper{ flds: sd.Fields, dm: ci.dm, ignoreUnrecognized: true }
 }
 
 func ( ci defMapCastIface ) FieldTyperFor(
@@ -175,19 +158,19 @@ func ( ci defMapCastIface ) CastAtomic(
 
 type fieldSetGetter interface {
 
-    getFieldSets( 
-        qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error )
+    getFieldSet( 
+        qn *mg.QualifiedTypeName, path objpath.PathNode ) ( *FieldSet, error )
 }
 
-func fieldSetsForTypeInDefMap(
+func fieldSetForTypeInDefMap(
     qn *mg.QualifiedTypeName, 
     dm *DefinitionMap, 
-    path objpath.PathNode ) ( []*FieldSet, error ) {
+    path objpath.PathNode ) ( *FieldSet, error ) {
 
     if def, ok := dm.GetOk( qn ); ok {
         switch v := def.( type ) {
-        case *StructDefinition: return collectFieldSets( v, dm ), nil
-        case *SchemaDefinition: return []*FieldSet{ v.Fields }, nil
+        case *StructDefinition: return v.Fields, nil
+        case *SchemaDefinition: return v.Fields, nil
         default: return nil, notAFieldSetTypeError( path, qn )
         } 
     } 
@@ -196,10 +179,10 @@ func fieldSetsForTypeInDefMap(
 
 type defMapFieldSetGetter struct { dm *DefinitionMap }
 
-func ( fsg defMapFieldSetGetter ) getFieldSets(
-    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error ) {
+func ( fsg defMapFieldSetGetter ) getFieldSet(
+    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( *FieldSet, error ) {
 
-    return fieldSetsForTypeInDefMap( qn, fsg.dm, path )
+    return fieldSetForTypeInDefMap( qn, fsg.dm, path )
 }
 
 type castReactor struct {
@@ -211,9 +194,24 @@ type castReactor struct {
     skipPathSetter bool
 }
 
+func ( cr *castReactor ) shouldSuppressAllocation( typ mg.TypeReference ) bool {
+    switch v := typ.( type ) {
+    case *mg.AtomicTypeReference:
+        if sd, hasDef := cr.dm.GetOk( v.Name ); hasDef {
+            _, isSchema := sd.( *SchemaDefinition )
+            return ! isSchema
+        }
+    case *mg.NullableTypeReference: return cr.shouldSuppressAllocation( v.Type )
+    }
+    return true
+}
+
 func ( cr *castReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     mgCastRct := mgRct.NewCastReactor( cr.typ, cr.iface )
     mgCastRct.SkipPathSetter = cr.skipPathSetter
+    mgCastRct.ShouldSuppressAllocation = func( typ mg.TypeReference ) bool {
+        return cr.shouldSuppressAllocation( typ )
+    }
     pip.Add( mgCastRct )
 }
 
@@ -233,20 +231,18 @@ func ( fc *fieldCtx ) removeOptFields() {
     for _, fld := range done { fc.await.Delete( fld ) }
 }
 
-func ( cr *castReactor ) newFieldCtx( flds []*FieldSet ) *fieldCtx {
+func ( cr *castReactor ) newFieldCtx( flds *FieldSet ) *fieldCtx {
     res := &fieldCtx{ await: mg.NewIdentifierMap() }
-    for _, fs := range flds {
-        fs.EachDefinition( func( fd *FieldDefinition ) {
-            res.await.Put( fd.Name, fd )
-        })
-    }
+    flds.EachDefinition( func( fd *FieldDefinition ) {
+        res.await.Put( fd.Name, fd )
+    })
     return res
 }
 
 func ( cr *castReactor ) startStruct( 
     ss *mgRct.StructStartEvent ) ( mgRct.ReactorEvent, error ) {
 
-    flds, err := cr.fsg.getFieldSets( ss.Type, ss.GetPath() )
+    flds, err := cr.fsg.getFieldSet( ss.Type, ss.GetPath() )
     if err != nil { return nil, err }
     if flds != nil { cr.stack.Push( cr.newFieldCtx( flds ) ) }
     if def, ok := cr.dm.GetOk( ss.Type ); ok {
@@ -492,8 +488,8 @@ func ( pi parametersCastIface ) InferStructFor(
     return pi.ci.InferStructFor( qn )
 }
 
-func ( pi parametersCastIface ) fieldSets() []*FieldSet {
-    return []*FieldSet{ pi.opDef.Signature.Fields }
+func ( pi parametersCastIface ) fieldSet() *FieldSet {
+    return pi.opDef.Signature.Fields
 }
 
 func ( pi parametersCastIface ) FieldTyperFor(
@@ -501,7 +497,7 @@ func ( pi parametersCastIface ) FieldTyperFor(
     path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
 
     if qn.Equals( qnTypedParameterMap ) { 
-        return fieldTyper{ flds: pi.fieldSets(), dm: pi.defs }, nil
+        return fieldTyper{ flds: pi.fieldSet(), dm: pi.defs }, nil
     }
     return pi.ci.FieldTyperFor( qn, path )
 }
@@ -520,11 +516,11 @@ func ( pi parametersCastIface ) AllowAssignment(
     return pi.ci.AllowAssignment( expct, act )
 }
 
-func ( pi parametersCastIface ) getFieldSets(
-    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( []*FieldSet, error ) {
+func ( pi parametersCastIface ) getFieldSet(
+    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( *FieldSet, error ) {
 
-    if qn.Equals( qnTypedParameterMap ) { return pi.fieldSets(), nil }
-    return fieldSetsForTypeInDefMap( qn, pi.defs, path )
+    if qn.Equals( qnTypedParameterMap ) { return pi.fieldSet(), nil }
+    return fieldSetForTypeInDefMap( qn, pi.defs, path )
 }
 
 type parametersReactor struct { rep mgRct.ReactorEventProcessor }

@@ -54,22 +54,11 @@ func MakeFieldSet( flds ...*FieldDefinition ) *FieldSet {
     return res
 }
 
-func MakeStructDef( 
-    qn, sprTyp string, flds []*FieldDefinition ) *StructDefinition {
+func MakeStructDef( qn string, flds []*FieldDefinition ) *StructDefinition {
     if flds == nil { flds = []*FieldDefinition{} }
     res := NewStructDefinition()
     res.Name = parser.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = parser.MustQualifiedTypeName( sprTyp ) }
     buildFieldSet( res.Fields, flds )
-    return res
-}
-
-func MakeStructDef2(
-    qn, sprTyp string,
-    flds []*FieldDefinition,
-    cons []*ConstructorDefinition ) *StructDefinition {
-    res := MakeStructDef( qn, sprTyp, flds )
-    res.Constructors = append( res.Constructors, cons... )
     return res
 }
 
@@ -107,11 +96,9 @@ func MakeOpDef( nm string, sig *CallSignature ) *OperationDefinition {
 }
 
 func MakeServiceDef(
-    qn, sprTyp, secQn string,
-    opDefs ...*OperationDefinition ) *ServiceDefinition {
+    qn, secQn string, opDefs ...*OperationDefinition ) *ServiceDefinition {
     res := NewServiceDefinition()
     res.Name = parser.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = parser.MustQualifiedTypeName( sprTyp ) }
     res.Operations = append( res.Operations, opDefs... )
     if secQn != "" { res.Security = parser.MustQualifiedTypeName( secQn ) }
     return res
@@ -215,7 +202,6 @@ func ( a *DefAsserter ) assertConstructors(
 func ( a *DefAsserter ) assertStructDef(
     s1 *StructDefinition, d2 Definition ) {
     s2 := a.equalType( s1, d2 ).( *StructDefinition )
-    a.descend( "(SuperType)" ).Equal( s1.SuperType, s2.SuperType )
     a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
     a.descend( "(Constructors)" ).
         assertConstructors( s1.Constructors, s2.Constructors )
@@ -264,8 +250,8 @@ func ( a *DefAsserter ) assertOpDefs(
 
 func ( a *DefAsserter ) assertServiceDef(
     s1 *ServiceDefinition, v2 interface{} ) {
+
     s2 := a.equalType( s1, v2 ).( *ServiceDefinition )
-    a.descend( "(SuperType)" ).Equal( s1.SuperType, s2.SuperType )
     a.descend( "(Operations)" ).assertOpDefs( s1.Operations, s2.Operations )
     a.descend( "(Security)" ).Equal( s1.Security, s2.Security )
 }
