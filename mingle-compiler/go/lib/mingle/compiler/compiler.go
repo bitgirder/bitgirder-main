@@ -631,11 +631,6 @@ func ( bc buildContext ) mustTypeInfo() *tree.TypeDeclInfo {
     panic( implErrorf( "no type info present for %s", bc.td.GetName() ) )
 }
 
-func ( bc buildContext ) superTypeRef() *parser.CompletableTypeReference {
-    if ti := bc.typeInfo(); ti != nil { return ti.SuperType }
-    return nil
-}
-
 func ( c *Compilation ) isValidImport( qn *mg.QualifiedTypeName ) bool {
     return c.extTypes.HasKey( qn ) || c.typeDecls.HasKey( qn )
 }
@@ -748,43 +743,18 @@ func ( c *Compilation ) getImportResolves( u *tree.NsUnit ) importNsMap {
     return res
 }
 
-// Returns true if spr (bc's super type) is already ahead in the build order or
-// was imported externally.  If spr is not able to be resolved, this method also
-// returns true, allowing the toposort algorithm to complete -- the resolution
-// error will still be added as a compile error
-func ( c *Compilation ) canAddSubTypeToBuildOrder(
-    bc buildContext, seen *mg.QnameMap ) bool {
-    ti := bc.mustTypeInfo()
-    c.ignoreErrors = true
-    defer func() { c.ignoreErrors = false }()
-    typ := bc.scope.resolveType( ti.SuperType, ti.SuperType.Location() )
-    if typ == nil { return true }
-    qn := qnameIn( typ )
-    return seen.HasKey( qn ) || bc.scope.c.extTypes.HasKey( qn )
-}
-
-func ( c *Compilation ) canAddToBuildOrder(
-    bc buildContext, seen *mg.QnameMap ) *mg.QualifiedTypeName {
-    qn := bc.qname()
-    spr := bc.superTypeRef()
-    if spr == nil { return qn }
-    if c.canAddSubTypeToBuildOrder( bc, seen ) { return qn }
-    return nil
-}
-
 func ( c *Compilation ) addBuildableContexts(
     work *list.List, seen *mg.QnameMap, ctxs []buildContext ) []buildContext {
     for e := work.Front(); e != nil; {
         bc := e.Value.( buildContext )
-        if qn := c.canAddToBuildOrder( bc, seen ); qn != nil {
-            ctxs = append( ctxs, bc )
-            seen.Put( qn, bc )
-            // Due to the way List.Remove() works, we first advance e, and then
-            // remove the element we just processed
-            toRemove := e
-            e = e.Next()
-            work.Remove( toRemove )
-        } else { e = e.Next() }
+        qn := bc.qname()
+        ctxs = append( ctxs, bc )
+        seen.Put( qn, bc )
+        // Due to the way List.Remove() works, we first advance e, and then
+        // remove the element we just processed
+        toRemove := e
+        e = e.Next()
+        work.Remove( toRemove )
     }
     return ctxs
 }
@@ -890,17 +860,6 @@ func ( c *Compilation ) buildAliasedTypes( ctxs []buildContext ) {
     for _, bc := range c.getAliasBuildOrder( ctxs ) { c.buildAliasedType( bc ) }
 }
 
-func ( c *Compilation ) getSuperType(
-    ti *tree.TypeDeclInfo, bs *buildScope ) *mg.QualifiedTypeName {
-    if ti.SuperType == nil { return nil }
-    res := bs.resolveType( ti.SuperType, ti.SuperType.Location() )
-    if res == nil { return nil }
-    if at, ok := res.( *mg.AtomicTypeReference ); ok { return at.Name } 
-    c.addErrorf( ti.SuperType.Location(), 
-        "Non-atomic supertype for %s: %s", ti.Name, res )
-    return nil
-}
-
 func ( c * Compilation ) checkKeyedElements(
     allow *mg.IdentifierMap, val tree.Keyed ) bool {
     res := true
@@ -945,20 +904,6 @@ func ( c *Compilation ) checkDescent(
     return ok
 }
 
-// Returns the type definition for superQn, returning nil if no definition is
-// found or if the descendant decl could not actually descend from the
-// definition of superQn
-func ( c *Compilation ) superTypeDefFor( 
-    superQn *mg.QualifiedTypeName, desc tree.TypeDecl ) types.Definition {
-    res := c.typeDefForQn( superQn )
-    if res == nil {
-        c.addErrorf( desc, "Cannot find ancestor type %s", superQn )
-        return nil
-    }
-    if ! c.checkDescent( desc, res ) { res = nil }
-    return res
-}
-
 func ( c *Compilation ) buildFieldDefinition(
     fldDecl *tree.FieldDecl,
     bs *buildScope ) *types.FieldDefinition {
@@ -974,38 +919,15 @@ func ( c *Compilation ) buildFieldDefinition(
     return res
 }
 
-func ( c *Compilation ) checkPreviousDef(
-    fldDecl *tree.FieldDecl, prevs *mg.IdentifierMap ) bool {
-    nm := fldDecl.Name
-    if prev := prevs.Get( nm ); prev != nil {
-        var desc string
-        switch val := prev.( type ) {
-        case *mg.QualifiedTypeName: desc = fmt.Sprintf( "in %s", val )
-        case *tree.FieldDecl: desc = fmt.Sprintf( "at %s", val.Locate() )
-        default: panic( implErrorf( "Unhandled field sentinel: %T", prev ) )
-        }
-        c.addErrorf( fldDecl, "Field %s already defined %s", nm, desc )
-        return false
-    }
-    prevs.Put( nm, fldDecl )
-    return true
-}
-
 func ( c *Compilation ) populateFieldSet(
     fs *types.FieldSet,
     fldDecls []*tree.FieldDecl,
-    prevs *mg.IdentifierMap,
     bs *buildScope ) bool {
     fldDefs, ok := make( []*types.FieldDefinition, 0, len( fldDecls ) ), true
     for _, fldDecl := range fldDecls {
-        fldDef := c.buildFieldDefinition( fldDecl, bs )
-        if fldDef == nil {
+        if fldDef := c.buildFieldDefinition( fldDecl, bs ); fldDef == nil {
             ok = false
-        } else {
-            if c.checkPreviousDef( fldDecl, prevs ) {
-                fldDefs = append( fldDefs, fldDef )
-            } else { ok = false }
-        }
+        } else { fldDefs = append( fldDefs, fldDef ) }
     }
     if ok { for _, fldDef := range fldDefs { fs.MustAdd( fldDef ) } }
     return ok
@@ -1021,27 +943,12 @@ func ( c *Compilation ) addPrevFieldDefs(
     })
 }
 
-func ( c *Compilation ) prevFieldsFor( 
-    decl tree.TypeDecl, sprTyp *mg.QualifiedTypeName ) *mg.IdentifierMap {
-    res := mg.NewIdentifierMap()
-    for sprTyp != nil {
-        if def := c.superTypeDefFor( sprTyp, decl ); def == nil {
-            sprTyp = nil
-        } else {
-            fs := def.( types.FieldContainer ).GetFields()
-            c.addPrevFieldDefs( res, fs, sprTyp )
-            sprTyp = def.( types.Descendant ).GetSuperType()
-        }
-    }
-    return res
-}
-
 func ( c *Compilation ) buildStructFields( 
     bc buildContext, sd *types.StructDefinition ) bool {
-    prevs := c.prevFieldsFor( bc.td, sd.GetSuperType() )
+
     fs := sd.Fields
     fldDecls := bc.td.( tree.FieldContainer ).GetFields()
-    return c.populateFieldSet( fs, fldDecls, prevs, bc.scope )
+    return c.populateFieldSet( fs, fldDecls, bc.scope )
 }
 
 func ( c *Compilation ) processConstructor(
@@ -1090,7 +997,6 @@ func ( c *Compilation ) buildConstructors(
 func ( c *Compilation ) buildStructType( bc buildContext ) {
     sd := types.NewStructDefinition()
     sd.Name = bc.qname() 
-    sd.SuperType = c.getSuperType( bc.mustTypeInfo(), bc.scope )
     ok := c.checkKeyedElements( structKeyedDefs, bc.td.( tree.Keyed ) )
     // always evaluate lhs even if ok is already false, so we generate possibly
     // more compiler errors in each run
@@ -1118,8 +1024,8 @@ func ( c *Compilation ) buildEnumType( bc buildContext ) {
 
 func ( c *Compilation ) setCallSignatureFields(
     decl *tree.CallSignature, sig *types.CallSignature, bs *buildScope ) bool {
-    prevs := mg.NewIdentifierMap()
-    return c.populateFieldSet( sig.Fields, decl.Fields, prevs, bs )
+
+    return c.populateFieldSet( sig.Fields, decl.Fields, bs )
 }
 
 func ( c *Compilation ) buildCallSignature(

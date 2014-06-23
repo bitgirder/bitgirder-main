@@ -14,6 +14,16 @@ func fldDef( nm, typ string, defl interface{} ) *types.FieldDefinition {
     return types.MakeFieldDef( nm, typ, defl )
 }
 
+func makeStructDefWithConstructors( 
+    nm string, 
+    flds []*types.FieldDefinition, 
+    cons []*types.ConstructorDefinition ) *types.StructDefinition {
+
+    res := types.MakeStructDef( nm, flds )
+    res.Constructors = cons
+    return res
+}
+
 func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
     res := make( []*mg.Identifier, 0, m.Len() )
     m.EachPair( func( id *mg.Identifier, _ interface{} ) {
@@ -37,18 +47,6 @@ func compileSingle( src string, f assert.Failer ) *CompilationResult {
 func failCompilerTest( cr *CompilationResult, t *testing.T ) {
     for _, err := range cr.Errors { t.Error( err ) }
     t.FailNow()
-}
-
-func roundtripCompilation( 
-    m *types.DefinitionMap, f assert.Failer ) *types.DefinitionMap {
-
-//    bb := &bytes.Buffer{}
-//    wr, rd := types.NewBinWriter( bb ), types.NewBinReader( bb )
-//    if err := wr.WriteDefinitionMap( m ); err != nil { f.Fatal( err ) }
-//    m2, err := rd.ReadDefinitionMap()
-//    if err != nil { f.Fatal( err ) }
-//    return m2
-    return m
 }
 
 type testSource struct {
@@ -156,11 +154,10 @@ func ( et *compilerTest ) compileResult() *CompilationResult {
 
 func ( et *compilerTest ) assertDefs( cr *CompilationResult ) {
     a := et.PathAsserter.Descend( "(expctDefs)" )
-    built := roundtripCompilation( cr.BuiltTypes, et.t )
     et.expctDefs.EachDefinition( func( def types.Definition ) {
         nm := def.GetName()
         a2 := a.Descend( nm )
-        if builtDef := built.Get( nm ); builtDef == nil {
+        if builtDef := cr.BuiltTypes.Get( nm ); builtDef == nil {
             a2.Fatalf( "not built" )
         } else { types.NewDefAsserter( a ).AssertDef( def, builtDef ) }
     })

@@ -110,8 +110,7 @@ func ( r *p1CompilerRun ) call() {
         comp, i = r.buildCompilation( extTypes, i )
         if cr, err := comp.Execute(); err == nil {
             if len( cr.Errors ) == 0 {
-                built := roundtripCompilation( cr.BuiltTypes, r.T )
-                r.assertBuiltTypes( built, i )
+                r.assertBuiltTypes( cr.BuiltTypes, i )
                 extTypes.MustAddFrom( cr.BuiltTypes )
             } else {
                 for _, err := range cr.Errors { r.Error( err ) }
@@ -425,7 +424,6 @@ service Service1 {
             },
             types.MakeStructDef(
                 "ns1@v1/Struct1",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
                         "string1", "mingle:core@v1/String", nil ),
@@ -496,15 +494,14 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v1/Struct2",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct1*", nil ),
                 },
             ),
-            types.MakeStructDef2(
+            makeStructDefWithConstructors(
                 "ns1@v1/Struct3",
-                "ns1@v1/Struct1",
+//                "ns1@v1/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
                         "string7", "mingle:core@v1/String?", nil ),
@@ -524,7 +521,6 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v1/Struct5",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef(
                         "f1", "mingle:core@v1/String?", nil ),
@@ -558,12 +554,11 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v1/Exception1",
-                "mingle:core@v1/StandardError",
+//                "mingle:core@v1/StandardError",
                 []*types.FieldDefinition{},
             ),
             types.MakeStructDef(
                 "ns1@v1/Exception2",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
                         "failTime", "mingle:core@v1/Int64", nil ),
@@ -571,7 +566,7 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v1/Exception3",
-                "ns1@v1/Exception1",
+//                "ns1@v1/Exception1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
                         "string2", "mingle:core@v1/String*", nil ),
@@ -631,7 +626,6 @@ service Service1 {
             types.MakeServiceDef(
                 "ns1@v1/Service1",
                 "",
-                "",
                 types.MakeOpDef( "op1",
                     types.MakeCallSig(
                         []*types.FieldDefinition{},
@@ -674,7 +668,6 @@ service Service1 {
             ),
             types.MakeServiceDef(
                 "ns1@v1/Service2",
-                "",
                 "ns1@v1/Sec1",
                 types.MakeOpDef( "op1",
                     types.MakeCallSig(
@@ -691,10 +684,9 @@ service Service1 {
                     ),
                 ),
             ),
-            types.MakeServiceDef( "ns1@v1/Service3", "", "ns1@v1/Sec2" ),
+            types.MakeServiceDef( "ns1@v1/Service3", "ns1@v1/Sec2" ),
             types.MakeStructDef(
                 "ns1@v1/FieldConstantTester",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f1", "mingle:core@v1/Boolean", true ),
                     types.MakeFieldDef( "f2", "mingle:core@v1/Boolean", false ),
@@ -758,7 +750,6 @@ service Service1 {
         types.MakeDefMap(
             types.MakeStructDef(
                 "ns1@v1/Struct4",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct2", nil ),
@@ -769,7 +760,7 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v1/Exception4",
-                "ns1@v1/Exception3",
+//                "ns1@v1/Exception3",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
                         "int1", "mingle:core@v1/Int64", int64( 33 ) ),
@@ -787,7 +778,6 @@ service Service1 {
             },
             types.MakeStructDef(
                 "ns2@v1/Struct1",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "inst1", "&ns1@v1/Struct1?", nil ),
                     types.MakeFieldDef( "inst2", "ns2@v1/Struct2", nil ),
@@ -800,7 +790,6 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns2@v1/Struct2",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "inst1", "ns2@v1/Struct1", nil ),
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct1", nil ),
@@ -808,19 +797,18 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns2@v1/Exception1",
-                "ns1@v1/Exception1",
+//                "ns1@v1/Exception1",
                 []*types.FieldDefinition{},
             ),
             types.MakeStructDef(
                 "ns2@v1/Exception2",
-                "ns1@v1/Exception3",
+//                "ns1@v1/Exception3",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "str1", "mingle:core@v1/String*", nil ),
                 },
             ),
             types.MakeServiceDef(
                 "ns2@v1/Service1",
-                "",
                 "",
                 types.MakeOpDef( "op1",
                     types.MakeCallSig(
@@ -850,7 +838,7 @@ service Service1 {
         types.MakeDefMap(
             types.MakeStructDef(
                 "ns1:globTestNs@v1/Struct1",
-                "ns1@v1/Struct1",
+//                "ns1@v1/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct4", nil ),
@@ -860,12 +848,10 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1:globTestNs@v1/Exception2",
-                "",
                 []*types.FieldDefinition{},
             ),
             types.MakeServiceDef(
                 "ns1:globTestNs@v1/Service1",
-                "",
                 "",
                 types.MakeOpDef( "op1",
                     types.MakeCallSig(
@@ -890,7 +876,6 @@ service Service1 {
         types.MakeDefMap(
             types.MakeStructDef(
                 "ns1@v2/Struct1",
-                "",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( 
                         "f1", "mingle:core@v1/String", "hello" ),
@@ -898,7 +883,7 @@ service Service1 {
             ),
             types.MakeStructDef(
                 "ns1@v2/Struct2",
-                "ns1@v1/Struct1",
+//                "ns1@v1/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f1", "&ns1@v2/Struct1?", nil ),
                 },
@@ -909,7 +894,7 @@ service Service1 {
             },
             types.MakeStructDef(
                 "ns1@v2/Struct3",
-                "ns1@v2/Struct1",
+//                "ns1@v2/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f2", "ns1@v2/Struct2", nil ),
                     types.MakeFieldDef( "f3", "mingle:core@v1/String?", nil ),
@@ -918,7 +903,6 @@ service Service1 {
             ),
             types.MakeServiceDef(
                 "ns1@v2/Service1",
-                "",
                 "",
                 types.MakeOpDef( "op1",
                     types.MakeCallSig(

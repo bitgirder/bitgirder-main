@@ -18,9 +18,9 @@ func TestCompiler( t *testing.T ) {
             struct S2 {}
             struct S3 {}
         ` ).
-        expectDef( types.MakeStructDef( "ns1@v1/S1", "", nil ) ).
-        expectDef( types.MakeStructDef( "ns1@v1/S2", "", nil ) ).
-        expectDef( types.MakeStructDef( "ns1@v1/S3", "", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/S1", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/S2", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/S3", nil ) ).
         addSource( "f2", `
             @version v1
             import ns1@v1/[ S1, S3 ]
@@ -31,13 +31,13 @@ func TestCompiler( t *testing.T ) {
             struct S4 {} # Okay (no lib1@v1/S4)
         ` ).
         expectDef( 
-            types.MakeStructDef( "ns2@v1/T1", "", 
+            types.MakeStructDef( "ns2@v1/T1", 
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f", "ns1@v1/S1", nil ),
                 },
             ),
         ).
-        expectDef( types.MakeStructDef( "ns2@v1/S2", "", nil ) ).
+        expectDef( types.MakeStructDef( "ns2@v1/S2", nil ) ).
         addSource( "f3", `
             @version v1
             import ns1@v1/* - [ S2 ]
@@ -45,9 +45,9 @@ func TestCompiler( t *testing.T ) {
             struct S2 {}
             struct T1 { f1 S1; f2 S3 }
         ` ).
-        expectDef( types.MakeStructDef( "ns3@v1/S2", "", nil ) ).
+        expectDef( types.MakeStructDef( "ns3@v1/S2", nil ) ).
         expectDef(
-            types.MakeStructDef( "ns3@v1/T1", "",
+            types.MakeStructDef( "ns3@v1/T1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
                     types.MakeFieldDef( "f2", "ns1@v1/S3", nil ),
@@ -122,7 +122,7 @@ func TestCompiler( t *testing.T ) {
             }
         `).
         expectDef(
-            types.MakeStructDef( "ns1@v1/S1", "",
+            types.MakeStructDef( "ns1@v1/S1",
                 []*types.FieldDefinition{
                     fldDef( "f1", "mingle:core@v1/Boolean", nil ),
                     fldDef( "f2", "mingle:core@v1/Buffer", nil ),
@@ -177,7 +177,7 @@ func TestCompiler( t *testing.T ) {
         expectError( 15, 20, "not a nullable type" ).
         expectError( 16, 21, "not a nullable type" ).
         expectDef(
-            types.MakeStructDef( "ns1@v1/S3", "",
+            types.MakeStructDef( "ns1@v1/S3",
                 []*types.FieldDefinition{
                     fldDef( "f1", "mingle:core@v1/String?", nil ),
                     fldDef( "f2", "mingle:core@v1/Buffer?", nil ),
@@ -209,7 +209,7 @@ func TestCompiler( t *testing.T ) {
             }
         ` ).
         expectDef(
-            types.MakeStructDef( "ns1@v1/S1", "",
+            types.MakeStructDef( "ns1@v1/S1",
                 []*types.FieldDefinition{
                     fldDef( "f1", `mingle:core@v1/String~"a"`, nil ),
                     fldDef( "f2", `mingle:core@v1/String~["aaa", "bbb"]`, nil ),
