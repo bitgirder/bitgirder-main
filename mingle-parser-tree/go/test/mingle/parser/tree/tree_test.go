@@ -102,7 +102,6 @@ func ( t *treeCheck ) equalNsDecl( ns1, ns2 *NamespaceDecl ) {
 func ( t *treeCheck ) equalTypeDeclInfo( i1, i2 *TypeDeclInfo ) {
     t.descend( "Name" ).Equal( i1.Name, i2.Name )
     t.descend( "NameLoc" ).Equal( i1.NameLoc, i2.NameLoc )
-    t.descend( "SuperType" ).equalType( i1.SuperType, i2.SuperType )
 }
 
 // Checking right now is loose on restrictions, and we really only check that
@@ -165,10 +164,16 @@ func ( t *treeCheck ) equalSecurityDecl( sd1, sd2 *SecurityDecl ) {
     t.descend( "NameLoc" ).Equal( sd1.NameLoc, sd2.NameLoc )
 }
 
+func ( t *treeCheck ) equalSchemaMixinDecl( sd1, sd2 *SchemaMixinDecl ) {
+    t.descend( "Name" ).Equal( sd1.Name, sd2.Name )
+    t.descend( "NameLoc" ).Equal( sd1.NameLoc, sd2.NameLoc )
+}
+
 func ( t *treeCheck ) equalSyntaxElement( se1, se2 SyntaxElement ) {
     switch v := se1.( type ) {
     case *ConstructorDecl: t.equalConstructorDecl( v, se2.( *ConstructorDecl ) )
     case *SecurityDecl: t.equalSecurityDecl( v, se2.( *SecurityDecl ) )
+    case *SchemaMixinDecl: t.equalSchemaMixinDecl( v, se2.( *SchemaMixinDecl ) )
     default: t.Fatalf( "Unhandled elt: %T", v )
     }
 }
@@ -383,8 +388,8 @@ struct Struct1 {
 struct StructWithFinalComma{ f1 String }
 struct EmptyStruct {}
 
-struct Struct3 < Struct1 {
-
+struct Struct3 {
+    @schema Struct1
     string6 String?
 
     @constructor( Int64 )
@@ -392,12 +397,12 @@ struct Struct3 < Struct1 {
     @constructor( String~"^a+$" )
 }
 
-struct Struct4 < Struct1 {}
+struct Struct4 { @schema Struct1 }
 
-struct Error1 < StandardError {}
+
 struct Error2 { failTime Int64 }
 
-struct Error3 < Error1 { 
+struct Error3 { 
     @constructor( F1 )
     string2 String*
 }
@@ -780,8 +785,6 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDn( "Struct3" ),
                     NameLoc: lc1( 45, 8 ),
-                    SuperType: 
-                        sxAtomicTyp( mgDn( "Struct1" ), nil, lc1( 45, 18 ) ),
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "string6" ), 
@@ -799,6 +802,11 @@ func initResultTestSource1() {
                     },
                 },
                 KeyedElements: keyedElts(
+                    "schema", &SchemaMixinDecl{
+                        Start: lc1( 46, 5 ),
+                        Name: mgDn( "Struct1" ),
+                        NameLoc: lc1( 46, 13 ),
+                    },
                     "constructor", &ConstructorDecl{ 
                         Start: lc1( 49, 5 ),
                         ArgType: 
@@ -831,26 +839,15 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDn( "Struct4" ),
                     NameLoc: lc1( 54, 8 ),
-                    SuperType: 
-                        sxAtomicTyp( mgDn( "Struct1" ), nil, lc1( 54, 18 ) ),
                 },
                 Fields: []*FieldDecl{},
-                KeyedElements: keyedElts(),
-            },
-            &StructDecl{
-                Start: lc1( 56, 1 ),
-                Info: &TypeDeclInfo{
-                    Name: mgDn( "Error1" ),
-                    NameLoc: lc1( 56, 8 ),
-                    SuperType: 
-                        sxAtomicTyp( 
-                            mgDn( "StandardError" ),
-                            nil,
-                            lc1( 56, 17 ),
-                        ),
-                },
-                Fields: []*FieldDecl{},
-                KeyedElements: keyedElts(),
+                KeyedElements: keyedElts(
+                    "schema", &SchemaMixinDecl{
+                        Start: lc1( 54, 18 ),
+                        Name: mgDn( "Struct1" ),
+                        NameLoc: lc1( 54, 26 ),
+                    },
+                ),
             },
             &StructDecl{
                 Start: lc1( 57, 1 ),
@@ -871,8 +868,6 @@ func initResultTestSource1() {
                 Info: &TypeDeclInfo{
                     Name: mgDn( "Error3" ),
                     NameLoc: lc1( 59, 8 ),
-                    SuperType: 
-                        sxAtomicTyp( mgDn( "Error1" ), nil, lc1( 59, 17 ) ),
                 },
                 Fields: []*FieldDecl{
                     { Name: mgId( "string2" ), 

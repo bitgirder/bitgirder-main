@@ -25,6 +25,7 @@ var (
     idVersion = mg.NewIdentifierUnsafe( []string{ "version" } )
     IdConstructor = mg.NewIdentifierUnsafe( []string{ "constructor" } )
     IdSecurity = mg.NewIdentifierUnsafe( []string{ "security" } )
+    IdSchema = mg.NewIdentifierUnsafe( []string{ "schema" } )
 
     typeDeclKwds = []parser.Keyword{ 
         kwdStruct, 
@@ -190,6 +191,12 @@ type FieldDecl struct {
 
 func ( fd *FieldDecl ) Locate() *parser.Location { return fd.NameLoc }
 
+type SchemaMixinDecl struct {
+    Start *parser.Location
+    Name mg.TypeName
+    NameLoc *parser.Location
+}
+
 type KeyedElements struct {
     elts *mg.IdentifierMap // vals are []SyntaxElement
 }
@@ -233,7 +240,6 @@ type FieldContainer interface { GetFields() []*FieldDecl }
 type TypeDeclInfo struct {
     Name *mg.DeclaredTypeName
     NameLoc *parser.Location
-    SuperType *parser.CompletableTypeReference
 }
 
 func ( i *TypeDeclInfo ) Locate() *parser.Location { return i.NameLoc }
@@ -633,13 +639,7 @@ func ( p *parse ) expectNsUnitNs() ( decl *NamespaceDecl, err error ) {
 
 func ( p *parse ) expectTypeDeclInfo() ( info *TypeDeclInfo, err error ) {
     info = new( TypeDeclInfo )
-    if info.Name, info.NameLoc, err = p.expectDeclaredTypeName(); err != nil { 
-        return 
-    }
-    var tn *parser.TokenNode
-    if tn, err = p.PollSpecial( parser.SpecialTokenLessThan ); err == nil {
-        if tn != nil { info.SuperType, err = p.expectTypeReference() }
-    }
+    info.Name, info.NameLoc, err = p.expectDeclaredTypeName()
     return
 }
 
@@ -664,6 +664,14 @@ func ( p *parse ) expectSecurityDecl(
     return
 }
 
+func ( p *parse ) expectSchemaDecl(
+    lc *parser.Location ) ( sd *SchemaMixinDecl, err error ) {
+
+    sd = &SchemaMixinDecl{ Start: lc }
+    sd.Name, sd.NameLoc, err = p.expectTypeName()
+    return
+}
+
 func ( p *parse ) expectKeyedElement( keyed *KeyedElements ) ( err error ) {
     var lc *parser.Location
     if lc, err = p.passSpecial( tkAsperand ); err != nil { return }
@@ -673,6 +681,7 @@ func ( p *parse ) expectKeyedElement( keyed *KeyedElements ) ( err error ) {
     switch {
     case key.Equals( IdConstructor ): elt, err = p.expectConstructorDecl( lc )
     case key.Equals( IdSecurity ): elt, err = p.expectSecurityDecl( lc )
+    case key.Equals( IdSchema ): elt, err = p.expectSchemaDecl( lc )
     default: err = p.errorUnexpectedKeyedElement( key )
     }
     if err != nil { return }
