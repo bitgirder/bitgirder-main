@@ -11,6 +11,8 @@ import (
     "mingle/parser"
 )
 
+const nilSource = "nilSource"
+
 var mkQn = parser.MustQualifiedTypeName
 var mkTyp = parser.MustTypeReference
 
@@ -158,13 +160,21 @@ func ( et *compilerTest ) compileResult() *CompilationResult {
 
 func ( et *compilerTest ) assertDefs( cr *CompilationResult ) {
     a := et.PathAsserter.Descend( "(expctDefs)" )
+    unexpct := make( map[ string ] types.Definition )
+    cr.BuiltTypes.EachDefinition( func( def types.Definition ) {
+        unexpct[ def.GetName().String() ] = def
+    })
     et.expctDefs.EachDefinition( func( def types.Definition ) {
         nm := def.GetName()
         a2 := a.Descend( nm )
         if builtDef := cr.BuiltTypes.Get( nm ); builtDef == nil {
             a2.Fatalf( "not built" )
-        } else { types.NewDefAsserter( a ).AssertDef( def, builtDef ) }
+        } else { 
+            types.NewDefAsserter( a ).AssertDef( def, builtDef ) 
+            delete( unexpct, nm.String() )
+        }
     })
+    a.Equalf( 0, len( unexpct ), "did not expect: %#v", unexpct )
 }
 
 func ( et *compilerTest ) makeErrorMap() map[ string ]errorExpect {
@@ -176,6 +186,7 @@ func ( et *compilerTest ) makeErrorMap() map[ string ]errorExpect {
 func ( et *compilerTest ) checkError( 
     err *Error, errMap map[ string ]errorExpect ) int {
     lc := err.Location
+    if lc == nil { lc = &parser.Location{ 0, 0, nilSource } }
     k := makeErrorKey( lc.Source, lc.Line, lc.Col, err.Message )
     if _, ok := errMap[ k ]; ok {
         delete( errMap, k )

@@ -207,6 +207,11 @@ func ( a *DefAsserter ) assertStructDef(
         assertConstructors( s1.Constructors, s2.Constructors )
 }
 
+func ( a *DefAsserter ) assertSchemaDef( s1 *SchemaDefinition, d2 Definition ) {
+    s2 := a.equalType( s1, d2 ).( *SchemaDefinition )
+    a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
+}
+
 func ( a *DefAsserter ) assertEnumDef( 
     e1 *EnumDefinition, v2 interface{} ) {
     e2 := a.equalType( e1, v2 ).( *EnumDefinition )
@@ -258,10 +263,12 @@ func ( a *DefAsserter ) assertServiceDef(
 
 func ( a *DefAsserter ) AssertDef( d1, d2 Definition ) {
     a.descend( "(Name)" ).Equal( d1.GetName(), d2.GetName() )
+    a = a.descend( d1.GetName() )
     switch v := d1.( type ) {
     case *PrimitiveDefinition: a.assertPrimDef( v, d2 )
     case *AliasedTypeDefinition: a.assertAliasDef( v, d2 )
     case *StructDefinition: a.assertStructDef( v, d2 )
+    case *SchemaDefinition: a.assertSchemaDef( v, d2 )
     case *EnumDefinition: a.assertEnumDef( v, d2 )
     case *PrototypeDefinition: a.assertProtoDef( v, d2 )
     case *ServiceDefinition: a.assertServiceDef( v, d2 )

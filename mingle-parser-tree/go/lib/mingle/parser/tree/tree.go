@@ -198,6 +198,8 @@ type SchemaMixinDecl struct {
     NameLoc *parser.Location
 }
 
+func ( sd *SchemaMixinDecl ) Locate() *parser.Location { return sd.Start }
+
 type TypeDecl interface {
     GetName() *mg.DeclaredTypeName
     Locatable

@@ -163,6 +163,8 @@ func TestCompiler( t *testing.T ) {
                 @constructor( String~"^a+$" )
             }
         ` ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct1", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct2", nil ) ).
         expectDef(
             makeStructDefWithConstructors(
                 "ns1@v1/Struct3",
@@ -189,9 +191,19 @@ func TestCompiler( t *testing.T ) {
         ),
 
         newCompilerTest( "schema-variations" ).
+        addLib( "lib1", 
+            `@version v1; namespace ns2; schema Schema1 { g1 Int32 }` ).
         addSource( "f1", `
             @version v1
             namespace ns1
+
+            # we forward declare and reference some schemas so we can check that
+            # the compiler is actually reordering correctly.
+            schema Schema4 { 
+                f2 Int32
+                f3 Int32
+                @schema Schema3 
+            }
 
             schema Schema1 { f1 Int32 }
 
@@ -202,16 +214,41 @@ func TestCompiler( t *testing.T ) {
                 f2 Int32 
             }
 
-            schema Schema4 { 
-                f3 Int32
-                @schema Schema3 
-            }
-
             schema Schema5 { 
                 @schema Schema1
                 @schema Schema2
                 @schema Schema3
                 @schema Schema4
+            }
+
+            alias Schema6 Schema1
+
+            schema Schema7 {
+                @schema Schema6
+                f7 Int32
+            }
+
+            struct S1 {
+                @schema Schema1 
+            }
+
+            struct S2 {
+                @schema Schema5
+                s2F1 Int32
+            }
+
+            struct S3 { 
+                @schema Schema6 
+            }
+
+            schema Schema8 { 
+                f1 Int32
+                @schema ns2@v1/Schema1
+            }
+
+            struct S4 { 
+                @schema ns2@v1/Schema1
+                g2 Int32
             }
         ` ).
         expectDef(
@@ -1330,16 +1367,38 @@ func TestCompiler( t *testing.T ) {
         expectError( 1, 1, "cycle: Schema3/Schema4/Schema5" ),
 
         newCompilerTest( "schema-errors" ).
+        addLib( "lib1",
+            `@version v1; namespace ns2; schema Schema1 { f1 Int32 }` ).
         setSource( `
             @version v1
             namespace ns1
             schema Schema1 {}
             schema Schema2 { @schema NoSuch }
             struct Struct1 { @schema NoSuch }
+            schema Schema3 { f1 Int32 }
+            schema Schema4 { @schema Schema3; f1 Int64 }
+            schema Schema5 { @schema Schema3; f1 Int32 default 1 }
+            schema Schema6 { @schema ns2@v1/Schema1; f1 Int32 }
+            struct Struct2 { @schema ns2@v1/Schema1; f1 Int32 }
+            schema Schema7 { f1 Int32 }
+            struct Struct3 { f1 Int32; @schema Schema3; @schema Schema7 }
+            struct Struct4 { @schema Struct1 }
+            alias BadAlias1 Struct4
+            struct Struct5 { @schema BadAlias }
+            alias BadAlias2 String*
+            struct Struct6 { @schema BadAlias2 }
         ` ).
         expectError( 4, 1, "empty schema" ).
         expectError( 5, 1, "no such schema" ).
-        expectError( 6, 1, "no such schema" ),
+        expectError( 6, 1, "no such schema" ).
+        expectError( 8, 1, "f1 redefined" ).
+        expectError( 9, 1, "f1 redefined" ).
+        expectError( 10, 1, "f1 redefined" ).
+        expectError( 11, 1, "f1 redefined" ).
+        expectError( 13, 1, "f1 redefined" ).
+        expectError( 14, 1, "not a schema" ).
+        expectError( 16, 1, "not a schema" ).
+        expectError( 18, 1, "not a schema" ),
 
         newCompilerTest( "dup-decls-in-same-source" ).
         setSource( `

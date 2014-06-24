@@ -3,6 +3,7 @@ package compiler
 import (
     "fmt"
     "log"
+    "strings"
     "bytes"
     "sort"
     "container/list"
@@ -138,6 +139,19 @@ func ( c *Compilation ) typeDeclsGet(
     return nil, false
 }
 
+func ( c *Compilation ) typeDefForQn( 
+    qn *mg.QualifiedTypeName ) types.Definition {
+
+    if def := c.builtTypes.Get( qn ); def != nil { return def }
+    if def := c.extTypes.Get( qn ); def != nil { return def }
+    return nil
+}
+
+func ( c *Compilation ) typeDefForType(
+    typ mg.TypeReference ) types.Definition {
+    return c.typeDefForQn( qnameIn( typ ) )
+}
+
 type Error struct {
     Location *parser.Location
     Message string
@@ -148,6 +162,7 @@ func ( e *Error ) Error() string {
 }
 
 func locationFor( locVal interface{} ) *parser.Location {
+    if locVal == nil { return nil }
     switch v := locVal.( type ) {
     case *parser.Location: return v
     case tree.Locatable: return v.Locate()
@@ -254,6 +269,29 @@ func ( bs *buildScope ) qnameFor(
     case *mg.DeclaredTypeName: return bs.expandDeclaredTypeName( v, nmLoc )
     }
     panic( implErrorf( "unhandled type name: %T", nm ) )
+}
+
+// returns nil if nm can't be succesfully resolved or validated, emitting errors
+// as with bs.qnameFor(). If a name is resolved and is not the name of an alias
+// definition, it is returned. If the resolved name is the name of an alias
+// definition that resolves to an atomic type with no restriction, that atomic
+// type's qname is returned. Otherwise, nil is returned but with no errors
+// emitted. If there develops the need to distinguish between no-name and
+// name-but-non-trivial-alias, we can change this call's return type to carry
+// that information.
+func ( bs *buildScope ) qnameForMixin(
+    nm mg.TypeName, nmLoc *parser.Location ) *mg.QualifiedTypeName {
+
+    qn := bs.qnameFor( nm, nmLoc )
+    if qn == nil { return nil }
+    if def := bs.c.typeDefForQn( qn ); def != nil {
+        if ad, ok := def.( *types.AliasedTypeDefinition ); ok {
+            if at, ok := ad.AliasedType.( *mg.AtomicTypeReference ); ok {
+                if at.Restriction == nil { qn = at.Name }
+            }
+        }
+    }
+    return qn
 }
 
 func ( bs *buildScope ) addRestrictionTargetTypeError(
@@ -580,6 +618,7 @@ func ( bs *buildScope ) resolve(
 func ( bs *buildScope ) resolveType( 
     typ *parser.CompletableTypeReference,
     errLoc *parser.Location ) mg.TypeReference {
+
     tr := newTypeResolution( errLoc )
     return bs.resolve( typ, tr )
 } 
@@ -804,6 +843,7 @@ func ( s qnameSort ) Swap( i, j int ) { s[ i ], s[ j ] = s[ j ], s[ i ] }
 
 func ( c *Compilation ) getAliasBuildOrder(
     ctxs []buildContext ) []buildContext {
+
     res := make( []buildContext, 0, 4 )
     for _, bc := range ctxs {
         if _, ok := bc.td.( *tree.AliasDecl ); ok { res = append( res, bc ) }
@@ -834,41 +874,12 @@ func ( c *Compilation ) buildAliasedTypes( ctxs []buildContext ) {
     for _, bc := range c.getAliasBuildOrder( ctxs ) { c.buildAliasedType( bc ) }
 }
 
-func ( c *Compilation ) typeDefForQn( 
-    qn *mg.QualifiedTypeName ) types.Definition {
-    if def := c.builtTypes.Get( qn ); def != nil { return def }
-    if def := c.extTypes.Get( qn ); def != nil { return def }
-    return nil
-}
-
-func ( c *Compilation ) typeDefForType(
-    typ mg.TypeReference ) types.Definition {
-    return c.typeDefForQn( qnameIn( typ ) )
-}
-
-func ( c *Compilation ) checkDescent( 
-    desc tree.TypeDecl, sprDef types.Definition ) bool {
-    ok := true
-    switch sprDef.( type ) {
-    case *types.StructDefinition: _, ok = desc.( *tree.StructDecl )
-    case *types.ServiceDefinition: _, ok = desc.( *tree.ServiceDecl )
-    default: ok = false
-    }
-    if ! ok {
-        c.addErrorf( desc, "%s cannot descend from type %s", 
-            desc.GetName(), sprDef.GetName() )
-    }
-    return ok
-}
-
 func ( c *Compilation ) buildFieldDefinition(
-    fldDecl *tree.FieldDecl,
-    bs *buildScope ) *types.FieldDefinition {
+    fldDecl *tree.FieldDecl, bs *buildScope ) *types.FieldDefinition {
+
     res := &types.FieldDefinition{ Name: fldDecl.Name }
-    if res.Type = bs.resolveType( fldDecl.Type, fldDecl.Type.Location() );
-       res.Type == nil {
-        return nil
-    }
+    res.Type = bs.resolveType( fldDecl.Type, fldDecl.Type.Location() )
+    if res.Type == nil { return nil }
     if baseTypeIsNull( res.Type ) {
         c.addError( fldDecl.Type.Location(), "Null type not allowed here" )
         return nil
@@ -876,36 +887,109 @@ func ( c *Compilation ) buildFieldDefinition(
     return res
 }
 
-func ( c *Compilation ) populateFieldSet(
-    fs *types.FieldSet,
-    fldDecls []*tree.FieldDecl,
-    bs *buildScope ) bool {
-    fldDefs, ok := make( []*types.FieldDefinition, 0, len( fldDecls ) ), true
-    for _, fldDecl := range fldDecls {
-        if fldDef := c.buildFieldDefinition( fldDecl, bs ); fldDef == nil {
-            ok = false
-        } else { fldDefs = append( fldDefs, fldDef ) }
+type builtField struct {
+    def *types.FieldDefinition
+    src interface{}
+}
+
+func ( bd builtField ) name() *mg.Identifier { return bd.def.Name }
+
+type fieldSetBuilder struct {
+    c *Compilation
+    bc buildContext
+    flds []*tree.FieldDecl
+    schemas []*tree.SchemaMixinDecl
+    fs *types.FieldSet
+    work *mg.IdentifierMap
+}
+
+func ( fsb *fieldSetBuilder ) addDefinition( 
+    fd *types.FieldDefinition, src interface{} ) {
+
+    var flds []builtField
+    key := fd.Name
+    if fldsVal, ok := fsb.work.GetOk( key ); ok {
+        flds = fldsVal.( []builtField )
+    } else { flds = make( []builtField, 0, 4 ) }
+    bd := builtField{ def: fd, src: src }
+    flds = append( flds, bd )
+    fsb.work.Put( key, flds )
+}
+
+func ( fsb *fieldSetBuilder ) addFieldsFromSchema( 
+    sd *tree.SchemaMixinDecl ) int {
+    
+    qn := fsb.bc.scope.qnameForMixin( sd.Name, sd.NameLoc )
+    if qn == nil { return 1 }
+    switch v := fsb.c.typeDefForQn( qn ).( type ) {
+    case *types.SchemaDefinition:
+        v.Fields.EachDefinition( func( fd *types.FieldDefinition ) {
+            fsb.addDefinition( fd, v ) 
+        })
+    default:
+        fsb.c.addErrorf( sd, "not a mixin: %s", qn )
+        return 1
     }
-    if ok { for _, fldDef := range fldDefs { fs.MustAdd( fldDef ) } }
-    return ok
+    return 0
 }
 
-func ( c *Compilation ) addPrevFieldDefs(
-    m *mg.IdentifierMap, fs *types.FieldSet, fldOwner *mg.QualifiedTypeName ) {
-    fs.EachDefinition( func( fd *types.FieldDefinition ) {
-        if m.Get( fd.Name ) != nil {
-            tmpl := "Field %s is defined upstream of %s"
-            panic( implErrorf( tmpl, fd.Name, fldOwner ) )
-        } else { m.Put( fd.Name, fldOwner ) }
+func ( fsb *fieldSetBuilder ) addSchemaMixins() int { 
+    if fsb.schemas == nil { return 0 }
+    errs := 0
+    for _, schema := range fsb.schemas {
+        errs += fsb.addFieldsFromSchema( schema )
+    }
+    return errs
+}
+
+func ( fsb *fieldSetBuilder ) addDirectFieldDecls() int {
+    errs := 0
+    for _, fldDecl := range fsb.flds {
+        fd := fsb.c.buildFieldDefinition( fldDecl, fsb.bc.scope )
+        if fd == nil { errs++ } else { fsb.addDefinition( fd, fldDecl ) }
+    }
+    return errs
+}
+
+func ( fsb *fieldSetBuilder ) addBuiltFields() bool {
+    errs := 0
+    fsb.work.EachPair( func( fld *mg.Identifier, val interface{} ) {
+        flds := val.( []builtField )
+        if len( flds ) == 1 {
+            fsb.fs.MustAdd( flds[ 0 ].def )
+        } else {
+            for _, bf := range flds {
+                errs++
+                fsb.c.addErrorf( fsb.bc.td, "field '%s' redefined", bf.name() )
+            }
+        }
     })
+    return errs == 0
+} 
+
+func ( fsb *fieldSetBuilder ) build() bool {
+    
+    errs := fsb.addDirectFieldDecls()
+    errs += fsb.addSchemaMixins()
+    if errs == 0 { return fsb.addBuiltFields() }
+    return false
 }
 
-func ( c *Compilation ) buildStructFields( 
-    bc buildContext, sd *types.StructDefinition ) bool {
+func ( c *Compilation ) buildFieldSet( 
+    bc buildContext, 
+    flds []*tree.FieldDecl,
+    schemas []*tree.SchemaMixinDecl,
+    fs *types.FieldSet ) bool {
 
-    fs := sd.Fields
-    fldDecls := bc.td.( tree.FieldContainer ).GetFields()
-    return c.populateFieldSet( fs, fldDecls, bc.scope )
+    fsb := &fieldSetBuilder{
+        c: c,
+        bc: bc,
+        flds: flds,
+        schemas: schemas,
+        fs: fs,
+        work: mg.NewIdentifierMap(),
+    }
+    return fsb.build()
 }
 
 func ( c *Compilation ) processConstructor(
@@ -950,12 +1034,109 @@ func ( c *Compilation ) buildConstructors(
 func ( c *Compilation ) buildStructType( bc buildContext ) {
     sd := types.NewStructDefinition()
     sd.Name = bc.qname() 
+    decl := bc.td.( *tree.StructDecl )
     // always evaluate lhs even if ok is already false, so we generate possibly
     // more compiler errors in each run
     ok := true
-    ok = c.buildStructFields( bc, sd ) && ok
+    ok = c.buildFieldSet( bc, decl.Fields, decl.Schemas, sd.Fields ) && ok
     ok = c.buildConstructors( bc, sd ) && ok
     if ok { c.putBuiltType( sd ) }
+}
+
+type schemaBuildOrder struct {
+    c *Compilation
+    ord []buildContext
+    nextIdx int
+}
+
+func ( c *Compilation ) newSchemaBuildOrder( 
+    ctxs []buildContext ) *schemaBuildOrder {
+
+    res := &schemaBuildOrder{ c: c, ord: make( []buildContext, 0, 16 ) }
+    for _, bc := range ctxs { 
+        if _, ok := bc.td.( *tree.SchemaDecl ); ok { 
+            res.ord = append( res.ord, bc ) 
+        }
+    }
+    return res
+}
+
+func ( bo *schemaBuildOrder ) initHoldMap() *mg.QnameMap {
+    res := mg.NewQnameMap()
+    for _, bc := range bo.ord { res.Put( bc.qname(), bc ) }
+    return res
+}
+
+// for each mixin target we check whether the target is upstream of bc. We
+// silently ignore situations in which the mixin does not resolve to a known
+// name or when it resolves to a name built outside of this compilation unit,
+// since either of these cases will be handled elsewhere and shouldn't block our
+// ability to get a build order.
+func ( bo *schemaBuildOrder ) hasDeps( 
+    bc buildContext, ready *mg.QnameMap ) bool {
+
+    sd := bc.td.( *tree.SchemaDecl )
+    deps := 0
+    for _, mixDecl := range sd.Schemas {
+        qn := bc.scope.qnameForMixin( mixDecl.Name, mixDecl.NameLoc )
+        if qn == nil { continue }
+        if ! bo.c.typeDecls.HasKey( qn ) { continue }
+        if ready.HasKey( qn ) { continue }
+        deps++
+    }
+    return deps == 0
+}
+
+// as we move from hold --> ready, we keep the newly added qnames in added,
+// since we can't do concurrent deletes from inside the EachPair block
+func ( bo *schemaBuildOrder ) makeReady( ready, hold *mg.QnameMap ) bool {
+    added := make( []*mg.QualifiedTypeName, 0, 4 )
+    hold.EachPair( func( qn *mg.QualifiedTypeName, v interface{} ) {
+        if bc := v.( buildContext ); bo.hasDeps( bc, ready ) {
+            ready.Put( qn, bc )
+            bo.ord[ bo.nextIdx ] = bc
+            bo.nextIdx++
+            added = append( added, qn )
+        }
+    })
+    for _, qn := range added { hold.Delete( qn ) }
+    return len( added ) > 0
+}
+
+func ( bo *schemaBuildOrder ) sort() bool {
+    ready, hold := mg.NewQnameMap(), bo.initHoldMap()
+    for loop := true; loop && hold.Len() > 0; {
+        loop = bo.makeReady( ready, hold )
+    }
+    if hold.Len() == 0 { return true }
+    strs := make( []string, 0, hold.Len() )
+    hold.EachPair( func( qn *mg.QualifiedTypeName, _ interface{} ) {
+        strs = append( strs, qn.ExternalForm() )
+    })
+    names := strings.Join( strs, ", " )
+    tmpl := "Schemas are involved in one or more mixin cycles: %s"
+    bo.c.addErrorf( nil, tmpl, names )
+    return false
+}
+
+func ( bo *schemaBuildOrder ) getOrder() []buildContext {
+    if ! bo.sort() { return nil }
+    return bo.ord
+}
+
+func ( c *Compilation ) buildSchemaType( bc buildContext ) {
+    decl := bc.td.( *tree.SchemaDecl )
+    sd := types.NewSchemaDefinition()
+    sd.Name = bc.qname()
+    if c.buildFieldSet( bc, decl.Fields, decl.Schemas, sd.Fields ) {
+        c.putBuiltType( sd )
+    }
+}
+
+func ( c *Compilation ) buildSchemaTypes( ctxs []buildContext ) {
+    ord := c.newSchemaBuildOrder( ctxs ).getOrder()
+    if ord == nil { return }
+    for _, bc := range ord { c.buildSchemaType( bc ) }
 }
 
 func ( c *Compilation ) buildEnumType( bc buildContext ) {
@@ -978,7 +1159,17 @@ func ( c *Compilation ) buildEnumType( bc buildContext ) {
 func ( c *Compilation ) setCallSignatureFields(
     decl *tree.CallSignature, sig *types.CallSignature, bs *buildScope ) bool {
 
-    return c.populateFieldSet( sig.Fields, decl.Fields, bs )
+    fldDecls := decl.Fields
+    fldDefs, errs := make( []*types.FieldDefinition, 0, len( fldDecls ) ), 0
+    for _, fldDecl := range fldDecls {
+        if fldDef := c.buildFieldDefinition( fldDecl, bs ); fldDef != nil {
+            fldDefs = append( fldDefs, fldDef ) 
+        } else { errs++ }
+    }
+    if errs == 0 { 
+        for _, fldDef := range fldDefs { sig.Fields.MustAdd( fldDef ) } 
+    }
+    return errs == 0
 }
 
 func ( c *Compilation ) buildCallSignature(
@@ -1103,7 +1294,6 @@ func ( c *Compilation ) buildServiceType( bc buildContext ) {
 func ( c *Compilation ) buildTypesInitial( ctxs []buildContext ) {
     for _, bc := range ctxs {
         switch bc.td.( type ) {
-        case *tree.AliasDecl: break // built in c.buildAliasedTypes()
         case *tree.StructDecl: c.buildStructType( bc )
         case *tree.EnumDecl: c.buildEnumType( bc )
         case *tree.PrototypeDecl: c.buildPrototypeType( bc )
@@ -1505,11 +1695,13 @@ func ( c *Compilation ) buildResult() *CompilationResult {
 // - Build all aliased type defs. As of this writing, this step could actually
 // be combined with the one following, since all type aliases are (re-)resolved
 // dynamically. Later though there may be a pre-resolution phase, and in that
-// case this step will need to proceed other compilation steps. As for the
+// case this step will need to precede other compilation steps. As for the
 // moment, the reason to isolate this step is to ensure a specific processing
 // order, which is only important to aid in our assertion of compiler error
 // handling (for circular alias chains we'd like to use the order of error
 // emission as part of our assertions).
+//
+// - Define all schema types
 //
 // - Define all declared instantiable types using the types named in step 1, but
 // ignoring field defaults, since correct evaluation of default expressions may
@@ -1521,16 +1713,11 @@ func ( c *Compilation ) buildResult() *CompilationResult {
 // - Define services.
 //
 func ( c *Compilation ) Execute() ( cr *CompilationResult, err error ) {
-    defer func() {
-        if err2 := recover(); err2 != nil {
-            if _, ok := err2.( *implError ); ! ok { panic( err2 ) }
-            err = err2.( error )
-        }
-    }()
     if err = c.validate(); err != nil { return }
     ctxs := c.initBuildContexts()
     c.printBuildOrder( ctxs )
     c.buildAliasedTypes( ctxs )
+    c.buildSchemaTypes( ctxs )
     c.buildTypesInitial( ctxs )
     c.setDefFieldDefaults( ctxs )
     return c.buildResult(), nil
