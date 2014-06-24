@@ -188,6 +188,73 @@ func TestCompiler( t *testing.T ) {
             types.MakeEnumDef( "ns1@v1/Enum1", "red", "green", "lightGrey" ),
         ),
 
+        newCompilerTest( "schema-variations" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+
+            schema Schema1 { f1 Int32 }
+
+            schema Schema2 { f2 Int32 }
+
+            schema Schema3 { 
+                f1 Int32
+                f2 Int32 
+            }
+
+            schema Schema4 { 
+                f3 Int32
+                @schema Schema3 
+            }
+
+            schema Schema5 { 
+                @schema Schema1
+                @schema Schema2
+                @schema Schema3
+                @schema Schema4
+            }
+        ` ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema2",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f2", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema3",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                    types.MakeFieldDef( "f2", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema4",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                    types.MakeFieldDef( "f2", "Int32", nil ),
+                    types.MakeFieldDef( "f3", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema5",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                    types.MakeFieldDef( "f2", "Int32", nil ),
+                    types.MakeFieldDef( "f3", "Int32", nil ),
+                },
+            ),
+        ),
+
 //        newCompilerTest( "standard-error-schema" ).
 //        addSource( "f1", `
 //            @version v1
@@ -1228,6 +1295,39 @@ func TestCompiler( t *testing.T ) {
         expectError( 29, 28, "Got string as min value for range" ).
         expectError( 30, 30, "Got string as max value for range" ).
         expectError( 31, 28, "Unsatisfiable range" ),
+
+        newCompilerTest( "schema-cycle-errors" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+
+            schema Schema1 { 
+                f1 Int32 
+                @schema Schema2
+            }
+
+            schema Schema2 { 
+                f2 Int32
+                @schema Schema1 
+            }
+
+            schema Schema3 {
+                f3 Int32
+                @schema Schema5
+            }
+
+            schema Schema4 {
+                f4 Int32
+                @schema Schema3
+            }
+
+            schema Schema5 {
+                f5 Int32
+                @schema Schema4
+            }
+        ` ).
+        expectError( 1, 1, "cycle: Schema1/Schema2" ).
+        expectError( 1, 1, "cycle: Schema3/Schema4/Schema5" ),
 
         newCompilerTest( "dup-decls-in-same-source" ).
         setSource( `
