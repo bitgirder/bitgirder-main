@@ -8,7 +8,11 @@ import (
     mg "mingle"
     "mingle/parser/tree"
     "mingle/types"
+    "mingle/parser"
 )
+
+var mkQn = parser.MustQualifiedTypeName
+var mkTyp = parser.MustTypeReference
 
 func fldDef( nm, typ string, defl interface{} ) *types.FieldDefinition {
     return types.MakeFieldDef( nm, typ, defl )
@@ -184,7 +188,6 @@ func ( et *compilerTest ) checkError(
 func ( et *compilerTest ) call() {
     et.Log( "calling" )
     cr := et.compileResult()
-    et.assertDefs( cr )
     errMap := et.makeErrorMap()
     errCount := 0
     for _, err := range cr.Errors { errCount += et.checkError( err, errMap ) }
@@ -193,4 +196,5 @@ func ( et *compilerTest ) call() {
     }
     errCount += len( errMap )
     if errCount > 0 { et.t.FailNow() }
+    et.assertDefs( cr )
 }

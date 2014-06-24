@@ -4,10 +4,943 @@ import (
     "testing"
     "bitgirder/assert"
     "mingle/types"
+    "mingle/parser"
 )
 
 func TestCompiler( t *testing.T ) {
     tests := []*compilerTest{
+
+        newCompilerTest( "base-field-types" ).
+        addSource( "f1", `
+            @version v1
+            
+            namespace ns1
+            
+            struct Struct1 {
+                string1 String # required field with no default
+                string2 String? # nullable String
+                string3 String default "hello there"
+                string4 String~"a*" default "aaaaa"
+                string5 String~"^.*(a|b)$"?
+                string6 String~[ "aaa", "aab" ]
+                bool1 &Boolean?
+                bool2 Boolean default true
+                buf1 Buffer?
+                timestamp1 &Timestamp?
+                timestamp2 Timestamp default "2007-08-24T14:15:43.123450000-07:00"
+                timestamp3 Timestamp~[
+                    "2007-08-24T14:15:43.123450000-07:00",
+                    "2008-08-24T14:15:43.123450000-07:00" ]
+                int1 Int64
+                int2 Int64 default 1234
+                int3 &Int64?
+                int4 Int32 default 12
+                int5 Int32~[0,) default 1111
+                int6 Int64~(,)
+                int7 Uint32
+                int8 Uint64~[0,100)
+                ints1 Int64*
+                ints2 Int32+ default [ 1, -2, 3, -4 ]
+                float1 Float64 default 3.1
+                float2 &Float64~(-1e-10,3]?
+                float3 Float32 default 3.2
+                floats1 Float32*
+                val1 Value
+                val2 Value default 12
+                list1 String* 
+                list2 String**
+                list3 String~"abc$"*
+            }
+            
+            struct Struct2 {
+                inst1 ns1/Struct1 # Unnecessary but legal fqname reference
+                inst2 Struct1*
+            }
+        ` ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v1/Struct1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( 
+                        "string1", "mingle:core@v1/String", nil ),
+                    types.MakeFieldDef( 
+                        "string2", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( 
+                        "string3", "mingle:core@v1/String", "hello there" ),
+                    types.MakeFieldDef(
+                        "string4", `mingle:core@v1/String~"a*"`, "aaaaa" ),
+                    types.MakeFieldDef(
+                        "string5", `mingle:core@v1/String~"^.*(a|b)$"?`, nil ),
+                    types.MakeFieldDef(
+                        "string6", `mingle:core@v1/String~["aaa","aab"]`, nil ),
+                    types.MakeFieldDef( 
+                        "bool1", "&mingle:core@v1/Boolean?", nil ),
+                    types.MakeFieldDef( 
+                        "bool2", "mingle:core@v1/Boolean", true ),
+                    types.MakeFieldDef( "buf1", "mingle:core@v1/Buffer?", nil ),
+                    types.MakeFieldDef( 
+                        "timestamp1", "&mingle:core@v1/Timestamp?", nil ),
+                    types.MakeFieldDef(
+                        "timestamp2", 
+                        "mingle:core@v1/Timestamp",
+                        parser.MustTimestamp( 
+                            "2007-08-24T14:15:43.123450000-07:00" ),
+                    ),
+                    types.MakeFieldDef(
+                        "timestamp3",
+                        `mingle:core@v1/Timestamp~["2007-08-24T14:15:43.123450000-07:00","2008-08-24T14:15:43.123450000-07:00"]`, nil ),
+                    types.MakeFieldDef( "int1", "mingle:core@v1/Int64", nil ),
+                    types.MakeFieldDef( 
+                        "int2", "mingle:core@v1/Int64", int64( 1234 ) ),
+                    types.MakeFieldDef( "int3", "&mingle:core@v1/Int64?", nil ),
+                    types.MakeFieldDef( 
+                        "int4", "mingle:core@v1/Int32", int32( 12 ) ),
+                    types.MakeFieldDef( 
+                        "int5", "mingle:core@v1/Int32~[0,)", int32( 1111 ) ),
+                    types.MakeFieldDef( 
+                        "int6", "mingle:core@v1/Int64~(,)", nil ),
+                    types.MakeFieldDef( "int7", "mingle:core@v1/Uint32", nil ),
+                    types.MakeFieldDef( 
+                        "int8", "mingle:core@v1/Uint64~[0,100)", nil ),
+                    types.MakeFieldDef( "ints1", "mingle:core@v1/Int64*", nil ),
+                    types.MakeFieldDef(
+                        "ints2",
+                        "mingle:core@v1/Int32+",
+                        []interface{}{ 
+                            int32( 1 ), int32( -2 ), int32( 3 ), int32( -4 ) },
+                    ),
+                    types.MakeFieldDef(
+                        "float1", "mingle:core@v1/Float64", float64( 3.1 ) ),
+                    types.MakeFieldDef(
+                        "float2", "&mingle:core@v1/Float64~(-1e-10,3]?", nil ),
+                    types.MakeFieldDef(
+                        "float3", "mingle:core@v1/Float32", float32( 3.2 ) ),
+                    types.MakeFieldDef( 
+                        "floats1", "mingle:core@v1/Float32*", nil ),
+                    types.MakeFieldDef( "val1", "mingle:core@v1/Value", nil ),
+                    types.MakeFieldDef( 
+                        "val2", "mingle:core@v1/Value", int64( 12 ) ),
+                    types.MakeFieldDef( 
+                        "list1", "mingle:core@v1/String*", nil ),
+                    types.MakeFieldDef( 
+                        "list2", "mingle:core@v1/String**", nil ),
+                    types.MakeFieldDef( 
+                        "list3", `mingle:core@v1/String~"abc$"*`, nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v1/Struct2",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct1*", nil ),
+                },
+            ),
+        ),
+
+        newCompilerTest( "enum-as-field-type" ).
+        addSource( "f1", `
+            
+            @version v1
+
+            namespace ns1
+
+            enum Enum1 { red, green, lightGrey }
+            
+            struct Struct1 {}
+            
+            struct Struct2 {}
+
+            struct Struct3 {
+                string1 String?
+                inst1 Struct2
+                enum1 &Enum1?
+                enum2 Enum1 default Enum1.green
+            
+                @constructor( Int64 )
+                @constructor( ns1/Struct1 )
+                @constructor( String~"^a+$" )
+            }
+        ` ).
+        expectDef(
+            makeStructDefWithConstructors(
+                "ns1@v1/Struct3",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( 
+                        "string1", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
+                    types.MakeFieldDef( "enum1", "&ns1@v1/Enum1?", nil ),
+                    types.MakeFieldDef( 
+                        "enum2",
+                        "ns1@v1/Enum1",
+                        parser.MustEnum( "ns1@v1/Enum1", "green" ),
+                    ),
+                },
+                []*types.ConstructorDefinition{
+                    { mkTyp( "mingle:core@v1/Int64" ) },
+                    { mkTyp( "ns1@v1/Struct1" ) },
+                    { mkTyp( `mingle:core@v1/String~"^a+$"` ) },
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeEnumDef( "ns1@v1/Enum1", "red", "green", "lightGrey" ),
+        ),
+
+//        newCompilerTest( "standard-error-schema" ).
+//        addSource( "f1", `
+//            @version v1
+//            namespace ns1
+//            struct Error1 { @schema StandardError }
+//        ` ),
+    
+        newCompilerTest( "alias-tests" ).
+        addSource( "f1", `
+
+            @version v1
+            namespace ns1
+
+            struct Struct1 {}
+            
+            alias Alias1 String?
+            alias Alias2 Struct1
+            alias Alias3 Alias1*
+            alias Alias4 String~"^a+$"
+            alias Alias5 Int64~[0,)
+            
+            struct Struct5 {
+                f1 Alias1
+                f2 Alias1 default "hello"
+                f3 Alias1*
+                f4 Alias1+ default [ "a", "b" ]
+                f5 Alias1*+
+                f6 Alias2
+                f7 Alias2*
+                f8 Alias3 default [ "hello" ]
+                f9 Alias3+
+                f10 Alias4 default "aaa"
+                f11 Alias5 default 12
+            }
+        ` ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias1" ),
+                AliasedType: mkTyp( "mingle:core@v1/String?" ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias2" ),
+                AliasedType: mkTyp( "ns1@v1/Struct1" ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias3" ),
+                AliasedType: mkTyp( "mingle:core@v1/String?*" ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias4" ),
+                AliasedType: mkTyp( `mingle:core@v1/String~"^a+$"` ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias5" ),
+                AliasedType: mkTyp( `mingle:core@v1/Int64~[0,)` ),
+            },
+        ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct1", nil ) ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v1/Struct5",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef(
+                        "f1", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef(
+                        "f2", "mingle:core@v1/String?", "hello" ),
+                    types.MakeFieldDef(
+                        "f3", "mingle:core@v1/String?*", nil ),
+                    types.MakeFieldDef(
+                        "f4", 
+                        "mingle:core@v1/String?+", 
+                        []interface{}{ "a", "b" },
+                    ),
+                    types.MakeFieldDef(
+                        "f5", "mingle:core@v1/String?*+", nil ),
+                    types.MakeFieldDef(
+                        "f6", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef(
+                        "f7", "ns1@v1/Struct1*", nil ),
+                    types.MakeFieldDef(
+                        "f8", 
+                        "mingle:core@v1/String?*", 
+                        []interface{}{ "hello" },
+                    ),
+                    types.MakeFieldDef(
+                        "f9", "mingle:core@v1/String?*+", nil ),
+                    types.MakeFieldDef(
+                        "f10", `mingle:core@v1/String~"^a+$"`, "aaa" ),
+                    types.MakeFieldDef(
+                        "f11", "mingle:core@v1/Int64~[0,)", int64( 12 ) ),
+                },
+            ),
+        ),
+
+        newCompilerTest( "service-tests" ).
+        addSource( "f1", `
+
+            @version v1
+            namespace ns1
+
+            struct Struct1 {}
+
+            struct Struct2 {}
+
+            alias Alias1 String?
+
+            alias Alias2 Struct1
+
+            struct Exception1 {}
+
+            struct Exception2 {}
+
+            struct Exception3 {}
+            
+            service Service1 {
+            
+                op op1(): String*
+            
+                op op2( param1 String,
+                     param2 &Struct1?,
+                     param3 Int64 default 12,
+                     param4 Alias1*,
+                     param5 Alias2 ): ns1/Struct2,
+                        throws Exception1, Exception3
+                
+                op op3(): &Int64? throws Exception2
+            
+                op op4(): Null
+            }
+            
+            prototype Proto1(): String
+            prototype Proto2(): String throws Exception1
+            prototype Proto3( f1 Struct1, f2 String default "hi" ): &Struct1?
+            
+            prototype Sec1( authentication Struct1 ): Null
+            
+            service Service2 {
+            
+                op op1(): Int64
+            
+                # Auth that throws no exceptions
+                @security Sec1
+            
+                op op2(): Boolean
+            }
+            
+            prototype Sec2( authentication Struct1 ): Int64~[9,10],
+                throws Exception1, 
+                       Exception2
+            
+            # Test of @security with throws attr
+            service Service3 { @security Sec2 }
+        ` ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias1" ),
+                AliasedType: mkTyp( `mingle:core@v1/String?` ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias2" ),
+                AliasedType: mkTyp( `ns1@v1/Struct1` ),
+            },
+        ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct1", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct2", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception1", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception2", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception3", nil ) ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/Proto1" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{},
+                    "mingle:core@v1/String",
+                    []string{},
+                ),
+            },
+        ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/Proto2" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{},
+                    "mingle:core@v1/String",
+                    []string{ "ns1@v1/Exception1" },
+                ),
+            },
+        ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/Proto3" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{
+                        types.MakeFieldDef( "f1", "ns1@v1/Struct1", nil ),
+                        types.MakeFieldDef( 
+                            "f2", "mingle:core@v1/String", "hi" ),
+                    },
+                    "&ns1@v1/Struct1?",
+                    []string{},
+                ),
+            },
+        ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/Sec1" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{
+                        types.MakeFieldDef( 
+                            "authentication", "ns1@v1/Struct1", nil ),
+                    },
+                    "mingle:core@v1/Null",
+                    []string{},
+                ),
+            },
+        ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/Sec2" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{
+                        types.MakeFieldDef( 
+                            "authentication", "ns1@v1/Struct1", nil ),
+                    },
+                    "mingle:core@v1/Int64~[9,10]",
+                    []string{ "ns1@v1/Exception1", "ns1@v1/Exception2" },
+                ),
+            },
+        ).
+        expectDef(
+            types.MakeServiceDef(
+                "ns1@v1/Service1",
+                "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/String*",
+                        []string{},
+                    ),
+                ),
+                types.MakeOpDef( "op2",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( 
+                                "param1", "mingle:core@v1/String", nil ),
+                            types.MakeFieldDef(
+                                "param2", "&ns1@v1/Struct1?", nil ),
+                            types.MakeFieldDef(
+                                "param3", "mingle:core@v1/Int64", int64( 12 ) ),
+                            types.MakeFieldDef(
+                                "param4", "mingle:core@v1/String?*", nil ),
+                            types.MakeFieldDef( 
+                                "param5", "ns1@v1/Struct1", nil ),
+                        },
+                        "ns1@v1/Struct2",
+                        []string{ "ns1@v1/Exception1", "ns1@v1/Exception3" },
+                    ),
+                ),
+                types.MakeOpDef( "op3",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "&mingle:core@v1/Int64?",
+                        []string{ "ns1@v1/Exception2" },
+                    ),
+                ),
+                types.MakeOpDef( "op4",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Null",
+                        []string{},
+                    ),
+                ),
+            ),
+        ).
+        expectDef(
+            types.MakeServiceDef(
+                "ns1@v1/Service2",
+                "ns1@v1/Sec1",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Int64",
+                        []string{},
+                    ),
+                ),
+                types.MakeOpDef( "op2",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "mingle:core@v1/Boolean",
+                        []string{},
+                    ),
+                ),
+            ),
+        ).
+        expectDef( types.MakeServiceDef( "ns1@v1/Service3", "ns1@v1/Sec2" ) ),
+
+        newCompilerTest( "field-constant-tests" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+
+            enum Enum1 { red, green }
+            
+            struct FieldConstantTester {
+                f1 Boolean default true
+                f2 Boolean default false
+                f3 Int32 default 1
+                f4 Int32 default -1
+                f5 Int64 default 1
+                f6 Int64 default -1
+                f7 Float32 default 1.0
+                f8 Float32 default -1.0
+                f9 Float64 default 1
+                f10 Float64 default -1
+                f11 Int32~[0,10) default 8
+                f12 String default "a"
+                f13 String~"a" default "a"
+                f14 Enum1 default Enum1.green
+                f15 Timestamp default "2007-08-24T14:15:43.123450000-07:00"
+                f16 String+ default [ "a", "b", "c" ]
+                f17 Int32* default [ 1, 2, 3 ]
+                f18 Float64* default []
+                f19 String*+ default [ [], [ "a", "b" ], [ "c", "d", "e" ] ]
+                f20 Uint32 default 1
+                f21 Uint32 default 4294967295
+                f22 Uint64 default 0
+                f23 Uint64 default 18446744073709551615
+            }
+        ` ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v1/FieldConstantTester",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "mingle:core@v1/Boolean", true ),
+                    types.MakeFieldDef( "f2", "mingle:core@v1/Boolean", false ),
+                    types.MakeFieldDef( 
+                        "f3", "mingle:core@v1/Int32", int32( 1 ) ),
+                    types.MakeFieldDef( 
+                        "f4", "mingle:core@v1/Int32", int32( -1 ) ),
+                    types.MakeFieldDef( 
+                        "f5", "mingle:core@v1/Int64", int64( 1 ) ),
+                    types.MakeFieldDef( 
+                        "f6", "mingle:core@v1/Int64", int64( -1 ) ),
+                    types.MakeFieldDef( 
+                        "f7", "mingle:core@v1/Float32", float32( 1.0 ) ),
+                    types.MakeFieldDef(
+                        "f8", "mingle:core@v1/Float32", float32( -1.0 ) ),
+                    types.MakeFieldDef(
+                        "f9", "mingle:core@v1/Float64", float64( 1.0 ) ),
+                    types.MakeFieldDef(
+                        "f10", "mingle:core@v1/Float64", float64( -1.0 ) ),
+                    types.MakeFieldDef(
+                        "f11", "mingle:core@v1/Int32~[0,10)", int32( 8 ) ),
+                    types.MakeFieldDef( "f12", "mingle:core@v1/String", "a" ),
+                    types.MakeFieldDef( 
+                        "f13", `mingle:core@v1/String~"a"`, "a" ),
+                    types.MakeFieldDef( "f14", "ns1@v1/Enum1",
+                        parser.MustEnum( "ns1@v1/Enum1", "green" ),
+                    ),
+                    types.MakeFieldDef( "f15", "mingle:core@v1/Timestamp",
+                        parser.MustTimestamp( 
+                            "2007-08-24T14:15:43.123450000-07:00" ) ),
+                    types.MakeFieldDef( 
+                        "f16", "mingle:core@v1/String+",
+                        []interface{}{ "a", "b", "c" } ),
+                    types.MakeFieldDef(
+                        "f17", "mingle:core@v1/Int32*",
+                        []interface{}{ int32( 1 ), int32( 2 ), int32( 3 ) } ),
+                    types.MakeFieldDef(
+                        "f18", "mingle:core@v1/Float64*", []interface{}{} ),
+                    types.MakeFieldDef(
+                        "f19", "mingle:core@v1/String*+",
+                        []interface{}{
+                            []interface{}{},
+                            []interface{}{ "a", "b" },
+                            []interface{}{ "c", "d", "e" },
+                        },
+                    ),
+                    types.MakeFieldDef( 
+                        "f20", "mingle:core@v1/Uint32", uint32( 1 ) ),
+                    types.MakeFieldDef( 
+                        "f21", "mingle:core@v1/Uint32", uint32( 4294967295 ) ),
+                    types.MakeFieldDef( 
+                        "f22", "mingle:core@v1/Uint64", uint64( 0 ) ),
+                    types.MakeFieldDef(
+                        "f23", 
+                        "mingle:core@v1/Uint64", 
+                        uint64( 18446744073709551615 ),
+                    ),
+                },
+            ),
+        ).
+        expectDef( types.MakeEnumDef( "ns1@v1/Enum1", "red", "green" ) ),
+
+        newCompilerTest( "import-tests" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+
+#            schema Schema1 { schemaField Int32 }
+
+            struct Struct1 {}
+            struct Struct2 {}
+            struct Struct3 {}
+
+            struct Exception1 {}
+            struct Exception2 {}
+            struct Exception3 {}
+
+            alias Alias1 String?
+            alias Alias2 Struct1
+            alias Alias3 String?*
+
+            service Service1 {}
+        ` ).
+        addSource( "f2", `
+            @version v1
+            namespace ns1
+            
+            struct Struct4 {
+#                @schema Schema1
+                inst1 Struct1
+                inst2 Struct2
+                str1 Alias1 # Implicitly brought in from compiler-src1.mg
+                str2 Alias3
+            }
+
+            struct Exception4 {}
+
+        ` ).
+        addSource( "f3", `
+            @version v1
+            
+            import ns1@v1/Struct4 # redundant but legal explicit version
+            import ns1/Exception3
+            
+            namespace ns2@v1 # version is redundant but legal
+            
+            # alias in this namespace that points to type in another namespace
+            alias Alias1 ns1/Struct3
+            
+            # alias in this namespace that points to alias in another namespace
+            alias Alias2 ns1/Alias3
+            
+            struct Struct1 {
+                inst1 &ns1@v1/Struct1?
+                inst2 Struct2
+                inst3 Struct4
+                inst4 Alias1
+                inst5 ns1/Alias2
+                inst6 Alias2
+            }
+            
+            struct Struct2 {
+                inst1 Struct1
+                inst2 ns1/Struct1
+            }
+            
+            struct Exception1 {}
+
+            struct Exception2 {}
+#            struct Exception2 { @schema ns1@v1/Schema1 }
+            
+            service Service1 {
+            
+                op op1(): Struct2 throws Exception1, ns1/Exception4
+            
+                op op2( param1 String*+,
+                        param2 Struct4*,
+                        param3 ns1/Struct1,
+                        param4 Struct2 ): String
+            }
+        ` ).
+        addSource( "f4", `
+            @version v1
+            
+            import ns1/* - [ 
+#                Schema1, Exception1, Exception2, Struct1, Service1,
+                Exception1, Exception2, Struct1, Service1,
+            ]
+
+            import ns2/Exception1 
+            
+            namespace ns1:globTestNs
+            
+            struct Struct1 {
+#                @schema ns1/Schema1
+                inst1 Struct2
+                inst2 Struct4
+                inst3 Struct1 
+            }
+            
+            struct Exception2 {}
+            
+            service Service1 {
+            
+                op op1( param1 Struct1*,
+                        param2 ns1/Struct1,
+                        param3 Struct3 ): String,
+                            throws Exception1, Exception2, Exception3
+            }
+        ` ).
+        addSource( "f5", `
+            @version v2
+            
+            namespace ns1
+
+#            schema Schema1 { v2F1 String }
+            
+            struct Struct1 { f1 String default "hello" }
+            
+            struct Struct2 { f1 &Struct1? }
+
+#            struct Struct2 {
+#                @schema ns1@v1/Struct1
+#                f1 &Struct1? 
+#            }
+            
+            alias Struct1V1 ns1@v1/Struct1
+            
+            struct Struct3 { 
+#                @schema Schema1
+                f2 Struct2 
+                f3 ns1@v1/Alias1
+                f4 Struct1V1*
+            }
+ 
+            service Service1 {
+                op op1( f1 Struct1, f2 Int64~[0,12), f3 ns1@v1/Struct1*+ ): Null
+            }
+        ` ).
+//        expectDef(
+//            types.MakeSchemaDef( 
+//                "ns1@v1/Schema1",
+//                []*types.FieldDefinition{
+//                    types.MakeFieldDef( "schemaField", "Int32", nil ),
+//                },
+//            ),
+//        ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct1", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct2", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Struct3", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception1", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception2", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception3", nil ) ).
+        expectDef( types.MakeStructDef( "ns1@v1/Exception4", nil ) ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias1" ),
+                AliasedType: mkTyp( "mingle:core@v1/String?" ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias2" ),
+                AliasedType: mkTyp( "ns1@v1/Struct1" ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Alias3" ),
+                AliasedType: mkTyp( "mingle:core@v1/String?*" ),
+            },
+        ).
+        expectDef( types.MakeServiceDef( "ns1@v1/Service1", "" ) ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v1/Struct4",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct2", nil ),
+                    types.MakeFieldDef( "str1", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( 
+                        "str2", "mingle:core@v1/String?*", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns2@v1/Alias1" ),
+                AliasedType: mkTyp( "ns1@v1/Struct3" ),
+            },
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns2@v1/Alias2" ),
+                AliasedType: mkTyp( "mingle:core@v1/String?*" ),
+            },
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns2@v1/Struct1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "inst1", "&ns1@v1/Struct1?", nil ),
+                    types.MakeFieldDef( "inst2", "ns2@v1/Struct2", nil ),
+                    types.MakeFieldDef( "inst3", "ns1@v1/Struct4", nil ),
+                    types.MakeFieldDef( "inst4", "ns1@v1/Struct3", nil ),
+                    types.MakeFieldDef( "inst5", "ns1@v1/Struct1", nil ),
+                    types.MakeFieldDef( 
+                        "inst6", "mingle:core@v1/String?*", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns2@v1/Struct2",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "inst1", "ns2@v1/Struct1", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct1", nil ),
+                },
+            ),
+        ).
+        expectDef( types.MakeStructDef( "ns2@v1/Exception1", nil ) ).
+        expectDef(
+            types.MakeStructDef(
+                "ns2@v1/Exception2",
+                []*types.FieldDefinition{
+//                    types.MakeFieldDef( "str1", "mingle:core@v1/String*", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeServiceDef(
+                "ns2@v1/Service1",
+                "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{},
+                        "ns2@v1/Struct2",
+                        []string{ "ns2@v1/Exception1", "ns1@v1/Exception4" },
+                    ),
+                ),
+                types.MakeOpDef( "op2",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( 
+                                "param1", "mingle:core@v1/String*+", nil ),
+                            types.MakeFieldDef(
+                                "param2", "ns1@v1/Struct4*", nil ),
+                            types.MakeFieldDef( 
+                                "param3", "ns1@v1/Struct1", nil ),
+                            types.MakeFieldDef( 
+                                "param4", "ns2@v1/Struct2", nil ),
+                        },
+                        "mingle:core@v1/String",
+                        []string{},
+                    ),
+                ),
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1:globTestNs@v1/Struct1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "inst1", "ns1@v1/Struct2", nil ),
+                    types.MakeFieldDef( "inst2", "ns1@v1/Struct4", nil ),
+                    types.MakeFieldDef( 
+                        "inst3", "ns1:globTestNs@v1/Struct1", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1:globTestNs@v1/Exception2",
+                []*types.FieldDefinition{},
+            ),
+        ).
+        expectDef(
+            types.MakeServiceDef(
+                "ns1:globTestNs@v1/Service1",
+                "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( 
+                                "param1", "ns1:globTestNs@v1/Struct1*", nil ),
+                            types.MakeFieldDef( 
+                                "param2", "ns1@v1/Struct1", nil ),
+                            types.MakeFieldDef( 
+                                "param3", "ns1@v1/Struct3", nil ),
+                        },
+                        "mingle:core@v1/String",
+                        []string{
+                            "ns2@v1/Exception1",
+                            "ns1:globTestNs@v1/Exception2",
+                            "ns1@v1/Exception3",
+                        },
+                    ),
+                ),
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v2/Struct1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( 
+                        "f1", "mingle:core@v1/String", "hello" ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v2/Struct2",
+//                "ns1@v1/Struct1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "&ns1@v2/Struct1?", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v2/Struct1V1" ),
+                AliasedType: mkTyp( "ns1@v1/Struct1" ),
+            },
+        ).
+        expectDef(
+            types.MakeStructDef(
+                "ns1@v2/Struct3",
+//                "ns1@v2/Struct1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f2", "ns1@v2/Struct2", nil ),
+                    types.MakeFieldDef( "f3", "mingle:core@v1/String?", nil ),
+                    types.MakeFieldDef( "f4", "ns1@v1/Struct1*", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeServiceDef(
+                "ns1@v2/Service1",
+                "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( "f1", "ns1@v2/Struct1", nil ),
+                            types.MakeFieldDef(
+                                "f2", "mingle:core@v1/Int64~[0,12)", nil ),
+                            types.MakeFieldDef( "f3", "ns1@v1/Struct1*+", nil ),
+                        },
+                        "mingle:core@v1/Null",
+                        []string{},
+                    ),
+                ),
+            ),
+        ),
 
         newCompilerTest( "import-include-exclude-success" ).
         addLib( "lib1", "@version v1; namespace lib1; struct S4 {}" ).
@@ -319,27 +1252,27 @@ func TestCompiler( t *testing.T ) {
         expectSrcError( 
             "f1", 1, 29, "Type S1 conflicts with an externally loaded type" ),
             
-        newCompilerTest( "field-redefinition" ).
-        addLib( "p1Src1", p1Sources[ 0 ] ).
-        addSource( "f1", `
-            @version v1
-            namespace ns2
-            struct S1 { f1 String }
-            struct S2 < S1 { f1 Int64 }
-            struct S3 < S1 { f2 Int64 } # This is okay
-            struct S4 < S3 { f1 Int64 } # But this is not
-            struct S5 < ns1/Struct1 { string1 String }
-            struct S6 { f1 Int64; f1 String }
-        ` ).
-        addSource( "f2",
-            "@version v1; namespace ns3; struct S1 < ns2/S1 { f1 String }" ).
-        expectSrcError(
-            "f1", 9, 35, "Field f1 already defined at [f1, line 9, col 25]" ).
-        expectSrcError( "f1", 5, 30, "Field f1 already defined in ns2@v1/S1" ).
-        expectSrcError( "f1", 7, 30, "Field f1 already defined in ns2@v1/S1" ).
-        expectSrcError( 
-            "f1", 8, 39, "Field string1 already defined in ns1@v1/Struct1" ).
-        expectSrcError( "f2", 1, 50, "Field f1 already defined in ns2@v1/S1" ),
+//        newCompilerTest( "field-redefinition" ).
+//        addLib( "p1Src1", p1Sources[ 0 ] ).
+//        addSource( "f1", `
+//            @version v1
+//            namespace ns2
+//            struct S1 { f1 String }
+//            struct S2 < S1 { f1 Int64 }
+//            struct S3 < S1 { f2 Int64 } # This is okay
+//            struct S4 < S3 { f1 Int64 } # But this is not
+//            struct S5 < ns1/Struct1 { string1 String }
+//            struct S6 { f1 Int64; f1 String }
+//        ` ).
+//        addSource( "f2",
+//            "@version v1; namespace ns3; struct S1 < ns2/S1 { f1 String }" ).
+//        expectSrcError(
+//            "f1", 9, 35, "Field f1 already defined at [f1, line 9, col 25]" ).
+//        expectSrcError( "f1", 5, 30, "Field f1 already defined in ns2@v1/S1" ).
+//        expectSrcError( "f1", 7, 30, "Field f1 already defined in ns2@v1/S1" ).
+//        expectSrcError( 
+//            "f1", 8, 39, "Field string1 already defined in ns1@v1/Struct1" ).
+//        expectSrcError( "f2", 1, 50, "Field f1 already defined in ns2@v1/S1" ),
             
         newCompilerTest( "op-field-redefinition" ).
         setSource( `
