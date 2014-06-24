@@ -370,7 +370,7 @@ func TestTypedTokenReaders( t *testing.T ) {
         var tok Token
         var err error
         switch mode {
-        case "id": tok, _, err = a.ReadIdentifier()
+        case "id": tok, _, err = a.ReadIdentifier( false )
         case "type": tok, _, err = a.ReadDeclaredTypeName()
         case "num": tok, _, err = a.ReadNumber()
         default: t.Fatalf( "Bad mode: %s", mode )

@@ -2,6 +2,7 @@ package tree
 
 import (
 //    "log"
+    "fmt"
     "testing"
     "bytes"
     "sort"
@@ -15,16 +16,6 @@ var mgDn = parser.MustDeclaredTypeName
 var mgQn = parser.MustQualifiedTypeName
 var mgNs = parser.MustNamespace
 var mgId = parser.MustIdentifier
-
-func keyedElts( args ...interface{} ) *KeyedElements {
-    ke := newKeyedElements()
-    for i, e := 0, len( args ); i < e; i += 2 {
-        id := mgId( args[ i ].( string ) )
-        elt := args[ i + 1 ].( SyntaxElement )
-        ke.Add( id, elt )
-    }
-    return ke
-}
 
 type treeCheck struct {
     *assert.PathAsserter
@@ -57,9 +48,14 @@ func ( t *treeCheck ) next() *treeCheck {
     return newTreeCheck( t.path.( *objpath.ListNode ).Next(), t.t )
 }
 
-func ( t *treeCheck ) equalLen( l1, l2 int ) int {
+func ( t *treeCheck ) equalLen0( l1, l2 int ) int {
     t.Equalf( l1, l2, "Slice lengths differ: %d != %d", l1, l2 ) 
     return l1
+}
+
+func ( t *treeCheck ) equalLen( l1, l2 int ) *treeCheck {
+    t.Descend( "(Length)" ).Equal( l1, l2 )
+    return t.startList()
 }
 
 func ( t *treeCheck ) equalTypeListEntry( e1, e2 *TypeListEntry ) {
@@ -69,7 +65,7 @@ func ( t *treeCheck ) equalTypeListEntry( e1, e2 *TypeListEntry ) {
 
 func ( t *treeCheck ) equalTypeListEntries( l1, l2 []*TypeListEntry ) {
     lt := t.startList()
-    for i, e := 0, t.equalLen( len( l1 ), len( l2 ) ); i < e; i++ {
+    for i, e := 0, t.equalLen0( len( l1 ), len( l2 ) ); i < e; i++ {
         lt.equalTypeListEntry( l1[ i ], l2[ i ] )
         lt = lt.next()
     }
@@ -85,7 +81,7 @@ func ( t *treeCheck ) equalImport( i1, i2 *Import ) {
 }
 
 func ( t *treeCheck ) equalImports( arr1, arr2 []*Import ) {
-    l := t.equalLen( len( arr1 ), len( arr2 ) )
+    l := t.equalLen0( len( arr1 ), len( arr2 ) )
     t = t.startList()
     for idx := 0; idx < l; idx++ {
         i1, i2 := arr1[ idx ], arr2[ idx ] 
@@ -146,7 +142,7 @@ func ( t *treeCheck ) equalField( f1, f2 *FieldDecl ) {
 }
 
 func ( t *treeCheck ) equalFields( arr1, arr2 []*FieldDecl ) {
-    l := t.equalLen( len( arr1 ), len( arr2 ) )
+    l := t.equalLen0( len( arr1 ), len( arr2 ) )
     for t, i := t.startList(), 0; i < l; i++ {
         t.equalField( arr1[ i ], arr2[ i ] )
         t = t.next()
@@ -158,10 +154,26 @@ func ( t *treeCheck ) equalConstructorDecl( cd1, cd2 *ConstructorDecl ) {
     t.descend( "ArgType" ).equalType( cd1.ArgType, cd2.ArgType )
 }
 
+func ( t *treeCheck ) equalConstructors( c1, c2 []*ConstructorDecl ) {
+    lt := t.equalLen( len( c1 ), len( c2 ) )
+    for i, cd1 := range c1 { 
+        lt.equalConstructorDecl( cd1, c2[ i ] ) 
+        lt = lt.next()
+    }
+}
+
 func ( t *treeCheck ) equalSecurityDecl( sd1, sd2 *SecurityDecl ) {
     t.descend( "Start" ).Equal( sd1.Start, sd2.Start )
     t.descend( "Name" ).Equal( sd1.Name, sd2.Name )
     t.descend( "NameLoc" ).Equal( sd1.NameLoc, sd2.NameLoc )
+}
+
+func ( t *treeCheck ) equalSecurityDecls( s1, s2 []*SecurityDecl ) {
+    lt := t.equalLen( len( s1 ), len( s2 ) )
+    for i, sd1 := range s1 { 
+        lt.equalSecurityDecl( sd1, s2[ i ] ) 
+        lt = lt.next()
+    }
 }
 
 func ( t *treeCheck ) equalSchemaMixinDecl( sd1, sd2 *SchemaMixinDecl ) {
@@ -169,43 +181,42 @@ func ( t *treeCheck ) equalSchemaMixinDecl( sd1, sd2 *SchemaMixinDecl ) {
     t.descend( "NameLoc" ).Equal( sd1.NameLoc, sd2.NameLoc )
 }
 
-func ( t *treeCheck ) equalSyntaxElement( se1, se2 SyntaxElement ) {
-    switch v := se1.( type ) {
-    case *ConstructorDecl: t.equalConstructorDecl( v, se2.( *ConstructorDecl ) )
-    case *SecurityDecl: t.equalSecurityDecl( v, se2.( *SecurityDecl ) )
-    case *SchemaMixinDecl: t.equalSchemaMixinDecl( v, se2.( *SchemaMixinDecl ) )
-    default: t.Fatalf( "Unhandled elt: %T", v )
+func ( t *treeCheck ) equalSchemas( s1, s2 []*SchemaMixinDecl ) {
+    lt := t.equalLen( len( s1 ), len( s2 ) )
+    for i, sd1 := range s1 { 
+        lt.equalSchemaMixinDecl( sd1, s2[ i ] ) 
+        lt = lt.next()
     }
 }
 
-func ( t *treeCheck ) equalKeyedElements( ke1, ke2 *KeyedElements ) {
-    if ke1 == nil || ke2 == nil {
-        if ! ( ke1 == nil && ke2 == nil ) {
-            t.Fatalf( "ke1 != ke2: %v != %v", ke1, ke2 )
-        }
+func unpackStructureDecl( sd structureDecl ) ( *parser.Location,
+                                               *TypeDeclInfo,
+                                               []*FieldDecl,
+                                               []*SchemaMixinDecl ) {
+    switch v := sd.( type ) {
+    case *StructDecl: return v.Start, v.Info, v.Fields, v.Schemas
+    case *SchemaDecl: return v.Start, v.Info, v.Fields, v.Schemas
     }
-    if l1, l2 := ke1.Len(), ke2.Len(); l1 == l2 {
-        ke1.EachPair( func( key *mg.Identifier, elts1 []SyntaxElement ) {
-            kt := t.descend( key.ExternalForm() )
-            if elts2 := ke2.Get( key ); elts2 == nil {
-                kt.Fatal( "ke2 has no value" )
-            } else { 
-                l := kt.equalLen( len( elts1 ), len( elts2 ) )
-                for lt, idx := kt.startList(), 0; idx < l; idx++ {
-                    lt.equalSyntaxElement( elts1[ idx ], elts2[ idx ] )
-                    lt = lt.next()
-                }
-            }
-        })
-    } else { t.Fatalf( "Keyed elt sizes differ, ke1:%d, ke2:%d", l1, l2 ) }
+    panic( libErrorf( "unhandled structure: %T", sd ) )
+}
+
+func ( t *treeCheck ) equalStructureDecl( sd1, sd2 structureDecl ) {
+    start1, info1, flds1, schemas1 := unpackStructureDecl( sd1 )
+    start2, info2, flds2, schemas2 := unpackStructureDecl( sd2 )
+    t.descend( "Start" ).Equal( start1, start2 )
+    t.descend( "Info" ).equalTypeDeclInfo( info1, info2 )
+    t.descend( "Fields" ).equalFields( flds1, flds2 )
+    t.descend( "Schemas" ).equalSchemas( schemas1, schemas2 )
 }
 
 func ( t *treeCheck ) equalStructDecl( sd1, sd2 *StructDecl ) {
-    t.descend( "Start" ).Equal( sd1.Start, sd2.Start )
-    t.descend( "Info" ).equalTypeDeclInfo( sd1.Info, sd2.Info )
-    t.descend( "Fields" ).equalFields( sd1.Fields, sd2.Fields )
-    t.descend( "KeyedElements" ).
-        equalKeyedElements( sd1.KeyedElements, sd2.KeyedElements )
+    t.equalStructureDecl( sd1, sd2 )
+    t.descend( "Constructors" ).
+        equalConstructors( sd1.Constructors, sd2.Constructors )
+}
+
+func ( t *treeCheck ) equalSchemaDecl( sd1, sd2 *SchemaDecl ) {
+    t.equalStructureDecl( sd1, sd2 )
 }
 
 func ( t *treeCheck ) equalEnumDecl( ed1, ed2 *EnumDecl ) {
@@ -223,7 +234,7 @@ func ( t *treeCheck ) equalAliasDecl( ad1, ad2 *AliasDecl ) {
 }
 
 func ( t *treeCheck ) equalThrown( arr1, arr2 []*ThrownType ) {
-    l := t.equalLen( len( arr1 ), len( arr2 ) )
+    l := t.equalLen0( len( arr1 ), len( arr2 ) )
     for lt, idx := t.startList(), 0; idx < l; idx++ {
         tt1, tt2 := arr1[ idx ], arr2[ idx ]
         lt.descend( "Type" ).equalType( tt1.Type, tt2.Type )
@@ -246,7 +257,7 @@ func ( t *treeCheck ) equalPrototypeDecl( pd1, pd2 *PrototypeDecl ) {
 }
 
 func ( t *treeCheck ) equalOperations( arr1, arr2 []*OperationDecl ) {
-    l := t.equalLen( len( arr1 ), len( arr2 ) )
+    l := t.equalLen0( len( arr1 ), len( arr2 ) )
     for lt, idx := t.startList(), 0; idx < l; idx++ {
         od1, od2 := arr1[ idx ], arr2[ idx ]
         lt.descend( "Name" ).Equal( od1.Name, od2.Name )
@@ -260,8 +271,8 @@ func ( t *treeCheck ) equalServiceDecl( sd1, sd2 *ServiceDecl ) {
     t.descend( "Start" ).Equal( sd1.Start, sd2.Start )
     t.descend( "Info" ).equalTypeDeclInfo( sd1.Info, sd2.Info )
     t.descend( "Operations" ).equalOperations( sd1.Operations, sd2.Operations )
-    t.descend( "KeyedElements" ).
-        equalKeyedElements( sd1.KeyedElements, sd2.KeyedElements )
+    t.descend( "SecurityDecls" ).
+        equalSecurityDecls( sd1.SecurityDecls, sd2.SecurityDecls )
 }
 
 func ( t *treeCheck ) equalTypeDecl( td1, td2 TypeDecl ) {
@@ -271,15 +282,17 @@ func ( t *treeCheck ) equalTypeDecl( td1, td2 TypeDecl ) {
     case *AliasDecl: t.equalAliasDecl( v, td2.( *AliasDecl ) )
     case *PrototypeDecl: t.equalPrototypeDecl( v, td2.( *PrototypeDecl ) )
     case *ServiceDecl: t.equalServiceDecl( v, td2.( *ServiceDecl ) )
+    case *SchemaDecl: t.equalSchemaDecl( v, td2.( *SchemaDecl ) )
     default: t.Fatalf( "Unhandled type decl type: %T", td1 )
     }
 }    
 
 func ( t *treeCheck ) equalTypeDecls( arr1, arr2 []TypeDecl ) {
-    l := t.equalLen( len( arr1 ), len( arr2 ) )
+    l := t.equalLen0( len( arr1 ), len( arr2 ) )
     for t, idx := t.startList(), 0; idx < l; idx++ {
         td1, td2 := arr1[ idx ], arr2[ idx ]
-        t.equalTypeDecl( td1, td2 )
+        dt := t.descend( fmt.Sprintf( "(%s)", td1.GetName() ) )
+        dt.equalTypeDecl( td1, td2 )
         t = t.next()
     }
 }
@@ -314,6 +327,7 @@ func TestParseSource( t *testing.T ) {
 }
 
 func TestParseErrors( t *testing.T ) {
+    a := assert.NewListPathAsserter( t )
     for _, tt := range []struct { errMsg string; line, col int; src string } {
         { `Expected @ but found: namespace`, 1, 1, `namespace ns1` },
         { `Expected operation or keyed def but found: throws`, 5, 9,
@@ -330,14 +344,18 @@ import ns1@v1/[ S1 ] - [ S2 ]`,
         },
         { "Source version is 'v2' but namespace declared 'v1'", 1, 30, 
             "@version v1; namespace ns1@v2;" },
+        { "Unexpected keyed definition @security", 1, 41,
+            "@version v1; namespace ns1; struct S1 { @security Bad }",
+        },
     } {
         if i, err := parseSource( "test-source", tt.src ); err == nil {
-            t.Fatalf( "%d: Expected error %q in %q", i, tt.errMsg, tt.src )
+            a.Fatalf( "%d: Expected error %q in %q", i, tt.errMsg, tt.src )
         } else if pe, ok := err.( *parser.ParseError ); ok {
-            assert.Equal( tt.errMsg, pe.Message )
-            assert.Equal( tt.line, pe.Loc.Line )
-            assert.Equal( tt.col, pe.Loc.Col )
-        } else { t.Fatalf( "%d: %s", i, err ) }
+            a.Descend( "errMsg" ).Equal( tt.errMsg, pe.Message )
+            a.Descend( "line" ).Equal( tt.line, pe.Loc.Line )
+            a.Descend( "col" ).Equal( tt.col, pe.Loc.Col )
+        } else { a.Fatalf( "%d: %s", i, err ) }
+        a = a.Next()
     }
 }
 
@@ -436,6 +454,19 @@ service Service3 { @security Sec1 }
 struct S { 
     f1 E1 default E1.green 
     f2 String* default []
+}
+
+schema Schema1 {}
+
+schema Schema2 {
+    f1 Int32
+    f2 Int64
+}
+
+schema Schema3 {
+    f1 Int32
+    @schema Schema1
+    f2 Int64
 }
 `,
     "testSource2":
@@ -755,7 +786,6 @@ func initResultTestSource1() {
                         sxAtomicTyp( mgDn( "Float32" ), nil, lc1( 39, 12 ) ),
                     },
                 },
-                KeyedElements: keyedElts(),
             },
             &StructDecl{
                 Start: lc1( 42, 1 ),
@@ -770,7 +800,6 @@ func initResultTestSource1() {
                         sxAtomicTyp( mgDn( "String" ), nil, lc1( 42, 33 ) ),
                     },
                 },
-                KeyedElements: keyedElts(),
             },
             &StructDecl{
                 Start: lc1( 43, 1 ),
@@ -778,7 +807,6 @@ func initResultTestSource1() {
                     Name: mgDn( "EmptyStruct" ),
                     NameLoc: lc1( 43, 8 ),
                 },
-                KeyedElements: keyedElts(),
             },
             &StructDecl{
                 Start: lc1( 45, 1 ),
@@ -801,18 +829,20 @@ func initResultTestSource1() {
                       },
                     },
                 },
-                KeyedElements: keyedElts(
-                    "schema", &SchemaMixinDecl{
+                Schemas: []*SchemaMixinDecl{
+                    &SchemaMixinDecl{
                         Start: lc1( 46, 5 ),
                         Name: mgDn( "Struct1" ),
                         NameLoc: lc1( 46, 13 ),
                     },
-                    "constructor", &ConstructorDecl{ 
+                },
+                Constructors: []*ConstructorDecl{
+                    &ConstructorDecl{ 
                         Start: lc1( 49, 5 ),
                         ArgType: 
                             sxAtomicTyp( mgDn( "Int64" ), nil, lc1( 49, 19 ) ),
                     },
-                    "constructor", &ConstructorDecl{ 
+                    &ConstructorDecl{ 
                         Start: lc1( 50, 5 ),
                         ArgType: 
                             sxAtomicTyp(
@@ -821,7 +851,7 @@ func initResultTestSource1() {
                                 lc1( 50, 19 ),
                             ),
                     },
-                    "constructor", &ConstructorDecl{ 
+                    &ConstructorDecl{ 
                         Start: lc1( 51, 5 ),
                         ArgType: sxAtomicTyp(
                             mgDn( "String" ),
@@ -832,7 +862,7 @@ func initResultTestSource1() {
                             lc1( 51, 19 ),
                         ),
                     },
-                ),
+                },
             },
             &StructDecl{
                 Start: lc1( 54, 1 ),
@@ -841,13 +871,13 @@ func initResultTestSource1() {
                     NameLoc: lc1( 54, 8 ),
                 },
                 Fields: []*FieldDecl{},
-                KeyedElements: keyedElts(
-                    "schema", &SchemaMixinDecl{
+                Schemas: []*SchemaMixinDecl{
+                    &SchemaMixinDecl{
                         Start: lc1( 54, 18 ),
                         Name: mgDn( "Struct1" ),
                         NameLoc: lc1( 54, 26 ),
                     },
-                ),
+                },
             },
             &StructDecl{
                 Start: lc1( 57, 1 ),
@@ -861,7 +891,6 @@ func initResultTestSource1() {
                       Type: sxAtomicTyp( mgDn( "Int64" ), nil, lc1( 57, 26 ) ),
                     },
                 },
-                KeyedElements: keyedElts(),
             },
             &StructDecl{
                 Start: lc1( 59, 1 ),
@@ -885,13 +914,13 @@ func initResultTestSource1() {
                       },
                     },
                 },
-                KeyedElements: keyedElts(
-                    "constructor", &ConstructorDecl{ 
+                Constructors: []*ConstructorDecl{
+                    &ConstructorDecl{ 
                         Start: lc1( 60, 5 ),
                         ArgType: 
                             sxAtomicTyp( mgDn( "F1" ), nil, lc1( 60, 19 ) ),
                     },
-                ),
+                },
             },
             &EnumDecl{
                 Start: lc1( 64, 1 ),
@@ -1112,13 +1141,13 @@ func initResultTestSource1() {
                       },
                     },
                 },
-                KeyedElements: keyedElts(
-                    "security", &SecurityDecl{
+                SecurityDecls: []*SecurityDecl{
+                    &SecurityDecl{
                         Start: lc1( 85, 5 ),
                         Name: parser.MustDeclaredTypeName( "Sec1" ),
                         NameLoc: lc1( 85, 15 ),
                     },
-                ),
+                },
             },
             &ServiceDecl{
                 Start: lc1( 88, 1 ),
@@ -1126,7 +1155,6 @@ func initResultTestSource1() {
                     Name: mgDn( "Service2" ),
                     NameLoc: lc1( 88, 9 ),
                 },
-                KeyedElements: keyedElts(),
             },
             &ServiceDecl{
                 Start: lc1( 89, 1 ),
@@ -1134,13 +1162,13 @@ func initResultTestSource1() {
                     Name: mgDn( "Service3" ),
                     NameLoc: lc1( 89, 9 ),
                 },
-                KeyedElements: keyedElts(
-                    "security", &SecurityDecl{
+                SecurityDecls: []*SecurityDecl{
+                    &SecurityDecl{
                         Start: lc1( 89, 20 ),
                         Name: parser.MustDeclaredTypeName( "Sec1" ),
                         NameLoc: lc1( 89, 30 ),
                     },
-                ),
+                },
             },
             &StructDecl{
                 Start: lc1( 90, 1 ),
@@ -1181,7 +1209,57 @@ func initResultTestSource1() {
                       },
                     },
                 },
-                KeyedElements: keyedElts(),
+            },
+            &SchemaDecl{
+                Start: lc1( 95, 1 ),
+                Info: &TypeDeclInfo{
+                    Name: mgDn( "Schema1" ),
+                    NameLoc: lc1( 95, 8 ),
+                },
+                Fields: []*FieldDecl{},
+                Schemas: []*SchemaMixinDecl{},
+            },
+            &SchemaDecl{
+                Start: lc1( 97, 1 ),
+                Info: &TypeDeclInfo{
+                    Name: mgDn( "Schema2" ),
+                    NameLoc: lc1( 97, 8 ),
+                },
+                Fields: []*FieldDecl{
+                    { Name: mgId( "f1" ), 
+                      NameLoc: lc1( 98, 5 ),
+                      Type: sxAtomicTyp( mgDn( "Int32" ), nil, lc1( 98, 8 ) ),
+                    },
+                    { Name: mgId( "f2" ), 
+                      NameLoc: lc1( 99, 5 ),
+                      Type: sxAtomicTyp( mgDn( "Int64" ), nil, lc1( 99, 8 ) ),
+                    },
+                },
+                Schemas: []*SchemaMixinDecl{},
+            },
+            &SchemaDecl{
+                Start: lc1( 102, 1 ),
+                Info: &TypeDeclInfo{
+                    Name: mgDn( "Schema3" ),
+                    NameLoc: lc1( 102, 8 ),
+                },
+                Fields: []*FieldDecl{
+                    { Name: mgId( "f1" ), 
+                      NameLoc: lc1( 103, 5 ),
+                      Type: sxAtomicTyp( mgDn( "Int32" ), nil, lc1( 103, 8 ) ),
+                    },
+                    { Name: mgId( "f2" ), 
+                      NameLoc: lc1( 105, 5 ),
+                      Type: sxAtomicTyp( mgDn( "Int64" ), nil, lc1( 105, 8 ) ),
+                    },
+                },
+                Schemas: []*SchemaMixinDecl{
+                    {
+                        Start: lc1( 104, 5 ),
+                        Name: mgDn( "Schema1" ),
+                        NameLoc: lc1( 104, 13 ),
+                    },
+                },
             },
         },
     }

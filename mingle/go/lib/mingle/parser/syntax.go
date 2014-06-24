@@ -72,7 +72,7 @@ func ( sb * Builder ) readToken(
     var lc *Location
     switch et {
     case tokenExpectAny: lxTok, lc, err = sb.lx.ReadToken()
-    case tokenExpectIdentifier: lxTok, lc, err = sb.lx.ReadIdentifier()
+    case tokenExpectIdentifier: lxTok, lc, err = sb.lx.ReadIdentifier( false )
     case tokenExpectDeclTypeName: lxTok, lc, err = sb.lx.ReadDeclaredTypeName()
     case tokenExpectNumber: lxTok, lc, err = sb.lx.ReadNumber()
     default: panic( fmt.Errorf( "Unexpected token expect type: %v", et ) )

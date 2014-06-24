@@ -16,6 +16,7 @@ const (
     kwdImport = parser.KeywordImport
     kwdNamespace = parser.KeywordNamespace
     kwdPrototype = parser.KeywordPrototype
+    kwdSchema = parser.KeywordSchema
     kwdService = parser.KeywordService
     kwdStruct = parser.KeywordStruct
     kwdThrows = parser.KeywordThrows
@@ -27,12 +28,16 @@ var (
     IdSecurity = mg.NewIdentifierUnsafe( []string{ "security" } )
     IdSchema = mg.NewIdentifierUnsafe( []string{ "schema" } )
 
+    structureElementKeys = []*mg.Identifier{ IdConstructor, IdSchema }
+    serviceElementKeys = []*mg.Identifier{ IdSecurity }
+
     typeDeclKwds = []parser.Keyword{ 
         kwdStruct, 
         kwdEnum,
         kwdPrototype,
         kwdService,
         kwdAlias,
+        kwdSchema,
     }
 
     binaryOps = []parser.SpecialToken{
@@ -61,10 +66,6 @@ var (
     tkForwardSlash = parser.SpecialTokenForwardSlash
     tkMinus = parser.SpecialTokenMinus
 )
-
-func panicf( tmpl string, argv ...interface{} ) error {
-    return fmt.Errorf( "tree: " + tmpl, argv... )
-}
 
 // enclEnd is the token which ends the enclosing body of the fields (call sig or
 // struct body at the moment); seps is all toks that can end a field, and
@@ -108,16 +109,16 @@ func ( i *Import ) sanityCheck() {
     if len( i.Includes ) == 0 {
         if ! i.IsGlob {
             tmpl := "Import at %s is not a glob and has no includes"
-            panic( panicf( tmpl, i.Start ) )
+            panic( libErrorf( tmpl, i.Start ) )
         }
     } else {
         if i.IsGlob {
             tmpl := "Created import at %s with glob and includes"
-            panic( panicf( tmpl, i.Start ) )
+            panic( libErrorf( tmpl, i.Start ) )
         }
         if len( i.Excludes ) > 0 {
             tmpl := "Created import at %s with includes and excludes"
-            panic( panicf( tmpl, i.Start ) )
+            panic( libErrorf( tmpl, i.Start ) )
         }
     }
 } 
@@ -197,43 +198,10 @@ type SchemaMixinDecl struct {
     NameLoc *parser.Location
 }
 
-type KeyedElements struct {
-    elts *mg.IdentifierMap // vals are []SyntaxElement
-}
-
-func newKeyedElements() *KeyedElements {
-    return &KeyedElements{ mg.NewIdentifierMap() }
-}
-
-func ( ke *KeyedElements ) Add( key *mg.Identifier, elt SyntaxElement ) {
-    var elts []SyntaxElement
-    if val := ke.elts.Get( key ); val != nil {
-        elts = val.( []SyntaxElement ) 
-    } else { elts = make( []SyntaxElement, 0, 4 ) }
-    elts = append( elts, elt )
-    ke.elts.Put( key, elts )
-}
-
-func ( ke *KeyedElements ) Len() int { return ke.elts.Len() }
-
-func ( ke *KeyedElements ) Get( key *mg.Identifier ) []SyntaxElement {
-    if val := ke.elts.Get( key ); val != nil { return val.( []SyntaxElement ) }
-    return nil
-}
-
-func ( ke *KeyedElements ) EachPair( 
-    f func( key *mg.Identifier, elts []SyntaxElement ) ) {
-    ke.elts.EachPair( func( key *mg.Identifier, val interface{} ) {
-        f( key, val.( []SyntaxElement ) )
-    })
-}
-
 type TypeDecl interface {
     GetName() *mg.DeclaredTypeName
     Locatable
 }
-
-type Keyed interface { GetKeyedElements() *KeyedElements }
 
 type FieldContainer interface { GetFields() []*FieldDecl }
 
@@ -248,7 +216,8 @@ type StructDecl struct {
     Start *parser.Location
     Info *TypeDeclInfo
     Fields []*FieldDecl
-    *KeyedElements
+    Constructors []*ConstructorDecl
+    Schemas []*SchemaMixinDecl
 }
 
 func ( sd *StructDecl ) GetTypeInfo() *TypeDeclInfo { return sd.Info }
@@ -256,8 +225,52 @@ func ( sd *StructDecl ) GetName() *mg.DeclaredTypeName { return sd.Info.Name }
 func ( sd *StructDecl ) Locate() *parser.Location { return sd.Start }
 func ( sd *StructDecl ) GetFields() []*FieldDecl { return sd.Fields }
 
-func ( sd *StructDecl ) GetKeyedElements() *KeyedElements {
-    return sd.KeyedElements
+func ( sd *StructDecl ) createKeyedEltsAcc() *mg.IdentifierMap {
+    res := mg.NewIdentifierMap()
+    res.Put( IdConstructor, make( []*ConstructorDecl, 0, 2 ) )
+    res.Put( IdSchema, make( []*SchemaMixinDecl, 0, 2 ) )
+    return res
+}
+
+func ( sd *StructDecl ) initKeyedElts( ke *mg.IdentifierMap ) {
+    sd.Schemas = ke.Get( IdSchema ).( []*SchemaMixinDecl )
+    sd.Constructors = ke.Get( IdConstructor ).( []*ConstructorDecl )
+}
+
+func ( sd *StructDecl ) setFields( flds []*FieldDecl ) { sd.Fields = flds }
+
+func ( sd *StructDecl ) setInfo( inf *TypeDeclInfo ) { sd.Info = inf }
+
+type SchemaDecl struct {
+    Start *parser.Location
+    Info *TypeDeclInfo
+    Fields []*FieldDecl
+    Schemas []*SchemaMixinDecl
+}
+
+func ( sd *SchemaDecl ) Locate() *parser.Location { return sd.Start }
+
+func ( sd *SchemaDecl ) GetName() *mg.DeclaredTypeName { return sd.Info.Name }
+
+func ( sd *SchemaDecl ) createKeyedEltsAcc() *mg.IdentifierMap {
+    res := mg.NewIdentifierMap()
+    res.Put( IdSchema, make( []*SchemaMixinDecl, 0, 2 ) )
+    return res
+}
+
+func ( sd *SchemaDecl ) setInfo( inf *TypeDeclInfo ) { sd.Info = inf }
+
+func ( sd *SchemaDecl ) initKeyedElts( ke *mg.IdentifierMap ) {
+    sd.Schemas = ke.Get( IdSchema ).( []*SchemaMixinDecl )
+}
+
+func ( sd *SchemaDecl ) setFields( flds []*FieldDecl ) { sd.Fields = flds }
+
+type structureDecl interface {
+    createKeyedEltsAcc() *mg.IdentifierMap
+    initKeyedElts( *mg.IdentifierMap )
+    setFields( []*FieldDecl )
+    setInfo( *TypeDeclInfo )
 }
 
 type EnumValue struct {
@@ -331,15 +344,21 @@ type ServiceDecl struct {
     Start *parser.Location
     Info *TypeDeclInfo
     Operations []*OperationDecl
-    *KeyedElements
+    SecurityDecls []*SecurityDecl
 }
 
 func ( sd *ServiceDecl ) GetTypeInfo() *TypeDeclInfo { return sd.Info }
 func ( sd *ServiceDecl ) GetName() *mg.DeclaredTypeName { return sd.Info.Name }
 func ( sd *ServiceDecl ) Locate() *parser.Location { return sd.Start }
 
-func ( sd *ServiceDecl ) GetKeyedElements() *KeyedElements {
-    return sd.KeyedElements
+func ( sd *ServiceDecl ) createKeyedEltsAcc() *mg.IdentifierMap {
+    res := mg.NewIdentifierMap()
+    res.Put( IdSecurity, make( []*SecurityDecl, 0, 2 ) )
+    return res
+}
+
+func ( sd *ServiceDecl ) initKeyedElts( ke *mg.IdentifierMap ) {
+    sd.SecurityDecls = ke.Get( IdSecurity ).( []*SecurityDecl )
 }
 
 type NsUnit struct {
@@ -621,7 +640,7 @@ func ( p *parse ) pollImports() ( []*Import, error ) {
             res = append( res, imprt )
         } else { return nil, err }
     }
-    panic( panicf( "unreachable" ) )
+    panic( libErrorf( "unreachable" ) )
 }
 
 func ( p *parse ) expectNsUnitNs() ( decl *NamespaceDecl, err error ) {
@@ -643,45 +662,66 @@ func ( p *parse ) expectTypeDeclInfo() ( info *TypeDeclInfo, err error ) {
     return
 }
 
-func ( p *parse ) errorUnexpectedKeyedElement( key *mg.Identifier ) error {
+func unexpectedKeyedElementMsg( key *mg.Identifier ) string {
     keyStr := key.Format( mg.LcCamelCapped )
-    return p.ParseError( "Unexpected keyed definition @%s", keyStr )
+    return fmt.Sprintf( "Unexpected keyed definition @%s", keyStr )
 }
 
-func ( p *parse ) expectConstructorDecl(
-    lc *parser.Location ) ( cd *ConstructorDecl, err error ) {
-    cd = &ConstructorDecl{ Start: lc }
+func ( p *parse ) errorUnexpectedKeyedElement( key *mg.Identifier ) error {
+    return p.ParseError( unexpectedKeyedElementMsg( key ) )
+}
+
+func ( p *parse ) addConstructorDecl(
+    elts *mg.IdentifierMap, lc *parser.Location ) ( err error ) {
+
+    cd := &ConstructorDecl{ Start: lc }
     if _, err = p.passOpenParen(); err != nil { return }
     if cd.ArgType, err = p.expectTypeReference(); err != nil { return }
     if _, err = p.passCloseParen(); err != nil { return }
+    s := append( elts.Get( IdConstructor ).( []*ConstructorDecl ), cd )
+    elts.Put( IdConstructor, s )
     return
 }
 
-func ( p *parse ) expectSecurityDecl(
-    lc *parser.Location ) ( sd *SecurityDecl, err error ) {
-    sd = &SecurityDecl{ Start: lc }
-    sd.Name, sd.NameLoc, err = p.expectTypeName()
+func ( p *parse ) addSecurityDecl( 
+    elts *mg.IdentifierMap, lc *parser.Location ) ( err error ) {
+
+    sd := &SecurityDecl{ Start: lc }
+    if sd.Name, sd.NameLoc, err = p.expectTypeName(); err != nil { return }
+    s := append( elts.Get( IdSecurity ).( []*SecurityDecl ), sd )
+    elts.Put( IdSecurity, s )
     return
 }
 
-func ( p *parse ) expectSchemaDecl(
-    lc *parser.Location ) ( sd *SchemaMixinDecl, err error ) {
+func ( p *parse ) addSchemaDecl( 
+    elts *mg.IdentifierMap, lc *parser.Location ) ( err error ) {
 
-    sd = &SchemaMixinDecl{ Start: lc }
-    sd.Name, sd.NameLoc, err = p.expectTypeName()
+    sd := &SchemaMixinDecl{ Start: lc }
+    if sd.Name, sd.NameLoc, err = p.expectTypeName(); err != nil { return }
+    s := append( elts.Get( IdSchema ).( []*SchemaMixinDecl ), sd )
+    elts.Put( IdSchema, s )
     return
 }
 
-func ( p *parse ) expectKeyedElement( keyed *KeyedElements ) ( err error ) {
+func isAllowedKeyedElement( key *mg.Identifier, allow []*mg.Identifier ) bool {
+    for _, id := range allow { if id.Equals( key ) { return true } }
+    return false
+}
+
+func ( p *parse ) expectKeyedElement( 
+    elts *mg.IdentifierMap, allow []*mg.Identifier ) ( err error ) {
+
     var lc *parser.Location
     if lc, err = p.passSpecial( tkAsperand ); err != nil { return }
     var key *mg.Identifier
-    var elt SyntaxElement
     if key, _, err = p.expectIdentifier(); err != nil { return }
+    if ! isAllowedKeyedElement( key, allow ) {
+        return &parser.ParseError{ unexpectedKeyedElementMsg( key ), lc }
+    }
     switch {
-    case key.Equals( IdConstructor ): elt, err = p.expectConstructorDecl( lc )
-    case key.Equals( IdSecurity ): elt, err = p.expectSecurityDecl( lc )
-    case key.Equals( IdSchema ): elt, err = p.expectSchemaDecl( lc )
+    case key.Equals( IdConstructor ): err = p.addConstructorDecl( elts, lc )
+    case key.Equals( IdSecurity ): err = p.addSecurityDecl( elts, lc )
+    case key.Equals( IdSchema ): err = p.addSchemaDecl( elts, lc )
     default: err = p.errorUnexpectedKeyedElement( key )
     }
     if err != nil { return }
@@ -689,8 +729,6 @@ func ( p *parse ) expectKeyedElement( keyed *KeyedElements ) ( err error ) {
     if sawBrace, err = p.peekSpecial( tkCloseBrace ); err == nil {
         if ! sawBrace { _, err = p.passStatementEnd() }
     } 
-    if err != nil { return }
-    if elt != nil { keyed.Add( key, elt ) }
     return
 }
 
@@ -784,7 +822,7 @@ func ( p *parse ) expectListExpression() ( e *ListExpression, err error ) {
         sawEnd, err = p.expectCommaOrEnd( tkCloseBracket )
         if err != nil || sawEnd { return }
     }
-    panic( panicf( "unreachable" ) )
+    panic( libErrorf( "unreachable" ) )
 }
 
 func ( p *parse ) expectExpression() ( e Expression, err error ) {
@@ -829,36 +867,55 @@ func ( p *parse ) expectFieldDecl(
     return
 }
 
-func ( p *parse ) expectStructBody( sd *StructDecl ) ( err error ) {
-    sd.Fields = make( []*FieldDecl, 0, 4 )
-    sd.KeyedElements = newKeyedElements()
-    for loop := true; loop && err == nil; {
-        var tn *parser.TokenNode
-        if tn, err = p.PeekToken(); err != nil { return }
-        if parser.IsSpecial( tn.Token, parser.SpecialTokenAsperand ) {
-            err = p.expectKeyedElement( sd.KeyedElements )
-        } else if parser.IsSpecial( tn.Token, parser.SpecialTokenCloseBrace ) { 
+func ( p *parse ) expectStructBody( sd structureDecl ) error {
+    flds := make( []*FieldDecl, 0, 4 )
+    ke := sd.createKeyedEltsAcc()
+    for loop := true; loop; {
+        tn, err := p.PeekToken()
+        if err != nil { return err }
+        switch {
+        case parser.IsSpecial( tn.Token, parser.SpecialTokenAsperand ):
+            if err = p.expectKeyedElement( ke, structureElementKeys ); 
+               err != nil {
+                return err
+            }
+        case parser.IsSpecial( tn.Token, parser.SpecialTokenCloseBrace ):
             loop, _ = false, p.MustNextToken()
-        } else {
+        default:
             var fld *FieldDecl
             var sawEnd bool
             fld, sawEnd, err = p.expectFieldDecl( fldEndsStruct )
-            if err != nil { return }
-            sd.Fields = append( sd.Fields, fld )
+            if err != nil { return err }
+            flds = append( flds, fld )
             loop = ! sawEnd
         }
     }
-    if err == nil { _, err = p.passStatementEnd() }
-    return
+    sd.setFields( flds )
+    sd.initKeyedElts( ke )
+    if _, err := p.passStatementEnd(); err != nil { return err }
+    return nil
+}
+
+func ( p *parse ) expectStructureDecl( sd structureDecl ) error {
+    info, err := p.expectTypeDeclInfo()
+    if err != nil { return err }
+    sd.setInfo( info )
+    if _, err = p.passOpenBrace(); err != nil { return err }
+    return p.expectStructBody( sd )
 }
 
 func ( p *parse ) expectStructDecl(
     start *parser.Location ) ( sd *StructDecl, err error ) {
+
     sd = &StructDecl{ Start: start }
-    if sd.Info, err = p.expectTypeDeclInfo(); err != nil { return }
-    if _, err = p.passOpenBrace(); err != nil { return }
-    err = p.expectStructBody( sd )
-    return
+    return sd, p.expectStructureDecl( sd )
+}
+
+func ( p *parse ) expectSchemaDecl(
+    start *parser.Location ) ( *SchemaDecl, error ) {
+
+    sd := &SchemaDecl{ Start: start }
+    return sd, p.expectStructureDecl( sd )
 }
 
 func ( p *parse ) completeEnumDecl( ed *EnumDecl ) ( err error ) {
@@ -876,7 +933,7 @@ func ( p *parse ) completeEnumDecl( ed *EnumDecl ) ( err error ) {
             return 
         }
     }
-    panic( panicf( "unreachable" ) )
+    panic( libErrorf( "unreachable" ) )
 }
 
 func ( p *parse ) expectEnumDecl( 
@@ -920,7 +977,7 @@ func ( p *parse ) collectCallFields( cs *CallSignature ) ( err error ) {
         cs.Fields = append( cs.Fields, fld )
         if sawEnd { return p.completeCallFields() }
     }
-    panic( panicf( "unreachable" ) )
+    panic( libErrorf( "unreachable" ) )
 }
 
 func ( p *parse ) expectThrownType() ( tt *ThrownType, err error ) {
@@ -978,8 +1035,9 @@ func ( p *parse ) collectCallSignature( sd *ServiceDecl ) ( err error ) {
 
 func ( p *parse ) expectServiceDecl(
     start *parser.Location ) ( sd *ServiceDecl, err error ) {
-    sd = &ServiceDecl{ Start: start, KeyedElements: newKeyedElements() }
+    sd = &ServiceDecl{ Start: start }
     sd.Operations = make( []*OperationDecl, 0, 4 )
+    ke := sd.createKeyedEltsAcc()
     if sd.Info, err = p.expectTypeDeclInfo(); err != nil { return }
     if _, err = p.passOpenBrace(); err != nil { return }
     for err == nil {
@@ -987,10 +1045,11 @@ func ( p *parse ) expectServiceDecl(
         if tn, err = p.PeekToken(); err != nil { return }
         if parser.IsSpecial( tn.Token, tkCloseBrace ) {
             p.MustNextToken()
-            _, err = p.passStatementEnd()
+            if _, err = p.passStatementEnd(); err != nil { return }
+            sd.initKeyedElts( ke )
             return
         } else if parser.IsSpecial( tn.Token, tkAsperand ) {
-            err = p.expectKeyedElement( sd.KeyedElements )
+            err = p.expectKeyedElement( ke, serviceElementKeys )
         } else if tn.IsKeyword( parser.KeywordOp ) {
             p.MustNextToken()
             err = p.collectCallSignature( sd )
@@ -1007,8 +1066,9 @@ func ( p *parse ) expectTypeDecl(
     case kwdAlias: return p.expectAliasDecl( start )
     case kwdPrototype: return p.expectPrototypeDecl( start )
     case kwdService: return p.expectServiceDecl( start )
+    case kwdSchema: return p.expectSchemaDecl( start )
     }
-    panic( panicf( "Unimplemented: %s", kwd ) )
+    panic( libErrorf( "Unimplemented: %s", kwd ) )
 }
 
 func ( p *parse ) pollTypeDecl() ( td TypeDecl, err error ) {
@@ -1041,7 +1101,7 @@ func ( p *parse ) pollTypeDecls() ( decls []TypeDecl, err error ) {
             decls = append( decls, decl )
         } else { return }
     }
-    panic( panicf( "unreachable" ) )
+    panic( libErrorf( "unreachable" ) )
 }
 
 func ( p *parse ) expectNsUnit( srcNm string ) ( u *NsUnit, err error ) {

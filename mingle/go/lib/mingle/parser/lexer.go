@@ -33,6 +33,7 @@ const (
     KeywordOp = Keyword( "op" )
     KeywordPrototype = Keyword( "prototype" )
     KeywordReturn = Keyword( "return" )
+    KeywordSchema = Keyword( "schema" )
     KeywordService = Keyword( "service" )
     KeywordStruct = Keyword( "struct" )
     KeywordThrows = Keyword( "throws" )
@@ -53,6 +54,7 @@ func init() {
     kwdMap[ "op" ] = KeywordOp
     kwdMap[ "prototype" ] = KeywordPrototype
     kwdMap[ "return" ] = KeywordReturn
+    kwdMap[ "schema" ] = KeywordSchema
     kwdMap[ "service" ] = KeywordService
     kwdMap[ "struct" ] = KeywordStruct
     kwdMap[ "throws" ] = KeywordThrows
@@ -330,9 +332,9 @@ func isKeyword( id *mg.Identifier ) ( Keyword, bool ) {
     return kwd, ok
 }
 
-func ( lx *Lexer ) readIdentifier() ( id Token, err error ) {
+func ( lx *Lexer ) readIdentifier( kwdRepl bool ) ( id Token, err error ) {
     if id, err = lx.parseIdentifier(); isLexErr( err ) { return }
-    if ( ! lx.isExternal ) { 
+    if ( kwdRepl && ( ! lx.isExternal ) ) { 
         if kwd, ok := isKeyword( id.( *mg.Identifier ) ); ok { id = kwd } 
     }
     return 
@@ -928,7 +930,7 @@ func ( lx *Lexer ) ReadToken() ( Token, *Location, error ) {
         r, err := lx.peekRune()
         if err != nil { return nil, err }
         switch {
-        case isIdentLower( r ): return lx.readIdentifier()
+        case isIdentLower( r ): return lx.readIdentifier( true )
         case isWhitespace( r ): return lx.readWhitespace()
         case isSpecialTokChar( r ): return lx.readSpecialTok()
         case isCommentStart( r ): return lx.readComment()
@@ -940,9 +942,9 @@ func ( lx *Lexer ) ReadToken() ( Token, *Location, error ) {
     })
 }
 
-func ( lx *Lexer ) ReadIdentifier() ( Token, *Location, error ) {
+func ( lx *Lexer ) ReadIdentifier( kwdRepl bool ) ( Token, *Location, error ) {
     return lx.implReadToken( func() ( Token, error ) {
-        return lx.readIdentifier()
+        return lx.readIdentifier( kwdRepl )
     })
 }
 

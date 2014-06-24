@@ -66,17 +66,9 @@ var (
 
     idAuthentication = mg.NewIdentifierUnsafe( []string{ "authentication" } )
 
-    structKeyedDefs = mg.NewIdentifierMap()
-    serviceKeyedDefs = mg.NewIdentifierMap()
-
     objpathConstExp = 
         objpath.RootedAt( mg.NewIdentifierUnsafe( []string{ "const-val" } ) )
 )
-
-func init() {
-    structKeyedDefs.Put( tree.IdConstructor, true )
-    serviceKeyedDefs.Put( tree.IdSecurity, true )
-}
 
 type CompilationResult struct {
     BuiltTypes *types.DefinitionMap
@@ -179,24 +171,6 @@ func ( c *Compilation ) addAssignError(
     actType mg.TypeReference ) {
     c.addErrorf( locVal, "Can't assign value of type %s to %s",
         expctType, actType )
-}
-
-func ( c *Compilation ) getOptSingleElement(
-    ke *tree.KeyedElements, id *mg.Identifier ) tree.SyntaxElement {
-    if elts := ke.Get( id ); elts != nil {
-        switch l := len( elts ); l {
-        case 0: 
-            panic( implErrorf( "Got zero-len elts for keyed decl: %s", id ) )
-        case 1: return elts[ 0 ]
-        default:
-            defStr := formatKeyedDef( id )
-            for _, elt := range elts {
-                c.addErrorf( elt, "Multiple definitions of %s", defStr )
-            }
-            return nil
-        }
-    }
-    return nil
 }
 
 func ( c *Compilation ) putBuiltType( d types.Definition ) {
@@ -860,23 +834,6 @@ func ( c *Compilation ) buildAliasedTypes( ctxs []buildContext ) {
     for _, bc := range c.getAliasBuildOrder( ctxs ) { c.buildAliasedType( bc ) }
 }
 
-func ( c * Compilation ) checkKeyedElements(
-    allow *mg.IdentifierMap, val tree.Keyed ) bool {
-    res := true
-    val.GetKeyedElements().EachPair(
-        func( key *mg.Identifier, elts []tree.SyntaxElement ) {
-            if ! allow.HasKey( key ) {
-                res = false // may have been already
-                msg := fmt.Sprintf( 
-                    "Unexpected declaration: %s", formatKeyedDef( key ) )
-                for _, elt := range elts { c.addErrorf( elt, msg ) }
-            }
-        },
-    )
-    return res
-} 
-
-
 func ( c *Compilation ) typeDefForQn( 
     qn *mg.QualifiedTypeName ) types.Definition {
     if def := c.builtTypes.Get( qn ); def != nil { return def }
@@ -984,22 +941,18 @@ func ( c *Compilation ) processConstructors(
 
 func ( c *Compilation ) buildConstructors(
     bc buildContext, sd *types.StructDefinition ) bool {
-    ke := bc.td.( tree.Keyed ).GetKeyedElements()
-    elts := ke.Get( tree.IdConstructor )
-    if elts == nil { return true }
-    consDecls := make( []*tree.ConstructorDecl, len( elts ) )
-    for i, elt := range elts { 
-        consDecls[ i ] = elt.( *tree.ConstructorDecl )
-    }
-    return c.processConstructors( consDecls, sd, bc.scope )
+
+    arr := bc.td.( *tree.StructDecl ).Constructors
+    if len( arr ) == 0 { return true }
+    return c.processConstructors( arr, sd, bc.scope )
 }
 
 func ( c *Compilation ) buildStructType( bc buildContext ) {
     sd := types.NewStructDefinition()
     sd.Name = bc.qname() 
-    ok := c.checkKeyedElements( structKeyedDefs, bc.td.( tree.Keyed ) )
     // always evaluate lhs even if ok is already false, so we generate possibly
     // more compiler errors in each run
+    ok := true
     ok = c.buildStructFields( bc, sd ) && ok
     ok = c.buildConstructors( bc, sd ) && ok
     if ok { c.putBuiltType( sd ) }
@@ -1120,12 +1073,19 @@ func ( c *Compilation ) processSecurityDecl(
 
 func ( c *Compilation ) buildOptSecurityDecl(
     decl *tree.ServiceDecl, sd *types.ServiceDefinition, bs *buildScope ) bool {
-    if elt := c.getOptSingleElement( decl.KeyedElements, tree.IdSecurity );
-       elt != nil {
-        qn := c.processSecurityDecl( elt.( *tree.SecurityDecl ), bs )
-        if qn != nil { sd.Security = qn } else { return false }
+
+    switch len( decl.SecurityDecls ) {
+    case 0: return true
+    case 1:
+        qn := c.processSecurityDecl( decl.SecurityDecls[ 0 ], bs )
+        if qn != nil { 
+            sd.Security = qn 
+            return true
+        }
+    default: 
+        c.addError( decl, "Multiple security declarations are not supported" )
     }
-    return true
+    return false
 }
 
 func ( c *Compilation ) buildServiceType( bc buildContext ) {
@@ -1136,7 +1096,6 @@ func ( c *Compilation ) buildServiceType( bc buildContext ) {
     sd.Operations, opDefsOk = 
         c.buildOpDefs( decl.Operations, sd.Operations, bc.scope ) 
     ok = opDefsOk && ok
-    ok = c.checkKeyedElements( serviceKeyedDefs, decl ) && ok
     ok = c.buildOptSecurityDecl( decl, sd, bc.scope ) && ok
     if ok { c.putBuiltType( sd ) }
 }

@@ -1297,7 +1297,7 @@ func TestCompiler( t *testing.T ) {
         expectError( 31, 28, "Unsatisfiable range" ),
 
         newCompilerTest( "schema-cycle-errors" ).
-        addSource( "f1", `
+        setSource( `
             @version v1
             namespace ns1
 
@@ -1328,6 +1328,18 @@ func TestCompiler( t *testing.T ) {
         ` ).
         expectError( 1, 1, "cycle: Schema1/Schema2" ).
         expectError( 1, 1, "cycle: Schema3/Schema4/Schema5" ),
+
+        newCompilerTest( "schema-errors" ).
+        setSource( `
+            @version v1
+            namespace ns1
+            schema Schema1 {}
+            schema Schema2 { @schema NoSuch }
+            struct Struct1 { @schema NoSuch }
+        ` ).
+        expectError( 4, 1, "empty schema" ).
+        expectError( 5, 1, "no such schema" ).
+        expectError( 6, 1, "no such schema" ),
 
         newCompilerTest( "dup-decls-in-same-source" ).
         setSource( `
