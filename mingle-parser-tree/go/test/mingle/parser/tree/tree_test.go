@@ -347,6 +347,9 @@ import ns1@v1/[ S1 ] - [ S2 ]`,
         { "Unexpected keyed definition @security", 1, 41,
             "@version v1; namespace ns1; struct S1 { @security Bad }",
         },
+        { "Unexpected keyed definition @constructor", 1, 42,
+            "@version v1; namespace ns1; service S1 { @constructor C1 }",
+        },
     } {
         if i, err := parseSource( "test-source", tt.src ); err == nil {
             a.Fatalf( "%d: Expected error %q in %q", i, tt.errMsg, tt.src )

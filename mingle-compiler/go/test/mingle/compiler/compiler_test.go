@@ -250,7 +250,83 @@ func TestCompiler( t *testing.T ) {
                 @schema ns2@v1/Schema1
                 g2 Int32
             }
+
+            schema Schema9 {}
+
+            struct S5 { @schema Schema9 }
+
+            struct S6 { 
+                f1 Int32
+                @schema Schema9
+            }
+
+            schema Schema10 { f1 Int32 default 1 }
+
+            struct S7 {
+                @schema Schema10
+                f2 Int64
+            }
+
+            struct S8 {
+                f1 Int32 default 1
+                @schema Schema10
+            }
         ` ).
+        expectDef( 
+            types.MakeStructDef( "ns1@v1/S1", 
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S2",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                    types.MakeFieldDef( "f2", "Int32", nil ),
+                    types.MakeFieldDef( "f3", "Int32", nil ),
+                    types.MakeFieldDef( "s2F1", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S3",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S4",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "g1", "Int32", nil ),
+                    types.MakeFieldDef( "g2", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef( types.MakeStructDef( "ns1@v1/S5", nil ) ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S6",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S7",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", int32( 1 ) ),
+                    types.MakeFieldDef( "f2", "Int64", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S8",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", int32( 1 ) ),
+                },
+            ),
+        ).
         expectDef(
             types.MakeSchemaDef( "ns1@v1/Schema1",
                 []*types.FieldDefinition{
@@ -288,6 +364,36 @@ func TestCompiler( t *testing.T ) {
                     types.MakeFieldDef( "f1", "Int32", nil ),
                     types.MakeFieldDef( "f2", "Int32", nil ),
                     types.MakeFieldDef( "f3", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/Schema6" ),
+                AliasedType: mkTyp( "ns1@v1/Schema1" ),
+            },
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema7",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                    types.MakeFieldDef( "f7", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema8",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", nil ),
+                    types.MakeFieldDef( "g1", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef( types.MakeSchemaDef( "ns1@v1/Schema9", nil ) ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema10",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "Int32", int32( 1 ) ),
                 },
             ),
         ),
@@ -1075,6 +1181,7 @@ func TestCompiler( t *testing.T ) {
             ),
         ).
         expectDef( types.MakeStructDef( "ns2@v1/S2", nil ) ).
+        expectDef( types.MakeStructDef( "ns2@v1/S4", nil ) ).
         addSource( "f3", `
             @version v1
             import ns1@v1/* - [ S2 ]
@@ -1363,8 +1470,9 @@ func TestCompiler( t *testing.T ) {
                 @schema Schema4
             }
         ` ).
-        expectError( 1, 1, "cycle: Schema1/Schema2" ).
-        expectError( 1, 1, "cycle: Schema3/Schema4/Schema5" ),
+        expectGlobalError(
+            "Schemas are involved in one or more mixin cycles: ns1@v1/Schema1, ns1@v1/Schema2, ns1@v1/Schema3, ns1@v1/Schema4, ns1@v1/Schema5",
+        ),
 
         newCompilerTest( "schema-errors" ).
         addLib( "lib1",
@@ -1378,27 +1486,49 @@ func TestCompiler( t *testing.T ) {
             schema Schema3 { f1 Int32 }
             schema Schema4 { @schema Schema3; f1 Int64 }
             schema Schema5 { @schema Schema3; f1 Int32 default 1 }
-            schema Schema6 { @schema ns2@v1/Schema1; f1 Int32 }
-            struct Struct2 { @schema ns2@v1/Schema1; f1 Int32 }
+            schema Schema6 { @schema ns2@v1/Schema1; f1 Int64 }
+            struct Struct2 { @schema ns2@v1/Schema1; f1 Int64 }
             schema Schema7 { f1 Int32 }
-            struct Struct3 { f1 Int32; @schema Schema3; @schema Schema7 }
+            struct Struct3 { f1 Int64; @schema Schema3; @schema Schema7 }
             struct Struct4 { @schema Struct1 }
             alias BadAlias1 Struct4
-            struct Struct5 { @schema BadAlias }
+            struct Struct5 { @schema BadAlias1 }
             alias BadAlias2 String*
-            struct Struct6 { @schema BadAlias2 }
+            struct Struct6 { @schema ns1@v1/BadAlias2 }
+            schema Schema8 { f1 Int32 default 1 }
+            struct Struct7 { f1 Int32; @schema Schema8 }
         ` ).
-        expectError( 4, 1, "empty schema" ).
-        expectError( 5, 1, "no such schema" ).
-        expectError( 6, 1, "no such schema" ).
-        expectError( 8, 1, "f1 redefined" ).
-        expectError( 9, 1, "f1 redefined" ).
-        expectError( 10, 1, "f1 redefined" ).
-        expectError( 11, 1, "f1 redefined" ).
-        expectError( 13, 1, "f1 redefined" ).
-        expectError( 14, 1, "not a schema" ).
-        expectError( 16, 1, "not a schema" ).
-        expectError( 18, 1, "not a schema" ),
+        expectError( 5, 38, "Unresolved type: NoSuch" ).
+        expectError( 6, 38, "Unresolved type: NoSuch" ).
+        expectError( 8, 13,
+            "f1 declared at [<>, line 8, col 47] conflicts with other definitions" ).
+        expectError( 8, 13, 
+            "f1 mixed in from ns1@v1/Schema3 conflicts with other definitions" ).
+        expectError( 9, 13,
+            "f1 mixed in from ns1@v1/Schema3 conflicts with other definitions" ).
+        expectError( 9, 13,
+            "f1 declared at [<>, line 9, col 47] conflicts with other definitions" ).
+        expectError( 10, 13,
+            "f1 declared at [<>, line 10, col 54] conflicts with other definitions" ).
+        expectError( 10, 13,
+            "f1 mixed in from ns2@v1/Schema1 conflicts with other definitions" ).
+        expectError( 11, 13,
+            "f1 declared at [<>, line 11, col 54] conflicts with other definitions" ).
+        expectError( 11, 13,
+            "f1 mixed in from ns2@v1/Schema1 conflicts with other definitions" ).
+        expectError( 13, 13,
+            "f1 declared at [<>, line 13, col 30] conflicts with other definitions" ).
+        expectError( 13, 13,
+            "f1 mixed in from ns1@v1/Schema3 conflicts with other definitions" ).
+        expectError( 13, 13,
+            "f1 mixed in from ns1@v1/Schema7 conflicts with other definitions" ).
+        expectError( 14, 38, "not a schema: Struct1" ).
+        expectError( 16, 38, "not a schema: BadAlias1" ).
+        expectError( 18, 38, "not a schema: ns1@v1/BadAlias2" ).
+        expectError( 20, 13,
+            "f1 declared at [<>, line 20, col 30] conflicts with other definitions" ).
+        expectError( 20, 13,
+            "f1 mixed in from ns1@v1/Schema8 conflicts with other definitions" ),
 
         newCompilerTest( "dup-decls-in-same-source" ).
         setSource( `
@@ -1423,43 +1553,24 @@ func TestCompiler( t *testing.T ) {
         expectSrcError( 
             "f1", 1, 29, "Type S1 conflicts with an externally loaded type" ),
             
-//        newCompilerTest( "field-redefinition" ).
-//        addLib( "p1Src1", p1Sources[ 0 ] ).
-//        addSource( "f1", `
-//            @version v1
-//            namespace ns2
-//            struct S1 { f1 String }
-//            struct S2 < S1 { f1 Int64 }
-//            struct S3 < S1 { f2 Int64 } # This is okay
-//            struct S4 < S3 { f1 Int64 } # But this is not
-//            struct S5 < ns1/Struct1 { string1 String }
-//            struct S6 { f1 Int64; f1 String }
-//        ` ).
-//        addSource( "f2",
-//            "@version v1; namespace ns3; struct S1 < ns2/S1 { f1 String }" ).
-//        expectSrcError(
-//            "f1", 9, 35, "Field f1 already defined at [f1, line 9, col 25]" ).
-//        expectSrcError( "f1", 5, 30, "Field f1 already defined in ns2@v1/S1" ).
-//        expectSrcError( "f1", 7, 30, "Field f1 already defined in ns2@v1/S1" ).
-//        expectSrcError( 
-//            "f1", 8, 39, "Field string1 already defined in ns1@v1/Struct1" ).
-//        expectSrcError( "f2", 1, 50, "Field f1 already defined in ns2@v1/S1" ),
-            
-        newCompilerTest( "op-field-redefinition" ).
+        newCompilerTest( "field-redefinition" ).
         setSource( `
             @version v1
             namespace ns1
+            schema Schema1 { f String; f String }
+            struct Struct { f String; f String }
             service S1 { op op1( f String, f String ): String; }
         ` ).
-        expectError( 4, 44, "Field f already defined at [<>, line 4, col 34]" ),
+        expectError( 4, 30, "field 'f' is multiply-declared" ).
+        expectError( 4, 40, "field 'f' is multiply-declared" ).
+        expectError( 5, 29, "field 'f' is multiply-declared" ).
+        expectError( 5, 39, "field 'f' is multiply-declared" ).
+        expectError( 6, 34, "field 'f' is multiply-declared" ).
+        expectError( 6, 44, "field 'f' is multiply-declared" ),
     
         newCompilerTest( "unresolved-field-type" ).
         setSource( "@version v1; namespace ns1; struct S1 { f1 Blah }" ).
         expectError( 1, 44, "Unresolved type: Blah" ),
-
-        newCompilerTest( "unresolved-super-type" ).
-        setSource( "@version v1; namespace ns1; struct S1 < nsX/Y {}" ).
-        expectError( 1, 41, "Unresolved type: nsX@v1/Y" ),
  
         newCompilerTest( "unresolved-op-param-type" ).
         setSource( `
@@ -1567,39 +1678,6 @@ func TestCompiler( t *testing.T ) {
         expectError( 4, 46, `Invalid RFC3339 time: ""` ).
         expectError( 5, 46, `Invalid RFC3339 time: "2001-01-02.12"` ),
  
-        newCompilerTest( "invalid-supertypes" ).
-        setSource( `
-            @version v1 
-            namespace ns1 
-            struct S1 < String {}
-            struct S2 {}
-            struct S3 < S2+ {}
-        ` ).
-        expectError( 
-            4, 13, "S1 cannot descend from type mingle:core@v1/String" ).
-        expectError( 6, 25, "Non-atomic supertype for S3: ns1@v1/S2+" ),
-    
-        newCompilerTest( "type-self-descent" ).
-        setSource( "@version v1; namespace ns1; struct S1 < S1 {}" ).
-        expectError( 1, 29,
-            "Type ns1@v1/S1 is involved in one or more circular " +
-            "dependencies" ),
- 
-        newCompilerTest( "ancestral-self-descent" ).
-        setSource( `
-            @version v1 
-            namespace ns1
-            struct S1 < S3 {} 
-            struct S2 < S1 {} 
-            struct S3 < S3 {}
-        ` ).
-        expectError( 4, 13,
-            "Type ns1@v1/S1 is involved in one or more circular dependencies" ).
-        expectError( 5, 13,
-            "Type ns1@v1/S2 is involved in one or more circular dependencies" ).
-        expectError( 6, 13,
-            "Type ns1@v1/S3 is involved in one or more circular dependencies" ),
- 
         newCompilerTest( "redefined-op-name" ).
         setSource( `
             @version v1
@@ -1656,8 +1734,8 @@ func TestCompiler( t *testing.T ) {
             namespace ns
             service S1 { @security Sec1; @security Sec2; }
         ` ).
-        expectError( 4, 26, "Multiple definitions of @security" ).
-        expectError( 4, 42, "Multiple definitions of @security" ),
+        expectError( 4, 13, 
+            "Multiple security declarations are not supported" ),
     
         newCompilerTest( "invalid-sec-type" ).
         setSource( `
@@ -1689,16 +1767,6 @@ func TestCompiler( t *testing.T ) {
         expectError( 
             5, 36, "ns@v1/Sec supplies a default authentication value" ),
 
-        newCompilerTest( "mislocated-keyed-elts" ).
-        setSource( `
-            @version v1
-            namespace ns
-            service Service1 { @constructor( String ); }
-            struct Struct1 { @security Sec1; }
-        ` ).
-        expectError( 4, 32, "Unexpected declaration: @constructor" ).
-        expectError( 5, 30, "Unexpected declaration: @security" ),
-    
         newCompilerTest( "constructor-errors" ).
         setSource( `
             @version v1

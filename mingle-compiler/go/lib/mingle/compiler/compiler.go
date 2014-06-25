@@ -83,7 +83,7 @@ type Compilation struct {
     scopesByNs *mg.NamespaceMap
     onDefaults []func()
     builtTypes *types.DefinitionMap
-    errs []*Error
+    errs map[ string ] *Error
 
     // Can be temporarily set in rare circumstances where an operation
     // which may generate compile errors needs to be invoked for the purposes of
@@ -98,7 +98,7 @@ func NewCompilation() *Compilation {
         scopesByNs: mg.NewNamespaceMap(),
         onDefaults: []func(){},
         builtTypes: types.NewDefinitionMap(),
-        errs: make( []*Error, 0, 4 ),
+        errs: make( map[ string ] *Error, 4 ),
     }
 }
 
@@ -172,7 +172,7 @@ func locationFor( locVal interface{} ) *parser.Location {
 
 func ( c *Compilation ) addError( locVal interface{}, msg string ) {
     err := &Error{ locationFor( locVal ), msg }
-    if ! c.ignoreErrors { c.errs = append( c.errs, err ) }
+    if ! c.ignoreErrors { c.errs[ err.Error() ] = err }
 }
 
 func ( c *Compilation ) addErrorf( 
@@ -888,11 +888,30 @@ func ( c *Compilation ) buildFieldDefinition(
 }
 
 type builtField struct {
-    def *types.FieldDefinition
+    fd *types.FieldDefinition
     src interface{}
 }
 
-func ( bd builtField ) name() *mg.Identifier { return bd.def.Name }
+type builtFieldListEntry struct {
+    key *types.FieldDefinition
+    fields []builtField
+}
+
+type builtFieldList struct {
+    entries []*builtFieldListEntry
+}
+
+func ( l *builtFieldList ) add( fd *types.FieldDefinition, src interface{} ) {
+    bf := builtField{ fd, src }
+    for _, e := range l.entries {
+        if e.key.Equals( fd ) { 
+            e.fields = append( e.fields, bf ) 
+            return
+        } 
+    }
+    e := &builtFieldListEntry{ key: fd, fields: []builtField{ bf } }
+    l.entries = append( l.entries, e )
+} 
 
 type fieldSetBuilder struct {
     c *Compilation
@@ -906,13 +925,12 @@ type fieldSetBuilder struct {
 func ( fsb *fieldSetBuilder ) addDefinition( 
     fd *types.FieldDefinition, src interface{} ) {
 
-    var flds []builtField
+    var flds *builtFieldList
     key := fd.Name
     if fldsVal, ok := fsb.work.GetOk( key ); ok {
-        flds = fldsVal.( []builtField )
-    } else { flds = make( []builtField, 0, 4 ) }
-    bd := builtField{ def: fd, src: src }
-    flds = append( flds, bd )
+        flds = fldsVal.( *builtFieldList )
+    } else { flds = &builtFieldList{ make( []*builtFieldListEntry, 0, 4 ) } }
+    flds.add( fd, src )
     fsb.work.Put( key, flds )
 }
 
@@ -927,7 +945,7 @@ func ( fsb *fieldSetBuilder ) addFieldsFromSchema(
             fsb.addDefinition( fd, v ) 
         })
     default:
-        fsb.c.addErrorf( sd, "not a mixin: %s", qn )
+        fsb.c.addErrorf( sd.NameLoc, "not a schema: %s", sd.Name )
         return 1
     }
     return 0
@@ -951,17 +969,77 @@ func ( fsb *fieldSetBuilder ) addDirectFieldDecls() int {
     return errs
 }
 
+func ( fsb *fieldSetBuilder ) addFieldRedefinitionErrorsEntry(
+    e *builtFieldListEntry ) int {
+    
+    res := 0
+    tmpl := "%s %s %s conflicts with other definitions"
+    for _, bf := range e.fields {
+        res++
+        var prep, loc string
+        switch v := bf.src.( type ) {
+        case *tree.FieldDecl: prep, loc = "declared at", v.NameLoc.String()
+        case *types.SchemaDefinition: 
+            prep, loc = "mixed in from", v.GetName().String()
+        default: panic( libErrorf( "unhandled src: %T", bf.src ) )
+        }
+        fsb.c.addErrorf( fsb.bc.td, tmpl, e.key.Name, prep, loc )
+    }
+    return res
+}
+
+func ( fsb *fieldSetBuilder ) addFieldRedefinitionErrors( 
+    bfl *builtFieldList ) int {
+
+    res := 0
+    for _, e := range bfl.entries { 
+        res += fsb.addFieldRedefinitionErrorsEntry( e )
+    }
+    return res
+}
+
+func ( fsb *fieldSetBuilder ) checkRedeclaration(
+    fld *mg.Identifier, bfle *builtFieldListEntry ) bool {
+
+    decls := make( []*tree.FieldDecl, 0, 2 )
+    for _, bf := range bfle.fields {
+        if decl, ok := bf.src.( *tree.FieldDecl ); ok { 
+            decls = append( decls, decl )
+        }
+    }
+    if len( decls ) < 2 { return true }
+    for _, decl := range decls { fsb.c.addFieldRedeclarationError( decl ) }
+    return false
+}
+
+func ( fsb *fieldSetBuilder ) addBuiltFieldDefaultChecks( 
+    bfle *builtFieldListEntry ) {
+
+    flds := bfle.fields
+    fsb.c.awaitDefaults( func() {
+        for i, e := 0, len( flds ); i < e; i++ {
+            for j := i + 1; j < e; j++ {
+                fi, fj := flds[ i ].fd, flds[ j ].fd
+                if ! fi.Equals( fj ) {
+                    fsb.addFieldRedefinitionErrorsEntry( bfle )
+                    return
+                }
+            }
+        }
+    })
+}
+
 func ( fsb *fieldSetBuilder ) addBuiltFields() bool {
     errs := 0
     fsb.work.EachPair( func( fld *mg.Identifier, val interface{} ) {
-        flds := val.( []builtField )
-        if len( flds ) == 1 {
-            fsb.fs.MustAdd( flds[ 0 ].def )
+        bfl := val.( *builtFieldList )
+        if len( bfl.entries ) == 1 {
+            e := bfl.entries[ 0 ]
+            if ! fsb.checkRedeclaration( fld, e ) { return }
+            fsb.fs.MustAdd( e.key )
+            fsb.addBuiltFieldDefaultChecks( e )
         } else {
-            for _, bf := range flds {
-                errs++
-                fsb.c.addErrorf( fsb.bc.td, "field '%s' redefined", bf.name() )
-            }
+            errs += fsb.addFieldRedefinitionErrors( bfl )
         }
     })
     return errs == 0
@@ -1113,6 +1191,7 @@ func ( bo *schemaBuildOrder ) sort() bool {
     hold.EachPair( func( qn *mg.QualifiedTypeName, _ interface{} ) {
         strs = append( strs, qn.ExternalForm() )
     })
+    sort.Strings( strs )
     names := strings.Join( strs, ", " )
     tmpl := "Schemas are involved in one or more mixin cycles: %s"
     bo.c.addErrorf( nil, tmpl, names )
@@ -1156,10 +1235,37 @@ func ( c *Compilation ) buildEnumType( bc buildContext ) {
     if ok { c.putBuiltType( ed ) }
 }
 
+func ( c *Compilation ) addFieldRedeclarationError( decl *tree.FieldDecl ) {
+    c.addErrorf( decl, "field '%s' is multiply-declared", decl.Name )
+}
+
+func ( c *Compilation ) checkSignatureFieldRedeclaration( 
+    decls []*tree.FieldDecl ) bool {
+
+    m := mg.NewIdentifierMap()
+    for _, decl := range decls {
+        var arr []*tree.FieldDecl
+        if v, ok := m.GetOk( decl.Name ); ok {
+            arr = v.( []*tree.FieldDecl )
+        } else { arr = make( []*tree.FieldDecl, 0, 2 ) }
+        arr = append( arr, decl )
+        m.Put( decl.Name, arr )
+    }
+    errs := 0
+    m.EachPair( func( nm *mg.Identifier, v interface{} ) {
+        arr := v.( []*tree.FieldDecl )
+        if len( arr ) == 1 { return }
+        errs++
+        for _, decl := range arr { c.addFieldRedeclarationError( decl ) }
+    })
+    return errs == 0
+}
+
 func ( c *Compilation ) setCallSignatureFields(
     decl *tree.CallSignature, sig *types.CallSignature, bs *buildScope ) bool {
 
     fldDecls := decl.Fields
+    if ! c.checkSignatureFieldRedeclaration( fldDecls ) { return false }
     fldDefs, errs := make( []*types.FieldDefinition, 0, len( fldDecls ) ), 0
     for _, fldDecl := range fldDecls {
         if fldDef := c.buildFieldDefinition( fldDecl, bs ); fldDef != nil {
@@ -1643,7 +1749,7 @@ func ( c *Compilation ) setFieldDefaults(
     }
 }
 
-func ( c *Compilation ) setStructFieldDefaults(
+func ( c *Compilation ) setFieldContainerFieldDefaults(
     bc buildContext, def types.Definition ) {
     c.setFieldDefaults( 
         bc.td.( tree.FieldContainer ).GetFields(),
@@ -1670,7 +1776,8 @@ func ( c *Compilation ) setServiceOpFieldDefaults(
 func ( c *Compilation ) setDefFieldDefaults( ctxs []buildContext ) {
     for _, bc := range ctxs {
         switch def := c.typeDefForQn( bc.qname() ).( type ) {
-        case *types.StructDefinition: c.setStructFieldDefaults( bc, def )
+        case *types.StructDefinition, *types.SchemaDefinition: 
+            c.setFieldContainerFieldDefaults( bc, def )
         case *types.PrototypeDefinition:
             fldDecls := bc.td.( *tree.PrototypeDecl ).Sig.Fields
             c.setFieldDefaults( fldDecls, def.Signature.GetFields(), bc.scope )
@@ -1681,8 +1788,10 @@ func ( c *Compilation ) setDefFieldDefaults( ctxs []buildContext ) {
 }
 
 func ( c *Compilation ) buildResult() *CompilationResult {
+    errs := make( []*Error, 0, len( c.errs ) )
+    for _, err := range c.errs { errs = append( errs, err ) }
     return &CompilationResult{
-        Errors: c.errs,
+        Errors: errs,
         BuiltTypes: c.builtTypes,
     }
 }

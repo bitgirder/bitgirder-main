@@ -5,6 +5,7 @@ import (
     "fmt"
     "bytes"
     "bitgirder/assert"
+    "sort"
     mg "mingle"
     "mingle/parser/tree"
     "mingle/types"
@@ -123,6 +124,10 @@ func ( et *compilerTest ) expectSrcError(
     return et
 }
 
+func ( et *compilerTest ) expectGlobalError( msg string ) *compilerTest {
+    return et.expectSrcError( nilSource, 0, 0, msg )
+}
+
 func ( et *compilerTest ) expectError( 
     line, col int, msg string ) *compilerTest {
     return et.expectSrcError( "<>", line, col, msg )
@@ -174,7 +179,12 @@ func ( et *compilerTest ) assertDefs( cr *CompilationResult ) {
             delete( unexpct, nm.String() )
         }
     })
-    a.Equalf( 0, len( unexpct ), "did not expect: %#v", unexpct )
+    if sz := len( unexpct ); sz > 0 {
+        strs := make( []string, 0, sz )
+        for k, _ := range unexpct { strs = append( strs, k ) }
+        sort.Strings( strs )
+        a.Fatalf( "did not expect: %v", strs )
+    }
 }
 
 func ( et *compilerTest ) makeErrorMap() map[ string ]errorExpect {
@@ -185,6 +195,7 @@ func ( et *compilerTest ) makeErrorMap() map[ string ]errorExpect {
 
 func ( et *compilerTest ) checkError( 
     err *Error, errMap map[ string ]errorExpect ) int {
+
     lc := err.Location
     if lc == nil { lc = &parser.Location{ 0, 0, nilSource } }
     k := makeErrorKey( lc.Source, lc.Line, lc.Col, err.Message )
@@ -196,6 +207,9 @@ func ( et *compilerTest ) checkError(
     return 1
 }
 
+// Note that we only call assertDefs() if no errors were expected, and after all
+// error checking has occurred, so that compiler errors that were unexpected can
+// cause the test to fail 
 func ( et *compilerTest ) call() {
     et.Log( "calling" )
     cr := et.compileResult()
@@ -207,5 +221,5 @@ func ( et *compilerTest ) call() {
     }
     errCount += len( errMap )
     if errCount > 0 { et.t.FailNow() }
-    et.assertDefs( cr )
+    if len( et.errs ) == 0 { et.assertDefs( cr ) }
 }

@@ -252,6 +252,8 @@ type SchemaDecl struct {
 
 func ( sd *SchemaDecl ) Locate() *parser.Location { return sd.Start }
 
+func ( sd *SchemaDecl ) GetFields() []*FieldDecl { return sd.Fields }
+
 func ( sd *SchemaDecl ) GetName() *mg.DeclaredTypeName { return sd.Info.Name }
 
 func ( sd *SchemaDecl ) createKeyedEltsAcc() *mg.IdentifierMap {

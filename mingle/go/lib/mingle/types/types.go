@@ -213,6 +213,8 @@ func NewSchemaDefinition() *SchemaDefinition {
 
 func ( sd *SchemaDefinition ) GetName() *mg.QualifiedTypeName { return sd.Name }
 
+func ( sd *SchemaDefinition ) GetFields() *FieldSet { return sd.Fields }
+
 type AliasedTypeDefinition struct {
     Name *mg.QualifiedTypeName
     AliasedType mg.TypeReference
