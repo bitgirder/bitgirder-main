@@ -398,12 +398,19 @@ func TestCompiler( t *testing.T ) {
             ),
         ),
 
-//        newCompilerTest( "standard-error-schema" ).
-//        addSource( "f1", `
-//            @version v1
-//            namespace ns1
-//            struct Error1 { @schema StandardError }
-//        ` ),
+        newCompilerTest( "standard-error-schema" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+            struct Error1 { @schema StandardError }
+        ` ).
+        expectDef( 
+            types.MakeStructDef( "ns1@v1/Error1", 
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "message", "String?", nil ),
+                },
+            ),
+        ),
     
         newCompilerTest( "alias-tests" ).
         addSource( "f1", `
@@ -806,7 +813,7 @@ func TestCompiler( t *testing.T ) {
             @version v1
             namespace ns1
 
-#            schema Schema1 { schemaField Int32 }
+            schema Schema1 { schemaField Int32 }
 
             struct Struct1 {}
             struct Struct2 {}
@@ -827,7 +834,7 @@ func TestCompiler( t *testing.T ) {
             namespace ns1
             
             struct Struct4 {
-#                @schema Schema1
+                @schema Schema1
                 inst1 Struct1
                 inst2 Struct2
                 str1 Alias1 # Implicitly brought in from compiler-src1.mg
@@ -867,8 +874,7 @@ func TestCompiler( t *testing.T ) {
             
             struct Exception1 {}
 
-            struct Exception2 {}
-#            struct Exception2 { @schema ns1@v1/Schema1 }
+            struct Exception2 { @schema ns1@v1/Schema1 }
             
             service Service1 {
             
@@ -884,8 +890,7 @@ func TestCompiler( t *testing.T ) {
             @version v1
             
             import ns1/* - [ 
-#                Schema1, Exception1, Exception2, Struct1, Service1,
-                Exception1, Exception2, Struct1, Service1,
+                Schema1, Exception1, Exception2, Struct1, Service1,
             ]
 
             import ns2/Exception1 
@@ -893,7 +898,7 @@ func TestCompiler( t *testing.T ) {
             namespace ns1:globTestNs
             
             struct Struct1 {
-#                @schema ns1/Schema1
+                @schema ns1/Schema1
                 inst1 Struct2
                 inst2 Struct4
                 inst3 Struct1 
@@ -914,21 +919,19 @@ func TestCompiler( t *testing.T ) {
             
             namespace ns1
 
-#            schema Schema1 { v2F1 String }
+            schema Schema1 { v2F1 String }
             
             struct Struct1 { f1 String default "hello" }
-            
-            struct Struct2 { f1 &Struct1? }
 
-#            struct Struct2 {
-#                @schema ns1@v1/Struct1
-#                f1 &Struct1? 
-#            }
+            struct Struct2 {
+                @schema ns1@v1/Schema1
+                f1 &Struct1? 
+            }
             
             alias Struct1V1 ns1@v1/Struct1
             
             struct Struct3 { 
-#                @schema Schema1
+                @schema Schema1
                 f2 Struct2 
                 f3 ns1@v1/Alias1
                 f4 Struct1V1*
@@ -938,14 +941,20 @@ func TestCompiler( t *testing.T ) {
                 op op1( f1 Struct1, f2 Int64~[0,12), f3 ns1@v1/Struct1*+ ): Null
             }
         ` ).
-//        expectDef(
-//            types.MakeSchemaDef( 
-//                "ns1@v1/Schema1",
-//                []*types.FieldDefinition{
-//                    types.MakeFieldDef( "schemaField", "Int32", nil ),
-//                },
-//            ),
-//        ).
+        expectDef( 
+            types.MakeSchemaDef( "ns1@v1/Schema1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "schemaField", "Int32", nil ),
+                },
+            ),
+        ).
+        expectDef( 
+            types.MakeSchemaDef( "ns1@v2/Schema1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "v2F1", "String", nil ),
+                },
+            ),
+        ).
         expectDef( types.MakeStructDef( "ns1@v1/Struct1", nil ) ).
         expectDef( types.MakeStructDef( "ns1@v1/Struct2", nil ) ).
         expectDef( types.MakeStructDef( "ns1@v1/Struct3", nil ) ).
@@ -976,6 +985,7 @@ func TestCompiler( t *testing.T ) {
             types.MakeStructDef(
                 "ns1@v1/Struct4",
                 []*types.FieldDefinition{
+                    types.MakeFieldDef( "schemaField", "Int32", nil ),
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct2", nil ),
                     types.MakeFieldDef( "str1", "mingle:core@v1/String?", nil ),
@@ -1024,7 +1034,7 @@ func TestCompiler( t *testing.T ) {
             types.MakeStructDef(
                 "ns2@v1/Exception2",
                 []*types.FieldDefinition{
-//                    types.MakeFieldDef( "str1", "mingle:core@v1/String*", nil ),
+                    types.MakeFieldDef( "schemaField", "Int32", nil ),
                 },
             ),
         ).
@@ -1065,6 +1075,7 @@ func TestCompiler( t *testing.T ) {
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct4", nil ),
                     types.MakeFieldDef( 
                         "inst3", "ns1:globTestNs@v1/Struct1", nil ),
+                    types.MakeFieldDef( "schemaField", "Int32", nil ),
                 },
             ),
         ).
@@ -1110,9 +1121,9 @@ func TestCompiler( t *testing.T ) {
         expectDef(
             types.MakeStructDef(
                 "ns1@v2/Struct2",
-//                "ns1@v1/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f1", "&ns1@v2/Struct1?", nil ),
+                    types.MakeFieldDef( "schemaField", "Int32", nil ),
                 },
             ),
         ).
@@ -1125,11 +1136,11 @@ func TestCompiler( t *testing.T ) {
         expectDef(
             types.MakeStructDef(
                 "ns1@v2/Struct3",
-//                "ns1@v2/Struct1",
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "f2", "ns1@v2/Struct2", nil ),
                     types.MakeFieldDef( "f3", "mingle:core@v1/String?", nil ),
                     types.MakeFieldDef( "f4", "ns1@v1/Struct1*", nil ),
+                    types.MakeFieldDef( "v2F1", "String", nil ),
                 },
             ),
         ).
@@ -1149,6 +1160,37 @@ func TestCompiler( t *testing.T ) {
                         []string{},
                     ),
                 ),
+            ),
+        ),
+
+        // early compiler versions didn't process imports correctly if the
+        // import order didn't follow the source file order
+        newCompilerTest( "import-resolve-ignores-source-order" ).
+        addSource( "f3", `
+            @version v1
+            import ns1/*
+            import ns2/S2
+            namespace ns3
+            struct S3 { f1 S1; f2 S2 }
+        ` ).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+        ` ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+            struct S1 {}
+        ` ).
+        expectDef( types.MakeStructDef( "ns1@v1/S1", nil ) ).
+        expectDef( types.MakeStructDef( "ns2@v1/S2", nil ) ).
+        expectDef(
+            types.MakeStructDef( "ns3@v1/S3",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
+                    types.MakeFieldDef( "f2", "ns2@v1/S2", nil ),
+                },
             ),
         ),
 
@@ -1207,43 +1249,49 @@ func TestCompiler( t *testing.T ) {
             struct S2 {}
             struct S3 {}
         ` ).
-        addLib( "lib1", "@version v1; namespace ns1C; struct S2 {}" ).
+        addLib( "lib1", "@version v1; namespace lib1; struct S2 {}" ).
         addSource( "f2", `
             @version v1
-            namespace ns1B
+            namespace ns2
             struct S2 {}
         ` ).
         addSource( "f3", `
             @version v1
             import ns1/[ S4 ]
             import ns1/S2
-            import ns1B/*
-            import ns1C/*
-            namespace ns2
+            import ns2/*
+            import lib1/*
+            namespace ns3
             struct S1 {}
         ` ).
-        expectSrcError( "f3", 3, 26, "No such import in ns1@v1: S4" ).
-        expectSrcError( "f3", 5, 20, 
-            "Importing S2 from ns1B@v1 would conflict with previous import " +
-            "from ns1@v1" ).
-        expectSrcError( "f3", 6, 20, 
-            "Importing S2 from ns1C@v1 would conflict with previous import " +
-            "from ns1@v1" ).
         addSource( "f4", `
             @version v1
             import ns1/* - [ S2 ]
-            namespace ns3
+            namespace ns4
             struct T1 { f1 S1; f2 S2 }
         ` ).
-        expectSrcError( "f4", 5, 35, "Unresolved type: S2" ).
-        addSource( "f5", 
-            "@version v1; import ns1/* - [ S4 ]; namespace ns4; struct T1 {}" ).
-        expectSrcError( "f5", 1, 31, "No such import in ns1@v1: S4" ).
+        addSource( "f5", `
+            @version v1
+            import ns1/* - [ S4 ] # bad import in another source
+            import lib1/[ S4 ] # bad import in a lib
+            namespace ns5
+            struct T1 {}
+        ` ).
         addSource( "f6", 
-            "@version v1; import ns1/*; namespace ns4; struct S1 {}" ).
+            "@version v1; import ns1/*; namespace ns6; struct S1 {}" ).
+        expectSrcError( "f3", 3, 26, "No such import in ns1@v1: S4" ).
+        expectSrcError( "f3", 5, 20, 
+            "Importing S2 from ns2@v1 would conflict with previous import " +
+            "from ns1@v1" ).
+        expectSrcError( "f3", 6, 20, 
+            "Importing S2 from lib1@v1 would conflict with previous import " +
+            "from ns1@v1" ).
+        expectSrcError( "f4", 5, 35, "Unresolved type: S2" ).
+        expectSrcError( "f5", 4, 27, "No such import in lib1@v1: S4" ).
+        expectSrcError( "f5", 3, 30, "No such import in ns1@v1: S4" ).
         expectSrcError( "f6", 1, 21,
             "Importing S1 from ns1@v1 would conflict with declared type in " +
-            "ns4@v1" ),
+            "ns6@v1" ),
 
         newCompilerTest( "core-type-implicit-resolution" ).
         setSource( `

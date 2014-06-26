@@ -28,9 +28,14 @@ func initCoreV1ValueTypes() {
     coreTypesV1.MustAdd( &PrimitiveDefinition{ Name: mg.QnameValue } )
 }
 
-func initCoreV1StandardError() *StructDefinition {
-    ed := NewStructDefinition()
+func initCoreV1StandardError() *SchemaDefinition {
+    ed := NewSchemaDefinition()
     ed.Name = asCoreV1Qn( "StandardError" )
+    fd := &FieldDefinition{
+        Name: mg.NewIdentifierUnsafe( []string{ "message" } ),
+        Type: mg.MustNullableTypeReference( mg.TypeString ),
+    }
+    ed.Fields.MustAdd( fd )
     coreTypesV1.MustAdd( ed )
     return ed
 }
@@ -47,32 +52,33 @@ func newCoreV1StandardError(
     return newV1StandardError( nm, mg.CoreNsV1, stdErr )
 }
 
-func initCoreV1MissingFieldsError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "MissingFieldsError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initCoreV1UnrecognizedFieldError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "UnrecognizedFieldError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initCoreV1ValueCastError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "ValueCastError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initServiceV1EndpointError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "EndpointError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
+//func initCoreV1MissingFieldsError( stdErr *StructDefinition ) {
+//    ed := newCoreV1StandardError( "MissingFieldsError", stdErr )
+//    coreTypesV1.MustAdd( ed )
+//}
+//
+//func initCoreV1UnrecognizedFieldError( stdErr *StructDefinition ) {
+//    ed := newCoreV1StandardError( "UnrecognizedFieldError", stdErr )
+//    coreTypesV1.MustAdd( ed )
+//}
+//
+//func initCoreV1ValueCastError( stdErr *StructDefinition ) {
+//    ed := newCoreV1StandardError( "ValueCastError", stdErr )
+//    coreTypesV1.MustAdd( ed )
+//}
+//
+//func initServiceV1EndpointError( stdErr *StructDefinition ) {
+//    ed := newCoreV1StandardError( "EndpointError", stdErr )
+//    coreTypesV1.MustAdd( ed )
+//}
 
 func initCoreV1Exceptions() {
-    stdErr := initCoreV1StandardError()
-    initCoreV1MissingFieldsError( stdErr )
-    initCoreV1UnrecognizedFieldError( stdErr )
-    initCoreV1ValueCastError( stdErr )
-    initServiceV1EndpointError( stdErr )
+    initCoreV1StandardError()
+//    stdErr := initCoreV1StandardError()
+//    initCoreV1MissingFieldsError( stdErr )
+//    initCoreV1UnrecognizedFieldError( stdErr )
+//    initCoreV1ValueCastError( stdErr )
+//    initServiceV1EndpointError( stdErr )
 }
 
 func init() {

@@ -1,1 +1,4 @@
 - move mingle-interpreter into mingle-compiler as an internal const evaluator
+
+- (compiler) disallow cyclic ns dependencies (equivalent to disallowing cyclic
+  imports)

@@ -122,6 +122,7 @@ func ( c *Compilation ) awaitDefaults( f func() ) {
 
 func ( c *Compilation ) SetExternalTypes( 
     extTypes *types.DefinitionMap ) *Compilation {
+
     c.extTypes = extTypes
     return c
 }
@@ -648,38 +649,55 @@ func ( c *Compilation ) isValidImport( qn *mg.QualifiedTypeName ) bool {
     return c.extTypes.HasKey( qn ) || c.typeDecls.HasKey( qn )
 }
 
-// Returns the initial set of non-qualified DeclaredTypeNames in play when
-// processing imports for an nsUnit having srcNs
-func ( c *Compilation ) initImportWorkingSet( 
-    srcNs *mg.Namespace ) map[ string ]interface{} {
-    res := map[ string ]interface{}{}
+type importResolveContext struct {
+
+    srcNs *mg.Namespace
+
+    // Initially, the set of non-qualified DeclaredTypeNames in play when
+    // processing imports for an nsUnit having srcNs. As imports are resolved,
+    // these are replaced with the namespaces in which they reside
+    acc map[ string ] interface{}
+
+    m importNsMap
+
+    imprt *tree.Import
+}
+
+func ( c *Compilation ) createImportResolveContext(
+    srcNs *mg.Namespace, 
+    imprt *tree.Import,
+    m importNsMap ) *importResolveContext {
+
+    res := &importResolveContext{ srcNs: srcNs, imprt: imprt, m: m }
+    res.acc = make( map[ string ]interface{} )
     c.typeDecls.EachPair( func( qn *mg.QualifiedTypeName, td interface{} ) {
-        if qn.Namespace.Equals( srcNs ) { res[ qn.Name.ExternalForm() ] = td }
+        if qn.Namespace.Equals( res.srcNs ) { 
+            res.acc[ qn.Name.ExternalForm() ] = td 
+        }
     })
     return res
 }
 
 func ( c *Compilation ) addImportByName(
-    srcNs *mg.Namespace,
+    ctx *importResolveContext,
     toAdd *mg.DeclaredTypeName, 
     inNs *mg.Namespace,
-    work map[ string ]interface{}, 
-    res importNsMap,
     errLoc *parser.Location ) {
+
     k := toAdd.ExternalForm()
     var prev interface{}
     var ok bool
-    prev, ok = work[ k ]
-    if ! ok { prev, ok = res[ k ] }
+    prev, ok = ctx.acc[ k ]
+    if ! ok { prev, ok = ctx.m[ k ] }
     if ok {
         prefix, suffix := "Importing %s from %s would conflict with ", ""
         switch prev.( type ) {
         case *mg.Namespace: suffix = "previous import from %s"
-        case tree.TypeDecl: suffix, prev = "declared type in %s", srcNs
-        default: panic( implErrorf( "Unhandled prev val: %T", prev ) )
+        case tree.TypeDecl: suffix, prev = "declared type in %s", ctx.srcNs
+        default: panic( libErrorf( "Unhandled prev val: %T", prev ) )
         }
         c.addErrorf( errLoc, prefix + suffix, toAdd, inNs, prev )
-    } else { work[ k ] = inNs }
+    } else { ctx.acc[ k ] = inNs }
 }
 
 func importExcludes( imprt *tree.Import, qn *mg.QualifiedTypeName ) bool {
@@ -689,27 +707,22 @@ func importExcludes( imprt *tree.Import, qn *mg.QualifiedTypeName ) bool {
     return false
 }
 
-func ( c *Compilation ) addInitialGlobNames(
-    srcNs *mg.Namespace,
-    work map[ string ]interface{}, 
-    res importNsMap, 
-    imprt *tree.Import ) {
-    errLoc := imprt.NamespaceLoc
+func ( c *Compilation ) addInitialGlobNames( ctx *importResolveContext ) {
+    errLoc := ctx.imprt.NamespaceLoc
     c.extTypes.EachDefinition(
         func ( td types.Definition ) {
-            if qn := td.GetName(); qn.Namespace.Equals( imprt.Namespace ) {
-                if ! importExcludes( imprt, qn ) {
-                    c.addImportByName( 
-                        srcNs, qn.Name, qn.Namespace, work, res, errLoc )
+            if qn := td.GetName(); qn.Namespace.Equals( ctx.imprt.Namespace ) {
+                if ! importExcludes( ctx.imprt, qn ) {
+                    c.addImportByName( ctx, qn.Name, qn.Namespace, errLoc )
                 }
             }
         },
     )
     c.typeDecls.EachPair(
         func( qn *mg.QualifiedTypeName, _ interface{} ) {
-            if ns := qn.Namespace; ns.Equals( imprt.Namespace ) {
-                if ! importExcludes( imprt, qn ) {
-                    c.addImportByName( srcNs, qn.Name, ns, work, res, errLoc )
+            if ns := qn.Namespace; ns.Equals( ctx.imprt.Namespace ) {
+                if ! importExcludes( ctx.imprt, qn ) {
+                    c.addImportByName( ctx, qn.Name, ns, errLoc )
                 }
             }
         },
@@ -718,10 +731,10 @@ func ( c *Compilation ) addInitialGlobNames(
 
 func ( c *Compilation ) checkImportTypes( 
     ns *mg.Namespace, typs []*tree.TypeListEntry ) []*mg.DeclaredTypeName {
+
     res := make( []*mg.DeclaredTypeName, 0, len( typs ) )
     for _, e := range typs {
-        qn := e.Name.ResolveIn( ns ) 
-        if c.isValidImport( qn ) {
+        if c.isValidImport( e.Name.ResolveIn( ns ) ) {
             res = append( res, e.Name )
         } else { 
             c.addErrorf( e.Loc, "No such import in %s: %s", ns, e.Name )
@@ -730,30 +743,38 @@ func ( c *Compilation ) checkImportTypes(
     return res
 }
 
-func ( c *Compilation ) addImportsFrom(
-    srcNs *mg.Namespace, imprt *tree.Import, m map[ string ]*mg.Namespace ) {
-    ns := imprt.Namespace
-    work := c.initImportWorkingSet( srcNs )
-    if imprt.IsGlob { 
-        c.addInitialGlobNames( srcNs, work, m, imprt ) 
+func ( c *Compilation ) addImportsFrom( ctx *importResolveContext ) {
+    ns := ctx.imprt.Namespace
+    if ctx.imprt.IsGlob { 
+        c.addInitialGlobNames( ctx )
     } else {
-        for _, nm := range c.checkImportTypes( ns, imprt.Includes ) {
-            c.addImportByName( srcNs, nm, ns, work, m, imprt.Locate() )
+        for _, nm := range c.checkImportTypes( ns, ctx.imprt.Includes ) {
+            c.addImportByName( ctx, nm, ns, ctx.imprt.NamespaceLoc )
         }
     }
-    for _, nm := range c.checkImportTypes( ns, imprt.Excludes ) {
-        delete( work, nm.ExternalForm() )
+    for _, nm := range c.checkImportTypes( ns, ctx.imprt.Excludes ) {
+        delete( ctx.acc, nm.ExternalForm() )
     }
-    for k, v := range work { 
-        if ns, ok := v.( *mg.Namespace ); ok { m[ k ] = ns }
+    for k, v := range ctx.acc { 
+        if ns, ok := v.( *mg.Namespace ); ok { ctx.m[ k ] = ns }
     }
 }
 
 func ( c *Compilation ) getImportResolves( u *tree.NsUnit ) importNsMap {
-    res := make( map[ string ]*mg.Namespace )
+    res := make( map[ string ] *mg.Namespace )
     srcNs := u.NsDecl.Namespace
-    for _, imprt := range u.Imports { c.addImportsFrom( srcNs, imprt, res ) }
+    for _, imprt := range u.Imports { 
+        ctx := c.createImportResolveContext( srcNs, imprt, res )
+        c.addImportsFrom( ctx ) 
+    }
     return res
+}
+
+func ( c *Compilation ) resolveImports() {
+    c.scopesByNs.EachPair( func( _ *mg.Namespace, v interface{} ) {
+        bs := v.( *buildScope )
+        bs.importResolves = c.getImportResolves( bs.nsUnit )
+    })
 }
 
 func ( c *Compilation ) addBuildableContexts(
@@ -816,19 +837,14 @@ func ( c *Compilation ) initBuildContexts() []buildContext {
         for _, td := range src.TypeDecls {
             if c.touchDecl( td, ns ) { bcOk = append( bcOk, td ) }
         }
-        resolvs := c.getImportResolves( src )
-        bs := &buildScope{ c: c, nsUnit: src, importResolves: resolvs }
+        bs := &buildScope{ c: c, nsUnit: src }
         c.scopesByNs.Put( ns, bs )
         for _, td := range bcOk {
             res = append( res, buildContext{ scope: bs, td: td } )
         }
     }
+    c.resolveImports()
     return c.sortByBuildOrder( res )
-}
-
-func ( c *Compilation ) printBuildOrder( ctxs []buildContext ) {
-    strs := make( []string, len( ctxs ) )
-    for i, ctx := range ctxs { strs[ i ] = ctx.td.GetName().ExternalForm() }
 }
 
 type qnameSort []buildContext
@@ -1824,7 +1840,6 @@ func ( c *Compilation ) buildResult() *CompilationResult {
 func ( c *Compilation ) Execute() ( cr *CompilationResult, err error ) {
     if err = c.validate(); err != nil { return }
     ctxs := c.initBuildContexts()
-    c.printBuildOrder( ctxs )
     c.buildAliasedTypes( ctxs )
     c.buildSchemaTypes( ctxs )
     c.buildTypesInitial( ctxs )

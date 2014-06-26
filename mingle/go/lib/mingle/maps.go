@@ -178,3 +178,9 @@ func ( m *NamespaceMap ) PutSafe( ns *Namespace, val interface{} ) error {
 }
 
 func ( m *NamespaceMap ) Delete( ns *Namespace ) { m.implDelete( ns ) }
+
+func ( m *NamespaceMap ) EachPair( f func( ns *Namespace, val interface{} ) ) {
+    m.implEachPair( 
+        func( k mapImplKey, v interface{} ) { f( k.( *Namespace ), v ) },
+    )
+}

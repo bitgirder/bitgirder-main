@@ -347,10 +347,11 @@ class GoBinBuilder < StandardProjTask
     include FileSigMixin
 
     private
-    def bin_type
+    def bin_type( raise_if_nil = true )
 
         case res = @target[ 3 ] 
-        when nil then raise "No bin type in target"
+        when nil 
+            raise "No bin type in target" if raise_if_nil
         when MOD_TEST, MOD_BIN then res
         else raise "Unrecognized bin build target: #{res}"
         end
@@ -358,7 +359,7 @@ class GoBinBuilder < StandardProjTask
 
     private
     def test_bin?
-        bin_type == MOD_TEST
+        bin_type( false ) == MOD_TEST
     end
 
     private
