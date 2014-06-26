@@ -663,11 +663,32 @@ type importResolveContext struct {
     imprt *tree.Import
 }
 
+// Fails if the namespace for imprt is not known to this compilation. A return
+// value of true doesn't necessarily mean that imprt is valid, as may be
+// revealed by downstream import processing.
+func ( c *Compilation ) checkImportTargetNamespace( imprt *tree.Import ) bool {
+    ns, found := imprt.Namespace, 0
+    c.typeDecls.EachPair( func( qn *mg.QualifiedTypeName, _ interface{} ) {
+        if found > 0 { return }
+        if qn.Namespace.Equals( ns ) { found++ }
+    })
+    if found > 0 { return true }
+    c.extTypes.EachDefinition( func( def types.Definition ) {
+        if found > 0 { return }
+        if def.GetName().Namespace.Equals( ns ) { found++ }
+    })
+    if found > 0 { return true }
+    c.addErrorf( imprt.NamespaceLoc, "Unknown target namespace for import: %s",
+        ns )
+    return false
+}
+
 func ( c *Compilation ) createImportResolveContext(
     srcNs *mg.Namespace, 
     imprt *tree.Import,
     m importNsMap ) *importResolveContext {
 
+    if ! c.checkImportTargetNamespace( imprt ) { return nil }
     res := &importResolveContext{ srcNs: srcNs, imprt: imprt, m: m }
     res.acc = make( map[ string ]interface{} )
     c.typeDecls.EachPair( func( qn *mg.QualifiedTypeName, td interface{} ) {
@@ -765,7 +786,7 @@ func ( c *Compilation ) getImportResolves( u *tree.NsUnit ) importNsMap {
     srcNs := u.NsDecl.Namespace
     for _, imprt := range u.Imports { 
         ctx := c.createImportResolveContext( srcNs, imprt, res )
-        c.addImportsFrom( ctx ) 
+        if ctx != nil { c.addImportsFrom( ctx ) }
     }
     return res
 }

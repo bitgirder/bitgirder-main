@@ -1296,6 +1296,13 @@ func TestCompiler( t *testing.T ) {
         ` ).
         addSource( "f6", 
             "@version v1; import ns1/*; namespace ns6; struct S1 {}" ).
+        addSource( "f7", `
+            @version v1
+            import not:here/*
+            import also:bad/S1
+            namespace ns7
+            struct S1 {}
+        ` ).
         expectSrcError( "f3", 3, 26, "No such import in ns1@v1: S4" ).
         expectSrcError( "f3", 5, 20, 
             "Importing S2 from ns2@v1 would conflict with previous import " +
@@ -1308,7 +1315,11 @@ func TestCompiler( t *testing.T ) {
         expectSrcError( "f5", 3, 30, "No such import in ns1@v1: S4" ).
         expectSrcError( "f6", 1, 21,
             "Importing S1 from ns1@v1 would conflict with declared type in " +
-            "ns6@v1" ),
+            "ns6@v1" ).
+        expectSrcError( "f7", 3, 20, 
+            "Unknown target namespace for import: not:here@v1" ).
+        expectSrcError( "f7", 4, 20, 
+            "Unknown target namespace for import: also:bad@v1" ),
 
         newCompilerTest( "core-type-implicit-resolution" ).
         setSource( `
