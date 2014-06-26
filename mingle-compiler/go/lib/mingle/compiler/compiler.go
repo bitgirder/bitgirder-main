@@ -1137,6 +1137,12 @@ func ( c *Compilation ) buildStructType( bc buildContext ) {
     if ok { c.putBuiltType( sd ) }
 }
 
+func ( c *Compilation ) buildStructTypes( ctxs []buildContext ) {
+    for _, bc := range ctxs {
+        if _, ok := bc.td.( *tree.StructDecl ); ok { c.buildStructType( bc ) }
+    }
+}
+
 type schemaBuildOrder struct {
     c *Compilation
     ord []buildContext
@@ -1234,6 +1240,14 @@ func ( c *Compilation ) buildSchemaTypes( ctxs []buildContext ) {
     for _, bc := range ord { c.buildSchemaType( bc ) }
 }
 
+func ( c *Compilation ) buildPrototypeTypes( ctxs []buildContext ) {
+    for _, bc := range ctxs {
+        if _, ok := bc.td.( *tree.PrototypeDecl ); ok { 
+            c.buildPrototypeType( bc )
+        }
+    }
+}
+
 func ( c *Compilation ) buildEnumType( bc buildContext ) {
     decl := bc.td.( *tree.EnumDecl )
     ed := &types.EnumDefinition{ Name: bc.qname(), Values: []*mg.Identifier{} }
@@ -1249,6 +1263,12 @@ func ( c *Compilation ) buildEnumType( bc buildContext ) {
         }
     }
     if ok { c.putBuiltType( ed ) }
+}
+
+func ( c *Compilation ) buildEnumTypes( ctxs []buildContext ) {
+    for _, bc := range ctxs {
+        if _, ok := bc.td.( *tree.EnumDecl ); ok { c.buildEnumType( bc ) }
+    }
 }
 
 func ( c *Compilation ) addFieldRedeclarationError( decl *tree.FieldDecl ) {
@@ -1413,14 +1433,9 @@ func ( c *Compilation ) buildServiceType( bc buildContext ) {
     if ok { c.putBuiltType( sd ) }
 }
 
-func ( c *Compilation ) buildTypesInitial( ctxs []buildContext ) {
+func ( c *Compilation ) buildServiceTypes( ctxs []buildContext ) {
     for _, bc := range ctxs {
-        switch bc.td.( type ) {
-        case *tree.StructDecl: c.buildStructType( bc )
-        case *tree.EnumDecl: c.buildEnumType( bc )
-        case *tree.PrototypeDecl: c.buildPrototypeType( bc )
-        case *tree.ServiceDecl: c.buildServiceType( bc )
-        }
+        if _, ok := bc.td.( *tree.ServiceDecl ); ok { c.buildServiceType( bc ) }
     }
 }
 
@@ -1817,32 +1832,22 @@ func ( c *Compilation ) buildResult() *CompilationResult {
 // any imported libs. After this phase all types available to all NsUnits will
 // be known, though not necessarily defined.
 //
-// - Build all aliased type defs. As of this writing, this step could actually
-// be combined with the one following, since all type aliases are (re-)resolved
-// dynamically. Later though there may be a pre-resolution phase, and in that
-// case this step will need to precede other compilation steps. As for the
-// moment, the reason to isolate this step is to ensure a specific processing
-// order, which is only important to aid in our assertion of compiler error
-// handling (for circular alias chains we'd like to use the order of error
-// emission as part of our assertions).
+// - Define alias,enum,schema,prototype,struct,service types in an order that
+// ensures that all simple types are defined before more the more complex ones
+// that may composite them.
 //
-// - Define all schema types
-//
-// - Define all declared instantiable types using the types named in step 1, but
-// ignoring field defaults, since correct evaluation of default expressions may
-// depend on knowledge of some as-yet-undefined type.
-//
-// - For any instantiable type defined above involving a field default
-// expression, redefine that type, this time computing the field defaults.
-//
-// - Define services.
+// - For any instantiable type involving a field default expression, redefine
+// that type, this time computing and validating the field defaults.
 //
 func ( c *Compilation ) Execute() ( cr *CompilationResult, err error ) {
     if err = c.validate(); err != nil { return }
     ctxs := c.initBuildContexts()
     c.buildAliasedTypes( ctxs )
+    c.buildEnumTypes( ctxs )
     c.buildSchemaTypes( ctxs )
-    c.buildTypesInitial( ctxs )
+    c.buildPrototypeTypes( ctxs )
+    c.buildStructTypes( ctxs )
+    c.buildServiceTypes( ctxs )
     c.setDefFieldDefaults( ctxs )
     return c.buildResult(), nil
 }

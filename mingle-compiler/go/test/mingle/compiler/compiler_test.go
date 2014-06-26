@@ -1163,8 +1163,10 @@ func TestCompiler( t *testing.T ) {
             ),
         ),
 
-        // early compiler versions didn't process imports correctly if the
-        // import order didn't follow the source file order
+        // Early compiler versions didn't process imports correctly if the
+        // import order didn't follow the source file order. Also we include a
+        // service that references a security prototype to ensure that the
+        // compiler correctly resolves simple types before complex ones
         newCompilerTest( "import-resolve-ignores-source-order" ).
         addSource( "f3", `
             @version v1
@@ -1172,6 +1174,7 @@ func TestCompiler( t *testing.T ) {
             import ns2/S2
             namespace ns3
             struct S3 { f1 S1; f2 S2 }
+            service Service1 { @security Sec1 }
         ` ).
         addSource( "f2", `
             @version v1
@@ -1182,6 +1185,7 @@ func TestCompiler( t *testing.T ) {
             @version v1
             namespace ns1
             struct S1 {}
+            prototype Sec1( authentication String ): String
         ` ).
         expectDef( types.MakeStructDef( "ns1@v1/S1", nil ) ).
         expectDef( types.MakeStructDef( "ns2@v1/S2", nil ) ).
@@ -1192,7 +1196,20 @@ func TestCompiler( t *testing.T ) {
                     types.MakeFieldDef( "f2", "ns2@v1/S2", nil ),
                 },
             ),
-        ),
+        ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/Sec1" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{
+                        types.MakeFieldDef( "authentication", "String", nil ),
+                    },
+                    "String",
+                    []string{},
+                ),
+            },
+        ).
+        expectDef( types.MakeServiceDef( "ns3@v1/Service1", "ns1@v1/Sec1" ) ),
 
         newCompilerTest( "import-include-exclude-success" ).
         addLib( "lib1", "@version v1; namespace lib1; struct S4 {}" ).
