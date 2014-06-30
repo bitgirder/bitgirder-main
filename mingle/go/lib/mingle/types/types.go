@@ -134,6 +134,10 @@ func ( fs *FieldSet ) MustAdd( fd *FieldDefinition ) {
     } else { fs.flds.Put( nm, fd ) }
 }
 
+func ( fs *FieldSet ) MustAddAll( fs2 *FieldSet ) {
+    fs2.EachDefinition( func( fd *FieldDefinition ) { fs.MustAdd( fd ) } )
+}
+
 func ( fs *FieldSet ) EachDefinition( f func( fd *FieldDefinition ) ) {
     fs.flds.EachPair( func( id *mg.Identifier, fd interface{} ) {
         f( fd.( *FieldDefinition ) )
@@ -197,6 +201,10 @@ func ( sd *StructDefinition ) GetName() *mg.QualifiedTypeName {
 }
 
 func ( sd *StructDefinition ) GetFields() *FieldSet { return sd.Fields }
+
+func ( sd *StructDefinition ) mustMixinSchema( schema *SchemaDefinition ) {
+    sd.Fields.MustAddAll( schema.Fields )
+}
 
 func ( sd *StructDefinition ) SatisfiesSchema( sc *SchemaDefinition ) bool {
     return sd.Fields.ContainsFields( sc.Fields )

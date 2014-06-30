@@ -287,7 +287,6 @@ func ( cr *CastReactor ) processValueAllocationWithPointerType(
 }
 
 func ( cr *CastReactor ) shouldSuppressAllocation( typ mg.TypeReference ) bool {
-    log.Printf( "checking whether to suppress allocation of %s", typ )
     if cr.ShouldSuppressAllocation == nil { return true }
     return cr.ShouldSuppressAllocation( typ )
 }
