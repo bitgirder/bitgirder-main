@@ -3,9 +3,11 @@ package types
 import (
     mg "mingle"
     mgRct "mingle/reactor"
+    "bitgirder/objpath"
 )
 
 type CastReactorTest struct {
+    Path objpath.PathNode
     Map *DefinitionMap
     Type mg.TypeReference
     In mg.Value

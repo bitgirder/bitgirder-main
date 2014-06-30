@@ -8,15 +8,20 @@ import (
 )
 
 func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
-    rct := NewCastReactorDefinitionMap( t.Type, t.Map )
+    rcts := []interface{}{}
+    if p := t.Path; p != nil {
+        rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
+    }
+    rcts = append( rcts, NewCastReactorDefinitionMap( t.Type, t.Map ) )
     vb := mgRct.NewValueBuilder()
+    rcts = append( rcts, vb )
 //    dbg := func( pref string ) mgRct.ReactorEventProcessor {
 //        res := mgRct.NewDebugReactor( c )
 //        res.Label = pref
 //        return res
 //    }
 //    pip := mgRct.InitReactorPipeline( dbg( "top" ), rct, dbg( "vb" ), vb )
-    pip := mgRct.InitReactorPipeline( rct, vb )
+    pip := mgRct.InitReactorPipeline( rcts... )
     c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         mgRct.CheckNoError( t.Err, c )

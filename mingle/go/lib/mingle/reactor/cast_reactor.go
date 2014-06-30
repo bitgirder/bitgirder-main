@@ -112,7 +112,9 @@ func ( cr *CastReactor ) dumpStack( pref string ) {
     log.Print( bb.String() )
 }
 
-func NewCastReactor( expct mg.TypeReference, iface CastInterface ) *CastReactor {
+func NewCastReactor( 
+    expct mg.TypeReference, iface CastInterface ) *CastReactor {
+
     res := &CastReactor{ stack: stack.NewStack(), iface: iface }
     res.stack.Push( expct )
     return res
