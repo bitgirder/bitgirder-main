@@ -12,6 +12,7 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     if p := t.Path; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
+//    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
     rcts = append( rcts, NewCastReactorDefinitionMap( t.Type, t.Map ) )
     vb := mgRct.NewValueBuilder()
     rcts = append( rcts, vb )

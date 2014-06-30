@@ -79,7 +79,7 @@ func ( ft fieldTyper ) FieldTypeFor(
 }
 
 func ( ci defMapCastIface ) fieldTyperForStruct(
-    def *StructDefinition, path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
+    def *StructDefinition, path objpath.PathNode ) ( FieldTyper, error ) {
 
     return fieldTyper{ flds: def.Fields, dm: ci.dm }, nil
 }
@@ -91,8 +91,7 @@ func ( ci defMapCastIface ) fieldTyperForSchema(
 }
 
 func ( ci defMapCastIface ) FieldTyperFor(
-    qn *mg.QualifiedTypeName, 
-    path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
+    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
 
     if def, ok := ci.dm.GetOk( qn ); ok {
         switch v := def.( type ) {
@@ -151,6 +150,12 @@ func ( ci defMapCastIface ) CastAtomic(
         if ed, ok := def.( *EnumDefinition ); ok {
             res, err := castEnum( v, ed, path )
             return res, err, true
+        } 
+        if ev, ok := v.( *mg.Enum ); ok {
+            if ! ev.Type.Equals( at.Name ) { return nil, nil, false }
+            if _, ok := def.( *StructDefinition ); ok {
+                return nil, notAnEnumTypeError( at, path ), true
+            }
         }
     }
     return nil, nil, false
@@ -187,7 +192,7 @@ func ( fsg defMapFieldSetGetter ) getFieldSet(
 
 type castReactor struct {
     typ mg.TypeReference
-    iface mgRct.CastInterface
+    iface CastInterface
     dm *DefinitionMap
     fsg fieldSetGetter
     stack *stack.Stack
@@ -207,7 +212,7 @@ func ( cr *castReactor ) shouldSuppressAllocation( typ mg.TypeReference ) bool {
 }
 
 func ( cr *castReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    mgCastRct := mgRct.NewCastReactor( cr.typ, cr.iface )
+    mgCastRct := NewCastReactor( cr.typ, cr.iface )
     mgCastRct.SkipPathSetter = cr.skipPathSetter
     mgCastRct.ShouldSuppressAllocation = func( typ mg.TypeReference ) bool {
         return cr.shouldSuppressAllocation( typ )
@@ -330,6 +335,10 @@ func ( cr *castReactor ) startContainer() error {
     return nil
 }
 
+func notAnEnumTypeError( typ mg.TypeReference, path objpath.PathNode ) error {
+    return mg.NewValueCastErrorf( path, "not an enum type: %s", typ )
+}
+
 // we only do value checks here that are specific to this cast, namely having to
 // do with enums. If the value is an enum, we check that we recogzize the type
 // and that the type is actually an enum. We don't actually check the enum value
@@ -341,8 +350,8 @@ func ( cr *castReactor ) valueEvent(
     if en, ok := ve.Val.( *mg.Enum ); ok {
         if def, ok := cr.dm.GetOk( en.Type ); ok {
             if _, ok := def.( *EnumDefinition ); ok { return ve, nil }
-            tmpl := "not an enum type: %s"
-            return nil, mg.NewValueCastErrorf( ve.GetPath(), tmpl, en.Type )
+            enTyp := en.Type.AsAtomicType()
+            return nil, notAnEnumTypeError( enTyp, ve.GetPath() )
         } 
         return nil, newUnrecognizedTypeError( ve.GetPath(), en.Type )
     }
@@ -375,7 +384,7 @@ func ( cr *castReactor ) ProcessEvent(
 
 func newCastReactorBase(
     typ mg.TypeReference, 
-    iface mgRct.CastInterface,
+    iface CastInterface,
     dm *DefinitionMap, 
     fsg fieldSetGetter ) *castReactor {
 
@@ -493,8 +502,7 @@ func ( pi parametersCastIface ) fieldSet() *FieldSet {
 }
 
 func ( pi parametersCastIface ) FieldTyperFor(
-    qn *mg.QualifiedTypeName, 
-    path objpath.PathNode ) ( mgRct.FieldTyper, error ) {
+    qn *mg.QualifiedTypeName, path objpath.PathNode ) ( FieldTyper, error ) {
 
     if qn.Equals( qnTypedParameterMap ) { 
         return fieldTyper{ flds: pi.fieldSet(), dm: pi.defs }, nil

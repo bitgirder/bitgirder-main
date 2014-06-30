@@ -767,17 +767,17 @@ func ( rti *rtInit ) addStructValCastTests() {
             },
         )
     }
-    tcErr1 := func( act interface{}, p objpath.PathNode ) error {
-        return newTcErr( "ns1@v1/S1", act, p )
+    tcErr1 := func( act interface{} ) error {
+        return newTcErr( "ns1@v1/S1", act, nil )
     }
-    addFail( parser.MustStruct( "ns1@v1/S2" ), tcErr1( "ns1@v1/S2", nil ) )
-    addFail( int32( 1 ), tcErr1( "Int32", nil ) )
-    addFail( parser.MustEnum( "ns1@v1/E1", "e" ), tcErr1( "ns1@v1/E1", nil ) )
+    addFail( parser.MustStruct( "ns1@v1/S2" ), tcErr1( "ns1@v1/S2" ) )
+    addFail( int32( 1 ), tcErr1( "Int32" ) )
+    addFail( parser.MustEnum( "ns1@v1/E1", "e" ), tcErr1( "ns1@v1/E1" ) )
     addFail( 
         parser.MustEnum( "ns1@v1/S1", "e" ), 
         newVcErr( nil, "not an enum type: ns1@v1/S1" ),
     )
-    addFail( mg.MustList(), tcErr1( mg.TypeOpaqueList, nil ) )
+    addFail( mg.MustList(), tcErr1( mg.TypeOpaqueList ) )
     s1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     s2 := parser.MustStruct( "ns1@v1/S2" )
     rti.addSucc( s1, s1, mg.TypeValue, dm )
