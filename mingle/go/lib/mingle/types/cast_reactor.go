@@ -70,15 +70,6 @@ type CastReactor struct {
     stack *stack.Stack
 
     SkipPathSetter bool
-
-    CastingList func( le *mgRct.ListStartEvent, lt *mg.ListTypeReference ) error
-
-    AllocationSuppressed func( ve *mgRct.ValueAllocationEvent ) error
-
-    ProcessValueReference func( 
-        ev *mgRct.ValueReferenceEvent, 
-        typ mg.TypeReference,
-        next mgRct.ReactorEventProcessor ) error
 }
 
 func ( cr *CastReactor ) dumpStack( pref string ) {
@@ -347,11 +338,6 @@ func ( cr *CastReactor ) processValueAllocationWithPointerType(
 
     ev2 := mgRct.CopyEvent( ev, true ).( *mgRct.ValueAllocationEvent )
     ev2.Type = pt.Type
-    if ev.Id != mg.PointerIdNull && cr.AllocationSuppressed != nil {
-        if ! pt.Type.Equals( ev.Type ) {
-            if err := cr.AllocationSuppressed( ev ); err != nil { return err }
-        }
-    }
     return cr.sendAllocEvent( ev2, next )
 }
 
@@ -373,10 +359,6 @@ func ( cr *CastReactor ) processValueAllocationWithoutPointerType(
     next mgRct.ReactorEventProcessor ) error {
 
     if ! cr.shouldSuppressAllocation( typ ) { return next.ProcessEvent( ev ) }
-
-    if ev.Id != mg.PointerIdNull && cr.AllocationSuppressed != nil {
-        if err := cr.AllocationSuppressed( ev ); err != nil { return err }
-    }
     return nil
 }
 
@@ -401,12 +383,6 @@ func ( cr *CastReactor ) processValueReference(
 
     typ := cr.stack.Pop().( mg.TypeReference )
     cr.dumpStack( fmt.Sprintf( "before processing ref %s", typ ) )
-    if cr.ProcessValueReference != nil { 
-        if err := cr.ProcessValueReference( ev, typ, next ); err != nil { 
-            return err 
-        }
-        return nil
-    }
     return next.ProcessEvent( ev )
 }
 
@@ -684,13 +660,6 @@ func ( cr *CastReactor ) processListStartWithListType(
     callTyp mg.TypeReference,
     next mgRct.ReactorEventProcessor ) error {
     
-    if ! le.Type.Equals( lt ) {
-        if le.Id != mg.PointerIdNull {
-            if cr.CastingList != nil {
-                if err := cr.CastingList( le, lt ); err != nil { return err }
-            }
-        }
-    }
     sp := objpath.CopyOf( le.GetPath() )
     cr.stack.Push( &listCast{ lt: lt, startPath: sp } )
     return next.ProcessEvent( le )
