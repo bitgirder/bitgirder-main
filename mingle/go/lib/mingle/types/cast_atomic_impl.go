@@ -298,3 +298,40 @@ func castAtomicWithCallType(
     }
     return
 }
+
+func completeCastEnum(
+    id *mg.Identifier, 
+    ed *EnumDefinition, 
+    path objpath.PathNode ) ( *mg.Enum, error ) {
+
+    if res := ed.GetValue( id ); res != nil { return res, nil }
+    tmpl := "illegal value for enum %s: %s"
+    return nil, mg.NewValueCastErrorf( path, tmpl, ed.GetName(), id )
+}
+
+func castEnumFromString( 
+    s string, ed *EnumDefinition, path objpath.PathNode ) ( *mg.Enum, error ) {
+
+    id, err := parser.ParseIdentifier( s )
+    if err != nil {
+        tmpl := "invalid enum value %q: %s"
+        return nil, mg.NewValueCastErrorf( path, tmpl, s, err )
+    }
+    return completeCastEnum( id, ed, path )
+}
+
+func castEnum( 
+    val mg.Value, 
+    ed *EnumDefinition, 
+    path objpath.PathNode ) ( *mg.Enum, error ) {
+
+    switch v := val.( type ) {
+    case mg.String: return castEnumFromString( string( v ), ed, path )
+    case *mg.Enum: 
+        if v.Type.Equals( ed.GetName() ) {
+            return completeCastEnum( v.Value, ed, path )
+        }
+    }
+    t := ed.GetName().AsAtomicType()
+    return nil, mg.NewTypeCastErrorValue( t, val, path )
+}
