@@ -1746,8 +1746,19 @@ func ( c *Compilation ) buildExpression(
     return expTree.compile( expctType, bs )
 }
 
-func castConstVal( val mg.Value, typ mg.TypeReference ) ( mg.Value, error ) {
-    rct := mgRct.NewDefaultCastReactor( typ )
+func ( c *Compilation ) buildConstValCastDefMap() *types.DefinitionMap {
+    res := types.NewDefinitionMap()
+    res.MustAddFrom( c.extTypes )
+    res.MustAddFrom( c.builtTypes )
+    return res
+}
+
+func ( c *Compilation ) castConstVal( 
+    val mg.Value, 
+    typ mg.TypeReference, 
+    dm *types.DefinitionMap ) ( mg.Value, error ) {
+
+    rct := types.NewCastReactor( typ, dm )
     vb := mgRct.NewValueBuilder()
     pip := mgRct.InitReactorPipeline( rct, vb )
     if err := mgRct.VisitValue( val, pip ); err != nil { return nil, err }
@@ -1755,8 +1766,12 @@ func castConstVal( val mg.Value, typ mg.TypeReference ) ( mg.Value, error ) {
 }
 
 func ( c *Compilation ) validateConstVal(
-    val mg.Value, typ mg.TypeReference, errLoc *parser.Location ) bool {
-    if _, err := castConstVal( val, typ ); err != nil {
+    val mg.Value, 
+    typ mg.TypeReference, 
+    dm *types.DefinitionMap,
+    errLoc *parser.Location ) bool {
+
+    if _, err := c.castConstVal( val, typ, dm ); err != nil {
         if ve, ok := err.( *mg.ValueCastError ); ok {
             c.addError( errLoc, ve.Message() )
         } else { c.addError( errLoc, err.Error() ) }
@@ -1768,11 +1783,13 @@ func ( c *Compilation ) validateConstVal(
 func ( c *Compilation ) evaluateConstant(
     exp *compiledExpression,
     expctType mg.TypeReference,
+    dm *types.DefinitionMap,
     errLoc *parser.Location, 
     bs *buildScope ) mg.Value {
+
     val, err := interp.Evaluate( exp.exp )
     if err == nil {
-        if ! c.validateConstVal( val, expctType, errLoc ) { return nil }
+        if ! c.validateConstVal( val, expctType, dm, errLoc ) { return nil }
     } else {
         if evErr, ok := err.( *interp.EvaluationError ); ok {
             if ubErr, ok := evErr.Err.( *interp.UnboundIdentifierError ); ok {
@@ -1788,30 +1805,42 @@ func ( c *Compilation ) evaluateConstant(
 }
 
 func ( c *Compilation ) setFieldDefaults( 
-    fldDecls []*tree.FieldDecl, fs *types.FieldSet, bs *buildScope ) {
+    fldDecls []*tree.FieldDecl, 
+    fs *types.FieldSet, 
+    dm *types.DefinitionMap,
+    bs *buildScope ) {
+
     for _, fldDecl := range fldDecls {
         if deflExp := fldDecl.Default; deflExp != nil {
             fldDef := fs.Get( fldDecl.Name )
             fldType := fldDef.Type
             if exp := c.buildExpression( deflExp, fldType, bs ); exp != nil {
                 errLoc := deflExp.Locate()
-                fldDef.Default = c.evaluateConstant( exp, fldType, errLoc, bs )
+                fldDef.Default = 
+                    c.evaluateConstant( exp, fldType, dm, errLoc, bs )
             }
         } 
     }
 }
 
 func ( c *Compilation ) setFieldContainerFieldDefaults(
-    bc buildContext, def types.Definition ) {
+    bc buildContext, 
+    def types.Definition,
+    dm *types.DefinitionMap ) {
+
     c.setFieldDefaults( 
         bc.td.( tree.FieldContainer ).GetFields(),
         def.( types.FieldContainer ).GetFields(),
+        dm,
         bc.scope,
     )
 }
 
 func ( c *Compilation ) setServiceOpFieldDefaults(
-    bc buildContext, sd *types.ServiceDefinition ) {
+    dm *types.DefinitionMap,
+    bc buildContext, 
+    sd *types.ServiceDefinition ) {
+
     decl := bc.td.( *tree.ServiceDecl )
     opDefs := types.OpDefsByName( sd.Operations )
     for _, opDecl := range decl.Operations {
@@ -1820,20 +1849,24 @@ func ( c *Compilation ) setServiceOpFieldDefaults(
             c.setFieldDefaults(
                 opDecl.Call.Fields, 
                 opDef.( *types.OperationDefinition ).Signature.GetFields(), 
+                dm,
                 bc.scope )
         }
     }
 }
 
 func ( c *Compilation ) setDefFieldDefaults( ctxs []buildContext ) {
+    dm := c.buildConstValCastDefMap()
     for _, bc := range ctxs {
         switch def := c.typeDefForQn( bc.qname() ).( type ) {
         case *types.StructDefinition, *types.SchemaDefinition: 
-            c.setFieldContainerFieldDefaults( bc, def )
+            c.setFieldContainerFieldDefaults( bc, def, dm )
         case *types.PrototypeDefinition:
             fldDecls := bc.td.( *tree.PrototypeDecl ).Sig.Fields
-            c.setFieldDefaults( fldDecls, def.Signature.GetFields(), bc.scope )
-        case *types.ServiceDefinition: c.setServiceOpFieldDefaults( bc, def )
+            sigFlds := def.Signature.GetFields()
+            c.setFieldDefaults( fldDecls, sigFlds, dm, bc.scope )
+        case *types.ServiceDefinition: 
+            c.setServiceOpFieldDefaults( dm, bc, def )
         }
     }
     for _, f := range c.onDefaults { f() }

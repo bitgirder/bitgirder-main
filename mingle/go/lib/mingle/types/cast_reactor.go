@@ -87,12 +87,6 @@ func ( cr *CastReactor ) dumpStack( pref string ) {
     log.Print( bb.String() )
 }
 
-func NewCastReactor0( expct mg.TypeReference ) *CastReactor {
-    res := &CastReactor{ stack: stack.NewStack() }
-    res.stack.Push( expct )
-    return res
-}
-
 func NewCastReactor( expct mg.TypeReference, dm *DefinitionMap ) *CastReactor {
     res := &CastReactor{ stack: stack.NewStack(), dm: dm }
     res.stack.Push( expct )
@@ -104,25 +98,12 @@ func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     if ! cr.SkipPathSetter { mgRct.EnsurePathSettingProcessor( pip ) }
 }
 
-type fieldCtx struct {
-    depth int
+type fieldCast struct {
+    ft fieldTyper
     await *mg.IdentifierMap
 }
 
-type fieldCast struct {
-    ft fieldTyper
-    fldCtx *fieldCtx
-}
-
-func newFieldCtx( flds *FieldSet ) *fieldCtx {
-    res := &fieldCtx{ await: mg.NewIdentifierMap() }
-    flds.EachDefinition( func( fd *FieldDefinition ) {
-        res.await.Put( fd.Name, fd )
-    })
-    return res
-}
-
-func ( fc *fieldCtx ) removeOptFields() {
+func ( fc *fieldCast ) removeOptFields() {
     done := make( []*mg.Identifier, 0, fc.await.Len() )
     fc.await.EachPair( func( _ *mg.Identifier, val interface{} ) {
         fd := val.( *FieldDefinition )
@@ -150,7 +131,7 @@ func feedDefault(
 }
 
 func processDefaults(
-    fldCtx *fieldCtx, 
+    fc *fieldCast,
     p objpath.PathNode, 
     next mgRct.ReactorEventProcessor ) error {
 
@@ -160,16 +141,16 @@ func processDefaults(
             if err := feedDefault( fld, defl, p, next ); err != nil { 
                 return err 
             }
-            fldCtx.await.Delete( fld )
+            fc.await.Delete( fld )
         }
         return nil
     }
-    return fldCtx.await.EachPairError( vis )
+    return fc.await.EachPairError( vis )
 }
 
-func createMissingFieldsError( p objpath.PathNode, fldCtx *fieldCtx ) error {
-    flds := make( []*mg.Identifier, 0, fldCtx.await.Len() )
-    fldCtx.await.EachPair( func( fld *mg.Identifier, _ interface{} ) {
+func createMissingFieldsError( p objpath.PathNode, fc *fieldCast ) error {
+    flds := make( []*mg.Identifier, 0, fc.await.Len() )
+    fc.await.EachPair( func( fld *mg.Identifier, _ interface{} ) {
         flds = append( flds, fld )
     })
     return mg.NewMissingFieldsError( p, flds )
@@ -400,10 +381,16 @@ func ( cr *CastReactor ) processValueReference(
 func ( cr *CastReactor ) implMapStart(
     ev mgRct.ReactorEvent, 
     ft fieldTyper, 
-    fldCtx *fieldCtx,
+    fs *FieldSet,
     next mgRct.ReactorEventProcessor ) error {
 
-    fc := &fieldCast{ ft: ft, fldCtx: fldCtx }
+    fc := &fieldCast{ ft: ft }
+    if fs != nil {
+        fc.await = mg.NewIdentifierMap()
+        fs.EachDefinition( func( fd *FieldDefinition ) {
+            fc.await.Put( fd.Name, fd )
+        })
+    }
     cr.stack.Push( fc )
     return next.ProcessEvent( ev )
 }
@@ -459,14 +446,12 @@ func ( cr *CastReactor ) completeStartStruct(
     ft, err := cr.fieldSetTyperFor( ss.Type, ss.GetPath() )
     if err != nil { return err }
     var ev mgRct.ReactorEvent = ss
-    flds, err := fieldSetForTypeInDefMap( ss.Type, cr.dm, ss.GetPath() )
+    fs, err := fieldSetForTypeInDefMap( ss.Type, cr.dm, ss.GetPath() )
     if err != nil { return err }
-//    if flds != nil { cr.fcStack.Push( newFieldCtx( flds ) ) }
-    fldCtx := newFieldCtx( flds )
     if def, ok := cr.dm.GetOk( ss.Type ); ok {
         if _, ok := def.( *SchemaDefinition ); ok { ev = asMapStartEvent( ss ) }
     } 
-    return cr.implMapStart( ev, ft, fldCtx, next )
+    return cr.implMapStart( ev, ft, fs, next )
 }
 
 func ( cr *CastReactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
@@ -555,7 +540,7 @@ func ( cr *CastReactor ) processFieldStart(
     fs *mgRct.FieldStartEvent, next mgRct.ReactorEventProcessor ) error {
 
     fc := cr.stack.Peek().( *fieldCast )
-    if fc.fldCtx != nil { fc.fldCtx.await.Delete( fs.Field ) }
+    if fc.await != nil { fc.await.Delete( fs.Field ) }
     
     typ, err := fc.ft.fieldTypeFor( fs.Field, fs.GetPath().Parent() )
     if err != nil { return err }
@@ -576,12 +561,11 @@ func ( cr *CastReactor ) processFieldsEnd(
     ee *mgRct.EndEvent, next mgRct.ReactorEventProcessor ) error {
 
     fc := cr.stack.Pop().( *fieldCast )
-    fldCtx := fc.fldCtx
-    if fldCtx == nil { return nil }
+    if fc.await == nil { return nil }
     p := ee.GetPath()
-    if err := processDefaults( fldCtx, p, next ); err != nil { return err }
-    fldCtx.removeOptFields()
-    if fldCtx.await.Len() > 0 { return createMissingFieldsError( p, fldCtx ) }
+    if err := processDefaults( fc, p, next ); err != nil { return err }
+    fc.removeOptFields()
+    if fc.await.Len() > 0 { return createMissingFieldsError( p, fc ) }
     return nil
 }
 
