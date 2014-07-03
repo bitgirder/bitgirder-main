@@ -10,15 +10,16 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     if p := t.Path; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
-//    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
+    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
     rcts = append( rcts, NewCastReactor( t.Type, t.Map ) )
     vb := mgRct.NewValueBuilder()
     rcts = append( rcts, vb )
     pip := mgRct.InitReactorPipeline( rcts... )
-//    c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
+    c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         mgRct.CheckNoError( t.Err, c )
-//        c.Logf( "got %s", mg.QuoteValue( vb.GetValue() ) )
+        c.Logf( "got %s, expect %s", mg.QuoteValue( vb.GetValue() ),
+            mg.QuoteValue( t.Expect ) )
         mg.AssertEqualValues( t.Expect, vb.GetValue(), c )
     } else { 
         cae := mg.CastErrorAssert{ 

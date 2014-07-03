@@ -15,10 +15,6 @@ var newVcErr = mg.NewValueCastError
 
 var pathInVal = objpath.RootedAt( mkId( "inVal" ) )
 
-func mustHeapVal( v interface{} ) *mg.HeapValue {
-    return mg.NewHeapValue( mg.MustValue( v ) )
-}
-
 func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.ValueCastError {
     return mg.NewTypeCastError( asType( expct ), asType( act ), p )
 }
@@ -304,31 +300,25 @@ func ( rti *rtInit ) addIdentityNumTests() {
     s1 := parser.MustStruct( "ns1@v1/S1" )
     e1 := parser.MustEnum( "ns1@v1/E1", "e" )
     for _, numCtx := range numTests {
+        rti.addSucc( numCtx.val, numCtx.val, numCtx.typ, dm )
         rti.addSucc( numCtx.val, numCtx.str, mg.TypeString, dm )
         rti.addSucc( numCtx.str, numCtx.val, numCtx.typ, dm )
-        ptrVal := mg.NewHeapValue( numCtx.val )
         ptrTyp := mg.NewPointerTypeReference( numCtx.typ )
-        rti.addSucc( numCtx.val, ptrVal, ptrTyp, dm )
-        rti.addSucc( numCtx.str, ptrVal, ptrTyp, dm )
-        rti.addSucc( ptrVal, numCtx.str, mg.TypeString, dm )
-        rti.addSucc( ptrVal, numCtx.val, numCtx.typ, dm )
+        rti.addSucc( numCtx.val, numCtx.val, ptrTyp, dm )
+        rti.addSucc( numCtx.str, numCtx.val, ptrTyp, dm )
         rti.addTcError( mg.EmptySymbolMap(), numCtx.typ, mg.TypeSymbolMap, dm )
         rti.addTcError( mg.EmptySymbolMap(), ptrTyp, mg.TypeSymbolMap, dm )
         rti.addVcError( nil, numCtx.typ, "Value is null", dm )
         rti.addTcError( mg.EmptyList(), numCtx.typ, mg.TypeOpaqueList, dm )
         rti.addTcError( testValBuf1, numCtx.typ, mg.TypeBuffer, dm )
         rti.addTcError( s1, numCtx.typ, s1.Type.AsAtomicType(), dm )
-        rti.addTcError( ptrVal, s1.Type.AsAtomicType(), numCtx.typ, dm )
+        rti.addTcError( numCtx.val, s1.Type.AsAtomicType(), numCtx.typ, dm )
         rti.addTcError( s1, ptrTyp, s1.Type.AsAtomicType(), dm )
         rti.addTcError( e1, numCtx.typ, e1.Type.AsAtomicType(), dm )
-        rti.addTcError( ptrVal, e1.Type.AsAtomicType(), numCtx.typ, dm )
+        rti.addTcError( numCtx.val, e1.Type.AsAtomicType(), numCtx.typ, dm )
         rti.addTcError( e1, ptrTyp, e1.Type.AsAtomicType(), dm )
         for _, valCtx := range numTests {
             rti.addSucc( valCtx.val, numCtx.val, numCtx.typ, dm )
-            rti.addSucc( 
-                mg.NewHeapValue( valCtx.val ), numCtx.val, numCtx.typ, dm )
-            rti.addSucc( valCtx.val, ptrVal, ptrTyp, dm )
-            rti.addSucc( mg.NewHeapValue( valCtx.val ), ptrVal, ptrTyp, dm )
         }
     }
 }
@@ -388,12 +378,11 @@ func ( rti *rtInit ) addBufferTests() {
     dm := NewDefinitionMap()
     buf1B64 := mg.String( base64.StdEncoding.EncodeToString( testValBuf1 ) )
     rti.addSucc( testValBuf1, buf1B64, mg.TypeString, dm )
-    rti.addSucc( mg.NewHeapValue( testValBuf1 ), buf1B64, mg.TypeString, dm )
-    rti.addSucc( mg.NewHeapValue( testValBuf1 ), mg.NewHeapValue( buf1B64 ),
+    rti.addSucc( testValBuf1, buf1B64,
         mg.NewPointerTypeReference( mg.TypeString ), dm )
     rti.addSucc( buf1B64, testValBuf1, mg.TypeBuffer , dm )
-    rti.addSucc( mg.NewHeapValue( buf1B64 ), testValBuf1, mg.TypeBuffer, dm )
-    rti.addSucc( mg.NewHeapValue( buf1B64 ), mg.NewHeapValue( testValBuf1 ),
+    rti.addSucc( buf1B64, testValBuf1, mg.TypeBuffer, dm )
+    rti.addSucc( buf1B64, testValBuf1,
         mg.NewPointerTypeReference( mg.TypeBuffer ), dm )
     rti.addVcError( "abc$/@", mg.TypeBuffer, 
         "Invalid base64 string: illegal base64 data at input byte 3", dm )
@@ -474,16 +463,15 @@ func ( rti *rtInit ) addListTests() {
         dm,
     )
     s1 := parser.MustStruct( "ns1@v1/S1" )
-    rti.addSucc(
-        []interface{}{ s1, mg.NewHeapValue( s1 ), nil },
-        mg.MustList( mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), mg.NullVal ),
+    rti.addIdent(
+        []interface{}{ s1, s1, nil },
         "&ns1@v1/S1?*",
         dm,
     )
     rti.addTests(
         &CastReactorTest{
             Map: dm,
-            In: mg.MustValue( []interface{}{ mg.NewHeapValue( s1 ), nil } ),
+            In: mg.MustValue( []interface{}{ s1, nil } ),
             Type: asType( "&ns1@v1/S1*" ),
             Err: newVcErr( 
                 objpath.RootedAtList().SetIndex( 1 ), "Value is null" ),
@@ -496,7 +484,7 @@ func ( rti *rtInit ) addListTests() {
                 objpath.RootedAtList().SetIndex( 1 ), "Value is null" ),
         },
     )
-    rti.addSucc(
+    rti.addIdent(
         []interface{}{ 
             int32( 1 ), 
             []interface{}{}, 
@@ -505,15 +493,6 @@ func ( rti *rtInit ) addListTests() {
             s1, 
             nil,
         },
-        mg.MustList(
-            mg.NewHeapValue( mg.Int32( 1 ) ),
-            mg.NewHeapValue( mg.MustList() ),
-            mg.NewHeapValue( 
-                mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) ) ),
-            mg.NewHeapValue( mg.String( "s1" ) ),
-            mg.NewHeapValue( s1 ),
-            mg.NullVal,
-        ),
         "&Value?*",
         dm,
     )
@@ -522,38 +501,13 @@ func ( rti *rtInit ) addListTests() {
     rti.addSucc( intList1, intList1, mg.TypeValue, dm )
     rti.addSucc( intList1, intList1, mg.TypeOpaqueList, dm )
     rti.addSucc( intList1, intList1, "Int32*?", dm )
-    rti.addSucc( 
-        mg.MustList(), 
-        mg.NewHeapValue( mg.MustList() ), 
-        mg.NewPointerTypeReference( asType( "&Int32*" ) ),
-        dm,
-    )
-    rti.addSucc( 
-        mg.NewHeapValue( mg.MustList() ), 
-        mg.NewHeapValue( mg.MustList() ),
-        mg.NewPointerTypeReference( asType( "&Int32*" ) ),
-        dm,
-    )
-    rti.addSucc( 
-        mg.NewHeapValue( mg.MustList() ), mg.MustList(), "&Int32*", dm )
+    rti.addIdent( mg.MustList(), "&(&Int32*)", dm )
+    rti.addIdent( mg.MustList(), "&Int32*", dm )
     rti.addSucc( nil, mg.NullVal, "Int32*?", dm )
     rti.addNullValueError( nil, "Int32*", dm )
     rti.addNullValueError( nil, "Int32+", dm )
-    rti.addNullValueError( mg.NewHeapValue( mg.NullVal ), "Int32+", dm )
-    rti.addVcError( 
-        mg.NewHeapValue( mg.MustList() ), "&Int32+", "empty list", dm )
-    rti.addSucc( 
-        nil, 
-        mg.NullVal,
-        mg.MustNullableTypeReference( asType( "&Int32*" ) ),
-        dm,
-    )
-    rti.addSucc( 
-        mg.NewHeapValue( mg.NullVal ), 
-        mg.NullVal,
-        mg.MustNullableTypeReference( asType( "&Int32*" ) ),
-        dm,
-    )
+    rti.addVcError( mg.MustList(), "&Int32+", "empty list", dm )
+    rti.addIdent( nil, "(&Int32*)?", dm )
 }
 
 func ( rti *rtInit ) addMapTests() {
@@ -595,21 +549,12 @@ func ( rti *rtInit ) addMapTests() {
     nester := 
         parser.MustSymbolMap( "f1", parser.MustSymbolMap( "f2", int32( 1 ) ) )
     rti.addSucc( nester, nester, mg.TypeSymbolMap, dm )
-    rti.addSucc( m1(), mg.NewHeapValue( m1() ), "&SymbolMap", dm )
-    rti.addSucc( 
-        mg.NewHeapValue( m1() ), mg.NewHeapValue( m1() ), "&SymbolMap", dm )
-    rti.addSucc( mg.NewHeapValue( m1() ), m1(), "SymbolMap", dm )
-    rti.addSucc( nil, mg.NullVal, "SymbolMap?", dm )
-    rti.addSucc( nil, mg.NullVal, "&SymbolMap?", dm )
-    rti.addSucc( 
-        mg.NewHeapValue( mg.NullVal ), 
-        mg.NewHeapValue( mg.NullVal ),
-        mg.NewPointerTypeReference( asType( "SymbolMap?" ) ),
-        dm,
-    )
+    rti.addIdent( m1(), "SymbolMap", dm )
+    rti.addIdent( m1(), "&SymbolMap", dm )
+    rti.addIdent( nil, "SymbolMap?", dm )
+    rti.addIdent( nil, "&SymbolMap?", dm )
     rti.addNullValueError( nil, "SymbolMap", dm )
     rti.addNullValueError( nil, "&SymbolMap", dm )
-    rti.addNullValueError( mg.NewHeapValue( mg.NullVal ), "&SymbolMap", dm )
 }
 
 func ( rti *rtInit ) addBaseFieldCastTests() {
@@ -654,12 +599,11 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     sm1 := parser.MustSymbolMap( "f1", int32( 1 ) )
     s1F1Succ( sm1, sm1, "SymbolMap" )
     s1F1Succ( sm1, sm1, "Value" )
-    s1F1Succ( int32( 1 ), mustHeapVal( int32( 1 ) ), "&Int32?" )
+    s1F1Succ( int32( 1 ), int32( 1 ), "&Int32?" )
     s1F1Succ( mg.NullVal, mg.NullVal, "&Int32?" )
     s1F1Succ(
         mg.MustList( "1", nil, int64( 1 ) ),
-        mg.MustList( 
-            mustHeapVal( int32( 1 ) ), mg.NullVal, mustHeapVal( int32( 1 ) ) ),
+        mg.MustList( int32( 1 ), mg.NullVal, int32( 1 ) ),
         "&Int32?*",
     )
     s1F1Fail( []byte{}, "Int32", tcErr1( mg.TypeInt32, mg.TypeBuffer ) )
@@ -717,8 +661,8 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     addSucc( 
         parser.MustStruct( "ns1@v1/S2", "f1", int32( 1 ), "f2", int32( 2 ) ) )
     addSucc( parser.MustStruct( "ns1@v1/S3" ) )
-    addSucc( parser.MustStruct( "ns1@v1/S3", "f1", mustHeapVal( int32( 1 ) ) ) )
-    s1Inst1 := mustHeapVal( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
+    addSucc( parser.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
+    s1Inst1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     addSucc( parser.MustStruct( "ns1@v1/S4", "f1", s1Inst1 ) )
     addFail(
         parser.MustStruct( "ns1@v1/S1" ),
@@ -780,25 +724,18 @@ func ( rti *rtInit ) addStructValCastTests() {
     addFail( mg.MustList(), tcErr1( mg.TypeOpaqueList ) )
     s1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     s2 := parser.MustStruct( "ns1@v1/S2" )
-    rti.addSucc( s1, s1, mg.TypeValue, dm )
-    rti.addSucc( s1, s1, "ns1@v1/S1", dm )
-    rti.addSucc( s2, s2, "ns1@v1/S2", dm )
-    rti.addSucc( s1, mg.NewHeapValue( s1 ), "&ns1@v1/S1?", dm )
+    rti.addIdent( s1, mg.TypeValue, dm )
+    rti.addIdent( s1, "ns1@v1/S1", dm )
+    rti.addIdent( s2, "ns1@v1/S2", dm )
+    rti.addIdent( s1, "&ns1@v1/S1", dm )
+    rti.addIdent( s1, "&ns1@v1/S1?", dm )
     l1 := mg.MustList( s1, s1 )
-    rti.addSucc( l1, l1, &mg.ListTypeReference{ t1, false }, dm )
-    rti.addSucc( l1, l1, &mg.ListTypeReference{ t1, true }, dm )
+    rti.addIdent( l1, &mg.ListTypeReference{ t1, false }, dm )
+    rti.addIdent( l1, &mg.ListTypeReference{ t1, true }, dm )
     rti.addTcError( int32( 1 ), s1.Type.AsAtomicType(), mg.TypeInt32, dm )
-    rti.addSucc( 
-        mg.NewHeapValue( s1 ), mg.NewHeapValue( s1 ), "&ns1@v1/S1", dm )
-    rti.addSucc( s1, mg.NewHeapValue( s1 ), "&ns1@v1/S1", dm )
-    rti.addSucc( mg.NewHeapValue( s1 ), s1, "ns1@v1/S1", dm )
-    rti.addSucc( nil, mg.NullVal, "&ns1@v1/S1?", dm )
+    rti.addIdent( nil, "&ns1@v1/S1?", dm )
     rti.addNullValueError( nil, "&ns1@v1/S1", dm )
-    rti.addNullValueError( mg.NewHeapValue( mg.NullVal ), "&ns1@v1/S1", dm )
     rti.addTcError( s1, "ns1@v1/S2", "ns1@v1/S1", dm )
-    rti.addTcError( mg.NewHeapValue( s1 ), "ns1@v1/S2", "ns1@v1/S1", dm )
-    rti.addTcError( s1, "ns1@v1/S2", "ns1@v1/S1", dm )
-    rti.addTcError( mg.NewHeapValue( s1 ), "ns1@v1/S2", "ns1@v1/S1", dm )
 }
 
 func ( rti *rtInit ) addInferredStructCastTests() {
@@ -825,16 +762,15 @@ func ( rti *rtInit ) addInferredStructCastTests() {
             },
         )
     }
-    i1HeapVal := mustHeapVal( int32( 1 ) )
+    i1Val := mg.Int32( int32( 1 ) )
     addSucc( 
-        parser.MustSymbolMap( "f1", int32( 1 ) ),
-        parser.MustStruct( "ns1@v1/S1", "f1", i1HeapVal ),
+        parser.MustSymbolMap( "f1", i1Val ),
+        parser.MustStruct( "ns1@v1/S1", "f1", i1Val ),
     )
-    s2HeapVal := 
-        mustHeapVal( parser.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) ) )
+    s2Val := parser.MustStruct( "ns1@v1/S2", "f1", int32( 1 ) )
     addSucc( 
-        parser.MustSymbolMap( "f2", parser.MustSymbolMap( "f1", i1HeapVal ) ),
-        parser.MustStruct( "ns1@v1/S1", "f2", s2HeapVal ),
+        parser.MustSymbolMap( "f2", parser.MustSymbolMap( "f1", i1Val ) ),
+        parser.MustStruct( "ns1@v1/S1", "f2", s2Val ),
     )
 }
 
@@ -892,6 +828,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
             },
         )
     }
+    addIdent := func( in mg.Value, typ interface{} ) { addSucc( in, in, typ ) }
     addSucc( 
         parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
         parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
@@ -918,54 +855,24 @@ func ( rti *rtInit ) addSchemaCastTests() {
         "ns1@v1/Schema1",
     )
     addSucc( 
-        mg.NewHeapValue( parser.MustSymbolMap( "f1", int64( 1 ) ) ),
-        mg.NewHeapValue( parser.MustSymbolMap( "f1", int32( 1 ) ) ),
+        parser.MustSymbolMap( "f1", int64( 1 ) ),
+        parser.MustSymbolMap( "f1", int32( 1 ) ),
         "ns1@v1/Schema1",
     )
-    addSucc( 
-        mg.NewHeapValue(
-            parser.MustStruct( "ns1@v1/S1", 
-                "f1", int32( 1 ), 
-                "f2", int32( 1 ),
-            ),
-        ),
-        mg.NewHeapValue(
-            parser.MustStruct( "ns1@v1/S1", 
-                "f1", int32( 1 ), 
-                "f2", int32( 1 ),
-            ),
-        ),
-        schema1Nil,
-    )
-    addSucc( 
-        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
+    addIdent( 
         parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ), "f2", int32( 1 ) ),
         schema1Nil,
     )
-    addSucc( mg.NullVal, mg.NullVal, schema1Nil )
-    addSucc(
+    addIdent( mg.NullVal, schema1Nil )
+    addIdent(
         parser.MustStruct( "ns1@v1/S2",
             "f1", parser.MustStruct( "ns1@v1/S1", 
                 "f1", int32( 1 ), 
                 "f2", int32( 1 ),
             ),
-            "f2", mg.NewHeapValue(
-                parser.MustStruct( "ns1@v1/S1", 
-                    "f1", int32( 1 ), 
-                    "f2", int32( 1 ),
-                ),
-            ),
-        ),
-        parser.MustStruct( "ns1@v1/S2",
-            "f1", parser.MustStruct( "ns1@v1/S1", 
+            "f2", parser.MustStruct( "ns1@v1/S1", 
                 "f1", int32( 1 ), 
                 "f2", int32( 1 ),
-            ),
-            "f2", mg.NewHeapValue(
-                parser.MustStruct( "ns1@v1/S1", 
-                    "f1", int32( 1 ), 
-                    "f2", int32( 1 ),
-                ),
             ),
         ),
         "ns1@v1/Schema2",
@@ -1122,15 +1029,12 @@ func ( rti *rtInit ) addEnumValCastTests() {
         addTest( in, nil, typ, err ) 
     }
     e1 := parser.MustEnum( "ns1@v1/E1", "c1" )
-    for _, t := range []struct{ typStr string; expct mg.Value }{
-        { typStr: "ns1@v1/E1", expct: e1 },
-        { typStr: "&ns1@v1/E1?", expct: mustHeapVal( e1 ) },
-    } {
-        addSucc( e1, t.expct, t.typStr )
-        addSucc( "c1", t.expct, t.typStr )
+    for _, typStr := range []string{ "ns1@v1/E1", "&ns1@v1/E1?" } {
+        addSucc( e1, e1, typStr )
+        addSucc( "c1", e1, typStr )
         addFail( 
             int32( 1 ), 
-            t.typStr, 
+            typStr, 
             newTcErr( "ns1@v1/E1", mg.TypeInt32, nil ),
         )
     }
