@@ -18,7 +18,7 @@ func ( t *ValueBuildTest ) Call( c *ReactorTestCall ) {
         err = VisitValue( t.Val, pip )
     } else { err = FeedSource( t.Source, pip ) }
     if err == nil {
-        mg.AssertEqualWireValues( t.Val, vb.GetValue(), c.PathAsserter )
+        mg.AssertEqualValues( t.Val, vb.GetValue(), c.PathAsserter )
     } else { c.Fatal( err ) }
 }
 
@@ -125,7 +125,7 @@ func ( t *FieldOrderReactorTest ) Call( c *ReactorTestCall ) {
 //    pip := InitReactorPipeline( ordRct, NewDebugReactor( c ), chk, vb )
     pip := InitReactorPipeline( ordRct, chk, vb )
     AssertFeedEventSource( eventSliceSource( t.Source ), pip, c )
-    mg.AssertEqualWireValues( t.Expect, vb.GetValue(), c.PathAsserter )
+    mg.AssertEqualValues( t.Expect, vb.GetValue(), c.PathAsserter )
 }
 
 func ( t *FieldOrderMissingFieldsTest ) assertMissingFieldsError(
@@ -170,15 +170,10 @@ func ( t *FieldOrderPathTest ) Call( c *ReactorTestCall ) {
 type eventAccContext struct {
     event ReactorEvent
     evs []ReactorEvent
-    id mg.PointerId
 }
 
 func newEventAccContext( ev ReactorEvent ) *eventAccContext {
-    return &eventAccContext{ 
-        event: ev, 
-        evs: make( []ReactorEvent, 0, 4 ),
-        id: mg.PointerIdNull,
-    }
+    return &eventAccContext{ event: ev, evs: make( []ReactorEvent, 0, 4 ) }
 }
 
 func ( ctx *eventAccContext ) saveEvent( ev ReactorEvent ) {
@@ -196,6 +191,6 @@ func CheckBuiltValue(
         a.Falsef( vb == nil, 
             "expecting value %s but value builder is nil", 
             mg.QuoteValue( expct ) )
-        mg.AssertEqualWireValues( expct, vb.GetValue(), a ) 
+        mg.AssertEqualValues( expct, vb.GetValue(), a ) 
     }
 }

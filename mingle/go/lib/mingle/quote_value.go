@@ -7,18 +7,6 @@ import (
 
 type valueQuote struct {
     buf *bytes.Buffer
-    refs map[ PointerId ] bool
-}
-
-func ( vq valueQuote ) appendCycle() { vq.buf.WriteString( "<!cycle>" ) }
-
-func ( vq valueQuote ) handledCycle( addr PointerId ) bool {
-    if _, ok := vq.refs[ addr ]; ok {
-        vq.appendCycle()
-        return true
-    }
-    vq.refs[ addr ] = true
-    return false
 }
 
 func ( vq valueQuote ) appendEnum( e *Enum ) {
@@ -26,21 +14,7 @@ func ( vq valueQuote ) appendEnum( e *Enum ) {
         e.Type.ExternalForm(), e.Value.ExternalForm() )
 }
 
-func ( vq valueQuote ) appendedCycle( a Addressed ) bool {
-    if _, ok := vq.refs[ a.Address() ]; ok {
-        vq.appendCycle()
-        return true
-    }
-    vq.refs[ a.Address() ] = true
-    return false
-}
-
 func ( vq valueQuote ) appendList( l *List ) {
-    if _, ok := vq.refs[ l.Address() ]; ok {
-        vq.appendCycle()
-        return
-    }
-    vq.refs[ l.Address() ] = true
     vq.buf.WriteRune( '[' )
     for i, val := range l.vals {
         vq.appendValue( val )
@@ -63,25 +37,12 @@ func ( vq valueQuote ) appendSymbolMapFields( m *SymbolMap ) {
 }
 
 func ( vq valueQuote ) appendSymbolMap( m *SymbolMap ) {
-    if vq.appendedCycle( m ) { return }
     vq.appendSymbolMapFields( m )
 }
 
 func ( vq valueQuote ) appendStruct( ms *Struct ) {
     vq.buf.WriteString( ms.Type.ExternalForm() )
     vq.appendSymbolMapFields( ms.Fields )
-}
-
-// we only check for cycles when the value pointer points to a struct value,
-// since that is the only value type which could end up referring to itself.
-// list/map cycles are handled in their respective code paths.
-func ( vq valueQuote ) appendValuePointer( vp ValuePointer ) {
-    if _, ok := vp.Dereference().( *Struct ); ok {
-        if vq.handledCycle( vp.Address() ) { return }
-    }
-    vq.buf.WriteString( "&(" )
-    vq.appendValue( vp.Dereference() )
-    vq.buf.WriteString( ")" )
 }
 
 func ( vq valueQuote ) appendValue( val Value ) {
@@ -96,16 +57,12 @@ func ( vq valueQuote ) appendValue( val Value ) {
     case *List: vq.appendList( v )
     case *SymbolMap: vq.appendSymbolMap( v )
     case *Struct: vq.appendStruct( v )
-    case ValuePointer: vq.appendValuePointer( v )
     default: fmt.Fprintf( vq.buf, "(!%T)", val ) // seems better than a panic
     }
 }
 
 func QuoteValue( val Value ) string { 
-    vq := valueQuote{ 
-        buf: &bytes.Buffer{}, 
-        refs: make( map[ PointerId ] bool ),
-    }
+    vq := valueQuote{ buf: &bytes.Buffer{} }
     vq.appendValue( val )
     return vq.buf.String()
 }

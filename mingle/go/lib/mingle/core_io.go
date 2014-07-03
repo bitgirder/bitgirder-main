@@ -24,26 +24,24 @@ const (
     IoTypeCodePointerTyp = IoTypeCode( uint8( 0x08 ) )
     IoTypeCodeRegexRestrict = IoTypeCode( uint8( 0x09 ) )
     IoTypeCodeRangeRestrict = IoTypeCode( uint8( 0x0a ) )
-    IoTypeCodeValPtrAlloc = IoTypeCode( uint8( 0x0b ) )
-    IoTypeCodeValPtrRef = IoTypeCode( uint8( 0x0c ) )
-    IoTypeCodeBool = IoTypeCode( uint8( 0x0d ) )
-    IoTypeCodeString = IoTypeCode( uint8( 0x0e ) )
-    IoTypeCodeInt32 = IoTypeCode( uint8( 0x0f ) )
-    IoTypeCodeInt64 = IoTypeCode( uint8( 0x10 ) )
-    IoTypeCodeUint32 = IoTypeCode( uint8( 0x11 ) )
-    IoTypeCodeUint64 = IoTypeCode( uint8( 0x12 ) )
-    IoTypeCodeFloat32 = IoTypeCode( uint8( 0x13 ) )
-    IoTypeCodeFloat64 = IoTypeCode( uint8( 0x14 ) )
-    IoTypeCodeTimestamp = IoTypeCode( uint8( 0x15 ) )
-    IoTypeCodeBuffer = IoTypeCode( uint8( 0x16 ) )
-    IoTypeCodeEnum = IoTypeCode( uint8( 0x17 ) )
-    IoTypeCodeSymMap = IoTypeCode( uint8( 0x18 ) )
-    IoTypeCodeField = IoTypeCode( uint8( 0x19 ) )
-    IoTypeCodeStruct = IoTypeCode( uint8( 0x1a ) )
-    IoTypeCodeList = IoTypeCode( uint8( 0x1b ) )
-    IoTypeCodeEnd = IoTypeCode( uint8( 0x1c ) )
-    IoTypeCodeIdPath = IoTypeCode( uint8( 0x1d ) )
-    IoTypeCodeIdPathListNode = IoTypeCode( uint8( 0x1e ) )
+    IoTypeCodeBool = IoTypeCode( uint8( 0x0b ) )
+    IoTypeCodeString = IoTypeCode( uint8( 0x0c ) )
+    IoTypeCodeInt32 = IoTypeCode( uint8( 0x0d ) )
+    IoTypeCodeInt64 = IoTypeCode( uint8( 0x0e ) )
+    IoTypeCodeUint32 = IoTypeCode( uint8( 0x0f ) )
+    IoTypeCodeUint64 = IoTypeCode( uint8( 0x10 ) )
+    IoTypeCodeFloat32 = IoTypeCode( uint8( 0x11 ) )
+    IoTypeCodeFloat64 = IoTypeCode( uint8( 0x12 ) )
+    IoTypeCodeTimestamp = IoTypeCode( uint8( 0x13 ) )
+    IoTypeCodeBuffer = IoTypeCode( uint8( 0x14 ) )
+    IoTypeCodeEnum = IoTypeCode( uint8( 0x15 ) )
+    IoTypeCodeSymMap = IoTypeCode( uint8( 0x16 ) )
+    IoTypeCodeField = IoTypeCode( uint8( 0x17 ) )
+    IoTypeCodeStruct = IoTypeCode( uint8( 0x18 ) )
+    IoTypeCodeList = IoTypeCode( uint8( 0x19 ) )
+    IoTypeCodeEnd = IoTypeCode( uint8( 0x1a ) )
+    IoTypeCodeIdPath = IoTypeCode( uint8( 0x1b ) )
+    IoTypeCodeIdPathListNode = IoTypeCode( uint8( 0x1c ) )
 )
 
 type BinIoError struct { msg string }
@@ -157,10 +155,6 @@ func ( w *BinWriter ) writeEnum( en *Enum ) ( err error ) {
     if err = w.WriteQualifiedTypeName( en.Type ); err != nil { return }
     if err = w.WriteIdentifier( en.Value ); err != nil { return }
     return
-}
-
-func ( w *BinWriter ) WritePointerId( id PointerId ) error {
-    return w.WriteUint64( uint64( id ) )
 }
 
 func ( w *BinWriter ) WriteScalarValue( val Value ) error {
@@ -538,12 +532,6 @@ func ( r *BinReader ) readRegexRestriction() ( rr *RegexRestriction,
     var src string
     if src, err = r.ReadUtf8(); err != nil { return }
     return NewRegexRestriction( src )
-}
-
-func ( r *BinReader ) ReadPointerId() ( PointerId, error ) {
-    id64, err := r.ReadUint64()
-    if err != nil { return 0, err }
-    return PointerId( id64 ), nil
 }
 
 func ( r *BinReader ) readRangeVal() ( Value, error ) {

@@ -11,7 +11,6 @@ func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
     switch v := val.( type ) {
     case Value: return w.WriteScalarValue( v )
     case *Identifier: return w.WriteIdentifier( v )
-    case PointerId: return w.WritePointerId( v )
     case objpath.PathNode: return w.WriteIdPath( v )
     case *Namespace: return w.WriteNamespace( v )
     case TypeName: return w.WriteTypeName( v )
@@ -40,10 +39,6 @@ func assertBinIoRoundtripRead(
     case *Identifier:
         if id, err := rd.ReadIdentifier(); err == nil { 
             a.True( v.Equals( id ) )
-        } else { a.Fatal( err ) }
-    case PointerId:
-        if id, err := rd.ReadPointerId(); err == nil {
-            a.Equal( v, id )
         } else { a.Fatal( err ) }
     case objpath.PathNode:
         if n, err := rd.ReadIdPath(); err == nil {
@@ -81,9 +76,9 @@ func TestCoreIo( t *testing.T ) {
             case *Null, Boolean, Buffer, String, *Enum, Int32, Uint32, Int64,
                  Uint64, Float32, Float64, Timestamp, *Identifier, *Namespace,
                  *QualifiedTypeName, TypeReference, *DeclaredTypeName, 
-                 PointerId, objpath.PathNode:
+                 objpath.PathNode:
                 assertBinIoRoundtrip( v, a.Descend( rt.Name ) )
-            case *SymbolMap, *HeapValue, *List, *Struct: ; // okay but skip
+            case *SymbolMap, *List, *Struct: ; // okay but skip
             default: a.Fatalf( "unhandled rt val: %T", rt.Val )
             }
         }

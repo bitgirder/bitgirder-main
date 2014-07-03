@@ -86,14 +86,6 @@ func TestValueTypeErrorFormatting( t *testing.T ) {
     assert.Equal( "Blah", (&ValueTypeError{ nil, "Blah" }).Error() )
 }
 
-// if we add more pointer conversions later ( go *int32 --> &ValuePointer{
-// Int32(...) } ) we'll add coverage for those here. for now we just have
-// coverage that *ValuePointers are recognized and returned
-func assertAsValuePointers( t *testing.T ) {
-    v1 := NewHeapValue( Int32( 1 ) )
-    assert.Equal( v1, v1 )
-}
-
 func TestAsValue( t *testing.T ) {
     assert.Equal( String( "hello" ), MustValue( "hello" ) )
     assert.Equal( String( "hello" ), MustValue( String( "hello" ) ) )
@@ -107,7 +99,6 @@ func TestAsValue( t *testing.T ) {
     assertAsNullValues( t )
     assertAsEnumValues( t )
     assertAsListValues( t )
-    assertAsValuePointers( t )
 }
 
 func TestAsValueBadValue( t *testing.T ) {
@@ -371,13 +362,6 @@ func TestTypeOf( t *testing.T ) {
     typ := &AtomicTypeReference{ Name: qn }
     a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
     a.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
-    ptrTyp := NewPointerTypeReference( typ )
-    a.Equal( ptrTyp, TypeOf( NewHeapValue( &Enum{ Type: qn } ) ) )
-    a.Equal( ptrTyp, TypeOf( NewHeapValue( &Struct{ Type: qn } ) ) )
-    a.Equal( NewPointerTypeReference( TypeInt32 ), 
-        TypeOf( NewHeapValue( Int32( 1 ) ) ) )
-    a.Equal( NewPointerTypeReference( TypeOpaqueList ), 
-        TypeOf( NewHeapValue( MustList() ) ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
@@ -492,12 +476,10 @@ func TestRestrictionAccept( t *testing.T ) {
 
 func TestCanAssign( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
-    int32Pt := NewPointerTypeReference( TypeInt32 )
     int32Rng := &AtomicTypeReference{
         Name: QnameInt32,
         Restriction: &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
     }
-    int32PtNl := &NullableTypeReference{ int32Pt }
     mkList := func( typ *ListTypeReference, vals ...interface{} ) *List {
         res := MustList( vals... )
         res.Type = typ
@@ -512,36 +494,12 @@ func TestCanAssign( t *testing.T ) {
         { typ: TypeNull, val: NullVal },
         { typ: TypeInt32, val: Int32( int32( 1 ) ) },
         { typ: TypeInt32, val: Int64( int64( 1 ) ), expctFail: true },
-        { typ: TypeInt32, 
-          val: NewHeapValue( Int32( 1 ) ),
-          expctFail: true,
-        },
-        { typ: NewPointerTypeReference( TypeInt32 ),
-          val: NewHeapValue( Int32( 1 ) ),
-        },
-        { typ: int32Pt,
-          val: NewHeapValue( Int64( 1 ) ),
-          expctFail: true,
-        },
-        { typ: int32PtNl,
-          val: NewHeapValue( Int64( 1 ) ),
-          expctFail: true,
-        },
-        { typ: int32PtNl, val: NullVal, },
         { typ: int32Rng, val: Int32( 0 ) },
         { typ: int32Rng, val: Int32( 2 ), expctFail: true },
         { typ: int32Rng,
           val: Int32( 2 ),
           ignoreRestriction: true,
           expctFail: false,
-        },
-        { typ: NewPointerTypeReference( int32Rng ),
-          val: NewHeapValue( Int32( 2 ) ),
-          expctFail: true,
-        },
-        { typ: NewPointerTypeReference( int32Rng ),
-          val: NewHeapValue( Int32( 2 ) ),
-          ignoreRestriction: true,
         },
         { typ: TypeInt32,
           val: mkList( &ListTypeReference{ TypeInt32, true } ),
@@ -593,7 +551,6 @@ func TestCanAssign( t *testing.T ) {
           expctFail: true,
         },
         { typ: TypeValue, val: String( "s" ) },
-        { typ: TypeValue, val: NewHeapValue( Int32( int32( 1 ) ) ) },
         { typ: TypeValue, val: NullVal, expctFail: true },
         { typ: TypeValue, val: MustStruct( ns1V1Qn( "S1" ) ) },
         { typ: TypeNullableValue, val: NullVal },
@@ -680,14 +637,6 @@ func ( a *quoteValueAsserter ) call( v Value, strs ...string ) {
     a.Fatalf( "No vals in %#v matched quoted val %q", strs, q )
 }
 
-func assertQuoteCycles( a *quoteValueAsserter ) {
-    cyc := NewCyclicValues()
-    a.call( cyc.S1, "&(ns1@v1/S1{k:&(ns1@v1/S1{k:<!cycle>})})" )
-    a.call( cyc.L1, `[1, "a", <!cycle>, 4, [5, <!cycle>]]` )
-    a.call( cyc.M1, "{k:<!cycle>}" )
-    a.call( cyc.M2, "{k:{k:<!cycle>}}" )
-}
-
 func TestQuoteValue( t *testing.T ) {
     a := &quoteValueAsserter{ &assert.Asserter{ t } }
     a.call( Boolean( true ), "true" )
@@ -710,18 +659,12 @@ func TestQuoteValue( t *testing.T ) {
     a.call( MustSymbolMap(), "{}" )
     a.call( MustSymbolMap( mkId( "k1" ), 1, mkId( "k2" ), "2" ),
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
-    a.call( NewHeapValue( Int32( 1 ) ), "&(1)" )
-    a.call( NewHeapValue( String( "a" ) ), `&("a")` )
-    a.call( NewHeapValue( MustList( Int32( 1 ) ) ), "&([1])" )
-    a.call( NewHeapValue( NewHeapValue( Int32( 1 ) ) ), "&(&(1))" )
     fldK := mkId( "k" )
     map1 := MustSymbolMap( fldK, 1 )
     qn1 := ns1V1Qn( "S1" )
     s1 := &Struct{ Type: qn1, Fields: map1 }
     s1Str := `ns1@v1/S1{k:1}`
     a.call( s1, s1Str )
-    a.call( NewHeapValue( s1 ), fmt.Sprintf( "&(%s)", s1Str ) )
-    assertQuoteCycles( a )
 }
 
 func TestIsNull( t *testing.T ) {
@@ -1343,9 +1286,6 @@ func TestEqualValues( t *testing.T ) {
             },
             false,
         },
-        { NewHeapValue( Int32( 1 ) ), NewHeapValue( Int32( 1 ) ), true },
-        { NewHeapValue( Int32( 1 ) ), NewHeapValue( Int32( 0 ) ), false },
-        { NewHeapValue( Int32( 1 ) ), NewHeapValue( Int64( 1 ) ), false },
     } {
         chk := func( v1, v2 Value ) {
             act := EqualValues( v1, v2 )

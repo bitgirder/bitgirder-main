@@ -125,8 +125,6 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
     }
     set( mkId( "id1" ) )
     set( mkId( "id1", "id2" ) )
-    set( PointerIdNull )
-    set( PointerId( uint64( 1 ) ) )
     ns1V1 := mkNs( mkId( "v1" ), mkId( "ns1" ) )
     set( ns1V1 )
     ns1ns2V1 := mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) )

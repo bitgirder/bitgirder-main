@@ -11,7 +11,6 @@ import (
     "unicode"
     "strings"
     "strconv"
-    "unsafe"
 )
 
 // values declared and accepted by this package are always > 0; 0 may be used
@@ -492,29 +491,7 @@ func TypeNameIn( typ TypeReference ) *QualifiedTypeName {
     return AtomicTypeIn( typ ).Name
 }
 
-type PointerId uint64
-
-const PointerIdNull = PointerId( uint64( 0 ) )
-
-func UnsafeToPointerId( p unsafe.Pointer ) PointerId {
-    return PointerId( uint64( uintptr( p ) ) )
-}
-
-func ( id PointerId ) String() string { 
-    return strconv.FormatUint( uint64( id ), 10 ) 
-}
-
-func ( id PointerId ) ExternalForm() string { return id.String() }
-
-type Addressed interface { Address() PointerId }
-
 type Value interface{ valImpl() }
-
-type ValuePointer interface {
-    Value
-    Address() PointerId
-    Dereference() Value
-}
 
 type goValPath objpath.PathNode // keys are string
 
@@ -721,18 +698,6 @@ func ( t Timestamp ) Compare( val interface{} ) int {
     return 0
 }
 
-type HeapValue struct { val Value }
-
-func NewHeapValue( val Value ) *HeapValue { return &HeapValue{ val: val } }
-
-func ( hv *HeapValue ) valImpl() {}
-
-func ( hv *HeapValue ) Dereference() Value { return hv.val }
-
-func ( hv *HeapValue ) Address() PointerId { 
-    return UnsafeToPointerId( unsafe.Pointer( hv ) )
-}
-
 func equalMaps( m1, m2 *SymbolMap ) bool {
     if m1.Len() != m2.Len() { return false }
     res := true
@@ -780,10 +745,6 @@ func EqualValues( v1, v2 Value ) bool {
         if m, ok := v2.( *SymbolMap ); ok { return equalMaps( v, m ) }
     case *Struct: if s, ok := v2.( *Struct ); ok { return equalStructs( v, s ) }
     case *List: if l, ok := v2.( *List ); ok { return equalLists( v, l ) }
-    case ValuePointer: 
-        if p, ok := v2.( ValuePointer ); ok { 
-            return EqualValues( v.Dereference(), p.Dereference() )
-        }
     }
     return false
 }
@@ -833,7 +794,6 @@ func asAtomicValue(
     case *Enum: val = v
     case *Struct: val = v
     case *Null: val = v
-    case ValuePointer: val = v
     default:
         msg := "Unhandled mingle value %v (%T)"
         err = &ValueTypeError{ path, fmt.Sprintf( msg, inVal, inVal ) }
@@ -875,10 +835,6 @@ func NewListValues( vals []Value ) *List {
 // empty instance
 func EmptyList() *List { return NewList( TypeOpaqueList ) }
 
-func ( l *List ) Address() PointerId { 
-    return UnsafeToPointerId( unsafe.Pointer( l ) ) 
-}
-
 func ( l *List ) AddUnsafe( val Value ) { l.vals = append( l.vals, val ) }
 
 func ( l *List ) valImpl() {}
@@ -917,10 +873,6 @@ func NewSymbolMap() *SymbolMap { return &SymbolMap{ NewIdentifierMap() } }
 // Later if we decide to make read-only variants of *SymbolMap we could return a
 // single instance here
 func EmptySymbolMap() *SymbolMap { return NewSymbolMap() }
-
-func ( m *SymbolMap ) Address() PointerId {
-    return UnsafeToPointerId( unsafe.Pointer( m ) ) 
-}
 
 func ( m *SymbolMap ) valImpl() {}
 
@@ -1207,10 +1159,6 @@ func IsNumericTypeName( qn *QualifiedTypeName ) bool {
     return false
 }
 
-func typeOfValuePointer( vp ValuePointer ) *PointerTypeReference {
-    return NewPointerTypeReference( TypeOf( vp.Dereference() ) )
-}
-
 func TypeOf( mgVal Value ) TypeReference {
     switch v := mgVal.( type ) {
     case Boolean: return TypeBoolean
@@ -1228,7 +1176,6 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Struct: return v.Type.AsAtomicType()
     case *List: return v.Type
     case *Null: return TypeNull
-    case ValuePointer: return typeOfValuePointer( v )
     }
     panic( libErrorf( "unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }
@@ -1251,10 +1198,7 @@ func canAssignAtomic(
 func CanAssign( val Value, typ TypeReference, useRestriction bool ) bool {
     switch t := typ.( type ) {
     case *AtomicTypeReference: return canAssignAtomic( val, t, useRestriction )
-    case *PointerTypeReference: 
-        if vp, ok := val.( ValuePointer ); ok {
-            return CanAssign( vp.Dereference(), t.Type, useRestriction )
-        }
+    case *PointerTypeReference: return false
     case *NullableTypeReference:
         if _, ok := val.( *Null ); ok { return true }
         return CanAssign( val, t.Type, useRestriction )
