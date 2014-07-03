@@ -85,27 +85,13 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
         Value: mkId( "val1" ),
     } )
     b.setVal( "symmap-empty", MustSymbolMap() )
-    b.setVal( "val-ptr", NewHeapValue( Int32( 1 ) ) )
-
-    val1Ptr := NewHeapValue( Int32( 1 ) )
-    b.setVal( "val-ptr-with-refs", MustList( val1Ptr, val1Ptr, val1Ptr ) )
-
     b.setVal( "symmap-flat", 
         MustSymbolMap( 
             mkId( "k1" ), int32( 1 ), 
             mkId( "k2" ), int32( 2 ),
-            mkId( "k3" ), NewHeapValue( Int32( int32( 1 ) ) ),
+            mkId( "k3" ), int32( 1 ),
         ),
     )
-
-    b.setVal( "symmap-with-refs",
-        MustSymbolMap(
-            mkId( "k1" ), val1Ptr, 
-            mkId( "k2" ), val1Ptr,
-            mkId( "k3" ), MustList( val1Ptr, val1Ptr ),
-        ),
-    )
-
     b.setVal( "symmap-nested",
         MustSymbolMap( mkId( "k1" ), 
             MustSymbolMap( mkId( "kk1" ), int32( 1 ) ) ) )
@@ -114,19 +100,8 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "struct-flat", MustStruct( ns1V1T1, mkId( "k1" ), int32( 1 ) ) )
     b.setVal( "list-empty", MustList() )
     b.setVal( "list-scalars", MustList( int32( 1 ), "hello" ) )
-
     b.setVal( "list-nested",
         MustList( int32( 1 ), MustList(), MustList( "hello" ), NullVal ) )
-
-    b.setVal( "list-pointers",
-        MustList(
-            int32( 1 ),
-            NewHeapValue( Int32( int32( 1 ) ) ),
-            NewHeapValue(
-                MustList( NewHeapValue( Int32( int32( 1 ) ) ) ) ),
-            MustList( NewHeapValue( Int32( int32( 1 ) ) ) ),
-        ),
-    )
 }
 
 func ( b *binIoRoundtripTestBuilder ) addPathTests() {
@@ -334,13 +309,12 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-list-val-type-code",
-            ErrMsg: `[offset 104]: unrecognized value code: 0x64`,
+            ErrMsg: `[offset 96]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
                 IoTypeCodeStruct, 
                     int32( -1 ), qnNsV1S,
                 IoTypeCodeField, idF1,
                 IoTypeCodeList, 
-                    uint64( 1 ), // pointer id
                     &ListTypeReference{
                         AllowsEmpty: true,
                         ElementType: TypeInt32,

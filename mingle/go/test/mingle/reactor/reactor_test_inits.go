@@ -529,8 +529,8 @@ func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
 }
 
 func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
-    mapStart := NewMapStartEvent( mg.PointerIdNull )
-    valListStart := NewListStartEvent( mg.TypeOpaqueList, mg.PointerIdNull )
+    mapStart := NewMapStartEvent()
+    valListStart := NewListStartEvent( mg.TypeOpaqueList )
     i1 := mg.Int32( int32( 1 ) )
     val1 := NewValueEvent( i1 )
     id := mg.MakeTestId
@@ -545,7 +545,7 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
             ElementType: typ( i ).AsAtomicType(), 
             AllowsEmpty: true,
         }
-        return NewListStartEvent( lt, mg.PointerIdNull )
+        return NewListStartEvent( lt )
     }
     fld := func( i int ) *FieldStartEvent { 
         return NewFieldStartEvent( id( i ) ) 

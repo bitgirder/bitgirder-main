@@ -97,11 +97,6 @@ func ( proc *PathSettingProcessor ) updateList() {
 
 func ( proc *PathSettingProcessor ) prepareValue() { proc.updateList() }
 
-func ( proc *PathSettingProcessor ) prepareValueAllocation() {
-    proc.updateList()
-    proc.stack.Push( psValueAllocContext{ path: proc.topPath() } )
-}
-
 func ( proc *PathSettingProcessor ) prepareListStart() {
     proc.prepareValue() // this list may be itself be a value in another list
     proc.stack.Push( &psListContext{ basePath: proc.topPath() } )
@@ -124,8 +119,7 @@ func ( proc *PathSettingProcessor ) prepareEnd() {
 
 func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
     switch v := ev.( type ) {
-    case *ValueEvent, *ValueReferenceEvent: proc.prepareValue()
-    case *ValueAllocationEvent: proc.prepareValueAllocation()
+    case *ValueEvent: proc.prepareValue()
     case *ListStartEvent: proc.prepareListStart()
     case *MapStartEvent, *StructStartEvent: proc.prepareStructure()
     case *FieldStartEvent: proc.prepareStartField( v.Field )

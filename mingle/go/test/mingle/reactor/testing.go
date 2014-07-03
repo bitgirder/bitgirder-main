@@ -82,24 +82,10 @@ func RunReactorTestsInNamespace( ns *mg.Namespace, t *testing.T ) {
     }
 }
 
-func eventForEqualityCheck( 
-    ev ReactorEvent, ignorePointerIds bool ) ReactorEvent {
+func EqualEvents( expct, act ReactorEvent, a *assert.PathAsserter ) {
 
-    ev = CopyEvent( ev, true )
-    switch v := ev.( type ) {
-    case *ValueAllocationEvent: v.Id = mg.PointerIdNull
-    case *ValueReferenceEvent: v.Id = mg.PointerIdNull
-    case *MapStartEvent: v.Id = mg.PointerIdNull
-    case *ListStartEvent: v.Id = mg.PointerIdNull
-    }
-    return ev
-}
-
-func EqualEvents( 
-    expct, act ReactorEvent, ignorePointerIds bool, a *assert.PathAsserter ) {
-
-    expct = eventForEqualityCheck( expct, ignorePointerIds )
-    act = eventForEqualityCheck( act, ignorePointerIds )
+    expct = CopyEvent( expct, true )
+    act = CopyEvent( act, true )
     a.Equalf( expct, act, "events are not equal: %s != %s",
         EventToString( expct ), EventToString( act ) )
 }
@@ -180,7 +166,6 @@ type eventPathCheckReactor struct {
     eeAssert *assert.PathAsserter
     expct []EventExpectation
     idx int
-    ignorePointerIds bool
 }
 
 func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
@@ -188,7 +173,7 @@ func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
     ee := r.expct[ r.idx ]
     r.idx++
     ee.Event.SetPath( ee.Path )
-    EqualEvents( ee.Event, ev, r.ignorePointerIds, r.eeAssert )
+    EqualEvents( ee.Event, ev, r.eeAssert )
     r.eeAssert = r.eeAssert.Next()
     return nil
 }
@@ -208,16 +193,14 @@ func NewEventPathCheckReactor(
 }
 
 func nextListStart( lt *mg.ListTypeReference ) *ListStartEvent {
-    return NewListStartEvent( lt, mg.PointerIdNull )
+    return NewListStartEvent( lt )
 }
 
 func nextValueListStart() *ListStartEvent {
     return nextListStart( mg.TypeOpaqueList )
 }
 
-func nextMapStart() *MapStartEvent { 
-    return NewMapStartEvent( mg.PointerIdNull ) 
-}
+func nextMapStart() *MapStartEvent { return NewMapStartEvent() }
 
 func CheckNoError( err error, c *ReactorTestCall ) {
     if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }

@@ -12,7 +12,7 @@ import (
 )
 
 func asMapStartEvent( ev mgRct.ReactorEvent ) *mgRct.MapStartEvent {
-    res := mgRct.NewMapStartEvent( mg.PointerIdNull ) 
+    res := mgRct.NewMapStartEvent() 
     res.SetPath( ev.GetPath() )
     return res
 }

@@ -59,34 +59,6 @@ func NewValueEvent( val mg.Value ) *ValueEvent {
     return &ValueEvent{ Val: val, reactorEventImpl: &reactorEventImpl{} } 
 }
 
-type ValueAllocationEvent struct {
-    *reactorEventImpl
-    Type mg.TypeReference
-    Id mg.PointerId
-}
-
-func NewValueAllocationEvent( 
-    typ mg.TypeReference, id mg.PointerId ) *ValueAllocationEvent {
-
-    return &ValueAllocationEvent{ 
-        Id: id, 
-        Type: typ,
-        reactorEventImpl: &reactorEventImpl{},
-    }
-}
-
-type ValueReferenceEvent struct {
-    *reactorEventImpl
-    Id mg.PointerId
-}
-
-func NewValueReferenceEvent( id mg.PointerId ) *ValueReferenceEvent {
-    return &ValueReferenceEvent{
-        Id: id,
-        reactorEventImpl: &reactorEventImpl{},
-    }
-}
-
 type StructStartEvent struct { 
     *reactorEventImpl
     Type *mg.QualifiedTypeName 
@@ -103,11 +75,10 @@ func isStructStart( ev ReactorEvent ) bool {
 
 type MapStartEvent struct {
     *reactorEventImpl
-    Id mg.PointerId
 }
 
-func NewMapStartEvent( id mg.PointerId ) *MapStartEvent {
-    return &MapStartEvent{ Id: id, reactorEventImpl: &reactorEventImpl{} }
+func NewMapStartEvent() *MapStartEvent {
+    return &MapStartEvent{ reactorEventImpl: &reactorEventImpl{} }
 }
 
 type FieldStartEvent struct { 
@@ -122,16 +93,12 @@ func NewFieldStartEvent( fld *mg.Identifier ) *FieldStartEvent {
 type ListStartEvent struct {
     *reactorEventImpl
     Type *mg.ListTypeReference // the element type
-    Id mg.PointerId
 }
 
-func NewListStartEvent( 
-    typ *mg.ListTypeReference, id mg.PointerId ) *ListStartEvent {
-
+func NewListStartEvent( typ *mg.ListTypeReference ) *ListStartEvent {
     return &ListStartEvent{ 
         reactorEventImpl: &reactorEventImpl{}, 
         Type: typ,
-        Id: id,
     }
 }
 
@@ -151,21 +118,9 @@ func EventToString( ev ReactorEvent ) string {
     case *StructStartEvent:
         pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
     case *ListStartEvent:
-        pairs = append( pairs, 
-            []string{ "id", v.Id.String() },
-            []string{ "type", v.Type.ExternalForm() },
-        )
-    case *MapStartEvent:
-        pairs = append( pairs, []string{ "id", v.Id.String() } )
+        pairs = append( pairs, []string{ "type", v.Type.ExternalForm() } )
     case *FieldStartEvent:
         pairs = append( pairs, []string{ "field", v.Field.ExternalForm() } )
-    case *ValueAllocationEvent:
-        pairs = append( pairs, 
-            []string{ "id", v.Id.String() }, 
-            []string{ "type", v.Type.ExternalForm() },
-        )
-    case *ValueReferenceEvent:
-        pairs = append( pairs, []string{ "id", v.Id.String() } )
     }
     if p := ev.GetPath(); p != nil {
         pairs = append( pairs, []string{ "path", mg.FormatIdPath( p ) } )
@@ -179,13 +134,11 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     var res ReactorEvent
     switch v := ev.( type ) {
     case *ValueEvent: res = NewValueEvent( v.Val )
-    case *ListStartEvent: res = NewListStartEvent( v.Type, v.Id )
-    case *MapStartEvent: res = NewMapStartEvent( v.Id )
+    case *ListStartEvent: res = NewListStartEvent( v.Type )
+    case *MapStartEvent: res = NewMapStartEvent()
     case *StructStartEvent: res = NewStructStartEvent( v.Type )
     case *FieldStartEvent: res = NewFieldStartEvent( v.Field )
     case *EndEvent: res = NewEndEvent()
-    case *ValueAllocationEvent: res = NewValueAllocationEvent( v.Type, v.Id )
-    case *ValueReferenceEvent: res = NewValueReferenceEvent( v.Id )
     default: panic( libErrorf( "unhandled copy target: %T", ev ) )
     }
     if withPath { res.SetPath( ev.GetPath() ) }
@@ -257,20 +210,6 @@ func InitReactorPipeline( elts ...interface{} ) ReactorEventProcessor {
 
 type valueVisit struct {
     rep ReactorEventProcessor
-    visitMap map[ mg.PointerId ] bool
-}
-
-// If a has been visited this method sends a reference event to vv.rep and
-// returns ( err, false ) where err is the value returned by vv.rep. If a has
-// not been visited before returns ( nil, true ) and updates visitMap for a.
-func ( vv valueVisit ) visitReference( a mg.Addressed ) ( error, bool ) {
-    addr := a.Address()
-    if _, ok := vv.visitMap[ addr ]; ok {
-        ev := NewValueReferenceEvent( addr )
-        return vv.rep.ProcessEvent( ev ), true
-    }
-    vv.visitMap[ addr ] = true
-    return nil, false
 }
 
 func ( vv valueVisit ) visitSymbolMapFields( m *mg.SymbolMap ) error {
@@ -290,8 +229,7 @@ func ( vv valueVisit ) visitStruct( ms *mg.Struct ) error {
 }
 
 func ( vv valueVisit ) visitList( ml *mg.List ) error {
-    if err, ok := vv.visitReference( ml ); ok { return err }
-    ev := NewListStartEvent( ml.Type, ml.Address() )
+    ev := NewListStartEvent( ml.Type )
     if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
     for _, val := range ml.Values() {
         if err := vv.visitValue( val ); err != nil { return err }
@@ -300,18 +238,9 @@ func ( vv valueVisit ) visitList( ml *mg.List ) error {
 }
 
 func ( vv valueVisit ) visitSymbolMap( sm *mg.SymbolMap ) error {
-    if err, ok := vv.visitReference( sm ); ok { return err }
-    ev := NewMapStartEvent( sm.Address() )
+    ev := NewMapStartEvent()
     if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
     return vv.visitSymbolMapFields( sm )
-}
-
-func ( vv valueVisit ) visitValuePointer( vp mg.ValuePointer ) error {
-    if err, ok := vv.visitReference( vp ); ok { return err }
-    typ := mg.TypeOf( vp.Dereference() )
-    ev := NewValueAllocationEvent( typ, vp.Address() ) 
-    if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
-    return vv.visitValue( vp.Dereference() )
 }
 
 func ( vv valueVisit ) visitValue( mv mg.Value ) error {
@@ -319,14 +248,12 @@ func ( vv valueVisit ) visitValue( mv mg.Value ) error {
     case *mg.Struct: return vv.visitStruct( v )
     case *mg.SymbolMap: return vv.visitSymbolMap( v )
     case *mg.List: return vv.visitList( v )
-    case mg.ValuePointer: return vv.visitValuePointer( v )
     }
     return vv.rep.ProcessEvent( NewValueEvent( mv ) )
 }
 
 func VisitValue( mv mg.Value, rep ReactorEventProcessor ) error {
-    vv := valueVisit{ rep: rep, visitMap: make( map[ mg.PointerId ] bool ) }
-    return vv.visitValue( mv )
+    return ( valueVisit{ rep: rep } ).visitValue( mv )
 }
 
 func isAssignableValueType( typ mg.TypeReference ) bool {

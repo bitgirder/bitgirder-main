@@ -27,49 +27,26 @@ func ( w writeReactor ) startField( fld *mg.Identifier ) error {
 
 func ( w writeReactor ) startList( lse *mgRct.ListStartEvent ) error { 
     if err := w.WriteTypeCode( mg.IoTypeCodeList ); err != nil { return err }
-    if err := w.WritePointerId( lse.Id ); err != nil { return err }
     if err := w.WriteListTypeReference( lse.Type ); err != nil { return err }
     return w.WriteInt32( -1 )
 }
 
-func ( w writeReactor ) startMap( id mg.PointerId ) error { 
-    if err := w.WriteTypeCode( mg.IoTypeCodeSymMap ); err != nil { return err }
-    return w.WritePointerId( id )
+func ( w writeReactor ) startMap() error { 
+    return w.WriteTypeCode( mg.IoTypeCodeSymMap )
 }
 
 func ( w writeReactor ) value( val mg.Value ) error {
     return w.WriteScalarValue( val )
 }
 
-func ( w writeReactor ) writeValuePointerAlloc( 
-    vp *mgRct.ValueAllocationEvent ) error {
-
-    if err := w.WriteTypeCode( mg.IoTypeCodeValPtrAlloc ); err != nil { 
-        return err 
-    }
-    if err := w.WriteTypeReference( vp.Type ); err != nil { return err }
-    return w.WritePointerId( vp.Id )
-}
-
-func ( w writeReactor ) writeValuePointerReference( 
-    v *mgRct.ValueReferenceEvent ) error {
-
-    if err := w.WriteTypeCode( mg.IoTypeCodeValPtrRef ); err != nil { 
-        return err 
-    }
-    return w.WritePointerId( v.Id )
-}
-
 func ( w writeReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     switch v := ev.( type ) {
     case *mgRct.ValueEvent: return w.value( v.Val )
-    case *mgRct.MapStartEvent: return w.startMap( v.Id )
+    case *mgRct.MapStartEvent: return w.startMap()
     case *mgRct.StructStartEvent: return w.startStruct( v.Type )
     case *mgRct.ListStartEvent: return w.startList( v )
     case *mgRct.FieldStartEvent: return w.startField( v.Field )
     case *mgRct.EndEvent: return w.WriteTypeCode( mg.IoTypeCodeEnd )
-    case *mgRct.ValueAllocationEvent: return w.writeValuePointerAlloc( v )
-    case *mgRct.ValueReferenceEvent: return w.writeValuePointerReference( v )
     }
     panic( libErrorf( "unhandled event type: %T", ev ) )
 }
@@ -98,26 +75,6 @@ func ( r *BinReader ) readScalarValue(
     return rep.ProcessEvent( mgRct.NewValueEvent( val ) )
 }
 
-func ( r *BinReader ) readValuePointerAlloc( 
-    rep mgRct.ReactorEventProcessor ) error {
-
-    if typ, err := r.ReadTypeReference(); err == nil {
-        if id, err := r.ReadPointerId(); err == nil {
-            ev := mgRct.NewValueAllocationEvent( typ, id )
-            if err := rep.ProcessEvent( ev ); err != nil { return err }
-        } else { return err }
-    } else { return err }
-    return r.implReadValue( rep )
-}
-
-func ( r *BinReader ) readValuePointerReference( 
-    rep mgRct.ReactorEventProcessor ) error {
-
-    id, err := r.ReadPointerId()
-    if err != nil { return err }
-    return rep.ProcessEvent( mgRct.NewValueReferenceEvent( id ) )
-}
-
 func ( r *BinReader ) readMapFields( rep mgRct.ReactorEventProcessor ) error {
     for {
         tc, err := r.ReadTypeCode()
@@ -138,11 +95,9 @@ func ( r *BinReader ) readMapFields( rep mgRct.ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readSymbolMap( rep mgRct.ReactorEventProcessor ) error {
-    if id, err := r.ReadPointerId(); err == nil {
-        if err := rep.ProcessEvent( mgRct.NewMapStartEvent( id ) ); err != nil {
-            return err 
-        }
-    } else { return err }
+    if err := rep.ProcessEvent( mgRct.NewMapStartEvent() ); err != nil {
+        return err 
+    }
     return r.readMapFields( rep )
 }
 
@@ -156,11 +111,9 @@ func ( r *BinReader ) readStruct( rep mgRct.ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readListHeader( rep mgRct.ReactorEventProcessor ) error {
-    if id, err := r.ReadPointerId(); err == nil {
-        if typ, err := r.ReadListTypeReference(); err == nil {
-            lse := mgRct.NewListStartEvent( typ, id )
-            if err = rep.ProcessEvent( lse ); err != nil { return err }
-        } else { return err }
+    if typ, err := r.ReadListTypeReference(); err == nil {
+        lse := mgRct.NewListStartEvent( typ )
+        if err = rep.ProcessEvent( lse ); err != nil { return err }
     } else { return err }
     return nil
 }
@@ -194,8 +147,6 @@ func ( r *BinReader ) implReadValue( rep mgRct.ReactorEventProcessor ) error {
          mg.IoTypeCodeUint32, mg.IoTypeCodeUint64, mg.IoTypeCodeFloat32,
          mg.IoTypeCodeFloat64, mg.IoTypeCodeBool, mg.IoTypeCodeEnum:
         return r.readScalarValue( tc, rep )
-    case mg.IoTypeCodeValPtrAlloc: return r.readValuePointerAlloc( rep )
-    case mg.IoTypeCodeValPtrRef: return r.readValuePointerReference( rep )
     case mg.IoTypeCodeSymMap: return r.readSymbolMap( rep )
     case mg.IoTypeCodeStruct: return r.readStruct( rep )
     case mg.IoTypeCodeList: return r.readList( rep )
