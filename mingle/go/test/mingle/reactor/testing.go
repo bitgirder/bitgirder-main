@@ -25,16 +25,6 @@ func listTypeRef( val interface{} ) *mg.ListTypeReference {
     return typeRef( val ).( *mg.ListTypeReference )
 }
 
-func ptrId( i int ) mg.PointerId { return mg.PointerId( uint64( i ) ) }
-
-func ptrAlloc( typ mg.TypeReference, i int ) *ValueAllocationEvent {
-    return NewValueAllocationEvent( typ, ptrId( i ) )
-}
-
-func ptrRef( i int ) *ValueReferenceEvent {
-    return NewValueReferenceEvent( ptrId( i ) )
-}
-
 type ReactorTestCall struct {
     *assert.PathAsserter
 }
@@ -217,36 +207,16 @@ func NewEventPathCheckReactor(
     }
 }
 
-type TestPointerIdFactory struct { id mg.PointerId }
-
-func NewTestPointerIdFactory() *TestPointerIdFactory {
-    return &TestPointerIdFactory{ id: mg.PointerId( 1 ) }
+func nextListStart( lt *mg.ListTypeReference ) *ListStartEvent {
+    return NewListStartEvent( lt, mg.PointerIdNull )
 }
 
-func ( f *TestPointerIdFactory ) NextPointerId() mg.PointerId {
-    res := f.id
-    f.id++
-    return res
+func nextValueListStart() *ListStartEvent {
+    return nextListStart( mg.TypeOpaqueList )
 }
 
-func ( f *TestPointerIdFactory ) NextListStart( 
-    lt *mg.ListTypeReference ) *ListStartEvent {
-
-    return NewListStartEvent( lt, f.NextPointerId() )
-}
-
-func ( f *TestPointerIdFactory ) NextValueListStart() *ListStartEvent {
-    return f.NextListStart( mg.TypeOpaqueList )
-}
-
-func ( f *TestPointerIdFactory ) NextMapStart() *MapStartEvent {
-    return NewMapStartEvent( f.NextPointerId() )
-}
-
-func ( f *TestPointerIdFactory ) NextValueAllocation( 
-    typ mg.TypeReference ) *ValueAllocationEvent {
-
-    return NewValueAllocationEvent( typ, f.NextPointerId() )
+func nextMapStart() *MapStartEvent { 
+    return NewMapStartEvent( mg.PointerIdNull ) 
 }
 
 func CheckNoError( err error, c *ReactorTestCall ) {

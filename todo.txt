@@ -2,3 +2,5 @@
 
 - (compiler) disallow cyclic ns dependencies (equivalent to disallowing cyclic
   imports)
+
+- consolidate valueAcc and ValueBuilder into one type

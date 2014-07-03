@@ -1291,7 +1291,6 @@ func ( rti *rtInit ) addDefaultPathTests() {
         ),
     )
     p := mg.MakeTestIdPath
-    idFact := mgRct.NewTestPointerIdFactory()
     mkTestId := mg.MakeTestId
     qn1 := parser.MustQualifiedTypeName( "ns1@v1/S1" )
     t1 := qn1.AsAtomicType()
@@ -1310,12 +1309,12 @@ func ( rti *rtInit ) addDefaultPathTests() {
     apnd( iv1, p( 1 ), false )
     apnd( fse( 2 ), p( 2 ), false )
     fld2Typ := asType( "Int32*" ).( *mg.ListTypeReference )
-    apnd( idFact.NextListStart( fld2Typ ), p( 2 ), false )
+    apnd( mgRct.NewListStartEvent( fld2Typ, mg.PointerIdNull ), p( 2 ), false )
     apnd( iv1, p( 2, "0" ), false )
     apnd( iv1, p( 2, "1" ), false )
     apnd( mgRct.NewEndEvent(), p( 2 ), false )
     apnd( fse( 3 ), p( 3 ), false )
-    apnd( idFact.NextMapStart(), p( 3 ), false )
+    apnd( mgRct.NewMapStartEvent( mg.PointerIdNull ), p( 3 ), false )
     apnd( fse( 1 ), p( 3, 1 ), false )
     apnd( iv1, p( 3, 1 ), false )
     apnd( mgRct.NewEndEvent(), p( 3 ), false )

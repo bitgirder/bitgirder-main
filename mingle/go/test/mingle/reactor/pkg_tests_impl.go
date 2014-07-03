@@ -33,19 +33,6 @@ func ( t *StructuralReactorErrorTest ) Call( c *ReactorTestCall ) {
     } else { c.EqualErrors( t.Error, err ) }
 }
 
-func ( t *PointerEventCheckTest ) Call( c *ReactorTestCall ) {
-    rct := InitReactorPipeline( 
-        NewDebugReactor( c ), NewPathSettingProcessor(),
-        NewPointerCheckReactor() )
-//        NewPathSettingProcessor(), NewPointerCheckReactor() )
-    if err := FeedSource( t.Events, rct ); err == nil {
-        c.Truef( t.Error == nil, 
-            "expected error (%T): %s", t.Error, t.Error )
-    } else {
-        c.EqualErrors( t.Error, err )
-    }
-}
-
 func ( t *EventPathTest ) Call( c *ReactorTestCall ) {
     rct := NewPathSettingProcessor();
     if t.StartPath != nil { rct.SetStartPath( t.StartPath ) }
