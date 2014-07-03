@@ -21,8 +21,6 @@ type psFieldContext struct { path objpath.PathNode }
 
 type psMapContext struct { path objpath.PathNode }
 
-type psValueAllocContext struct { path objpath.PathNode }
-
 type psListContext struct {
     basePath objpath.PathNode
     path *objpath.ListNode
@@ -63,9 +61,6 @@ func ( proc *PathSettingProcessor ) InitializePipeline(
 func ( proc *PathSettingProcessor ) topPath() objpath.PathNode {
     if proc.stack.IsEmpty() { return proc.startPath }
     switch v := proc.stack.Peek().( type ) {
-    case psValueAllocContext:
-        if v.path == nil { return nil }
-        return v.path
     case psFieldContext: 
         if v.path == nil { return nil }
         return v.path
@@ -128,22 +123,14 @@ func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
     if path := proc.topPath(); path != nil { ev.SetPath( path ) }
 }
 
-func ( proc *PathSettingProcessor ) optCompleteAllocation() {
-    if _, ok := proc.stack.Peek().( psValueAllocContext ); ok { 
-        proc.stack.Pop() 
-    }
-}
-
 func ( proc *PathSettingProcessor ) processedValue() {
     if proc.stack.IsEmpty() { return }
-    proc.optCompleteAllocation()
     if _, ok := proc.stack.Peek().( psFieldContext ); ok { proc.stack.Pop() }
 }
 
 func ( proc *PathSettingProcessor ) processedEnd() {
     if proc.stack.IsEmpty() { return }
     if _, ok := proc.stack.Peek().( psMapContext ); ok { proc.stack.Pop() }
-    proc.optCompleteAllocation()
     proc.processedValue()
 }
 
