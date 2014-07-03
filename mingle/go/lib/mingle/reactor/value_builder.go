@@ -8,18 +8,23 @@ import (
 )
 
 type ValueBuilder struct {
-    acc *valueAccumulator
+    val mg.Value
+    accs *stack.Stack
 }
 
 func NewValueBuilder() *ValueBuilder {
-    return &ValueBuilder{ acc: newValueAccumulator() }
+    return &ValueBuilder{ accs: stack.NewStack() }
 }
 
 func ( vb *ValueBuilder ) InitializePipeline( p *pipeline.Pipeline ) {
     EnsureStructuralReactor( p )
 }
 
-func ( vb *ValueBuilder ) GetValue() mg.Value { return vb.acc.getValue() }
+// Panics if result of val is not ready
+func ( vb *ValueBuilder ) GetValue() mg.Value {
+    if vb.val == nil { panic( rctErrorf( nil, "Value is not yet built" ) ) }
+    return vb.val
+}
 
 type mapAcc struct { 
     m *mg.SymbolMap
@@ -66,28 +71,18 @@ func newListAcc() *listAcc {
     return &listAcc{ l: mg.NewList( mg.TypeOpaqueList ) } 
 }
 
-// Can make this public if needed
-type valueAccumulator struct {
-    val mg.Value
-    accs *stack.Stack
+func ( vb *ValueBuilder ) pushAcc( acc interface{} ) { vb.accs.Push( acc ) }
+
+func ( vb *ValueBuilder ) peekAcc() ( interface{}, bool ) {
+    return vb.accs.Peek(), ! vb.accs.IsEmpty()
 }
 
-func newValueAccumulator() *valueAccumulator {
-    return &valueAccumulator{ accs: stack.NewStack() }
-}
-
-func ( va *valueAccumulator ) pushAcc( acc interface{} ) { va.accs.Push( acc ) }
-
-func ( va *valueAccumulator ) peekAcc() ( interface{}, bool ) {
-    return va.accs.Peek(), ! va.accs.IsEmpty()
-}
-
-func ( va *valueAccumulator ) mustPeekAcc() interface{} {
-    if res, ok := va.peekAcc(); ok { return res }
+func ( vb *ValueBuilder ) mustPeekAcc() interface{} {
+    if res, ok := vb.peekAcc(); ok { return res }
     panic( libError( "acc stack is empty" ) )
 }
 
-func ( va *valueAccumulator ) acceptValue( 
+func ( vb *ValueBuilder ) acceptValue( 
     acc interface{}, val mg.Value ) bool {
 
     switch v := acc.( type ) {
@@ -98,7 +93,7 @@ func ( va *valueAccumulator ) acceptValue(
     panic( libErrorf( "unhandled acc: %T", acc ) )
 }
 
-func ( va *valueAccumulator ) valueForAcc( acc interface{} ) mg.Value {
+func ( vb *ValueBuilder ) valueForAcc( acc interface{} ) mg.Value {
     switch v := acc.( type ) {
     case *mapAcc: return v.m
     case *structAcc: return v.s
@@ -107,26 +102,20 @@ func ( va *valueAccumulator ) valueForAcc( acc interface{} ) mg.Value {
     panic( libErrorf( "unhandled acc: %T", acc ) )
 }
 
-func ( va *valueAccumulator ) popAccValue() {
-    va.valueReady( va.valueForAcc( va.accs.Pop() ) )
+func ( vb *ValueBuilder ) popAccValue() {
+    vb.valueReady( vb.valueForAcc( vb.accs.Pop() ) )
 }
 
-func ( va *valueAccumulator ) valueReady( val mg.Value ) {
-    if acc, ok := va.peekAcc(); ok {
-        if va.acceptValue( acc, val ) { va.popAccValue() }
+func ( vb *ValueBuilder ) valueReady( val mg.Value ) {
+    if acc, ok := vb.peekAcc(); ok {
+        if vb.acceptValue( acc, val ) { vb.popAccValue() }
     } else {
-        va.val = val
+        vb.val = val
     }
 }
 
-// Panics if result of val is not ready
-func ( va *valueAccumulator ) getValue() mg.Value {
-    if va.val == nil { panic( rctErrorf( nil, "Value is not yet built" ) ) }
-    return va.val
-}
-
-func ( va *valueAccumulator ) startField( fld *mg.Identifier ) {
-    acc, ok := va.peekAcc()
+func ( vb *ValueBuilder ) startField( fld *mg.Identifier ) {
+    acc, ok := vb.peekAcc()
     if ! ok { panic( libErrorf( "got field start %s with empty stack", fld ) ) }
     switch v := acc.( type ) {
     case *mapAcc: v.startField( fld )
@@ -136,21 +125,17 @@ func ( va *valueAccumulator ) startField( fld *mg.Identifier ) {
     }
 }
 
-func ( va *valueAccumulator ) end() { va.popAccValue() }
+func ( vb *ValueBuilder ) end() { vb.popAccValue() }
 
-func ( va *valueAccumulator ) ProcessEvent( ev ReactorEvent ) error {
+func ( vb *ValueBuilder ) ProcessEvent( ev ReactorEvent ) error {
     switch v := ev.( type ) {
-    case *ValueEvent: va.valueReady( v.Val )
-    case *ListStartEvent: va.pushAcc( newListAcc() )
-    case *MapStartEvent: va.pushAcc( newMapAcc() )
-    case *StructStartEvent: va.pushAcc( newStructAcc( v.Type ) )
-    case *FieldStartEvent: va.startField( v.Field )
-    case *EndEvent: va.end()
+    case *ValueEvent: vb.valueReady( v.Val )
+    case *ListStartEvent: vb.pushAcc( newListAcc() )
+    case *MapStartEvent: vb.pushAcc( newMapAcc() )
+    case *StructStartEvent: vb.pushAcc( newStructAcc( v.Type ) )
+    case *FieldStartEvent: vb.startField( v.Field )
+    case *EndEvent: vb.end()
     default: panic( libErrorf( "Unhandled event: %T", ev ) )
     }
     return nil
-}
-
-func ( vb *ValueBuilder ) ProcessEvent( ev ReactorEvent ) error {
-    return vb.acc.ProcessEvent( ev )
 }
