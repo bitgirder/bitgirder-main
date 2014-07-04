@@ -849,8 +849,18 @@ func ( l *List ) Set( v Value, idx int ) { l.vals[ idx ] = v }
 func ( l *List ) Len() int { return len( l.vals ) }
 
 func CreateList( vals ...interface{} ) ( *List, error ) {
-    sz := len( vals )
-    res := &List{ vals: make( []Value, sz ), Type: TypeOpaqueList }
+    res := &List{ Type: TypeOpaqueList }
+    if len( vals ) > 0 {
+        if typ, ok := vals[ 0 ].( TypeReference ); ok {
+            if lt, ok := typ.( *ListTypeReference ); ok {
+                res.Type = lt
+                vals = vals[ 1 : ]
+            } else {
+                return nil, fmt.Errorf( "first arg not a list type: %s", typ )
+            }
+        }
+    }
+    res.vals = make( []Value, len( vals ) )
     for i, val := range vals {
         var err error
         if res.vals[ i ], err = AsValue( val ); err != nil { return nil, err }

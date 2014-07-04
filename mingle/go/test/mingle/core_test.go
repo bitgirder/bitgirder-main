@@ -80,6 +80,17 @@ func assertAsListValues( t *testing.T ) {
     )
 }
 
+// Also gives coverage for MustList()
+func TestCreateListWithType( t *testing.T ) {
+    a := &assert.Asserter{ t }
+    t1 := &ListTypeReference{ ElementType: TypeInt32 }
+    l := MustList( t1, int32( 1 ), int32( 2 ) )
+    a.Equal( 2, l.Len() )
+    a.Equal( Int32( 1 ), l.Get( 0 ) )
+    a.Equal( Int32( 2 ), l.Get( 1 ) )
+    a.Truef( l.Type.Equals( t1 ), "bad type: %s", l.Type )
+}
+
 func TestValueTypeErrorFormatting( t *testing.T ) {
     loc := objpath.RootedAt( "f1" )
     assert.Equal( "f1: Blah", (&ValueTypeError{ loc, "Blah" }).Error() )

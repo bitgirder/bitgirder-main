@@ -1331,6 +1331,49 @@ func ( rti *rtInit ) addDefaultPathTests() {
     )
 }
 
+func ( rti *rtInit ) addConstructorCastTests() {
+    dm := MakeV1DefMap(
+        MakeStructDef( "ns1@v1/S2", nil ),
+        MakeEnumDef( "ns1@v1/E1", "e1" ),
+    )
+    s1Typ := NewStructDefinition()
+    s1Typ.Name = mkQn( "ns1@v1/S1" )
+    s1Typ.Fields.MustAdd( MakeFieldDef( "f1", "Int32", nil ) )
+    s1Typ.Constructors = append( s1Typ.Constructors, 
+        &ConstructorDefinition{ mg.TypeInt32 },
+        &ConstructorDefinition{ mg.TypeString },
+        &ConstructorDefinition{ asType( "String*" ) },
+        &ConstructorDefinition{ asType( "ns1@v1/S2" ) },
+        &ConstructorDefinition{ asType( "ns1@v1/S2*" ) },
+        &ConstructorDefinition{ asType( "ns1@v1/E1" ) },
+    )
+    dm.MustAdd( s1Typ )
+    s1Inst1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
+    rti.addIdent( s1Inst1, s1Typ.Name, dm )
+    rti.addIdent( int32( 2 ), s1Typ.Name, dm )
+    rti.addIdent( "hello", s1Typ.Name, dm )
+    rti.addIdent( mg.MustList( asType( "String*" ), "a", "b" ), s1Typ.Name, dm )
+    rti.addIdent( parser.MustStruct( "ns1@v1/S2" ), s1Typ.Name, dm )
+    rti.addIdent( 
+        mg.MustList(
+            asType( "ns1@v1/S2*" ),
+            parser.MustStruct( "ns1@v1/S2" ),
+            parser.MustStruct( "ns1@v1/S2" ),
+        ),
+        s1Typ.Name,
+        dm,
+    )
+    rti.addIdent( parser.MustEnum( "ns1@v1/E1", "e1" ), s1Typ.Name, dm )
+    rti.addIdent( int32( 2 ), asType( "&ns1@v1/S1" ), dm )
+    rti.addTcError( int64( 1 ), s1Typ.Name, mg.TypeInt64, dm )
+    rti.addTcError(
+        mg.MustList( asType( "String+" ), "a", "b" ),
+        s1Typ.Name,
+        asType( "String+" ),
+        dm,
+    )
+}
+
 func ( rti *rtInit ) call() {
     rti.addBaseTypeTests()    
     rti.addMiscTcErrors()
@@ -1350,6 +1393,7 @@ func ( rti *rtInit ) call() {
     rti.addEnumValCastTests()
     rti.addDeepCatchallTests()
     rti.addDefaultCastTests()
+    rti.addConstructorCastTests()
     rti.addDefaultPathTests()
 }
 

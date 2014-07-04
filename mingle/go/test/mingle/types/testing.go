@@ -19,6 +19,7 @@ var (
 func asType( val interface{} ) mg.TypeReference {
     switch v := val.( type ) {
     case mg.TypeReference: return v
+    case *mg.QualifiedTypeName: return v.AsAtomicType()
     case string: return parser.MustTypeReference( v )
     }
     panic( libErrorf( "Unhandled type reference: %T", val ) )
