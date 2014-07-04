@@ -166,22 +166,52 @@ func ( cr *CastReactor ) errStackUnrecognized() error {
     return libErrorf( "unrecognized stack element: %T", cr.stack.Peek() )
 }
 
+func ( cr *CastReactor ) getStructDef( 
+    nm *mg.QualifiedTypeName ) *StructDefinition {
+
+    if def, ok := cr.dm.GetOk( nm ); ok {
+        if sd, ok := def.( *StructDefinition ); ok { return sd }
+    }
+    return nil
+}
+
+func ( cr *CastReactor ) constructorTypeForType(
+    typ mg.TypeReference, sd *StructDefinition ) mg.TypeReference {
+
+    for _, cd := range sd.Constructors {
+        if cd.Type.Equals( typ ) { return cd.Type }
+    }
+    return nil
+}
+
+func ( cr *CastReactor ) castStructConstructor(
+    v mg.Value,
+    sd *StructDefinition,
+    path objpath.PathNode ) ( mg.Value, error, bool ) {
+
+    if cr.constructorTypeForType( mg.TypeOf( v ), sd ) != nil { 
+        return v, nil, true 
+    }
+    if ev, ok := v.( *mg.Enum ); ok {
+        if ev.Type.Equals( sd.Name ) { 
+            return nil, notAnEnumTypeError( sd.Name.AsAtomicType(), path ), true
+        }
+    }
+    return nil, nil, false
+}
+
 func ( cr *CastReactor ) castAtomic(
     v mg.Value,
     at *mg.AtomicTypeReference,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
 
     if def, ok := cr.dm.GetOk( at.Name ); ok {
-        if ed, ok := def.( *EnumDefinition ); ok {
-            res, err := castEnum( v, ed, path )
+        switch td := def.( type ) {
+        case *EnumDefinition:
+            res, err := castEnum( v, td, path )
             return res, err, true
+        case *StructDefinition: return cr.castStructConstructor( v, td, path )
         } 
-        if ev, ok := v.( *mg.Enum ); ok {
-            if ! ev.Type.Equals( at.Name ) { return nil, nil, false }
-            if _, ok := def.( *StructDefinition ); ok {
-                return nil, notAnEnumTypeError( at, path ), true
-            }
-        }
     }
     return nil, nil, false
 }
@@ -473,11 +503,16 @@ func ( cr *CastReactor ) processEnd(
     return nil
 }
 
-func ( cr *CastReactor ) allowAssignment( 
-    expct, act *mg.QualifiedTypeName ) bool {
+func ( cr *CastReactor ) allowStructStartForType( 
+    ss *mgRct.StructStartEvent, expct *mg.QualifiedTypeName ) bool {
 
-    if _, ok := cr.dm.GetOk( act ); ! ok { return false }
-    return canAssignType( expct, act, cr.dm )
+    if _, ok := cr.dm.GetOk( ss.Type ); ! ok { return false }
+    if sd := cr.getStructDef( expct ); sd != nil {
+        if cr.constructorTypeForType( ss.Type.AsAtomicType(), sd ) != nil {
+            return true
+        }
+    }
+    return canAssignType( expct, ss.Type, cr.dm )
 }
 
 func ( cr *CastReactor ) processStructStartWithAtomicType(
@@ -492,7 +527,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     }
 
     if at.Name.Equals( ss.Type ) || at.Equals( mg.TypeValue ) ||
-       cr.allowAssignment( at.Name, ss.Type ) {
+       cr.allowStructStartForType( ss, at.Name ) {
         return cr.completeStartStruct( ss, next )
     }
 
@@ -542,8 +577,13 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
         return cr.processListStartWithType( 
             le, mg.TypeOpaqueList, callTyp, next )
     }
-
-    return mg.NewTypeCastError( callTyp, mg.TypeOpaqueList, le.GetPath() )
+    if sd := cr.getStructDef( at.Name ); sd != nil {
+        if typ := cr.constructorTypeForType( le.Type, sd ); typ != nil {
+            lt := typ.( *mg.ListTypeReference )
+            return cr.processListStartWithListType( le, lt, callTyp, next )
+        }
+    }
+    return mg.NewTypeCastError( callTyp, le.Type, le.GetPath() )
 }
 
 func ( cr *CastReactor ) processListStartWithListType(

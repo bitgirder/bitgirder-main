@@ -508,6 +508,28 @@ func ( rti *rtInit ) addListTests() {
     rti.addNullValueError( nil, "Int32+", dm )
     rti.addVcError( mg.MustList(), "&Int32+", "empty list", dm )
     rti.addIdent( nil, "(&Int32*)?", dm )
+    rti.addIdent(
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+        mg.TypeValue,
+        dm,
+    )
+    rti.addIdent(
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+        mg.TypeOpaqueList,
+        dm,
+    )
+    rti.addSucc(
+        mg.MustList( int32( 0 ), int32( 1 ) ),
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+        asType( "Int32*" ),
+        dm,
+    )
+    rti.addTcError(
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+        asType( "Buffer" ),
+        asType( "Int32*" ),
+        dm,
+    )
 }
 
 func ( rti *rtInit ) addMapTests() {
