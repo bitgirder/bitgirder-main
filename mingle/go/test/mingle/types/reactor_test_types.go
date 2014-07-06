@@ -21,3 +21,11 @@ type EventPathTest struct {
     Type mg.TypeReference
     Map *DefinitionMap
 }
+
+type BuiltinTypeTest struct {
+    In mg.Value
+    Expect interface{}
+    Type mg.TypeReference
+    Map *DefinitionMap
+    Err error
+}

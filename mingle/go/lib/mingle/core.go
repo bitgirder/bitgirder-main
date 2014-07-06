@@ -1058,6 +1058,12 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
+    QnameIdentifier *QualifiedTypeName
+    TypeIdentifier *AtomicTypeReference
+    QnameNamespace *QualifiedTypeName
+    TypeNamespace *AtomicTypeReference
+    QnameIdentifierPath *QualifiedTypeName
+    TypeIdentifierPath *AtomicTypeReference
     QnameRequest *QualifiedTypeName
     TypeRequest *AtomicTypeReference
     QnameResponse *QualifiedTypeName
@@ -1073,11 +1079,7 @@ var (
     IdAuthentication *Identifier
     IdResult *Identifier
     IdError *Identifier
-    QnameTypeReference *QualifiedTypeName
-    TypeTypeReference *AtomicTypeReference
     IdBuffer *Identifier
-    QnameIdentifierPath *QualifiedTypeName
-    TypeIdentifierPath *AtomicTypeReference
 )
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
@@ -1085,11 +1087,26 @@ var PrimitiveTypes []*AtomicTypeReference
 var NumericTypeNames []*QualifiedTypeName
 
 var CoreNsV1 *Namespace
+var LangNsV1 *Namespace
+
+func mkInitPair( 
+    nm string, ns *Namespace ) ( *QualifiedTypeName, *AtomicTypeReference ) {
+
+    dn := NewDeclaredTypeNameUnsafe( nm )
+    qn := &QualifiedTypeName{ Namespace: ns, Name: dn }
+    return qn, &AtomicTypeReference{ Name: qn }
+}
 
 func init() {
-    id := func( strs... string ) *Identifier { return &Identifier{ strs } }
+    id := func( s string ) *Identifier {
+        return NewIdentifierUnsafe( []string{ s } )
+    }
     CoreNsV1 = &Namespace{
         Parts: []*Identifier{ id( "mingle" ), id( "core" ) },
+        Version: id( "v1" ),
+    }
+    LangNsV1 = &Namespace{
+        Parts: []*Identifier{ id( "mingle" ), id( "lang" ) },
         Version: id( "v1" ),
     }
     makeQn := func( s string ) *QualifiedTypeName {
@@ -1138,6 +1155,10 @@ func init() {
         QnameFloat32,
         QnameFloat64,
     }
+    QnameIdentifier, TypeIdentifier = mkInitPair( "Identifier", LangNsV1 )
+    QnameNamespace, TypeNamespace = mkInitPair( "Namespace", LangNsV1 )
+    QnameIdentifierPath, TypeIdentifierPath = 
+        mkInitPair( "IdentifierPath", LangNsV1 )
     QnameRequest, TypeRequest = f1( "Request" )
     QnameResponse, TypeResponse = f1( "Response" )
     IdNamespace = id( "namespace" )
@@ -1147,9 +1168,7 @@ func init() {
     IdAuthentication = id( "authentication" )
     IdResult = id( "result" )
     IdError =id( "error" )
-    QnameTypeReference, TypeTypeReference = f1( "TypeReference" )
     IdBuffer = id( "buffer" )
-    QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
 }
 
 func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {

@@ -35,3 +35,7 @@ func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
     mgRct.AssertFeedSource( t.Source, pip, c )
     chk.Complete()
 }
+
+func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
+    c.Fatal( "unimplemented" )
+}

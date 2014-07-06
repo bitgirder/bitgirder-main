@@ -1396,6 +1396,223 @@ func ( rti *rtInit ) addConstructorCastTests() {
     )
 }
 
+func ( rti *rtInit ) addBuiltinTypeTests() {
+    dm := MakeV1DefMap()
+    idBytes := func( s string ) []byte {
+        return mg.IdentifierAsBytes( mkId( s ) )
+    }
+    badIdBytes := []byte{ 0, 0, 0, 0, 0, 0 }
+    p := func( rootId string ) objpath.PathNode {
+        return objpath.RootedAt( mkId( rootId ) )
+    }
+    idStruct := func( parts ...string ) *mg.Struct {
+        l := mg.NewList( asType( "String+" ).( *mg.ListTypeReference ) )
+        for _, part := range parts { l.AddUnsafe( mg.String( part ) ) }
+        return parser.MustStruct( mg.QnameIdentifier, "parts", l )
+    }
+    add := func( in, typ, expct interface{} ) {
+        rti.addTests(
+            &BuiltinTypeTest{
+                In: mg.MustValue( in ),
+                Type: asType( typ ),
+                Expect: expct,
+                Map: dm,
+            },
+        )
+    }
+    addErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
+        rti.addTests(
+            &BuiltinTypeTest{
+                In: mg.MustValue( in ),
+                Type: asType( typ ),
+                Err: newVcErr( path, msg ),
+                Map: dm,
+            },
+        )
+    }
+    add( idStruct( "id1" ), mg.TypeIdentifier, mkId( "id1" ) )
+    add( idStruct( "id1", "id2" ), mg.TypeIdentifier, mkId( "id1-id2" ) )
+    add( idBytes( "id1" ), mg.TypeIdentifier, mkId( "id1" ) )
+    add(
+        mkId( "id1" ).ExternalForm(),
+        mg.TypeIdentifier,
+        mkId( "id1" ),
+    )
+    addErr( "id$Bad", mg.TypeIdentifier, nil, "STUB" )
+    addErr( 
+        badIdBytes,
+        mg.TypeIdentifier,
+        nil,
+        "STUB",
+    )
+    addErr(
+        idStruct( "part1", "BadPart" ),
+        mg.TypeIdentifier,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "STUB",
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", "v1",
+            "parts", mg.MustList( "ns1", "ns2" ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idBytes( "v1" ),
+            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    addErr(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", "bad$ver",
+            "parts", mg.MustList( idStruct( "ns1" ) ),
+        ),
+        mg.TypeNamespace,
+        p( "version" ),
+        "STUB",
+    ) 
+    addErr(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
+        ),
+        mg.TypeNamespace,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "STUB",
+    ) 
+    addErr(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), badIdBytes ),
+        ),
+        mg.TypeNamespace,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "STUB",
+    )
+    idPathStruct := func( parts ...interface{} ) *mg.Struct {
+        return parser.MustStruct( mg.QnameIdentifierPath,
+            "parts", mg.MustList( parts... ),
+        )
+    }
+    add(
+        idPathStruct(
+            idStruct( "p1" ),
+            idStruct( "p2" ),
+            int32( 1 ),
+            idStruct( "p3" ),
+        ),
+        mg.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 1 ).
+            Descend( mkId( "p3" ) ),
+    )
+    add(
+        idPathStruct(
+            idStruct( "p1" ),
+            "p2",
+            int32( 1 ),
+            uint32( 2 ),
+            int64( 3 ),
+            uint64( 4 ),
+            idBytes( "p3" ),
+        ),
+        mg.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 1 ).
+            StartList().SetIndex( 2 ).
+            StartList().SetIndex( 3 ).
+            StartList().SetIndex( 4 ).
+            Descend( mkId( "p3" ) ),
+    )
+    add(
+        "p1.p2.3.p4",
+        mg.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 3 ).
+            Descend( mkId( "p4" ) ),
+    )
+    addErr(
+        "p1.bad$Id",
+        mg.TypeIdentifierPath,
+        nil,
+        "STUB",
+    )
+    addErr(
+        idPathStruct( true ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+    addErr(
+        idPathStruct( "bad$Id" ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+    addErr(
+        idPathStruct( badIdBytes ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+    addErr(
+        idPathStruct( float32( 1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+    addErr(
+        idPathStruct( float64( 1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+    addErr(
+        idPathStruct( int32( -1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+    addErr(
+        idPathStruct( int64( -1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "STUB",
+    )
+}
+
 func ( rti *rtInit ) call() {
     rti.addBaseTypeTests()    
     rti.addMiscTcErrors()
@@ -1417,6 +1634,7 @@ func ( rti *rtInit ) call() {
     rti.addDefaultCastTests()
     rti.addConstructorCastTests()
     rti.addDefaultPathTests()
+    rti.addBuiltinTypeTests()
 }
 
 func init() {
