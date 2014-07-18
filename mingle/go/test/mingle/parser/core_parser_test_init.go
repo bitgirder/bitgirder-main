@@ -2,6 +2,7 @@ package parser
 
 import (
     mg "mingle"
+    "bitgirder/objpath"
 )
 
 type CoreParseTestType string
@@ -10,6 +11,7 @@ const (
     TestTypeString = CoreParseTestType( "string" )
     TestTypeNumber = CoreParseTestType( "number" )
     TestTypeIdentifier = CoreParseTestType( "identifier" )
+    TestTypeIdentifierPath = CoreParseTestType( "identifier-path" )
     TestTypeNamespace = CoreParseTestType( "namespace" )
     TestTypeDeclaredTypeName = CoreParseTestType( "declared-type-name" )
     TestTypeQualifiedTypeName = CoreParseTestType( "qualified-type-name" )
@@ -33,10 +35,7 @@ var CoreParseTests = []*CoreParseTest{}
 
 func init() {
     failPe := func( 
-        in string, 
-        col int, 
-        msg string, 
-        tt CoreParseTestType ) *CoreParseTest {
+        in string, col int, msg string, tt CoreParseTestType ) *CoreParseTest {
         return &CoreParseTest{
             In: in, TestType: tt, Err: &ParseErrorExpect{ col, msg } }
     }
@@ -177,6 +176,64 @@ func init() {
         idFail( "trailing_underscore_", 21, "Empty identifier part" ),
         idFail( "trailing-input/x", 15, "Unexpected token: /" ),
         idFail( "", 1, "Empty identifier" ),
+    )
+    idPathSucc := func( 
+        in, extForm string, expct objpath.PathNode ) *CoreParseTest {
+        
+            if extForm == "" { extForm = in }
+            return &CoreParseTest{
+                In: in,
+                ExternalForm: extForm,
+                Expect: expct,
+                TestType: TestTypeIdentifierPath,
+            }
+        }
+    idPathFail := peFailBinder( TestTypeIdentifierPath )
+    CoreParseTests = append( CoreParseTests,
+        idPathSucc( "i1", "", objpath.RootedAt( id( "i1" ) ) ),
+        idPathSucc( 
+            "someStuff.otherStuff", 
+            "some-stuff.other-stuff",
+            objpath.RootedAt( id( "some", "stuff" ) ).
+                Descend( id( "other", "stuff" ) ),
+        ),
+        idPathSucc(
+            "i1[ 2 ].i3[ 4 ][ 5 ].i6", 
+            "",
+            objpath.RootedAt( id( "i1" ) ).
+                StartList().SetIndex( 2 ).
+                Descend( id( "i3" ) ).
+                StartList().SetIndex( 4 ).
+                StartList().SetIndex( 5 ).
+                Descend( id( "i6" ) ),
+        ),
+        idPathSucc(
+            "   i1[2]  [  3     ] .  i4   ",
+            "i1[ 2 ][ 3 ].i4",
+            objpath.RootedAt( id( "i1" ) ).
+                StartList().SetIndex( 2 ).
+                StartList().SetIndex( 3 ).
+                Descend( id( "i4" ) ),
+        ),
+        idPathSucc(
+            "[ 1 ][ 2 ].i3",
+            "",
+            objpath.RootedAtList().SetIndex( 1 ).
+                StartList().SetIndex( 2 ).
+                Descend( id( "i3" ) ),
+        ),
+        idPathFail( "", 0, "empty path" ),
+        idPathFail( "bad$Id", 4, "invalid identifier" ),
+        idPathFail( "[ 1 ].bad$Id", 7, "invalid identifier" ),
+        idPathFail( "i1[ 2", 6, "unterminated list index" ),
+        idPathFail( "[ -1 ]", 1, "invalid list index" ),
+        idPathFail( "i1[ -2 ]", 3, "invalid list index" ),
+        idPathFail( "i1.2", 4, "invalid identifier" ),
+        idPathFail( "i1..i2", 4, "empty path component" ),
+        idPathFail( "i1.[2]", 4, "empty path component" ),
+        idPathFail( "i1;i2", 3, "invalid identifier" ),
+        idPathFail( "i1[ 2 ]i3", 8, "missing path separator" ),
+        idPathFail( "i1 i2", 1, "invalid identifier" ),
     )
     ns := func( ver *mg.Identifier, parts ...*mg.Identifier ) *mg.Namespace {
         return &mg.Namespace{ parts, ver }
