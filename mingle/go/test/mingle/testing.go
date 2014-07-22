@@ -109,8 +109,8 @@ func EqualPaths( expct, act objpath.PathNode, a assert.Failer ) {
 
 func MakeTestId( i int ) *Identifier { return mkId( fmt.Sprintf( "f%d", i ) ) }
 
-func mustInt( s string ) int {
-    res, err := strconv.Atoi( s )
+func mustUint64( s string ) uint64 {
+    res, err := strconv.ParseUint( s, 10, 64 )
     if ( err != nil ) { panic( err ) }
     return res
 }
@@ -118,7 +118,7 @@ func mustInt( s string ) int {
 func startTestIdPath( elt interface{} ) objpath.PathNode {
     switch v := elt.( type ) {
     case int: return objpath.RootedAt( MakeTestId( v ) )
-    case string: return objpath.RootedAtList().SetIndex( mustInt( v ) )
+    case string: return objpath.RootedAtList().SetIndex( mustUint64( v ) )
     }
     panic( libErrorf( "unhandled elt: %T", elt ) )
 }
@@ -129,7 +129,7 @@ func MakeTestIdPath( elts ...interface{} ) objpath.PathNode {
     for i, e := 1, len( elts ); i < e; i++ {
         switch v := elts[ i ].( type ) {
         case int: res = res.Descend( MakeTestId( v ) ) 
-        case string: res = res.StartList().SetIndex( mustInt( v ) )
+        case string: res = res.StartList().SetIndex( mustUint64( v ) )
         default: panic( libErrorf( "unhandled elt: %T", v ) )
         }
     }

@@ -461,3 +461,16 @@ func TestNumberIsInt( t *testing.T ) {
     f( &NumericToken{ Int: "3", Frac: "1" }, false )
     f( &NumericToken{ Int: "3", Exp: "1" }, false )
 }
+
+func TestLexerWithoutRecognizeComments( t *testing.T ) {
+    a := newLexerAsserter( "a 1 # blah", false, t )
+    a.lx.RejectComments = true
+    a.expectToken( 1, 1, id( "a" ) )
+    a.expectToken( 1, 2, WhitespaceToken( " " ) )
+    a.expectToken( 1, 3, &NumericToken{ Int: "1" } )
+    a.expectToken( 1, 4, WhitespaceToken( " " ) )
+    tok, _, err := a.lx.ReadToken()
+    if err == nil { t.Fatalf( "expected error for '#', got: %s", tok ) }
+    expct := &ParseErrorExpect{ 5, "Unexpected comment start" }
+    AssertParseError( err, expct, assert.NewPathAsserter( t ) )
+}

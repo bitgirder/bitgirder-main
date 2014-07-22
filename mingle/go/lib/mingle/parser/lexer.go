@@ -85,6 +85,7 @@ type Lexer struct {
     col int
     newlineUnreadCol int
     isExternal bool
+    RejectComments bool
     strip bool
     sawEof bool
     synthLoc *Location
@@ -479,6 +480,9 @@ func isCommentStart( r rune ) bool { return r == '#' }
 type CommentToken string
 
 func ( lx *Lexer ) readComment() ( tok Token, err error ) {
+    if lx.RejectComments {
+        return nil, lx.parseError( "Unexpected comment start" ) 
+    }
     buf := bytes.Buffer{}
     lx.mustRune( '#' )
     for loop := true; loop && err == nil; {
@@ -964,6 +968,7 @@ type LexerOptions struct {
     SourceName string
     Reader io.Reader
     IsExternal bool
+    RejectComments bool
     Strip bool
 }
 
@@ -975,6 +980,7 @@ func NewLexer( opts *LexerOptions ) *Lexer {
         newlineUnreadCol: -1,
         isExternal: opts.IsExternal,
         SourceName: opts.SourceName,
+        RejectComments: opts.RejectComments,
         strip: opts.Strip,
     }
 }

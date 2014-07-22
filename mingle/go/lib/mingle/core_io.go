@@ -104,11 +104,11 @@ func ( pw pathWriter ) Descend( elt interface{} ) ( err error ) {
     return pw.w.WriteIdentifier( elt.( *Identifier ) )
 }
 
-func ( pw pathWriter ) List( idx int ) ( err error ) {
+func ( pw pathWriter ) List( idx uint64 ) ( err error ) {
     if err = pw.w.WriteTypeCode( IoTypeCodeIdPathListNode ); err != nil { 
         return 
     }
-    return pw.w.WriteInt32( int32( idx ) )
+    return pw.w.WriteUint64( idx )
 }
 
 func ( w *BinWriter ) WriteIdPath( p objpath.PathNode ) ( err error ) {
@@ -411,12 +411,12 @@ func ( r *BinReader ) readIdPathNext(
             } else { return p.Descend( id ), false, nil }
         } else { return nil, false, err }
     case IoTypeCodeIdPathListNode:
-        if i, err := r.ReadInt32(); err == nil {
+        if i, err := r.ReadUint64(); err == nil {
             var l *objpath.ListNode
             if p == nil { 
                 l = objpath.RootedAtList() 
             } else { l = p.StartList() }
-            for ; i > 0; i-- { l = l.Next() }
+            l.SetIndex( i )
             return l, false, nil
         } else { return nil, false, err }
     case IoTypeCodeEnd: return p, true, nil

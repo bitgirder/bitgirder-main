@@ -75,6 +75,23 @@ func TestSkipWsOrComments( t *testing.T ) {
     }
 }
 
+func TestSkipWs( t *testing.T ) {
+    chk := func( in string, expct interface{} ) {
+        a := assert.Asserter{ t }
+        sb := newSyntaxBuilder( in, false )
+        if err := sb.SkipWs(); err != nil { t.Fatal( err ) }
+        tn, err := sb.PeekToken()
+        if err != nil { t.Fatal( err ) }
+        var act interface{}
+        if tn != nil { act = tn.Token }
+        a.Equal( expct, act )
+    }
+    chk( "", nil )
+    chk( " \t\r\n", nil )
+    chk( "   abc", id( "abc" ) )
+    chk( "   # stuff", CommentToken( " stuff" ) )
+}
+
 func TestExpectSpecialMulti( t *testing.T ) {
     expct := []SpecialToken{ SpecialTokenQuestionMark, SpecialTokenAsperand }
     pa := assert.NewPathAsserter( t )

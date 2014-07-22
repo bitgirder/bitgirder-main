@@ -36,11 +36,11 @@ func ( v *pathBuildVisitor ) Descend( elt interface{} ) error {
     return nil
 }
 
-func ( v *pathBuildVisitor ) List( idx int ) error {
+func ( v *pathBuildVisitor ) List( idx uint64 ) error {
     if err := v.takeCall(); err != nil { return err }
     var ln *ListNode
     if v.p == nil { ln = RootedAtList() } else { ln = v.p.StartList() }
-    for i := 0; i < idx; i++ { ln = ln.Next() }
+    for i := uint64( 0 ); i < idx; i++ { ln = ln.Next() }
     v.p = ln
     return nil
 }

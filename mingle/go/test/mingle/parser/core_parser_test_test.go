@@ -15,11 +15,12 @@ func parseCoreParseTest(
         res, _, err = lx.ReadToken()
         if err == nil { expectEof( lx, a ) }
     case TestTypeIdentifier: res, err = ParseIdentifier( cpt.In )
+    case TestTypeIdentifierPath: res, err = ParseIdentifierPath( cpt.In )
     case TestTypeDeclaredTypeName: res, err = ParseDeclaredTypeName( cpt.In )
     case TestTypeNamespace: res, err = ParseNamespace( cpt.In )
     case TestTypeQualifiedTypeName: res, err = ParseQualifiedTypeName( cpt.In )
     case TestTypeTypeReference: res, err = ParseTypeReference( cpt.In )
-    default: a.Fatalf( "Unknown: %T", cpt.Expect )
+    default: a.Fatalf( "unhandled test type: %s", cpt.TestType )
     }
     return
 }

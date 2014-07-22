@@ -40,6 +40,15 @@ func ( tn *TokenNode ) IsKeyword( k Keyword ) bool {
     return false
 }
 
+func ( tn *TokenNode ) IsIdentifier() bool {
+    _, ok := tn.Token.( *mg.Identifier )
+    return ok
+}
+
+func ( tn *TokenNode ) String() string {
+    return fmt.Sprintf( "TokenNode{ Loc: %s, Token: %s }", tn.Loc, tn.Token )
+}
+
 type Builder struct {
     lx *Lexer
 }
@@ -51,6 +60,7 @@ func newSyntaxBuilderExt( s string ) *Builder {
         Reader: bytes.NewBufferString( s ),
         SourceName: ParseSourceInput,
         IsExternal: true,
+        RejectComments: true,
     }
     return NewBuilder( NewLexer( opts ) )
 }
@@ -75,7 +85,7 @@ func ( sb * Builder ) readToken(
     case tokenExpectIdentifier: lxTok, lc, err = sb.lx.ReadIdentifier( false )
     case tokenExpectDeclTypeName: lxTok, lc, err = sb.lx.ReadDeclaredTypeName()
     case tokenExpectNumber: lxTok, lc, err = sb.lx.ReadNumber()
-    default: panic( fmt.Errorf( "Unexpected token expect type: %v", et ) )
+    default: panic( libErrorf( "unexpected token expect type: %v", et ) )
     }
     if lxTok != nil { tn = &TokenNode{ lxTok, lc } }
     return
@@ -157,6 +167,7 @@ func ( sb *Builder ) peekUnexpectedTokenErrorNode() *TokenNode {
 // tn nil means the error is at next token loc (or END)
 func ( sb *Builder ) ErrorTokenUnexpected( 
     expctDesc string, tn *TokenNode ) error {
+
     if tn == nil { tn = sb.peekUnexpectedTokenErrorNode() }
     var tokStr string
     var lc *Location
@@ -177,8 +188,7 @@ func IsSpecial( tok Token, spec SpecialToken ) bool {
     return ok && act == spec
 }
 
-func ( sb *Builder ) PollSpecial( 
-    l ...SpecialToken ) ( *TokenNode, error ) {
+func ( sb *Builder ) PollSpecial( l ...SpecialToken ) ( *TokenNode, error ) {
     tn, err := sb.PeekToken()
     if err == nil && tn != nil {
         for _, t := range l {
@@ -193,6 +203,7 @@ func ( sb *Builder ) PollSpecial(
 
 func ( sb *Builder ) ExpectSpecial(
     l ...SpecialToken ) ( tn *TokenNode, err error ) {
+
     if tn, err = sb.PollSpecial( l... ); err == nil && tn == nil {
         var msg string
         if len( l ) == 1 {
@@ -205,6 +216,13 @@ func ( sb *Builder ) ExpectSpecial(
         err = sb.ErrorTokenUnexpected( msg, nil )
     }
     return
+}
+
+// could make this public if needed
+func ( sb *Builder ) mustSpecial( l ...SpecialToken ) *TokenNode {
+    tn, err := sb.ExpectSpecial( l... )
+    if err == nil { return tn }
+    panic( err )
 }
 
 func ( sb *Builder ) errorStringForToken( tok Token ) string {
@@ -227,18 +245,26 @@ func ( sb *Builder ) CheckTrailingToken() error {
     return nil
 }
 
-func ( sb *Builder ) SkipWsOrComments() ( err error ) {
+func ( sb *Builder ) implSkipWsOrComments( skipComments bool ) ( err error ) {
     for loop := true; loop && err == nil; {
         var tn *TokenNode
         if tn, err = sb.PeekToken(); err == nil && tn != nil {
             switch tn.Token.( type ) {
-            case CommentToken, WhitespaceToken: sb.MustNextToken()
+            case CommentToken: loop = skipComments
+            case WhitespaceToken:;
             default: loop = false
             }
+            if loop { sb.MustNextToken() }
         } else { loop = false } // possibly because tn == nil
     }
     return err
 }
+
+func ( sb *Builder ) SkipWsOrComments() error {
+    return sb.implSkipWsOrComments( true )
+}
+
+func ( sb *Builder ) SkipWs() error { return sb.implSkipWsOrComments( false ) }
 
 const expctDescNumericToken = "numeric token"
 

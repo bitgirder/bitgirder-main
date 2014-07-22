@@ -27,3 +27,9 @@ type ParseError struct {
 func ( e *ParseError ) Error() string {
     return fmt.Sprintf( "%s: %s", e.Loc, e.Message )
 }
+
+func NewParseErrorf( 
+    loc *Location, tmpl string, argv ...interface{} ) *ParseError {
+
+    return &ParseError{ Loc: loc, Message: fmt.Sprintf( tmpl, argv... ) }
+}

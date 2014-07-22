@@ -26,7 +26,7 @@ type DictNode struct {
 
 type ListNode struct {
     parent PathNode
-    indx int
+    indx uint64
 }
 
 func descend( parent PathNode, elt interface{} ) PathNode {
@@ -55,7 +55,7 @@ func ( l *ListNode ) Next() *ListNode {
     return &ListNode{ l.parent, l.indx + 1 } 
 }
 
-func ( l *ListNode ) SetIndex( indx int ) *ListNode {
+func ( l *ListNode ) SetIndex( indx uint64 ) *ListNode {
     l.indx = indx
     return l
 }
@@ -105,7 +105,7 @@ func ascentOrderFor( n PathNode ) []interface{} {
 
 type Visitor interface {
     Descend( elt interface{} ) error
-    List( idx int ) error
+    List( idx uint64 ) error
 }
 
 func Visit( p PathNode, v Visitor ) error {
@@ -133,7 +133,7 @@ func ( cv *copyVisitor ) Descend( elt interface{} ) error {
     return nil
 }
 
-func ( cv *copyVisitor ) List( idx int ) error {
+func ( cv *copyVisitor ) List( idx uint64 ) error {
     if cv.p == nil {
         cv.p = RootedAtList().SetIndex( idx )
     } else {
@@ -162,10 +162,10 @@ func ( v *formatVisitor ) Descend( elt interface{} ) error {
     return nil
 }
 
-func ( v *formatVisitor ) List( idx int ) error {
+func ( v *formatVisitor ) List( idx uint64 ) error {
     v.sawRoot = true
     v.apnd( "[ " )
-    v.apnd( strconv.Itoa( idx ) )
+    v.apnd( strconv.FormatUint( idx, 10 ) )
     v.apnd( " ]" )
     return nil
 }
