@@ -51,7 +51,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
             Events: CopySource( evs ),
-            Error: rctError( nil, errMsg ),
+            Error: NewReactorError( nil, errMsg ),
         }
     }
     mk2 := func( 

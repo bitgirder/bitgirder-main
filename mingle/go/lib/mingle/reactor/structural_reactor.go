@@ -32,7 +32,7 @@ func newMapStructureCheck() *mapStructureCheck {
 
 func ( mc *mapStructureCheck ) startField( fld *mg.Identifier ) error {
     if mc.seen.HasKey( fld ) {
-        return rctErrorf( nil, "Multiple entries for field: %s", 
+        return NewReactorErrorf( nil, "Multiple entries for field: %s", 
             fld.ExternalForm() )
     }
     mc.seen.Put( fld, true )
@@ -77,13 +77,14 @@ func ( sr *StructuralReactor ) sawDescFor( val interface{} ) string {
 
 func ( sr *StructuralReactor ) checkNotDone( ev ReactorEvent ) error {
     if ! sr.done { return nil }
-    return rctErrorf( ev.GetPath(), "Saw %s after value was built", 
+    return NewReactorErrorf( ev.GetPath(), "Saw %s after value was built", 
         sr.sawDescFor( ev ) );
 }
 
 func ( sr *StructuralReactor ) failTopType( ev ReactorEvent ) error {
     desc := sr.descForEvent( ev )
-    return rctErrorf( ev.GetPath(), "Expected %s but got %s", sr.topTyp, desc )
+    return NewReactorErrorf( 
+        ev.GetPath(), "Expected %s but got %s", sr.topTyp, desc )
 }
 
 func ( sr *StructuralReactor ) couldStartWithEvent( ev ReactorEvent ) bool {
@@ -106,14 +107,14 @@ func ( sr *StructuralReactor ) push( val interface{} ) { sr.stack.Push( val ) }
 
 func ( sr *StructuralReactor ) failUnexpectedMapEnd( val interface{} ) error {
     desc := sr.sawDescFor( val )
-    return rctErrorf( nil, 
+    return NewReactorErrorf( nil, 
         "Expected field name or end of fields but got %s", desc )
 }
 
 func ( sr *StructuralReactor ) listValueTypeError( 
     expct mg.TypeReference, ev ReactorEvent ) error {
 
-    return rctErrorf( nil, "expected list value of type %s but saw %s",
+    return NewReactorErrorf( nil, "expected list value of type %s but saw %s",
         expct, sr.sawDescFor( ev ) )
 }
 
@@ -164,8 +165,9 @@ func ( sr *StructuralReactor ) execValueCheck(
         case listStructureCheck: err = sr.checkEventForList( v, ev )
         case *mg.Identifier: break;
         case *mapStructureCheck: return sr.failUnexpectedMapEnd( ev )
-        default: err = rctErrorf( ev.GetPath(), "Saw %s while expecting %s", 
-            sr.sawDescFor( ev ), sr.expectDescFor( v ) );
+        default: 
+            err = NewReactorErrorf( ev.GetPath(), "Saw %s while expecting %s", 
+                sr.sawDescFor( ev ), sr.expectDescFor( v ) );
         }
     }
     if err != nil { return }
@@ -196,7 +198,7 @@ func ( sr *StructuralReactor ) checkFieldStart( fs *FieldStartEvent ) error {
         sr.push( fs.Field )
         return nil
     }
-    return rctErrorf( fs.GetPath(), 
+    return NewReactorErrorf( fs.GetPath(), 
         "Saw start of field '%s' while expecting %s",
         fs.Field.ExternalForm(), sr.expectDescFor( top ) )
 }
@@ -215,7 +217,7 @@ func ( sr *StructuralReactor ) checkEnd( ee *EndEvent ) error {
         sr.completeValue()
         return nil
     }
-    return rctErrorf( ee.GetPath(), 
+    return NewReactorErrorf( ee.GetPath(), 
         "Saw end while expecting %s", sr.expectDescFor( top ) )
 }
 

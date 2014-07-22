@@ -20,16 +20,16 @@ func ( e *ReactorError ) Message() string { return e.msg }
 
 func ( e *ReactorError) Location() objpath.PathNode { return e.ve.Location() }
 
-func rctError( path objpath.PathNode, msg string ) *ReactorError { 
+func NewReactorError( path objpath.PathNode, msg string ) *ReactorError { 
     res := &ReactorError{ msg: msg, ve: mg.ValueErrorImpl{} } 
     if path != nil { res.ve.Path = path }
     return res
 }
 
-func rctErrorf( 
+func NewReactorErrorf( 
     path objpath.PathNode, tmpl string, args ...interface{} ) *ReactorError {
 
-    return rctError( path, fmt.Sprintf( tmpl, args... ) )
+    return NewReactorError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 type ReactorEvent interface {

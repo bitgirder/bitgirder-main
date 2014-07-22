@@ -278,6 +278,12 @@ func NewRegexRestriction( src string ) ( *RegexRestriction, error ) {
     return nil, err
 }
 
+func MustRegexRestriction( src string ) *RegexRestriction {
+    res, err := NewRegexRestriction( src )
+    if err == nil { return res }
+    panic( err )
+}
+
 func ( r *RegexRestriction ) ExternalForm() string {
     return fmt.Sprintf( "%q", string( r.src ) )
 }

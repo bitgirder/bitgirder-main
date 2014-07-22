@@ -22,7 +22,9 @@ func ( vb *ValueBuilder ) InitializePipeline( p *pipeline.Pipeline ) {
 
 // Panics if result of val is not ready
 func ( vb *ValueBuilder ) GetValue() mg.Value {
-    if vb.val == nil { panic( rctErrorf( nil, "Value is not yet built" ) ) }
+    if vb.val == nil { 
+        panic( NewReactorErrorf( nil, "Value is not yet built" ) ) 
+    }
     return vb.val
 }
 

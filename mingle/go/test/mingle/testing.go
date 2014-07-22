@@ -189,9 +189,3 @@ func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
     ca := CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
     ca.Call()
 }
-
-func MustRegexRestriction( s string ) *RegexRestriction {
-    rx, err := NewRegexRestriction( s )
-    if err == nil { return rx }
-    panic( err )
-}

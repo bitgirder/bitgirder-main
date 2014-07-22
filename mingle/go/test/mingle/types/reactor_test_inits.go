@@ -1438,18 +1438,23 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         mg.TypeIdentifier,
         mkId( "id1" ),
     )
-    addErr( "id$Bad", mg.TypeIdentifier, nil, "STUB" )
+    addErr( 
+        "id$Bad", 
+        mg.TypeIdentifier, 
+        nil, 
+        "[<input>, line 1, col 3]: Invalid id rune: \"$\" (U+0024)",
+    )
     addErr( 
         badIdBytes,
         mg.TypeIdentifier,
         nil,
-        "STUB",
+        "[offset 0]: Expected type code 0x01 but got 0x00",
     )
     addErr(
         idStruct( "part1", "BadPart" ),
         mg.TypeIdentifier,
         p( "parts" ).StartList().SetIndex( 1 ),
-        "STUB",
+        "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
     )
     add(
         parser.MustStruct( mg.QnameNamespace,

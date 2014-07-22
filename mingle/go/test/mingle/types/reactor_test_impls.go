@@ -37,5 +37,11 @@ func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
 }
 
 func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
-    c.Fatal( "unimplemented" )
+    c.Logf( "expcting %s as type: %s", mg.QuoteValue( t.In ), t.Type )
+    vb := NewBindReactorForType( t.Type )
+    cr := NewCastReactor( t.Type, V1Types() )
+    pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), vb )
+    if err := mgRct.VisitValue( t.In, pip ); err == nil {
+        c.Equal( t.Expect, vb.GetValue() )
+    } else { c.EqualErrors( t.Err, err ) }
 }
