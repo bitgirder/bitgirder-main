@@ -45,7 +45,7 @@ func compileSingle( src string, f assert.Failer ) *CompilationResult {
     if err != nil { f.Fatal( err ) }
     comp := NewCompilation().
             AddSource( nsUnit ).
-            SetExternalTypes( types.CoreTypesV1() )
+            SetExternalTypes( types.V1Types() )
     compRes, err := comp.Execute()
     if err != nil { f.Fatal( err ) }
     return compRes
@@ -155,7 +155,7 @@ func ( et *compilerTest ) compile(
 }
 
 func ( et *compilerTest ) compileResult() *CompilationResult {
-    extTypes := types.CoreTypesV1()
+    extTypes := types.V1Types()
     if len( et.libs ) > 0 {
         cr := et.compile( et.libs, extTypes )
         extTypes.MustAddFrom( cr.BuiltTypes )

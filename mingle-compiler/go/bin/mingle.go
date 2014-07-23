@@ -17,7 +17,7 @@ func checkOrFail( err error ) { if err != nil { fail( err ) } }
 
 func createCompilation() *compiler.Compilation {
     res := compiler.NewCompilation()
-    res.SetExternalTypes( types.CoreTypesV1() )
+    res.SetExternalTypes( types.V1Types() )
     return res
 }
 
