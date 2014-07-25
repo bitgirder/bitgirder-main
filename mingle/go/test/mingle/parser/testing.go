@@ -255,6 +255,15 @@ func MustTypeReference( s string ) mg.TypeReference {
     return res
 }
 
+func AsTypeReference( val interface{} ) mg.TypeReference {
+    switch v := val.( type ) {
+    case string: return MustTypeReference( v )
+    case mg.TypeReference: return v
+    case *mg.QualifiedTypeName: return v.AsAtomicType()
+    }
+    panic( libErrorf( "unhandled type reference value: %T", val ) )
+}
+
 func MustTimestamp( s string ) mg.Timestamp {
     tm, err := ParseTimestamp( s )
     if err == nil { return tm }

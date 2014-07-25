@@ -532,6 +532,12 @@ type ValueError interface {
     error
 }
 
+// path is an idPath
+func FormatError( path objpath.PathNode, msg string ) string {
+    if path == nil { return msg }
+    return FormatIdPath( path ) + ": " + msg 
+}
+
 type ValueErrorImpl struct {
     Path idPath
 }

@@ -5,6 +5,7 @@
         "mingle", 
         "mingle/reactor",
         "mingle/io",
+        "mingle/bind",
         "mingle/types",
         "mingle/parser"
     ],
