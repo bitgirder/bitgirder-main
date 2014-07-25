@@ -113,24 +113,40 @@ func binderFactoryForTest( bt *BindTest ) BinderFactory {
     panic( libErrorf( "unhandled profile: %s", bt.Profile ) )
 }
 
-func callBindTest( bt *BindTest, a *assert.PathAsserter ) {
-//    a.Logf( "binding %s (%T) as %s with profile %s", 
-//        mg.QuoteValue( bt.In ), bt.In, bt.Type, bt.Profile )
-    bf := binderFactoryForTest( bt )
+func implCallBindReactorTest( 
+    bf BinderFactory,
+    in mg.Value,
+    expct interface{},
+    errExpct error,
+    a *assert.PathAsserter ) {
+
     br := NewBindReactor( bf )
 //    pip := mgRct.InitReactorPipeline( mgRct.NewDebugReactor( a ), br )
     pip := mgRct.InitReactorPipeline( br )
-    if err := mgRct.VisitValue( bt.In, pip ); err == nil {
-        a.Equal( bt.Expect, br.GetValue() )
+    if err := mgRct.VisitValue( in, pip ); err == nil {
+        a.Equal( expct, br.GetValue() )
     } else {
-        a.EqualErrors( bt.Error, err )
+        a.EqualErrors( errExpct, err )
     }
+}
+
+func callBindTest( bt *BindTest, a *assert.PathAsserter ) {
+    implCallBindReactorTest(
+        binderFactoryForTest( bt ), bt.In, bt.Expect, bt.Error, a )
+}
+
+func callBinderImplTest( bt *BinderImplTest, a *assert.PathAsserter ) {
+    implCallBindReactorTest( bt.Factory, bt.In, bt.Expect, bt.Error, a )
 }
 
 func TestBinding( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
-    for _, bt := range stdBindTests {
-        callBindTest( bt, la )
+    for _, sbt := range stdBindTests {
+        switch v := sbt.( type ) {
+        case *BindTest: callBindTest( v, la )
+        case *BinderImplTest: callBinderImplTest( v, la )
+        default: la.Fatalf( "unhandled test: %T", sbt )
+        }
         la = la.Next()
     }
 }

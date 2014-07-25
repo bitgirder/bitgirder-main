@@ -1456,166 +1456,166 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ).StartList().SetIndex( 1 ),
         "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
     )
-    add(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ) ),
-        ),
-        mg.TypeNamespace,
-        mkNs( "ns1@v1" ),
-    )
-    add(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
-        ),
-        mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", "v1",
-            "parts", mg.MustList( "ns1", "ns2" ),
-        ),
-        mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idBytes( "v1" ),
-            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
-        ),
-        mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
-        ),
-        mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    addErr(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", "bad$ver",
-            "parts", mg.MustList( idStruct( "ns1" ) ),
-        ),
-        mg.TypeNamespace,
-        p( "version" ),
-        "STUB",
-    ) 
-    addErr(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
-        ),
-        mg.TypeNamespace,
-        p( "parts" ).StartList().SetIndex( 1 ),
-        "STUB",
-    ) 
-    addErr(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), badIdBytes ),
-        ),
-        mg.TypeNamespace,
-        p( "parts" ).StartList().SetIndex( 1 ),
-        "STUB",
-    )
-    idPathStruct := func( parts ...interface{} ) *mg.Struct {
-        return parser.MustStruct( mg.QnameIdentifierPath,
-            "parts", mg.MustList( parts... ),
-        )
-    }
-    add(
-        idPathStruct(
-            idStruct( "p1" ),
-            idStruct( "p2" ),
-            int32( 1 ),
-            idStruct( "p3" ),
-        ),
-        mg.TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 1 ).
-            Descend( mkId( "p3" ) ),
-    )
-    add(
-        idPathStruct(
-            idStruct( "p1" ),
-            "p2",
-            int32( 1 ),
-            uint32( 2 ),
-            int64( 3 ),
-            uint64( 4 ),
-            idBytes( "p3" ),
-        ),
-        mg.TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 1 ).
-            StartList().SetIndex( 2 ).
-            StartList().SetIndex( 3 ).
-            StartList().SetIndex( 4 ).
-            Descend( mkId( "p3" ) ),
-    )
-    add(
-        "p1.p2.3.p4",
-        mg.TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 3 ).
-            Descend( mkId( "p4" ) ),
-    )
-    addErr(
-        "p1.bad$Id",
-        mg.TypeIdentifierPath,
-        nil,
-        "STUB",
-    )
-    addErr(
-        idPathStruct( true ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
-    addErr(
-        idPathStruct( "bad$Id" ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
-    addErr(
-        idPathStruct( badIdBytes ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
-    addErr(
-        idPathStruct( float32( 1 ) ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
-    addErr(
-        idPathStruct( float64( 1 ) ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
-    addErr(
-        idPathStruct( int32( -1 ) ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
-    addErr(
-        idPathStruct( int64( -1 ) ),
-        mg.TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "STUB",
-    )
+//    add(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", idStruct( "v1" ),
+//            "parts", mg.MustList( idStruct( "ns1" ) ),
+//        ),
+//        mg.TypeNamespace,
+//        mkNs( "ns1@v1" ),
+//    )
+//    add(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", idStruct( "v1" ),
+//            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
+//        ),
+//        mg.TypeNamespace,
+//        mkNs( "ns1:ns2@v1" ),
+//    )
+//    add(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", "v1",
+//            "parts", mg.MustList( "ns1", "ns2" ),
+//        ),
+//        mg.TypeNamespace,
+//        mkNs( "ns1:ns2@v1" ),
+//    )
+//    add(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", idBytes( "v1" ),
+//            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
+//        ),
+//        mg.TypeNamespace,
+//        mkNs( "ns1:ns2@v1" ),
+//    )
+//    add(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", idStruct( "v1" ),
+//            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
+//        ),
+//        mg.TypeNamespace,
+//        mkNs( "ns1:ns2@v1" ),
+//    )
+//    addErr(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", "bad$ver",
+//            "parts", mg.MustList( idStruct( "ns1" ) ),
+//        ),
+//        mg.TypeNamespace,
+//        p( "version" ),
+//        "STUB",
+//    ) 
+//    addErr(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", idStruct( "v1" ),
+//            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
+//        ),
+//        mg.TypeNamespace,
+//        p( "parts" ).StartList().SetIndex( 1 ),
+//        "STUB",
+//    ) 
+//    addErr(
+//        parser.MustStruct( mg.QnameNamespace,
+//            "version", idStruct( "v1" ),
+//            "parts", mg.MustList( idStruct( "ns1" ), badIdBytes ),
+//        ),
+//        mg.TypeNamespace,
+//        p( "parts" ).StartList().SetIndex( 1 ),
+//        "STUB",
+//    )
+//    idPathStruct := func( parts ...interface{} ) *mg.Struct {
+//        return parser.MustStruct( mg.QnameIdentifierPath,
+//            "parts", mg.MustList( parts... ),
+//        )
+//    }
+//    add(
+//        idPathStruct(
+//            idStruct( "p1" ),
+//            idStruct( "p2" ),
+//            int32( 1 ),
+//            idStruct( "p3" ),
+//        ),
+//        mg.TypeIdentifierPath,
+//        p( "p1" ).
+//            Descend( mkId( "p2" ) ).
+//            StartList().SetIndex( 1 ).
+//            Descend( mkId( "p3" ) ),
+//    )
+//    add(
+//        idPathStruct(
+//            idStruct( "p1" ),
+//            "p2",
+//            int32( 1 ),
+//            uint32( 2 ),
+//            int64( 3 ),
+//            uint64( 4 ),
+//            idBytes( "p3" ),
+//        ),
+//        mg.TypeIdentifierPath,
+//        p( "p1" ).
+//            Descend( mkId( "p2" ) ).
+//            StartList().SetIndex( 1 ).
+//            StartList().SetIndex( 2 ).
+//            StartList().SetIndex( 3 ).
+//            StartList().SetIndex( 4 ).
+//            Descend( mkId( "p3" ) ),
+//    )
+//    add(
+//        "p1.p2.3.p4",
+//        mg.TypeIdentifierPath,
+//        p( "p1" ).
+//            Descend( mkId( "p2" ) ).
+//            StartList().SetIndex( 3 ).
+//            Descend( mkId( "p4" ) ),
+//    )
+//    addErr(
+//        "p1.bad$Id",
+//        mg.TypeIdentifierPath,
+//        nil,
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( true ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( "bad$Id" ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( badIdBytes ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( float32( 1 ) ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( float64( 1 ) ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( int32( -1 ) ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
+//    addErr(
+//        idPathStruct( int64( -1 ) ),
+//        mg.TypeIdentifierPath,
+//        p( "parts" ).StartList(),
+//        "STUB",
+//    )
 }
 
 func ( rti *rtInit ) call() {

@@ -30,3 +30,10 @@ const s1F1ValFailOnProduce = int32( 100 )
 type S1 struct {
     f1 int32
 }
+
+type BinderImplTest struct {
+    In mg.Value
+    Expect interface{}
+    Error error
+    Factory BinderFactory
+}

@@ -2,11 +2,12 @@ package bind
 
 import (
     mg "mingle"
+    mgRct "mingle/reactor"
     "mingle/parser"
     "bitgirder/objpath"
 )
 
-var stdBindTests = []*BindTest{}
+var stdBindTests = []interface{}{}
 
 var tm1 = mg.MustTimestamp( "2013-10-19T02:47:00-08:00" )
 
@@ -72,6 +73,8 @@ func initDefaultValBindTests() {
     )
 }
 
+// these are meant to exercise various of the bind reactor itself, particularly
+// in terms of its error handling and paths
 func initCustomValBindTests() {
     add := func( in mg.Value, expct interface{}, typ interface{} ) {
         stdBindTests = append( stdBindTests,
@@ -144,7 +147,112 @@ func initCustomValBindTests() {
     )
 }
 
+func initFunctionBinderTests() {
+    add := func( in mg.Value, expct interface{}, bf BinderFactory ) {
+        stdBindTests = append( stdBindTests,
+            &BinderImplTest{
+                In: in,
+                Expect: expct,
+                Factory: bf,
+            },
+        )
+    }
+    addErr := func( in mg.Value, err error, bf BinderFactory ) {
+        stdBindTests = append( stdBindTests,
+            &BinderImplTest{
+                In: in,
+                Error: err,
+                Factory: bf,
+            },
+        )
+    }
+    add(
+        mg.Int32( int32( 1 ) ),
+        int32( 1 ),
+        &FunctionBinderFactory{
+            Value: func( ve *mgRct.ValueEvent ) ( interface{}, error ) {
+                return DefaultBindingForValue( ve.Val ), nil
+            },
+        },
+    )
+    add(
+        mg.Int32( int32( 1 ) ),
+        int32( 1 ),
+        &FunctionBinderFactory{ 
+            Value: AsSequentialValueFunction( DefaultValueBinderFunction ),
+        },
+    )
+    add(
+        mg.Int32( int32( 1 ) ),
+        int32( -1 ),
+        &FunctionBinderFactory{
+            Value: AsSequentialValueFunction(
+                func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+                    return - int32( ve.Val.( mg.Int32 ) ), nil, true
+                },
+                DefaultValueBinderFunction,
+            ),
+        },
+    )
+    add(
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        S1{ f1: 1 },
+        &FunctionBinderFactory{}.
+            SetStructBinder(
+                NewFunctionFieldSetBinder().
+                Create( func() interface{} { return S1{} } ).
+                Field( 
+                    mkId( "f1" ),
+                    DefaultBinderFactory,
+                    func( 
+                        val interface{}, 
+                        path objpath.PathNode,
+                        obj interface{} ) ( interface{}, error ) {
+ 
+                        res := obj.( S1 )
+                        res.f1 = val.( int32 )
+                        return res, nil
+                    },
+                ).
+                Validate(),
+            ),
+        },
+    )
+    addErr(
+        mg.MustList( asTyp( "ns1@v1/S1*" ) ),
+        NewBindError( nil, "unhandled value: ns1@v1/S1*" ),
+        &FunctionBinderFactory{},
+    )
+    addErr(
+        mg.EmptySymbolMap(),
+        NewBindError( nil, "unhandled value: mingle:core@v1/SymbolMap" ),
+        &FunctionBinderFactory{},
+    )
+    addErr(
+        parser.MustStruct( "ns1@v1/S1" ),
+        NewBindError( nil, "unhandled value: ns1@v1/S1" ),
+        &FunctionBinderFactory{},
+    )
+    addErr(
+        mg.Int32( int32( 1 ) ),
+        NewBindError( nil, "unhandled value: mingle:core@v1/Int32" ),
+        &FunctionBinderFactory{},
+    )
+    addErr(
+        mg.Int32( int32( 1 ) ),
+        NewBindError( nil, "unhandled value: mingle:core@v1/Int32" ),
+        &FunctionBinderFactory{
+            Value: AsSequentialValueFunction(
+                func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+                    return nil, nil, false
+                },
+            ),
+        },
+    )
+}
+
 func init() {
     initDefaultValBindTests()
     initCustomValBindTests()
+    initFunctionBinderTests()
 }

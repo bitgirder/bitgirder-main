@@ -28,6 +28,19 @@ func NewBindErrorf(
     return NewBindError( path, fmt.Sprintf( tmpl, argv... ) )
 }
 
+func failBinderType( ev mgRct.ReactorEvent ) error {
+    var typ interface { ExternalForm() string }
+    switch v := ev.( type ) {
+    case *mgRct.ValueEvent: typ = mg.TypeOf( v.Val )
+    case *mgRct.ListStartEvent: typ = v.Type
+    case *mgRct.MapStartEvent: typ = mg.TypeSymbolMap
+    case *mgRct.StructStartEvent: typ = v.Type
+    default: panic( libErrorf( "can't get type for: %T", ev ) )
+    }
+    return NewBindErrorf( ev.GetPath(), 
+        "unhandled value: %s", typ.ExternalForm() )
+}
+
 type ValueProducer interface {
     ProduceValue( ee *mgRct.EndEvent ) ( interface{}, error )
 }

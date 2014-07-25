@@ -2,6 +2,7 @@ package types
 
 import ( 
     mg "mingle"
+    "mingle/bind"
     mgRct "mingle/reactor"
 )
 
@@ -36,12 +37,19 @@ func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
     chk.Complete()
 }
 
+func binderFactoryForTest( t *BuiltinTypeTest ) bind.BinderFactory {
+    switch {
+    case t.Type.Equals( mg.TypeIdentifier ): return IdentifierBinderFactory
+    }
+    panic( libErrorf( "unhandled built in type: %s", t.Type ) )
+}
+
 func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
     c.Logf( "expcting %s as type: %s", mg.QuoteValue( t.In ), t.Type )
-    vb := NewBindReactorForType( t.Type )
+    br := bind.NewBindReactor( binderFactoryForTest( t ) )
     cr := NewCastReactor( t.Type, V1Types() )
-    pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), vb )
+    pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), br )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
-        c.Equal( t.Expect, vb.GetValue() )
+        c.Equal( t.Expect, br.GetValue() )
     } else { c.EqualErrors( t.Err, err ) }
 }
