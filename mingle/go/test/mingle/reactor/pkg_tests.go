@@ -2,12 +2,25 @@ package reactor
 
 import (
     mg "mingle"
+    "mingle/parser"
     "bitgirder/objpath"
 )
 
-type ValueBuildTest struct { 
+const testMsgErrorBadValue = "test-message-error-bad-value"
+const bindReactorErrorTestVal = mg.Int32( int32( 100 ) )
+var bindReactorErrorTestQn = parser.MustQualifiedTypeName( "ns1@v1/BadType" )
+var bindReactorErrorTestField = parser.MustIdentifier( "bad-field" )
+
+const (
+    bindTestProfileDefault = "default"
+    bindTestProfileError = "error"
+)
+
+type BindReactorTest struct { 
     Val mg.Value 
-    Source []ReactorEvent
+    Source interface{}
+    Profile string
+    Error error
 }
 
 type EventExpectation struct {

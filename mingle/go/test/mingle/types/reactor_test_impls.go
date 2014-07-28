@@ -13,15 +13,16 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     }
     rcts = append( rcts, mgRct.NewDebugReactor( c ) )
     rcts = append( rcts, NewCastReactor( t.Type, t.Map ) )
-    vb := mgRct.NewValueBuilder()
+    vb := mgRct.NewBindReactor( mgRct.ValueBinderFactory )
     rcts = append( rcts, vb )
     pip := mgRct.InitReactorPipeline( rcts... )
     c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         mgRct.CheckNoError( t.Err, c )
-        c.Logf( "got %s, expect %s", mg.QuoteValue( vb.GetValue() ),
+        act := vb.GetValue().( mg.Value )
+        c.Logf( "got %s, expect %s", mg.QuoteValue( act ),
             mg.QuoteValue( t.Expect ) )
-        mg.AssertEqualValues( t.Expect, vb.GetValue(), c )
+        mg.AssertEqualValues( t.Expect, act, c )
     } else { 
         cae := mg.CastErrorAssert{ 
             ErrExpect: t.Err, ErrAct: err, PathAsserter: c.PathAsserter }

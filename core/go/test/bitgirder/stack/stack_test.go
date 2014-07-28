@@ -20,8 +20,10 @@ func assertPanicOnPopEmpty( s *Stack, t *testing.T ) {
 func TestStackBasic( t *testing.T ) {
     s := NewStack()
     assert( s.IsEmpty(), "stack not empty", t )
+    assert( s.Len() == 0, "len != 0", t )
     assert( s.Peek() == nil, "empty stack peek not nil", t )
     s.Push( 1 )
+    assert( s.Len() == 1, "len != 1", t )
     assert( ! s.IsEmpty(), "stack reports empty", t )
     assert( s.Peek().( int ) == 1, "stack top is not 1", t )
     assert( s.Pop().( int ) == 1, "result of pop is not 1", t )

@@ -10,6 +10,8 @@ func NewStack() *Stack { return &Stack{ l: &list.List{} } }
 
 func ( s *Stack ) IsEmpty() bool { return s.l.Len() == 0 }
 
+func ( s *Stack ) Len() int { return s.l.Len() }
+
 func ( s *Stack ) Peek() interface{} {
     if s.IsEmpty() { return nil }
     return s.l.Front().Value

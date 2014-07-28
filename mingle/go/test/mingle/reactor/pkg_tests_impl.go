@@ -4,22 +4,119 @@ import (
     mg "mingle"
     "bitgirder/assert"
     "bitgirder/stack"
+    "bitgirder/objpath"
 )
 
-func ( t *ValueBuildTest ) Call( c *ReactorTestCall ) {
-    rcts := []interface{}{}
-    rcts = append( rcts, NewDebugReactor( c ) )
-    vb := NewValueBuilder()
-    rcts = append( rcts, vb )
-    pip := InitReactorPipeline( rcts... )
-    var err error
-    if t.Source == nil {
-        c.Logf( "visiting %s", mg.QuoteValue( t.Val ) )
-        err = VisitValue( t.Val, pip )
-    } else { err = FeedSource( t.Source, pip ) }
-    if err == nil {
-        mg.AssertEqualValues( t.Val, vb.GetValue(), c.PathAsserter )
-    } else { c.Fatal( err ) }
+func bindErrForPath( p objpath.PathNode ) error {
+    return NewBindError( p, testMsgErrorBadValue )
+}
+
+func bindErrForEvent( ev ReactorEvent ) error {
+    return bindErrForPath( ev.GetPath() )
+}
+
+func bindErrForValue( v mg.Value, p objpath.PathNode ) error {
+    if v == bindReactorErrorTestVal { return bindErrForPath( p ) }
+    return nil
+}
+
+func bindTestErrorProduceValue() ( interface{}, error ) {
+    return mg.String( "placeholder-val" ), nil
+}
+
+type bindTestErrorFactory int
+
+func ( ef bindTestErrorFactory ) BindValue( 
+    ve *ValueEvent ) ( interface{}, error ) {
+
+    return ve.Val, bindErrForValue( ve.Val, ve.GetPath() )
+}
+
+func ( ef bindTestErrorFactory ) StartMap( 
+    mse *MapStartEvent ) ( FieldSetBinder, error ) {
+
+    return bindTestErrorFieldSetBinder( 1 ), nil
+}
+
+func ( ef bindTestErrorFactory ) StartStruct( 
+    sse *StructStartEvent ) ( FieldSetBinder, error ) {
+
+    if sse.Type.Equals( bindReactorErrorTestQn ) {
+        return nil, bindErrForEvent( sse )
+    }
+    return bindTestErrorFieldSetBinder( 1 ), nil
+}
+
+func ( ef bindTestErrorFactory ) StartList( 
+    lse *ListStartEvent ) ( ListBinder, error ) {
+
+    if mg.TypeNameIn( lse.Type ).Equals( bindReactorErrorTestQn ) {
+        return nil, bindErrForEvent( lse )
+    }
+    return bindTestErrorListBinder( 1 ), nil
+}
+
+type bindTestErrorListBinder int
+
+func ( lb bindTestErrorListBinder ) AddValue( 
+    val interface{}, path objpath.PathNode ) error {
+
+    return bindErrForValue( val.( mg.Value ), path )
+}
+
+func ( lb bindTestErrorListBinder ) NextBinderFactory() BinderFactory {
+    return bindTestErrorFactory( 1 )
+}
+
+func ( lb bindTestErrorListBinder ) ProduceValue(
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return bindTestErrorProduceValue()
+}
+
+type bindTestErrorFieldSetBinder int
+
+func ( fs bindTestErrorFieldSetBinder ) StartField( 
+    fse *FieldStartEvent ) ( BinderFactory, error ) {
+    
+    if fse.Field.Equals( bindReactorErrorTestField ) {
+        return nil, bindErrForPath( objpath.ParentOf( fse.GetPath() ) )
+    }
+    return bindTestErrorFactory( 1 ), nil
+}
+
+func ( fs bindTestErrorFieldSetBinder ) SetValue( 
+    fld *mg.Identifier, val interface{}, path objpath.PathNode ) error {
+
+    return bindErrForValue( val.( mg.Value ), path )
+}
+
+func ( fs bindTestErrorFieldSetBinder ) ProduceValue( 
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return bindTestErrorProduceValue()
+}
+
+func ( t *BindReactorTest ) getBinderFactory() BinderFactory {
+    switch t.Profile {
+    case bindTestProfileDefault: return ValueBinderFactory
+    case bindTestProfileError: return bindTestErrorFactory( 1 )
+    }
+    panic( libErrorf( "unhandled profile: %s", t.Profile ) )
+}
+
+func ( t *BindReactorTest ) Call( c *ReactorTestCall ) {
+    br := NewBindReactor( t.getBinderFactory() )
+    pip := InitReactorPipeline( NewDebugReactor( c ), br )
+    src := t.Source
+    if src == nil { src = t.Val }
+    if mv, ok := src.( mg.Value ); ok {
+        c.Logf( "feeding %s", mg.QuoteValue( mv ) )
+    }
+    if err := FeedSource( src, pip ); err == nil {
+        act := br.GetValue().( mg.Value )
+        mg.AssertEqualValues( t.Val, act, c.PathAsserter )
+    } else { c.EqualErrors( t.Error, err ) }
 }
 
 func ( t *StructuralReactorErrorTest ) Call( c *ReactorTestCall ) {
@@ -115,7 +212,7 @@ func ( ocr *orderCheckReactor ) ProcessEvent(
 }
 
 func ( t *FieldOrderReactorTest ) Call( c *ReactorTestCall ) {
-    vb := NewValueBuilder()
+    br := NewBindReactor( ValueBinderFactory )
     chk := &orderCheckReactor{ 
         PathAsserter: c.PathAsserter,
         fo: t,
@@ -123,9 +220,10 @@ func ( t *FieldOrderReactorTest ) Call( c *ReactorTestCall ) {
     }
     ordRct := NewFieldOrderReactor( fogImpl( t.Orders ) )
 //    pip := InitReactorPipeline( ordRct, NewDebugReactor( c ), chk, vb )
-    pip := InitReactorPipeline( ordRct, chk, vb )
+    pip := InitReactorPipeline( ordRct, chk, br )
     AssertFeedEventSource( eventSliceSource( t.Source ), pip, c )
-    mg.AssertEqualValues( t.Expect, vb.GetValue(), c.PathAsserter )
+    act := br.GetValue().( mg.Value )
+    mg.AssertEqualValues( t.Expect, act, c.PathAsserter )
 }
 
 func ( t *FieldOrderMissingFieldsTest ) assertMissingFieldsError(
@@ -141,9 +239,9 @@ func ( t *FieldOrderMissingFieldsTest ) assertMissingFieldsError(
 }
 
 func ( t *FieldOrderMissingFieldsTest ) Call( c *ReactorTestCall ) {
-    vb := NewValueBuilder()
+    br := NewBindReactor( ValueBinderFactory )
     ord := NewFieldOrderReactor( fogImpl( t.Orders ) )
-    rct := InitReactorPipeline( ord, vb )
+    rct := InitReactorPipeline( ord, br )
     for _, ev := range t.Source {
         if err := rct.ProcessEvent( ev ); err != nil { 
             t.assertMissingFieldsError( t.Error, err, c )
@@ -153,8 +251,9 @@ func ( t *FieldOrderMissingFieldsTest ) Call( c *ReactorTestCall ) {
     if e2 := t.Error; e2 != nil { 
         c.Fatalf( "Expected error (%T): %s", e2, e2 ) 
     }
-    c.Equalf( t.Expect, vb.GetValue(), "expected %s but got %s", 
-        mg.QuoteValue( t.Expect ), mg.QuoteValue( vb.GetValue() ) )
+    act := br.GetValue().( mg.Value )
+    c.Equalf( t.Expect, act, "expected %s but got %s", 
+        mg.QuoteValue( t.Expect ), mg.QuoteValue( act ) )
 }
 
 func ( t *FieldOrderPathTest ) Call( c *ReactorTestCall ) {
@@ -181,16 +280,16 @@ func ( ctx *eventAccContext ) saveEvent( ev ReactorEvent ) {
 }
 
 func CheckBuiltValue( 
-    expct mg.Value, vb *ValueBuilder, a *assert.PathAsserter ) {
+    expct mg.Value, br *BindReactor, a *assert.PathAsserter ) {
 
     if expct == nil {
-        if vb != nil {
-            a.Fatalf( "unexpected value: %s", mg.QuoteValue( vb.GetValue() ) )
+        if br != nil {
+            act := br.GetValue().( mg.Value )
+            a.Fatalf( "unexpected value: %s", mg.QuoteValue( act ) )
         }
     } else { 
-        a.Falsef( vb == nil, 
-            "expecting value %s but value builder is nil", 
+        a.Falsef( br == nil, "expecting value %s but value builder is nil", 
             mg.QuoteValue( expct ) )
-        mg.AssertEqualValues( expct, vb.GetValue(), a ) 
+        mg.AssertEqualValues( expct, br.GetValue().( mg.Value ), a ) 
     }
 }

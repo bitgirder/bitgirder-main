@@ -194,30 +194,30 @@ func initFunctionBinderTests() {
             ),
         },
     )
-    add(
-        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
-        S1{ f1: 1 },
-        &FunctionBinderFactory{}.
-            SetStructBinder(
-                NewFunctionFieldSetBinder().
-                Create( func() interface{} { return S1{} } ).
-                Field( 
-                    mkId( "f1" ),
-                    DefaultBinderFactory,
-                    func( 
-                        val interface{}, 
-                        path objpath.PathNode,
-                        obj interface{} ) ( interface{}, error ) {
- 
-                        res := obj.( S1 )
-                        res.f1 = val.( int32 )
-                        return res, nil
-                    },
-                ).
-                Validate(),
-            ),
-        },
-    )
+//    add(
+//        parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+//        S1{ f1: 1 },
+//        &FunctionBinderFactory{}.
+//            SetStructBinder(
+//                NewFunctionFieldSetBinder().
+//                Create( func() interface{} { return S1{} } ).
+//                Field( 
+//                    mkId( "f1" ),
+//                    DefaultBinderFactory,
+//                    func( 
+//                        val interface{}, 
+//                        path objpath.PathNode,
+//                        obj interface{} ) ( interface{}, error ) {
+// 
+//                        res := obj.( S1 )
+//                        res.f1 = val.( int32 )
+//                        return res, nil
+//                    },
+//                ).
+//                Validate(),
+//            ),
+//        },
+//    )
     addErr(
         mg.MustList( asTyp( "ns1@v1/S1*" ) ),
         NewBindError( nil, "unhandled value: ns1@v1/S1*" ),

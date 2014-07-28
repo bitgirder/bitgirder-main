@@ -162,9 +162,9 @@ func ( r *BinReader ) ReadReactorValue(
 }
 
 func ( r *BinReader ) ReadValue() ( mg.Value, error ) {
-    vb := mgRct.NewValueBuilder()
+    vb := mgRct.NewBindReactor( mgRct.ValueBinderFactory )
     pip := mgRct.InitReactorPipeline( vb )
     err := r.ReadReactorValue( pip )
     if err != nil { return nil, err }
-    return vb.GetValue(), nil
+    return vb.GetValue().( mg.Value ), nil
 }
