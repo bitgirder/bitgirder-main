@@ -8,7 +8,7 @@ import (
 )
 
 func bindErrForPath( p objpath.PathNode ) error {
-    return NewBindError( p, testMsgErrorBadValue )
+    return newTestError( p, testMsgErrorBadValue )
 }
 
 func bindErrForEvent( ev ReactorEvent ) error {
@@ -16,7 +16,7 @@ func bindErrForEvent( ev ReactorEvent ) error {
 }
 
 func bindErrForValue( v mg.Value, p objpath.PathNode ) error {
-    if v == bindReactorErrorTestVal { return bindErrForPath( p ) }
+    if v == buildReactorErrorTestVal { return bindErrForPath( p ) }
     return nil
 }
 
@@ -26,87 +26,87 @@ func bindTestErrorProduceValue() ( interface{}, error ) {
 
 type bindTestErrorFactory int
 
-func ( ef bindTestErrorFactory ) BindValue( 
+func ( ef bindTestErrorFactory ) BuildValue( 
     ve *ValueEvent ) ( interface{}, error ) {
 
     return ve.Val, bindErrForValue( ve.Val, ve.GetPath() )
 }
 
 func ( ef bindTestErrorFactory ) StartMap( 
-    mse *MapStartEvent ) ( FieldSetBinder, error ) {
+    mse *MapStartEvent ) ( FieldSetBuilder, error ) {
 
-    return bindTestErrorFieldSetBinder( 1 ), nil
+    return bindTestErrorFieldSetBuilder( 1 ), nil
 }
 
 func ( ef bindTestErrorFactory ) StartStruct( 
-    sse *StructStartEvent ) ( FieldSetBinder, error ) {
+    sse *StructStartEvent ) ( FieldSetBuilder, error ) {
 
-    if sse.Type.Equals( bindReactorErrorTestQn ) {
+    if sse.Type.Equals( buildReactorErrorTestQn ) {
         return nil, bindErrForEvent( sse )
     }
-    return bindTestErrorFieldSetBinder( 1 ), nil
+    return bindTestErrorFieldSetBuilder( 1 ), nil
 }
 
 func ( ef bindTestErrorFactory ) StartList( 
-    lse *ListStartEvent ) ( ListBinder, error ) {
+    lse *ListStartEvent ) ( ListBuilder, error ) {
 
-    if mg.TypeNameIn( lse.Type ).Equals( bindReactorErrorTestQn ) {
+    if mg.TypeNameIn( lse.Type ).Equals( buildReactorErrorTestQn ) {
         return nil, bindErrForEvent( lse )
     }
-    return bindTestErrorListBinder( 1 ), nil
+    return bindTestErrorListBuilder( 1 ), nil
 }
 
-type bindTestErrorListBinder int
+type bindTestErrorListBuilder int
 
-func ( lb bindTestErrorListBinder ) AddValue( 
+func ( lb bindTestErrorListBuilder ) AddValue( 
     val interface{}, path objpath.PathNode ) error {
 
     return bindErrForValue( val.( mg.Value ), path )
 }
 
-func ( lb bindTestErrorListBinder ) NextBinderFactory() BinderFactory {
+func ( lb bindTestErrorListBuilder ) NextBuilderFactory() BuilderFactory {
     return bindTestErrorFactory( 1 )
 }
 
-func ( lb bindTestErrorListBinder ) ProduceValue(
+func ( lb bindTestErrorListBuilder ) ProduceValue(
     ee *EndEvent ) ( interface{}, error ) {
 
     return bindTestErrorProduceValue()
 }
 
-type bindTestErrorFieldSetBinder int
+type bindTestErrorFieldSetBuilder int
 
-func ( fs bindTestErrorFieldSetBinder ) StartField( 
-    fse *FieldStartEvent ) ( BinderFactory, error ) {
+func ( fs bindTestErrorFieldSetBuilder ) StartField( 
+    fse *FieldStartEvent ) ( BuilderFactory, error ) {
     
-    if fse.Field.Equals( bindReactorErrorTestField ) {
+    if fse.Field.Equals( buildReactorErrorTestField ) {
         return nil, bindErrForPath( objpath.ParentOf( fse.GetPath() ) )
     }
     return bindTestErrorFactory( 1 ), nil
 }
 
-func ( fs bindTestErrorFieldSetBinder ) SetValue( 
+func ( fs bindTestErrorFieldSetBuilder ) SetValue( 
     fld *mg.Identifier, val interface{}, path objpath.PathNode ) error {
 
     return bindErrForValue( val.( mg.Value ), path )
 }
 
-func ( fs bindTestErrorFieldSetBinder ) ProduceValue( 
+func ( fs bindTestErrorFieldSetBuilder ) ProduceValue( 
     ee *EndEvent ) ( interface{}, error ) {
 
     return bindTestErrorProduceValue()
 }
 
-func ( t *BindReactorTest ) getBinderFactory() BinderFactory {
+func ( t *BuildReactorTest ) getBuilderFactory() BuilderFactory {
     switch t.Profile {
-    case bindTestProfileDefault: return ValueBinderFactory
+    case bindTestProfileDefault: return ValueBuilderFactory
     case bindTestProfileError: return bindTestErrorFactory( 1 )
     }
     panic( libErrorf( "unhandled profile: %s", t.Profile ) )
 }
 
-func ( t *BindReactorTest ) Call( c *ReactorTestCall ) {
-    br := NewBindReactor( t.getBinderFactory() )
+func ( t *BuildReactorTest ) Call( c *ReactorTestCall ) {
+    br := NewBuildReactor( t.getBuilderFactory() )
     pip := InitReactorPipeline( NewDebugReactor( c ), br )
     src := t.Source
     if src == nil { src = t.Val }
@@ -212,7 +212,7 @@ func ( ocr *orderCheckReactor ) ProcessEvent(
 }
 
 func ( t *FieldOrderReactorTest ) Call( c *ReactorTestCall ) {
-    br := NewBindReactor( ValueBinderFactory )
+    br := NewBuildReactor( ValueBuilderFactory )
     chk := &orderCheckReactor{ 
         PathAsserter: c.PathAsserter,
         fo: t,
@@ -239,7 +239,7 @@ func ( t *FieldOrderMissingFieldsTest ) assertMissingFieldsError(
 }
 
 func ( t *FieldOrderMissingFieldsTest ) Call( c *ReactorTestCall ) {
-    br := NewBindReactor( ValueBinderFactory )
+    br := NewBuildReactor( ValueBuilderFactory )
     ord := NewFieldOrderReactor( fogImpl( t.Orders ) )
     rct := InitReactorPipeline( ord, br )
     for _, ev := range t.Source {
@@ -280,7 +280,7 @@ func ( ctx *eventAccContext ) saveEvent( ev ReactorEvent ) {
 }
 
 func CheckBuiltValue( 
-    expct mg.Value, br *BindReactor, a *assert.PathAsserter ) {
+    expct mg.Value, br *BuildReactor, a *assert.PathAsserter ) {
 
     if expct == nil {
         if br != nil {

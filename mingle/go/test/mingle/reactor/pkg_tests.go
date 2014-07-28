@@ -7,16 +7,27 @@ import (
 )
 
 const testMsgErrorBadValue = "test-message-error-bad-value"
-const bindReactorErrorTestVal = mg.Int32( int32( 100 ) )
-var bindReactorErrorTestQn = parser.MustQualifiedTypeName( "ns1@v1/BadType" )
-var bindReactorErrorTestField = parser.MustIdentifier( "bad-field" )
+const buildReactorErrorTestVal = mg.Int32( int32( 100 ) )
+var buildReactorErrorTestQn = parser.MustQualifiedTypeName( "ns1@v1/BadType" )
+var buildReactorErrorTestField = parser.MustIdentifier( "bad-field" )
+
+type testError struct { 
+    path objpath.PathNode
+    msg string 
+}
+
+func ( e *testError ) Error() string { return mg.FormatError( e.path, e.msg ) }
+
+func newTestError( path objpath.PathNode, msg string ) *testError {
+    return &testError{ path: path, msg: msg }
+}
 
 const (
     bindTestProfileDefault = "default"
     bindTestProfileError = "error"
 )
 
-type BindReactorTest struct { 
+type BuildReactorTest struct { 
     Val mg.Value 
     Source interface{}
     Profile string

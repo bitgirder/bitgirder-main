@@ -7,7 +7,7 @@ import (
     "fmt"
 )
 
-func initBindReactorValueTests( b *ReactorTestSetBuilder ) {
+func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
     s1 := parser.MustStruct( "ns1@v1/S1",
         "val1", mg.String( "hello" ),
         "list1", mg.MustList(),
@@ -16,7 +16,7 @@ func initBindReactorValueTests( b *ReactorTestSetBuilder ) {
     )
     addTest := func( v mg.Value ) { 
         b.AddTests( 
-            &BindReactorTest{ 
+            &BuildReactorTest{ 
                 Val: v, 
                 Profile: bindTestProfileDefault,
             },
@@ -45,10 +45,10 @@ func initBindReactorValueTests( b *ReactorTestSetBuilder ) {
 
 // these are meant to check that errors are correctly returned by the reactor,
 // and that path info supplied to binders and factories are correct
-func initBindReactorErrorTests( b *ReactorTestSetBuilder ) {
+func initBuildReactorErrorTests( b *ReactorTestSetBuilder ) {
     addErr := func( in mg.Value, err error ) {
         b.AddTests(
-            &BindReactorTest{
+            &BuildReactorTest{
                 Source: in,
                 Profile: bindTestProfileError,
                 Error: err,
@@ -56,41 +56,43 @@ func initBindReactorErrorTests( b *ReactorTestSetBuilder ) {
         )
     }
     p := mg.MakeTestIdPath
-    bindErrAt := func( path objpath.PathNode ) *BindError {
-        return NewBindError( path, testMsgErrorBadValue )
+    bindErrAt := func( path objpath.PathNode ) error {
+        return newTestError( path, testMsgErrorBadValue )
     }
-    addErr( mg.MustValue( bindReactorErrorTestVal ), bindErrAt( nil ) )
+    addErr( mg.MustValue( buildReactorErrorTestVal ), bindErrAt( nil ) )
     addErr(
-        mg.MustList( int32( 1 ), bindReactorErrorTestVal ),
+        mg.MustList( int32( 1 ), buildReactorErrorTestVal ),
         bindErrAt( p( "1" ) ),
     )
     addErr(
-        parser.MustSymbolMap( "f1", bindReactorErrorTestVal ),
+        parser.MustSymbolMap( "f1", buildReactorErrorTestVal ),
         bindErrAt( p( 1 ) ),
     )
     addErr(
-        parser.MustStruct( "ns1@v1/S1", "f1", bindReactorErrorTestVal ),
+        parser.MustStruct( "ns1@v1/S1", "f1", buildReactorErrorTestVal ),
         bindErrAt( p( 1 ) ),
     )
     addErr( 
-        parser.MustStruct( "ns1@v1/S1", bindReactorErrorTestField, int32( 1 ) ),
+        parser.MustStruct( "ns1@v1/S1", 
+            buildReactorErrorTestField, int32( 1 ),
+        ),
         bindErrAt( nil ),
     )
     addErr(
-        parser.MustSymbolMap( bindReactorErrorTestField, int32( 1 ) ),
+        parser.MustSymbolMap( buildReactorErrorTestField, int32( 1 ) ),
         bindErrAt( nil ),
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1",
             "f1", parser.MustStruct( "ns1@v1/S1",
-                bindReactorErrorTestField, int32( 1 ),
+                buildReactorErrorTestField, int32( 1 ),
             ),
         ),
         bindErrAt( p( 1 ) ),
     )
     addErr(
         parser.MustSymbolMap( 
-            "f1", mg.MustList( int32( 1 ), bindReactorErrorTestVal ),
+            "f1", mg.MustList( int32( 1 ), buildReactorErrorTestVal ),
         ),
         bindErrAt( p( 1, "1" ) ),
     )
@@ -105,13 +107,13 @@ func initBindReactorErrorTests( b *ReactorTestSetBuilder ) {
     addErr( parser.MustStruct( "ns1@v1/BadType" ), bindErrAt( nil ) )
 }
 
-func initBindReactorTests( b *ReactorTestSetBuilder ) {
-    initBindReactorValueTests( b )
-    initBindReactorErrorTests( b )
+func initBuildReactorTests( b *ReactorTestSetBuilder ) {
+    initBuildReactorValueTests( b )
+    initBuildReactorErrorTests( b )
 }
 
 // we only add here error tests; we assume that a value build reactor sits
-// behind a structural reactor and so let BindReactorTest successes imply
+// behind a structural reactor and so let BuildReactorTest successes imply
 // correct behavior of the structural check reactor for valid inputs
 func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
@@ -834,7 +836,7 @@ func initFieldOrderReactorTests( b *ReactorTestSetBuilder ) {
 
 func initReactorTests( b *ReactorTestSetBuilder ) {
     initStructuralReactorTests( b )
-    initBindReactorTests( b )
+    initBuildReactorTests( b )
     initEventPathTests( b )
     initFieldOrderReactorTests( b )
 }
