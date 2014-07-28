@@ -1759,10 +1759,10 @@ func ( c *Compilation ) castConstVal(
     dm *types.DefinitionMap ) ( mg.Value, error ) {
 
     rct := types.NewCastReactor( typ, dm )
-    vb := mgRct.NewValueBuilder()
+    vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     pip := mgRct.InitReactorPipeline( rct, vb )
     if err := mgRct.VisitValue( val, pip ); err != nil { return nil, err }
-    return vb.GetValue(), nil
+    return vb.GetValue().( mg.Value ), nil
 }
 
 func ( c *Compilation ) validateConstVal(
