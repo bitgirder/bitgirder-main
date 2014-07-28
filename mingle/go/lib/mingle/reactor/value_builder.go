@@ -2,142 +2,256 @@ package reactor
 
 import (
     mg "mingle"
-    "bitgirder/stack"
+    "bitgirder/objpath"
     "bitgirder/pipeline"
+    "bitgirder/stack"
+    "fmt"
 //    "log"
 )
 
-type ValueBuilder struct {
-    val mg.Value
-    accs *stack.Stack
+type BindError struct {
+    Path objpath.PathNode
+    Message string
 }
 
-func NewValueBuilder() *ValueBuilder {
-    return &ValueBuilder{ accs: stack.NewStack() }
+func ( e *BindError ) Error() string {
+    return mg.FormatError( e.Path, e.Message )
 }
 
-func ( vb *ValueBuilder ) InitializePipeline( p *pipeline.Pipeline ) {
-    EnsureStructuralReactor( p )
+func NewBindError( path objpath.PathNode, msg string ) *BindError {
+    return &BindError{ Path: path, Message: msg }
 }
 
-// Panics if result of val is not ready
-func ( vb *ValueBuilder ) GetValue() mg.Value {
-    if vb.val == nil { 
-        panic( NewReactorErrorf( nil, "Value is not yet built" ) ) 
-    }
-    return vb.val
+func NewBindErrorf( 
+    path objpath.PathNode, tmpl string, argv ...interface{} ) *BindError {
+
+    return NewBindError( path, fmt.Sprintf( tmpl, argv... ) )
 }
 
-type mapAcc struct { 
-    m *mg.SymbolMap
-    curFld *mg.Identifier
-}
-
-func newMapAcc() *mapAcc { return &mapAcc{ m: mg.NewSymbolMap() } }
-
-// asserts that ma.curFld is non-nil, clears it, and returns it
-func ( ma *mapAcc ) clearField() *mg.Identifier {
-    if ma.curFld == nil { panic( libError( "no current field" ) ) }
-    res := ma.curFld
-    ma.curFld = nil
-    return res
-}
-
-func ( ma *mapAcc ) setValue( val mg.Value ) { 
-    ma.m.Put( ma.clearField(), val ) 
-}
-
-func ( ma *mapAcc ) startField( fld *mg.Identifier ) {
-    if cur := ma.curFld; cur != nil {
-        panic( libErrorf( "saw start of field %s while cur is %s", fld, cur ) )
-    }
-    ma.curFld = fld
-}
-
-type structAcc struct {
-    flds *mapAcc
-    s *mg.Struct
-}
-
-func newStructAcc( typ *mg.QualifiedTypeName ) *structAcc {
-    res := &structAcc{ flds: newMapAcc() }
-    res.s = &mg.Struct{ Type: typ, Fields: res.flds.m }
-    return res
-}    
-
-type listAcc struct { 
-    l *mg.List 
-}
-
-func newListAcc() *listAcc { 
-    return &listAcc{ l: mg.NewList( mg.TypeOpaqueList ) } 
-}
-
-func ( vb *ValueBuilder ) pushAcc( acc interface{} ) { vb.accs.Push( acc ) }
-
-func ( vb *ValueBuilder ) peekAcc() ( interface{}, bool ) {
-    return vb.accs.Peek(), ! vb.accs.IsEmpty()
-}
-
-func ( vb *ValueBuilder ) mustPeekAcc() interface{} {
-    if res, ok := vb.peekAcc(); ok { return res }
-    panic( libError( "acc stack is empty" ) )
-}
-
-func ( vb *ValueBuilder ) acceptValue( 
-    acc interface{}, val mg.Value ) bool {
-
-    switch v := acc.( type ) {
-    case *mapAcc: v.setValue( val ); return false
-    case *structAcc: v.flds.setValue( val ); return false
-    case *listAcc: v.l.AddUnsafe( val ); return false
-    }
-    panic( libErrorf( "unhandled acc: %T", acc ) )
-}
-
-func ( vb *ValueBuilder ) valueForAcc( acc interface{} ) mg.Value {
-    switch v := acc.( type ) {
-    case *mapAcc: return v.m
-    case *structAcc: return v.s
-    case *listAcc: return v.l
-    }
-    panic( libErrorf( "unhandled acc: %T", acc ) )
-}
-
-func ( vb *ValueBuilder ) popAccValue() {
-    vb.valueReady( vb.valueForAcc( vb.accs.Pop() ) )
-}
-
-func ( vb *ValueBuilder ) valueReady( val mg.Value ) {
-    if acc, ok := vb.peekAcc(); ok {
-        if vb.acceptValue( acc, val ) { vb.popAccValue() }
-    } else {
-        vb.val = val
-    }
-}
-
-func ( vb *ValueBuilder ) startField( fld *mg.Identifier ) {
-    acc, ok := vb.peekAcc()
-    if ! ok { panic( libErrorf( "got field start %s with empty stack", fld ) ) }
-    switch v := acc.( type ) {
-    case *mapAcc: v.startField( fld )
-    case *structAcc: v.flds.startField( fld )
-    default:
-        panic( libErrorf( "unexpected acc for start of field %s: %T", fld, v ) )
-    }
-}
-
-func ( vb *ValueBuilder ) end() { vb.popAccValue() }
-
-func ( vb *ValueBuilder ) ProcessEvent( ev ReactorEvent ) error {
+func failBinderType( ev ReactorEvent ) error {
+    var typ interface { ExternalForm() string }
     switch v := ev.( type ) {
-    case *ValueEvent: vb.valueReady( v.Val )
-    case *ListStartEvent: vb.pushAcc( newListAcc() )
-    case *MapStartEvent: vb.pushAcc( newMapAcc() )
-    case *StructStartEvent: vb.pushAcc( newStructAcc( v.Type ) )
-    case *FieldStartEvent: vb.startField( v.Field )
-    case *EndEvent: vb.end()
-    default: panic( libErrorf( "Unhandled event: %T", ev ) )
+    case *ValueEvent: typ = mg.TypeOf( v.Val )
+    case *ListStartEvent: typ = v.Type
+    case *MapStartEvent: typ = mg.TypeSymbolMap
+    case *StructStartEvent: typ = v.Type
+    default: panic( libErrorf( "can't get type for: %T", ev ) )
     }
+    return NewBindErrorf( ev.GetPath(), 
+        "unhandled value: %s", typ.ExternalForm() )
+}
+
+type ValueProducer interface {
+    ProduceValue( ee *EndEvent ) ( interface{}, error )
+}
+
+type FieldSetBinder interface {
+
+    StartField( fse *FieldStartEvent ) ( BinderFactory, error )
+
+    SetValue( fld *mg.Identifier, val interface{}, path objpath.PathNode ) error
+
+    ValueProducer
+}
+
+type ListBinder interface {
+    
+    AddValue( val interface{}, path objpath.PathNode ) error
+
+    NextBinderFactory() BinderFactory
+
+    ValueProducer
+}
+
+type BinderFactory interface {
+
+    BindValue( ve *ValueEvent ) ( interface{}, error )
+
+    StartMap( mse *MapStartEvent ) ( FieldSetBinder, error )
+
+    StartStruct( sse *StructStartEvent ) ( FieldSetBinder, error )
+
+    StartList( lse *ListStartEvent ) ( ListBinder, error )
+}
+
+type BindReactor struct {
+    val interface{}
+    hasVal bool
+    stk *stack.Stack
+}
+
+func NewBindReactor( bf BinderFactory ) *BindReactor {
+    res := &BindReactor{ stk: stack.NewStack() }
+    res.stk.Push( bf )
+    return res
+}
+
+func ( br *BindReactor ) GetValue() interface{} {
+    if ! br.hasVal { panic( libError( "binder has no value" ) ) }
+    return br.val
+}
+
+func ( br *BindReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
+    EnsureStructuralReactor( pip )
+    EnsurePathSettingProcessor( pip )
+}
+
+func ( br *BindReactor ) completeFieldValue( 
+    val interface{}, ev ReactorEvent ) error {
+
+    fld := br.stk.Pop().( *mg.Identifier )
+    fsb := br.stk.Peek().( FieldSetBinder )
+    return fsb.SetValue( fld, val, ev.GetPath() )
+}
+
+func ( br *BindReactor ) completeValue( 
+    val interface{}, ev ReactorEvent ) error {
+
+    if br.stk.IsEmpty() {
+        br.val, br.hasVal = val, true
+        return nil
+    }
+    switch v := br.stk.Peek().( type ) {
+    case *mg.Identifier: return br.completeFieldValue( val, ev )
+    case ListBinder: return v.AddValue( val, ev.GetPath() )
+    }
+    panic( libErrorf( "unhandled value recipient: %T", br.stk.Peek() ) )
+}
+
+func ( br *BindReactor ) nextBindFact() BinderFactory {
+    top := br.stk.Peek()
+    switch v := top.( type ) {
+    case BinderFactory: 
+        br.stk.Pop()
+        return v
+    case ListBinder: return v.NextBinderFactory()
+    }
+    panic( libErrorf( "unhandled stack element for nextBindFact(): %T", top ) )
+}
+
+func ( br *BindReactor ) processValue( ve *ValueEvent ) error {
+    val, err := br.nextBindFact().BindValue( ve )
+    if err != nil { return err }
+    return br.completeValue( val, ve )
+}
+
+func ( br *BindReactor ) startFieldSet( fsb FieldSetBinder, err error ) error {
+    if err != nil { return err }
+    br.stk.Push( fsb )
     return nil
 }
+
+func ( br *BindReactor ) processMapStart( mse *MapStartEvent ) error {
+    return br.startFieldSet( br.nextBindFact().StartMap( mse ) )
+}
+
+func ( br *BindReactor ) processStructStart( 
+    sse *StructStartEvent ) error {
+
+    return br.startFieldSet( br.nextBindFact().StartStruct( sse ) )
+}
+
+func ( br *BindReactor ) processFieldStart( fse *FieldStartEvent ) error {
+    fsb := br.stk.Peek().( FieldSetBinder )
+    bf, err := fsb.StartField( fse )
+    if err != nil { return err }
+    br.stk.Push( fse.Field )
+    br.stk.Push( bf )
+    return nil
+}
+
+func ( br *BindReactor ) processListStart( lse *ListStartEvent ) error {
+    lb, err := br.nextBindFact().StartList( lse )
+    if err != nil { return err }
+    br.stk.Push( lb )
+    return nil
+}
+
+func ( br *BindReactor ) processEnd( ee *EndEvent ) error {
+    vp := br.stk.Pop().( ValueProducer )
+    val, err := vp.ProduceValue( ee )
+    if err != nil { return err }
+    return br.completeValue( val, ee )
+}
+
+func ( br *BindReactor ) ProcessEvent( ev ReactorEvent ) error {
+    if br.hasVal { return libError( "reactor already has a value" ) }
+    switch v := ev.( type ) {
+    case *ValueEvent: return br.processValue( v )
+    case *MapStartEvent: return br.processMapStart( v )
+    case *StructStartEvent: return br.processStructStart( v )
+    case *FieldStartEvent: return br.processFieldStart( v )
+    case *ListStartEvent: return br.processListStart( v )
+    case *EndEvent: return br.processEnd( v )
+    }
+    return libErrorf( "unhandled event: %T", ev )
+}
+
+type valBindFact int
+
+func ( f valBindFact ) BindValue( ve *ValueEvent ) ( interface{}, error ) {
+    return ve.Val, nil
+}
+
+type valFieldSetBinder struct {
+    m *mg.SymbolMap
+    res interface{}
+}
+
+func ( fsb *valFieldSetBinder ) StartField( 
+    fse *FieldStartEvent ) ( BinderFactory, error ) {
+
+    return ValueBinderFactory, nil
+}
+
+func ( fsb *valFieldSetBinder ) SetValue( 
+    fld *mg.Identifier, val interface{}, path objpath.PathNode ) error {
+
+    fsb.m.Put( fld, val.( mg.Value ) )
+    return nil
+}
+
+func ( fsb *valFieldSetBinder ) ProduceValue( 
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return fsb.res, nil
+}
+
+func ( f valBindFact ) StartMap( 
+    mse *MapStartEvent ) ( FieldSetBinder, error ) {
+
+    res := mg.NewSymbolMap()
+    return &valFieldSetBinder{ res, res }, nil
+}
+
+func ( f valBindFact ) StartStruct( 
+    sse *StructStartEvent ) ( FieldSetBinder, error ) {
+
+    res := mg.NewStruct( sse.Type )
+    return &valFieldSetBinder{ res.Fields, res }, nil
+}
+
+type listBindFact struct { l *mg.List }
+
+func ( lbf *listBindFact ) AddValue( 
+    val interface{}, path objpath.PathNode ) error {
+
+    lbf.l.AddUnsafe( val.( mg.Value ) )
+    return nil
+}
+
+func ( lbf *listBindFact ) NextBinderFactory() BinderFactory {
+    return ValueBinderFactory
+}
+
+func ( lbf *listBindFact ) ProduceValue( 
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return lbf.l, nil
+}
+
+func ( f valBindFact ) StartList( lse *ListStartEvent ) ( ListBinder, error ) {
+    return &listBindFact{ mg.NewList( lse.Type ) }, nil
+}
+
+var ValueBinderFactory BinderFactory = valBindFact( 1 )
