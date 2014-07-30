@@ -18,7 +18,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
         b.AddTests( 
             &BuildReactorTest{ 
                 Val: v, 
-                Profile: bindTestProfileDefault,
+                Profile: builderTestProfileDefault,
             },
         )
     }
@@ -50,37 +50,34 @@ func initBuildReactorErrorTests( b *ReactorTestSetBuilder ) {
         b.AddTests(
             &BuildReactorTest{
                 Source: in,
-                Profile: bindTestProfileError,
+                Profile: builderTestProfileError,
                 Error: err,
             },
         )
     }
     p := mg.MakeTestIdPath
-    bindErrAt := func( path objpath.PathNode ) error {
-        return newTestError( path, testMsgErrorBadValue )
-    }
-    addErr( mg.MustValue( buildReactorErrorTestVal ), bindErrAt( nil ) )
+    addErr( mg.MustValue( buildReactorErrorTestVal ), testErrForPath( nil ) )
     addErr(
         mg.MustList( int32( 1 ), buildReactorErrorTestVal ),
-        bindErrAt( p( "1" ) ),
+        testErrForPath( p( "1" ) ),
     )
     addErr(
         parser.MustSymbolMap( "f1", buildReactorErrorTestVal ),
-        bindErrAt( p( 1 ) ),
+        testErrForPath( p( 1 ) ),
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1", "f1", buildReactorErrorTestVal ),
-        bindErrAt( p( 1 ) ),
+        testErrForPath( p( 1 ) ),
     )
     addErr( 
         parser.MustStruct( "ns1@v1/S1", 
             buildReactorErrorTestField, int32( 1 ),
         ),
-        bindErrAt( nil ),
+        testErrForPath( nil ),
     )
     addErr(
         parser.MustSymbolMap( buildReactorErrorTestField, int32( 1 ) ),
-        bindErrAt( nil ),
+        testErrForPath( nil ),
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1",
@@ -88,35 +85,126 @@ func initBuildReactorErrorTests( b *ReactorTestSetBuilder ) {
                 buildReactorErrorTestField, int32( 1 ),
             ),
         ),
-        bindErrAt( p( 1 ) ),
+        testErrForPath( p( 1 ) ),
     )
     addErr(
         parser.MustSymbolMap( 
             "f1", mg.MustList( int32( 1 ), buildReactorErrorTestVal ),
         ),
-        bindErrAt( p( 1, "1" ) ),
+        testErrForPath( p( 1, "1" ) ),
     )
     addErr(
-        mg.MustList( typeRef( "ns1@v1/BadType*" ) ),
-        bindErrAt( nil ),
+        mg.MustList( asType( "ns1@v1/BadType*" ) ),
+        testErrForPath( nil ),
     )
     addErr(
-        mg.MustList( mg.MustList( typeRef( "ns1@v1/BadType*" ) ) ),
-        bindErrAt( p( "0" ) ),
+        mg.MustList( mg.MustList( asType( "ns1@v1/BadType*" ) ) ),
+        testErrForPath( p( "0" ) ),
     )
-    addErr( parser.MustStruct( "ns1@v1/BadType" ), bindErrAt( nil ) )
+    addErr( parser.MustStruct( "ns1@v1/BadType" ), testErrForPath( nil ) )
+}
+
+func initBuildReactorImplTests( b *ReactorTestSetBuilder ) {
+    p := mg.MakeTestIdPath
+    add := func( in mg.Value, expct interface{} ) {
+        b.AddTests(
+            &BuildReactorTest{
+                Source: in,
+                Val: expct,
+                Profile: builderTestProfileImpl,
+            },
+        )
+    }
+    addErr := func( in mg.Value, err error ) {
+        b.AddTests(
+            &BuildReactorTest{
+                Source: in,
+                Error: err,
+                Profile: builderTestProfileImpl,
+            },
+        )
+    }
+    add( mg.Int32( int32( 1 ) ), int32( 1 ) )
+    add( mg.String( "ok" ), "ok" )
+    add( mg.MustList( asType( "Int32*" ) ), []int32{} )
+    add( 
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+        []int32{ 0, 1 },
+    )
+    add(
+        parser.MustStruct( "ns1@v1/S1", 
+            "f1", int32( 1 ),
+            "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+            "f3", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        ),
+        &s1{ f1: 1, f2: []int32{ 0, 1 }, f3: &s1{ f1: 1 } },
+    )
+    add(
+        parser.MustSymbolMap(
+            "f1", int32( 1 ),
+            "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+            "f3", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        ),
+        map[ string ]interface{}{
+            "f1": int32( 1 ),
+            "f2": []int32{ 0, 1 },
+            "f3": &s1{ f1: 1 },
+        },
+    )
+    addErr( mg.Int32( int32( -1 ) ), testErrForPath( nil ) )
+    addErr( 
+        mg.Int64( int64( 1 ) ), 
+        newTestError( nil, "unhandled value: mingle:core@v1/Int64" ),
+    )
+    addErr(
+        parser.MustStruct( "ns1@v1/BadStruct" ),
+        newTestError( nil, "unhandled value: ns1@v1/BadStruct" ),
+    )
+    addErr(
+        mg.MustList( asType( "ns1@v1/BadStruct*" ) ),
+        newTestError( nil, "unhandled value: ns1@v1/BadStruct*" ),
+    )
+    addErr(
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( -1 ) ),
+        testErrForPath( p( "1" ) ),
+    )
+    addErr(
+        mg.MustList( 
+            asType( "Int32*" ), 
+            int32( 0 ), int32( 1 ), int32( 2 ), int32( 3 ), int32( 4 ),
+        ),
+        testErrForPath( p( "4" ) ),
+    )
+    addErr(
+        parser.MustStruct( "ns1@v1/S1", "f1", int32( -1 ) ),
+        testErrForPath( p( 1 ) ),
+    )
+    unrec4 := mg.NewUnrecognizedFieldError( nil, mkId( "f4" ) )
+    addErr( parser.MustSymbolMap( "f4", "bad" ), unrec4 )
+    addErr( parser.MustStruct( "ns1@v1/S1", "f4", "bad" ), unrec4 )
+    // since builderTestProfileImpl successfully handles maps, we use a
+    // fail-only profile just to check that custom errors from a map start func
+    // are indeed returned
+    b.AddTests(
+        &BuildReactorTest{
+            Source: mg.EmptySymbolMap(),
+            Error: testErrForPath( nil ),
+            Profile: builderTestProfileImplFailOnly,
+        },
+    )
 }
 
 func initBuildReactorTests( b *ReactorTestSetBuilder ) {
     initBuildReactorValueTests( b )
     initBuildReactorErrorTests( b )
+    initBuildReactorImplTests( b )
 }
 
 // we only add here error tests; we assume that a value build reactor sits
 // behind a structural reactor and so let BuildReactorTest successes imply
 // correct behavior of the structural check reactor for valid inputs
 func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
-    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
+    evStartStruct1 := NewStructStartEvent( mkQn( "ns1@v1/S1" ) )
     id := mg.MakeTestId
     evStartField1 := NewFieldStartEvent( id( 1 ) )
     evStartField2 := NewFieldStartEvent( id( 2 ) )
@@ -191,12 +279,12 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     )
     addListFail := func( expct, saw string, evs ...ReactorEvent ) {
         msg := fmt.Sprintf( "expected list value of type %s but saw %s", 
-            typeRef( expct ), saw )
+            asType( expct ), saw )
         b.AddTests( mk1( msg, evs... ) )
     }
     for _, s := range []struct { expctTyp, saw string; ev ReactorEvent } {
         { expctTyp: "Int32", 
-          saw: typeRef( "Int64" ).ExternalForm(),
+          saw: asType( "Int64" ).ExternalForm(),
           ev: NewValueEvent( mg.Int64( int64( 1 ) ) ),
         },
         { expctTyp: "Int32", 
@@ -204,11 +292,11 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
           ev: nextListStart( listTypeRef( "Int32*" ) ),
         },
         { expctTyp: "&Int32",
-          saw: typeRef( "Int32" ).ExternalForm(),
+          saw: asType( "Int32" ).ExternalForm(),
           ev: NewValueEvent( mg.Int32( int32( 1 ) ) ),
         },
         { expctTyp: "SymbolMap",
-          saw: typeRef( "Int32" ).ExternalForm(),
+          saw: asType( "Int32" ).ExternalForm(),
           ev: NewValueEvent( mg.Int32( int32( 1 ) ) ),
         },
     } {
@@ -233,7 +321,7 @@ func initEventPathTests( b *ReactorTestSetBuilder ) {
     ee := func( ev ReactorEvent, p objpath.PathNode ) EventExpectation {
         return EventExpectation{ Event: ev, Path: p }
     }
-    evStartStruct1 := NewStructStartEvent( qname( "ns1@v1/S1" ) )
+    evStartStruct1 := NewStructStartEvent( mkQn( "ns1@v1/S1" ) )
     id := mg.MakeTestId
     evStartField := func( i int ) *FieldStartEvent {
         return NewFieldStartEvent( id( i ) )
@@ -415,7 +503,7 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
     }
     i1 := mg.Int32( int32( 1 ) )
     val1 := NewValueEvent( i1 )
-    t1, t2 := qname( "ns1@v1/S1" ), qname( "ns1@v1/S2" )
+    t1, t2 := mkQn( "ns1@v1/S1" ), mkQn( "ns1@v1/S2" )
     ss1, ss2 := NewStructStartEvent( t1 ), NewStructStartEvent( t2 )
     ss2Val1 := parser.MustStruct( t2, ids[ 0 ], i1 )
     // expct sequences for instance of ns1@v1/S1 by field f0 ...
@@ -552,7 +640,7 @@ func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
             { fldId( 4 ), true },
         },
     )
-    t1 := qname( "ns1@v1/S1" )
+    t1 := mkQn( "ns1@v1/S1" )
     ords := []FieldOrderReactorTestOrder{ { Order: ord, Type: t1 } }
     mkSrc := func( flds []int ) []ReactorEvent {
         evs := []interface{}{ NewStructStartEvent( t1 ) }
@@ -611,7 +699,7 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
     val1 := NewValueEvent( i1 )
     id := mg.MakeTestId
     typ := func( i int ) *mg.QualifiedTypeName {
-        return qname( fmt.Sprintf( "ns1@v1/S%d", i ) )
+        return mkQn( fmt.Sprintf( "ns1@v1/S%d", i ) )
     }
     ss := func( i int ) *StructStartEvent { 
         return NewStructStartEvent( typ( i ) ) 

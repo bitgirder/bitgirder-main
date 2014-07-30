@@ -4,25 +4,19 @@ import (
     mg "mingle"
     "mingle/parser"
     "bitgirder/assert"
+    "bitgirder/objpath"
     "testing"
 //    "log"
 )
 
 var reactorTestNs *mg.Namespace
 
-var qname = parser.MustQualifiedTypeName
-
-func typeRef( val interface{} ) mg.TypeReference {
-    switch v := val.( type ) {
-    case mg.TypeReference: return v
-    case *mg.QualifiedTypeName: return &mg.AtomicTypeReference{ Name: v }
-    case string: return parser.MustTypeReference( v )
-    }
-    panic( libErrorf( "unhandled type ref input: %T", val ) )
-}
+var mkQn = parser.MustQualifiedTypeName
+var mkId = parser.MustIdentifier
+var asType = parser.AsTypeReference
 
 func listTypeRef( val interface{} ) *mg.ListTypeReference {
-    return typeRef( val ).( *mg.ListTypeReference )
+    return asType( val ).( *mg.ListTypeReference )
 }
 
 type ReactorTestCall struct {
@@ -209,4 +203,34 @@ func CheckNoError( err error, c *ReactorTestCall ) {
 func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
     ca := mg.CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
     ca.Call()
+}
+
+type testError struct { 
+    path objpath.PathNode
+    msg string 
+}
+
+func ( e *testError ) Error() string { return mg.FormatError( e.path, e.msg ) }
+
+func newTestError( path objpath.PathNode, msg string ) *testError {
+    return &testError{ path: path, msg: msg }
+}
+
+func testErrForPath( p objpath.PathNode ) error {
+    return newTestError( p, testMsgErrorBadValue )
+}
+
+func testErrForEvent( ev ReactorEvent ) error {
+    return testErrForPath( ev.GetPath() )
+}
+
+func testErrForValue( v mg.Value, p objpath.PathNode ) error {
+    if v == buildReactorErrorTestVal { return testErrForPath( p ) }
+    return nil
+}
+
+type s1 struct {
+    f1 int32
+    f2 []int32
+    f3 *s1
 }

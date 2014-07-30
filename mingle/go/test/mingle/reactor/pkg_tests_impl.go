@@ -7,115 +7,262 @@ import (
     "bitgirder/objpath"
 )
 
-func bindErrForPath( p objpath.PathNode ) error {
-    return newTestError( p, testMsgErrorBadValue )
-}
-
-func bindErrForEvent( ev ReactorEvent ) error {
-    return bindErrForPath( ev.GetPath() )
-}
-
-func bindErrForValue( v mg.Value, p objpath.PathNode ) error {
-    if v == buildReactorErrorTestVal { return bindErrForPath( p ) }
-    return nil
-}
-
-func bindTestErrorProduceValue() ( interface{}, error ) {
+func builderTestErrorProduceValue() ( interface{}, error ) {
     return mg.String( "placeholder-val" ), nil
 }
 
-type bindTestErrorFactory int
+type builderTestErrorFactory int
 
-func ( ef bindTestErrorFactory ) BuildValue( 
+func ( ef builderTestErrorFactory ) BuildValue( 
     ve *ValueEvent ) ( interface{}, error ) {
 
-    return ve.Val, bindErrForValue( ve.Val, ve.GetPath() )
+    return ve.Val, testErrForValue( ve.Val, ve.GetPath() )
 }
 
-func ( ef bindTestErrorFactory ) StartMap( 
+func ( ef builderTestErrorFactory ) StartMap( 
     mse *MapStartEvent ) ( FieldSetBuilder, error ) {
 
-    return bindTestErrorFieldSetBuilder( 1 ), nil
+    return builderTestErrorFieldSetBuilder( 1 ), nil
 }
 
-func ( ef bindTestErrorFactory ) StartStruct( 
+func ( ef builderTestErrorFactory ) StartStruct( 
     sse *StructStartEvent ) ( FieldSetBuilder, error ) {
 
     if sse.Type.Equals( buildReactorErrorTestQn ) {
-        return nil, bindErrForEvent( sse )
+        return nil, testErrForEvent( sse )
     }
-    return bindTestErrorFieldSetBuilder( 1 ), nil
+    return builderTestErrorFieldSetBuilder( 1 ), nil
 }
 
-func ( ef bindTestErrorFactory ) StartList( 
+func ( ef builderTestErrorFactory ) StartList( 
     lse *ListStartEvent ) ( ListBuilder, error ) {
 
     if mg.TypeNameIn( lse.Type ).Equals( buildReactorErrorTestQn ) {
-        return nil, bindErrForEvent( lse )
+        return nil, testErrForEvent( lse )
     }
-    return bindTestErrorListBuilder( 1 ), nil
+    return builderTestErrorListBuilder( 1 ), nil
 }
 
-type bindTestErrorListBuilder int
+type builderTestErrorListBuilder int
 
-func ( lb bindTestErrorListBuilder ) AddValue( 
+func ( lb builderTestErrorListBuilder ) AddValue( 
     val interface{}, path objpath.PathNode ) error {
 
-    return bindErrForValue( val.( mg.Value ), path )
+    return testErrForValue( val.( mg.Value ), path )
 }
 
-func ( lb bindTestErrorListBuilder ) NextBuilderFactory() BuilderFactory {
-    return bindTestErrorFactory( 1 )
+func ( lb builderTestErrorListBuilder ) NextBuilderFactory() BuilderFactory {
+    return builderTestErrorFactory( 1 )
 }
 
-func ( lb bindTestErrorListBuilder ) ProduceValue(
+func ( lb builderTestErrorListBuilder ) ProduceValue(
     ee *EndEvent ) ( interface{}, error ) {
 
-    return bindTestErrorProduceValue()
+    return builderTestErrorProduceValue()
 }
 
-type bindTestErrorFieldSetBuilder int
+type builderTestErrorFieldSetBuilder int
 
-func ( fs bindTestErrorFieldSetBuilder ) StartField( 
+func ( fs builderTestErrorFieldSetBuilder ) StartField( 
     fse *FieldStartEvent ) ( BuilderFactory, error ) {
     
     if fse.Field.Equals( buildReactorErrorTestField ) {
-        return nil, bindErrForPath( objpath.ParentOf( fse.GetPath() ) )
+        return nil, testErrForPath( objpath.ParentOf( fse.GetPath() ) )
     }
-    return bindTestErrorFactory( 1 ), nil
+    return builderTestErrorFactory( 1 ), nil
 }
 
-func ( fs bindTestErrorFieldSetBuilder ) SetValue( 
+func ( fs builderTestErrorFieldSetBuilder ) SetValue( 
     fld *mg.Identifier, val interface{}, path objpath.PathNode ) error {
 
-    return bindErrForValue( val.( mg.Value ), path )
+    return testErrForValue( val.( mg.Value ), path )
 }
 
-func ( fs bindTestErrorFieldSetBuilder ) ProduceValue( 
+func ( fs builderTestErrorFieldSetBuilder ) ProduceValue( 
     ee *EndEvent ) ( interface{}, error ) {
 
-    return bindTestErrorProduceValue()
+    return builderTestErrorProduceValue()
+}
+
+type int32SliceBuilder struct {
+    s []int32
+}
+
+func ( b *int32SliceBuilder ) AddValue( 
+    val interface{}, path objpath.PathNode ) error {
+
+    b.s = append( b.s, val.( int32 ) )
+    return nil
+}
+
+func ( b *int32SliceBuilder ) NextBuilderFactory() BuilderFactory {
+    return testBuilderFactory
+}
+
+func ( b *int32SliceBuilder ) ProduceValue(
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return b.s, nil
+}
+
+var testBuilderFactory = NewFunctionsBuilderFactory()
+var testBuilderFactoryFailOnly = NewFunctionsBuilderFactory()
+
+func init() {
+    testBuilderFactory.ErrorFunc = 
+        func( path objpath.PathNode, msg string ) error {
+            return newTestError( path, msg )
+        }
+    testBuilderFactory.ValueFunc =
+        NewBuildValueOkFunctionSequence(
+            func( ve *ValueEvent ) ( interface{}, error, bool ) {
+                if v, ok := ve.Val.( mg.Int32 ); ok {
+                    i := int32( v )
+                    if i < 0 { return nil, testErrForEvent( ve ), true }
+                    return i, nil, true
+                }
+                return nil, nil, false
+            },
+            func( ve *ValueEvent ) ( interface{}, error, bool ) {
+                if s, ok := ve.Val.( mg.String ); ok {
+                    return string( s ), nil, true
+                }
+                return nil, nil, false
+            },
+        )
+    testBuilderFactory.ListFunc = 
+        func( lse *ListStartEvent ) ( ListBuilder, error ) {
+            switch lt := lse.Type; {
+            case lt.Equals( asType( "Int32*" ) ): 
+                sb := &FunctionsListBuilder{
+                    Value: make( []int32, 0, 4 ),
+                    NextFunc: func() BuilderFactory { 
+                        return testBuilderFactory 
+                    },
+                    AddFunc: func( 
+                        val, res interface{}, 
+                        path objpath.PathNode ) ( interface{}, error ) {
+
+                        arr := res.( []int32 )
+                        if cap( arr ) == len( arr ) {
+                            return nil, testErrForPath( path )
+                        }
+                        return append( arr, val.( int32 ) ), nil
+                    },
+                }
+                return sb, nil
+            }
+            return nil, nil
+        }
+    testBuilderFactory.StructFunc = 
+        func( sse *StructStartEvent ) ( FieldSetBuilder, error ) {
+    
+            if ! sse.Type.Equals( mkQn( "ns1@v1/S1" ) ) { return nil, nil }
+            res := NewFunctionsFieldSetBuilder() 
+            res.Value = new( s1 )
+            res.RegisterField(
+                mkId( "f1" ),
+                func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                    return testBuilderFactory, nil
+                },
+                func( val interface{}, path objpath.PathNode ) error {
+                    res.Value.( *s1 ).f1 = val.( int32 )
+                    return nil
+                },
+            )
+            res.RegisterField(
+                mkId( "f2" ),
+                func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                    return testBuilderFactory, nil
+                },
+                func( val interface{}, path objpath.PathNode ) error {
+                    res.Value.( *s1 ).f2 = val.( []int32 )
+                    return nil
+                },
+            )
+            res.RegisterField(
+                mkId( "f3" ),
+                func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                    return testBuilderFactory, nil
+                },
+                func( val interface{}, path objpath.PathNode ) error {
+                    res.Value.( *s1 ).f3 = val.( *s1 )
+                    return nil
+                },
+            )
+            return res, nil
+        }
+    testBuilderFactory.MapFunc = 
+        func( mse *MapStartEvent ) ( FieldSetBuilder, error ) {
+            res := NewFunctionsFieldSetBuilder()
+            res.Value = make( map[ string ]interface{} )
+            res.RegisterCatchall(
+                func( fse *FieldStartEvent ) ( BuilderFactory, error ) {
+                    switch fse.Field.ExternalForm() {
+                    case "f1", "f2", "f3": return testBuilderFactory, nil
+                    }
+                    return nil, nil
+                },
+                func( 
+                    fld *mg.Identifier, 
+                    val interface{}, 
+                    path objpath.PathNode ) error {
+
+                    m := res.Value.( map[ string ]interface{} )
+                    m[ fld.ExternalForm() ] = val
+                    return nil
+                },
+            )
+            return res, nil
+        }
+    testBuilderFactoryFailOnly.ErrorFunc = 
+        func( loc objpath.PathNode, msg string ) error {
+            return newTestError( loc, msg )
+        }
+    testBuilderFactoryFailOnly.ValueFunc = 
+        func( ve *ValueEvent ) ( interface{}, error, bool ) {
+            return nil, testErrForEvent( ve ), true
+        }
+    testBuilderFactoryFailOnly.ListFunc =
+        func( lse *ListStartEvent ) ( ListBuilder, error ) {
+            return nil, testErrForEvent( lse )
+        }
+    testBuilderFactoryFailOnly.MapFunc =
+        func( mse *MapStartEvent ) ( FieldSetBuilder, error ) {
+            return nil, testErrForEvent( mse )
+        }
+    testBuilderFactoryFailOnly.StructFunc =
+        func( sse *StructStartEvent ) ( FieldSetBuilder, error ) {
+            return nil, testErrForEvent( sse )
+        }
 }
 
 func ( t *BuildReactorTest ) getBuilderFactory() BuilderFactory {
     switch t.Profile {
-    case bindTestProfileDefault: return ValueBuilderFactory
-    case bindTestProfileError: return bindTestErrorFactory( 1 )
+    case builderTestProfileDefault: return ValueBuilderFactory
+    case builderTestProfileError: return builderTestErrorFactory( 1 )
+    case builderTestProfileImpl: return testBuilderFactory
+    case builderTestProfileImplFailOnly: return testBuilderFactoryFailOnly
     }
     panic( libErrorf( "unhandled profile: %s", t.Profile ) )
 }
 
 func ( t *BuildReactorTest ) Call( c *ReactorTestCall ) {
     br := NewBuildReactor( t.getBuilderFactory() )
-    pip := InitReactorPipeline( NewDebugReactor( c ), br )
+//    pip := InitReactorPipeline( NewDebugReactor( c ), br )
+    pip := InitReactorPipeline( br )
     src := t.Source
     if src == nil { src = t.Val }
-    if mv, ok := src.( mg.Value ); ok {
-        c.Logf( "feeding %s", mg.QuoteValue( mv ) )
-    }
+//    if mv, ok := src.( mg.Value ); ok {
+//        c.Logf( "feeding %s", mg.QuoteValue( mv ) )
+//    }
     if err := FeedSource( src, pip ); err == nil {
-        act := br.GetValue().( mg.Value )
-        mg.AssertEqualValues( t.Val, act, c.PathAsserter )
+        act := br.GetValue()
+        switch v := t.Val.( type ) {
+        case mg.Value: 
+            mg.AssertEqualValues( v, act.( mg.Value ), c.PathAsserter )
+        default: c.Equal( v, act )
+        }
     } else { c.EqualErrors( t.Error, err ) }
 }
 

@@ -21,6 +21,12 @@ type FieldSetBuilder interface {
     ValueProducer
 }
 
+type FieldSetBuilderStartFieldFunction func( 
+    fse *FieldStartEvent ) ( BuilderFactory, error )
+
+type FieldSetBuilderSetValueFunction func(
+    fld *mg.Identifier, val interface{}, path objpath.PathNode ) error
+
 type ListBuilder interface {
     
     AddValue( val interface{}, path objpath.PathNode ) error

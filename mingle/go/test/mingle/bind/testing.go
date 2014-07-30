@@ -6,4 +6,4 @@ import (
 
 var mkId = parser.MustIdentifier
 var mkQn = parser.MustQualifiedTypeName
-var asTyp = parser.AsTypeReference
+var asType = parser.AsTypeReference

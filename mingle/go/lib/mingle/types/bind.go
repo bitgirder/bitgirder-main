@@ -2,10 +2,8 @@ package types
 
 import (
     mgRct "mingle/reactor"
-    "mingle/bind"
     "mingle/parser"
     mg "mingle"
-//    "bitgirder/stub"
 )
 
 // if err is something that should be sent to caller as a value error, a value
@@ -17,7 +15,4 @@ func asValueError( ve mgRct.ReactorEvent, err error ) error {
     case *mg.BinIoError: err = mg.NewValueCastError( ve.GetPath(), v.Error() )
     }
     return err
-}
-
-var IdentifierBinderFactory = &bind.FunctionBinderFactory{
 }
