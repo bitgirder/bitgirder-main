@@ -134,22 +134,21 @@ func init() {
         func( lse *ListStartEvent ) ( ListBuilder, error ) {
             switch lt := lse.Type; {
             case lt.Equals( asType( "Int32*" ) ): 
-                sb := &FunctionsListBuilder{
-                    Value: make( []int32, 0, 4 ),
-                    NextFunc: func() BuilderFactory { 
-                        return testBuilderFactory 
-                    },
-                    AddFunc: func( 
-                        val, res interface{}, 
-                        path objpath.PathNode ) ( interface{}, error ) {
+                sb := NewFunctionsListBuilder()
+                sb.Value = make( []int32, 0, 4 )
+                sb.NextFunc = func() BuilderFactory { 
+                    return testBuilderFactory 
+                }
+                sb.AddFunc = 
+                    func( val, res interface{}, 
+                          path objpath.PathNode ) ( interface{}, error ) {
 
                         arr := res.( []int32 )
                         if cap( arr ) == len( arr ) {
                             return nil, testErrForPath( path )
                         }
                         return append( arr, val.( int32 ) ), nil
-                    },
-                }
+                    }
                 return sb, nil
             }
             return nil, nil

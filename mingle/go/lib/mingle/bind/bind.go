@@ -36,7 +36,7 @@ func NewBindRegistry() *BindRegistry {
     return &BindRegistry{ m: mg.NewQnameMap() }
 }
 
-func ( reg *BindRegistry ) MustAdd( 
+func ( reg *BindRegistry ) MustAddValue( 
     qn *mg.QualifiedTypeName, bf mgRct.BuilderFactory ) {
 
     if reg.m.HasKey( qn ) {
@@ -47,17 +47,20 @@ func ( reg *BindRegistry ) MustAdd(
 
 // could make this public if needed
 func addPrimBindings( reg *BindRegistry ) {
-//    reg.MustAdd(
-//        mg.QnameBoolean, 
-//        mgRct.NewFunctionsBuilderFactory().
-//            BuildValue( func( ve *mgRct.ValueEvent ) ( interface{}, error ) {
-//                if b, ok := ve.Val.( mg.Boolean ); ok {
-//                    return bool( b ), nil
-//                }
-//                return nil, 
-//                    NewBindErrorf( ve.GetPath(), "bad type: %T", ve.Val )
-//            }),
-//    )
+    addPrim := func( qn *mg.QualifiedTypeName, f mgRct.BuildValueOkFunction ) {
+        bf := mgRct.NewFunctionsBuilderFactory()
+        bf.ValueFunc = f
+        reg.MustAddValue( qn, bf )
+    }
+    addPrim(
+        mg.QnameBoolean, 
+        func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+            if b, ok := ve.Val.( mg.Boolean ); ok {
+                return bool( b ), nil, true
+            }
+            return nil, nil, false
+        },
+    )
 }
 
 var regsByDomain *mg.IdentifierMap = mg.NewIdentifierMap()
@@ -76,5 +79,17 @@ func BindRegistryForDomain( domain *mg.Identifier ) *BindRegistry {
 }
 
 func NewBindBuilderFactory( reg *BindRegistry ) mgRct.BuilderFactory {
-    return mgRct.ValueBuilderFactory
+    res := mgRct.NewFunctionsBuilderFactory()
+    res.ErrorFunc = func( path objpath.PathNode, msg string ) error {
+        return NewBindError( path, msg )
+    }
+    res.ValueFunc = func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+        qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name
+        if bf, ok := reg.m.GetOk( qn ); ok {
+            res, err := bf.( mgRct.BuilderFactory ).BuildValue( ve )
+            return res, err, true
+        }
+        return nil, nil, false
+    }
+    return res
 }

@@ -7,10 +7,6 @@ import (
     "fmt"
 )
 
-func NewFunctionsBuilderFactory() *FunctionsBuilderFactory {
-    return &FunctionsBuilderFactory{}
-}
-
 type BuildValueOkFunction func ( ve *ValueEvent ) ( interface{}, error, bool )
 
 func NewBuildValueOkFunctionSequence( 
@@ -30,6 +26,10 @@ type FunctionsBuilderFactory struct {
     ListFunc func( lse *ListStartEvent ) ( ListBuilder, error )
     MapFunc func( mse *MapStartEvent ) ( FieldSetBuilder, error )
     StructFunc func( sse *StructStartEvent ) ( FieldSetBuilder, error )
+}
+
+func NewFunctionsBuilderFactory() *FunctionsBuilderFactory {
+    return &FunctionsBuilderFactory{}
 }
 
 func ( bf *FunctionsBuilderFactory ) makeError( 
@@ -110,6 +110,10 @@ type FunctionsListBuilder struct {
 
     AddFunc func( 
         val, res interface{}, path objpath.PathNode ) ( interface{}, error )
+}
+
+func NewFunctionsListBuilder() *FunctionsListBuilder {
+    return &FunctionsListBuilder{}
 }
 
 func mustCheckFunc( val interface{}, nm string ) {
