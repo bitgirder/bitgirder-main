@@ -17,7 +17,7 @@ var didEnsureTestBuilderFactories = false
 func ensureTestBuilderFactories() {
     if didEnsureTestBuilderFactories { return }
     didEnsureTestBuilderFactories = true
-    reg := BindRegistryForDomain( DomainDefault )
+    reg := RegistryForDomain( DomainDefault )
     reg.MustAddValue(
         mkQn( "ns1@v1/S1" ),
         func() mgRct.BuilderFactory {
@@ -69,8 +69,8 @@ func ensureTestBuilderFactories() {
 func callBindTest( t *BindTest, a *assert.PathAsserter ) {
     a.Logf( "visiting %s", mg.QuoteValue( t.In ) )
     ensureTestBuilderFactories()
-    reg := BindRegistryForDomain( t.Domain )
-    br := mgRct.NewBuildReactor( NewBindBuilderFactory( reg ) )
+    reg := RegistryForDomain( t.Domain )
+    br := NewBuildReactor( NewBuilderFactory( reg ) )
     pip := mgRct.InitReactorPipeline( br )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         a.Equal( t.Expect, br.GetValue() )
@@ -85,4 +85,22 @@ func TestBinding( t *testing.T ) {
         callBindTest( sbt.( *BindTest ), la )
         la = la.Next()
     }
+}
+
+func TestRegistryAccessors( t *testing.T ) {
+    a := assert.NewPathAsserter( t )
+    reg := NewRegistry()
+    chkGetType := func( 
+        typ mg.TypeReference, expctOk bool, bf mgRct.BuilderFactory ) {
+
+        act, ok := reg.BuilderFactoryForType( typ )
+        ta := a.Descend( typ.ExternalForm() )
+        ta.Descend( "ok" ).Equal( expctOk, ok )
+        if ok { ta.Descend( "bf" ).Equal( bf, act ) }
+    }
+    strBld := mgRct.NewFunctionsBuilderFactory()
+    reg.MustAddValue( mg.QnameString, strBld )
+    chkGetType( mg.TypeString, true, strBld )
+    chkGetType( asType( `String~"a"` ), true, strBld )
+    chkGetType( mg.TypeInt32, false, nil )
 }

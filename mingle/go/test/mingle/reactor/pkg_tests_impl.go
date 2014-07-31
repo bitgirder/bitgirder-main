@@ -40,10 +40,12 @@ func ( ef builderTestErrorFactory ) StartList(
     if mg.TypeNameIn( lse.Type ).Equals( buildReactorErrorTestQn ) {
         return nil, testErrForEvent( lse )
     }
-    return builderTestErrorListBuilder( 1 ), nil
+    return builderTestErrorListBuilder{ lse.Type }, nil
 }
 
-type builderTestErrorListBuilder int
+type builderTestErrorListBuilder struct {
+    lt *mg.ListTypeReference
+}
 
 func ( lb builderTestErrorListBuilder ) AddValue( 
     val interface{}, path objpath.PathNode ) error {
@@ -52,6 +54,9 @@ func ( lb builderTestErrorListBuilder ) AddValue(
 }
 
 func ( lb builderTestErrorListBuilder ) NextBuilderFactory() BuilderFactory {
+    if lb.lt.Equals( asType( "ns1@v1/NextBuilderNilTest*" ) ) {
+        return nil
+    }
     return builderTestErrorFactory( 1 )
 }
 
@@ -109,7 +114,7 @@ var testBuilderFactory = NewFunctionsBuilderFactory()
 var testBuilderFactoryFailOnly = NewFunctionsBuilderFactory()
 
 func init() {
-    testBuilderFactory.ErrorFunc = 
+    testBuilderFactory.ErrorFactory = 
         func( path objpath.PathNode, msg string ) error {
             return newTestError( path, msg )
         }
@@ -140,14 +145,14 @@ func init() {
                     return testBuilderFactory 
                 }
                 sb.AddFunc = 
-                    func( val, res interface{}, 
-                          path objpath.PathNode ) ( interface{}, error ) {
+                    func( val interface{}, path objpath.PathNode ) error {
 
-                        arr := res.( []int32 )
+                        arr := sb.Value.( []int32 )
                         if cap( arr ) == len( arr ) {
-                            return nil, testErrForPath( path )
+                            return testErrForPath( path )
                         }
-                        return append( arr, val.( int32 ) ), nil
+                        sb.Value = append( arr, val.( int32 ) )
+                        return nil
                     }
                 return sb, nil
             }
@@ -224,7 +229,7 @@ func init() {
             )
             return res, nil
         }
-    testBuilderFactoryFailOnly.ErrorFunc = 
+    testBuilderFactoryFailOnly.ErrorFactory = 
         func( loc objpath.PathNode, msg string ) error {
             return newTestError( loc, msg )
         }
@@ -258,6 +263,9 @@ func ( t *BuildReactorTest ) getBuilderFactory() BuilderFactory {
 
 func ( t *BuildReactorTest ) Call( c *ReactorTestCall ) {
     br := NewBuildReactor( t.getBuilderFactory() )
+    br.ErrorFactory = func( path objpath.PathNode, msg string ) error {
+        return newTestError( path, msg )
+    }
 //    pip := InitReactorPipeline( NewDebugReactor( c ), br )
     pip := InitReactorPipeline( br )
     src := t.Source

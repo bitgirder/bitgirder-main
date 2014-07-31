@@ -5,8 +5,30 @@ import (
     "bitgirder/objpath"
     "bitgirder/pipeline"
     "bitgirder/stack"
+    "errors"
+    "fmt"
 //    "log"
 )
+
+type BuilderErrorFactory func( path objpath.PathNode, msg string ) error
+
+func defaultBuilderErrorFactory( path objpath.PathNode, msg string ) error {
+    return errors.New( mg.FormatError( path, msg ) )
+}
+
+func failBuilderBadInput( ev ReactorEvent, errFact BuilderErrorFactory ) error {
+    if errFact == nil { errFact = defaultBuilderErrorFactory }
+    var typ interface { ExternalForm() string }
+    switch v := ev.( type ) {
+    case *ValueEvent: typ = mg.TypeOf( v.Val )
+    case *ListStartEvent: typ = v.Type
+    case *MapStartEvent: typ = mg.TypeSymbolMap
+    case *StructStartEvent: typ = v.Type
+    default: panic( libErrorf( "can't get type for: %T", ev ) )
+    }
+    msg := fmt.Sprintf( "unhandled value: %s", typ.ExternalForm() )
+    return errFact( ev.GetPath(), msg )
+}
 
 type ValueProducer interface {
     ProduceValue( ee *EndEvent ) ( interface{}, error )
@@ -51,6 +73,7 @@ type BuildReactor struct {
     val interface{}
     hasVal bool
     stk *stack.Stack
+    ErrorFactory BuilderErrorFactory
 }
 
 func NewBuildReactor( bf BuilderFactory ) *BuildReactor {
@@ -91,20 +114,25 @@ func ( br *BuildReactor ) completeValue(
     panic( libErrorf( "unhandled value recipient: %T", br.stk.Peek() ) )
 }
 
-func ( br *BuildReactor ) nextBuilderFact() BuilderFactory {
+func ( br *BuildReactor ) nextBuilderFact( 
+    ev ReactorEvent ) ( BuilderFactory, error ) {
+
     top := br.stk.Peek()
     switch v := top.( type ) {
     case BuilderFactory: 
         br.stk.Pop()
-        return v
-    case ListBuilder: return v.NextBuilderFactory()
+        return v, nil
+    case ListBuilder: 
+        if lb := v.NextBuilderFactory(); lb != nil { return lb, nil }
+        return nil, failBuilderBadInput( ev, br.ErrorFactory )
     }
-    panic( 
-        libErrorf( "unhandled stack element for nextBuilderFact(): %T", top ) )
+    panic( libErrorf( "unhandled stack element: %T", top ) )
 }
 
 func ( br *BuildReactor ) processValue( ve *ValueEvent ) error {
-    val, err := br.nextBuilderFact().BuildValue( ve )
+    bf, err := br.nextBuilderFact( ve )
+    if err != nil { return err }
+    val, err := bf.BuildValue( ve )
     if err != nil { return err }
     return br.completeValue( val, ve )
 }
@@ -118,13 +146,17 @@ func ( br *BuildReactor ) startFieldSet(
 }
 
 func ( br *BuildReactor ) processMapStart( mse *MapStartEvent ) error {
-    return br.startFieldSet( br.nextBuilderFact().StartMap( mse ) )
+    bf, err := br.nextBuilderFact( mse )
+    if err != nil { return err }
+    return br.startFieldSet( bf.StartMap( mse ) )
 }
 
 func ( br *BuildReactor ) processStructStart( 
     sse *StructStartEvent ) error {
 
-    return br.startFieldSet( br.nextBuilderFact().StartStruct( sse ) )
+    bf, err := br.nextBuilderFact( sse )
+    if err != nil { return err }
+    return br.startFieldSet( bf.StartStruct( sse ) )
 }
 
 func ( br *BuildReactor ) processFieldStart( fse *FieldStartEvent ) error {
@@ -137,7 +169,9 @@ func ( br *BuildReactor ) processFieldStart( fse *FieldStartEvent ) error {
 }
 
 func ( br *BuildReactor ) processListStart( lse *ListStartEvent ) error {
-    lb, err := br.nextBuilderFact().StartList( lse )
+    bf, err := br.nextBuilderFact( lse )
+    if err != nil { return err }
+    lb, err := bf.StartList( lse )
     if err != nil { return err }
     br.stk.Push( lb )
     return nil

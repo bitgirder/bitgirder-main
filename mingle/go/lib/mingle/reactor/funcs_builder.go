@@ -3,8 +3,6 @@ package reactor
 import (
     "bitgirder/objpath"
     mg "mingle"
-    "errors"
-    "fmt"
 //    "log"
 )
 
@@ -22,7 +20,7 @@ func NewBuildValueOkFunctionSequence(
 }
 
 type FunctionsBuilderFactory struct {
-    ErrorFunc func( loc objpath.PathNode, msg string ) error
+    ErrorFactory BuilderErrorFactory
     ValueFunc BuildValueOkFunction
     ListFunc func( lse *ListStartEvent ) ( ListBuilder, error )
     MapFunc func( mse *MapStartEvent ) ( FieldSetBuilder, error )
@@ -33,26 +31,8 @@ func NewFunctionsBuilderFactory() *FunctionsBuilderFactory {
     return &FunctionsBuilderFactory{}
 }
 
-func ( bf *FunctionsBuilderFactory ) makeError( 
-    loc objpath.PathNode, msg string ) error {
-
-    if bf.ErrorFunc == nil {
-        return errors.New( mg.FormatError( loc, msg ) )
-    }
-    return bf.ErrorFunc( loc, msg )
-}
-
 func ( bf *FunctionsBuilderFactory ) failBadInput( ev ReactorEvent ) error {
-    var typ interface { ExternalForm() string }
-    switch v := ev.( type ) {
-    case *ValueEvent: typ = mg.TypeOf( v.Val )
-    case *ListStartEvent: typ = v.Type
-    case *MapStartEvent: typ = mg.TypeSymbolMap
-    case *StructStartEvent: typ = v.Type
-    default: panic( libErrorf( "can't get type for: %T", ev ) )
-    }
-    msg := fmt.Sprintf( "unhandled value: %s", typ.ExternalForm() )
-    return bf.makeError( ev.GetPath(), msg )
+    return failBuilderBadInput( ev, bf.ErrorFactory )
 }
 
 func ( bf *FunctionsBuilderFactory ) BuildValue( 
@@ -109,8 +89,7 @@ type FunctionsListBuilder struct {
 
     NextFunc func() BuilderFactory
 
-    AddFunc func( 
-        val, res interface{}, path objpath.PathNode ) ( interface{}, error )
+    AddFunc func( val interface{}, path objpath.PathNode ) error
 }
 
 func NewFunctionsListBuilder() *FunctionsListBuilder {
@@ -125,8 +104,7 @@ func ( lb *FunctionsListBuilder ) AddValue(
     val interface{}, path objpath.PathNode ) ( err error ) {
 
     mustCheckFunc( lb.AddFunc, "AddFunc" )
-    lb.Value, err = lb.AddFunc( val, lb.Value, path )
-    return
+    return lb.AddFunc( val, path )
 }
 
 func ( lb *FunctionsListBuilder ) NextBuilderFactory() BuilderFactory {

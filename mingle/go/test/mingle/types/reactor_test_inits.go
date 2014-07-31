@@ -1639,7 +1639,7 @@ func ( rti *rtInit ) call() {
     rti.addDefaultCastTests()
     rti.addConstructorCastTests()
     rti.addDefaultPathTests()
-//    rti.addBuiltinTypeTests()
+    rti.addBuiltinTypeTests()
 }
 
 func init() {

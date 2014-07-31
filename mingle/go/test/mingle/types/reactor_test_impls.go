@@ -2,7 +2,7 @@ package types
 
 import ( 
     mg "mingle"
-//    "mingle/bind"
+    "mingle/bind"
     mgRct "mingle/reactor"
 )
 
@@ -38,19 +38,23 @@ func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
     chk.Complete()
 }
 
-//func binderFactoryForTest( t *BuiltinTypeTest ) bind.BinderFactory {
-//    switch {
-//    case t.Type.Equals( mg.TypeIdentifier ): return IdentifierBinderFactory
-//    }
-//    panic( libErrorf( "unhandled built in type: %s", t.Type ) )
-//}
+func ( t *BuiltinTypeTest ) createBindReactor( 
+    c *mgRct.ReactorTestCall ) *mgRct.BuildReactor {
+
+    reg := bind.RegistryForDomain( bind.DomainDefault )
+    if bf, ok := reg.BuilderFactoryForType( t.Type ); ok {
+        return bind.NewBuildReactor( bf )
+    }
+    c.Fatalf( "no binder for type: %s", t.Type )
+    panic( libError( "unreachable" ) )
+}
 
 func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
-//    c.Logf( "expcting %s as type: %s", mg.QuoteValue( t.In ), t.Type )
-//    br := bind.NewBuildReactor( binderFactoryForTest( t ) )
-//    cr := NewCastReactor( t.Type, V1Types() )
-//    pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), br )
-//    if err := mgRct.VisitValue( t.In, pip ); err == nil {
-//        c.Equal( t.Expect, br.GetValue() )
-//    } else { c.EqualErrors( t.Err, err ) }
+    c.Logf( "expcting %s as type: %s", mg.QuoteValue( t.In ), t.Type )
+    br := t.createBindReactor( c )
+    cr := NewCastReactor( t.Type, V1Types() )
+    pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), br )
+    if err := mgRct.VisitValue( t.In, pip ); err == nil {
+        c.Equal( t.Expect, br.GetValue() )
+    } else { c.EqualErrors( t.Err, err ) }
 }

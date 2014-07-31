@@ -101,6 +101,13 @@ func initBuildReactorErrorTests( b *ReactorTestSetBuilder ) {
         mg.MustList( mg.MustList( asType( "ns1@v1/BadType*" ) ) ),
         testErrForPath( p( "0" ) ),
     )
+    addErr(
+        mg.MustList( 
+            asType( "ns1@v1/NextBuilderNilTest*" ), 
+            parser.MustStruct( "ns1@v1/NextBuilderNilTest" ),
+        ),
+        newTestError( p( "0" ), "unhandled value: ns1@v1/NextBuilderNilTest" ),
+    )
     addErr( parser.MustStruct( "ns1@v1/BadType" ), testErrForPath( nil ) )
 }
 

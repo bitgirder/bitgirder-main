@@ -30,15 +30,30 @@ func NewBindErrorf(
 
 var DomainDefault = mg.NewIdentifierUnsafe( []string{ "default" } )
 
-type BindRegistry struct {
+func bindErrorFactory( path objpath.PathNode, msg string ) error {
+    return NewBindError( path, msg )
+}
+
+type Registry struct {
     m *mg.QnameMap 
 }
 
-func NewBindRegistry() *BindRegistry { 
-    return &BindRegistry{ m: mg.NewQnameMap() }
+func NewRegistry() *Registry { 
+    return &Registry{ m: mg.NewQnameMap() }
 }
 
-func ( reg *BindRegistry ) MustAddValue( 
+func ( reg *Registry ) BuilderFactoryForType( 
+    typ mg.TypeReference ) ( mgRct.BuilderFactory, bool ) {
+
+    if at, ok := typ.( *mg.AtomicTypeReference ); ok {
+        if v, ok := reg.m.GetOk( at.Name ); ok { 
+            return v.( mgRct.BuilderFactory ), true
+        }
+    }
+    return nil, false
+}
+
+func ( reg *Registry ) MustAddValue( 
     qn *mg.QualifiedTypeName, bf mgRct.BuilderFactory ) {
 
     if reg.m.HasKey( qn ) {
@@ -47,15 +62,16 @@ func ( reg *BindRegistry ) MustAddValue(
     reg.m.Put( qn, bf )
 }
 
-func bindErrorFactory( path objpath.PathNode, msg string ) error {
-    return NewBindError( path, msg )
+func NewFunctionsBuilderFactory() *mgRct.FunctionsBuilderFactory {
+    res := mgRct.NewFunctionsBuilderFactory()
+    res.ErrorFactory = bindErrorFactory
+    return res
 }
 
 // could make this public if needed
-func addPrimBindings( reg *BindRegistry ) {
+func addPrimBindings( reg *Registry ) {
     addPrim := func( qn *mg.QualifiedTypeName, f mgRct.BuildValueOkFunction ) {
-        bf := mgRct.NewFunctionsBuilderFactory()
-        bf.ErrorFunc = bindErrorFactory
+        bf := NewFunctionsBuilderFactory()
         bf.ValueFunc = f
         reg.MustAddValue( qn, bf )
     }
@@ -161,21 +177,20 @@ func addPrimBindings( reg *BindRegistry ) {
 var regsByDomain *mg.IdentifierMap = mg.NewIdentifierMap()
 
 func init() {
-    reg := NewBindRegistry()
+    reg := NewRegistry()
     regsByDomain.Put( DomainDefault, reg )
     addPrimBindings( reg )
 }
 
-func BindRegistryForDomain( domain *mg.Identifier ) *BindRegistry {
+func RegistryForDomain( domain *mg.Identifier ) *Registry {
     if reg, ok := regsByDomain.GetOk( domain ); ok { 
-        return reg.( *BindRegistry )
+        return reg.( *Registry )
     }
     return nil
 }
 
-func NewBindBuilderFactory( reg *BindRegistry ) mgRct.BuilderFactory {
-    res := mgRct.NewFunctionsBuilderFactory()
-    res.ErrorFunc = bindErrorFactory
+func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
+    res := NewFunctionsBuilderFactory()
     res.ValueFunc = func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
         qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name
         if bf, ok := reg.m.GetOk( qn ); ok {
@@ -193,5 +208,11 @@ func NewBindBuilderFactory( reg *BindRegistry ) mgRct.BuilderFactory {
         }
         return nil, nil
     }
+    return res
+}
+
+func NewBuildReactor( bf mgRct.BuilderFactory ) *mgRct.BuildReactor {
+    res := mgRct.NewBuildReactor( bf )
+    res.ErrorFactory = bindErrorFactory
     return res
 }
