@@ -159,14 +159,14 @@ func init() {
             switch {
             case sse.Type.Equals( mkQn( "ns1@v1/S1" ) ):
                 res := NewFunctionsFieldSetBuilder() 
-                res.Value = new( s1 )
+                res.Value = new( S1 )
                 res.RegisterField(
                     mkId( "f1" ),
                     func( path objpath.PathNode ) ( BuilderFactory, error ) {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *s1 ).f1 = val.( int32 )
+                        res.Value.( *S1 ).f1 = val.( int32 )
                         return nil
                     },
                 )
@@ -176,7 +176,7 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *s1 ).f2 = val.( []int32 )
+                        res.Value.( *S1 ).f2 = val.( []int32 )
                         return nil
                     },
                 )
@@ -186,16 +186,16 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *s1 ).f3 = val.( *s1 )
+                        res.Value.( *S1 ).f3 = val.( *S1 )
                         return nil
                     },
                 )
                 return res, nil
             case sse.Type.Equals( mkQn( "ns1@v1/S2" ) ):
                 res := NewFunctionsFieldSetBuilder()
-                res.Value = new( s2 )
+                res.Value = new( S2 )
                 res.FinalValue = func() interface{} {
-                    return *( res.Value.( *s2 ) )
+                    return *( res.Value.( *S2 ) )
                 }
                 return res, nil
             }

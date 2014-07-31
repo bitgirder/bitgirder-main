@@ -67,11 +67,11 @@ func ensureTestBuilderFactories() {
 }
 
 func callBindTest( t *BindTest, a *assert.PathAsserter ) {
+    a.Logf( "visiting %s", mg.QuoteValue( t.In ) )
     ensureTestBuilderFactories()
     reg := BindRegistryForDomain( t.Domain )
     br := mgRct.NewBuildReactor( NewBindBuilderFactory( reg ) )
     pip := mgRct.InitReactorPipeline( br )
-    a.Logf( "visiting %s", mg.QuoteValue( t.In ) )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         a.Equal( t.Expect, br.GetValue() )
     } else {

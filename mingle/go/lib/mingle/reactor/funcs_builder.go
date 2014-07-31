@@ -5,6 +5,7 @@ import (
     mg "mingle"
     "errors"
     "fmt"
+//    "log"
 )
 
 type BuildValueOkFunction func ( ve *ValueEvent ) ( interface{}, error, bool )

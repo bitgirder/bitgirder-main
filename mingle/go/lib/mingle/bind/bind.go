@@ -6,6 +6,7 @@ import (
     mg "mingle"
     mgRct "mingle/reactor"
     "time"
+//    "log"
 )
 
 type BindError struct {
@@ -46,10 +47,15 @@ func ( reg *BindRegistry ) MustAddValue(
     reg.m.Put( qn, bf )
 }
 
+func bindErrorFactory( path objpath.PathNode, msg string ) error {
+    return NewBindError( path, msg )
+}
+
 // could make this public if needed
 func addPrimBindings( reg *BindRegistry ) {
     addPrim := func( qn *mg.QualifiedTypeName, f mgRct.BuildValueOkFunction ) {
         bf := mgRct.NewFunctionsBuilderFactory()
+        bf.ErrorFunc = bindErrorFactory
         bf.ValueFunc = f
         reg.MustAddValue( qn, bf )
     }
@@ -169,9 +175,7 @@ func BindRegistryForDomain( domain *mg.Identifier ) *BindRegistry {
 
 func NewBindBuilderFactory( reg *BindRegistry ) mgRct.BuilderFactory {
     res := mgRct.NewFunctionsBuilderFactory()
-    res.ErrorFunc = func( path objpath.PathNode, msg string ) error {
-        return NewBindError( path, msg )
-    }
+    res.ErrorFunc = bindErrorFactory
     res.ValueFunc = func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
         qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name
         if bf, ok := reg.m.GetOk( qn ); ok {

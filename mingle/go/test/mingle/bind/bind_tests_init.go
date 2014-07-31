@@ -37,49 +37,6 @@ func initDefaultValBindTests() {
     e1V1 := parser.MustEnum( "ns1@v1/E1", "v1" )
     add( s1V1, S1{ f1: 1 } )
     add( e1V1, E1V1 )
-    add( 
-        mg.MustList( asType( "ns1@v1/S1*" ), s1V1, s1V1 ),
-        []S1{ { f1: 1 }, { f1: 1 } },
-    )
-    add(
-        mg.MustList( asType( "ns1@v1/S1*" ) ),
-        []S1{},
-    )
-    add(
-        mg.MustList( asType( "ns1@v1/S1***" ),
-            mg.MustList( asType( "ns1@v1/S1**" ),
-                mg.MustList( asType( "ns1@v1/S1*" ), s1V1, s1V1 ),
-                mg.MustList( asType( "ns1@v1/S1*" ) ),
-            ),
-            mg.MustList( asType( "ns1@v1/S1**" ) ),
-        ),
-        [][][]S1{
-            [][]S1{
-                []S1{ { f1: 1 }, { f1: 1 } },
-                []S1{},
-            },
-            [][]S1{},
-        },
-    )
-    add(
-        mg.MustList( asType( "ns1@v1/E1*" ), e1V1, e1V1 ),
-        []E1{ E1V1, E1V1 },
-    )
-    add( mg.MustList( asType( "ns1@v1/E1*" ) ), []E1{} )
-    add( 
-        parser.MustSymbolMap( 
-            "f1", int32( 1 ),
-            "f2", s1V1,
-            "f3", mg.MustList( asType( "ns1@v1/S1*" ), s1V1 ),
-            "f4", mg.MustList( asType( "ns1@v1/E1*" ), e1V1 ),
-        ),
-        map[ string ]interface{}{ 
-            "f1": int32( 1 ),
-            "f2": S1{ f1: 1 },
-            "f3": []S1{ { f1: 1 } },
-            "f4": []E1{ E1V1 },
-        },
-    )
     addErr := func( in mg.Value, path objpath.PathNode, msg string ) {
         stdBindTests = append( stdBindTests,
             &BindTest{
@@ -92,51 +49,48 @@ func initDefaultValBindTests() {
     addErr(
         parser.MustStruct( "ns1@v1/Bad" ),
         nil,
-        "no binding for type: ns1@v1/Bad",
+        "unhandled value: ns1@v1/Bad",
     )
     addErr(
         parser.MustEnum( "ns1@v1/Bad", "e1" ),
         nil,
-        "no binding for type: ns1@v1/Bad",
+        "unhandled value: ns1@v1/Bad",
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ),
         p( 1 ),
-        "unexpected value: mingle:core@v1/Int64",
+        "unhandled value: mingle:core@v1/Int64",
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1",
             "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
         ),
         p( 1 ),
-        "unexpected value: ns1@v1/S1",
+        "unhandled value: ns1@v1/S1",
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1",
             "f1", parser.MustEnum( "ns1@v1/E1", "v1" ),
         ),
         p( 1 ),
-        "unexpected value: ns1@v1/E1",
+        "unhandled value: ns1@v1/E1",
     )
     addErr(
-        parser.MustStruct( "ns1@v1/S1", "f1", mg.MustList( "ns1@v1/S1*" ) ),
+        parser.MustStruct( "ns1@v1/S1", 
+            "f1", mg.MustList( asType( "ns1@v1/S1*" ), "ns1@v1/S1*" ),
+        ),
         p( 1 ),
-        "unexpected value: ns1@v1/S1*",
+        "unhandled value: ns1@v1/S1*",
     )
     addErr(
         parser.MustStruct( "ns1@v1/S1", "f1", mg.EmptySymbolMap() ),
         p( 1 ),
-        "unexpected value: mingle:core@v1/SymbolMap",
-    )
-    addErr(
-        mg.MustList( int32( 1 ), parser.MustStruct( "ns1@v1/Bad" ) ),
-        p( "1" ),
-        "no binding for type: ns1@v1/Bad",
+        "unhandled value: mingle:core@v1/SymbolMap",
     )
     addErr(
         mg.MustList( asType( "ns1@v1/Bad*" ) ),
         nil,
-        "no binding for type: ns1@v1/Bad*",
+        "unhandled value: ns1@v1/Bad*",
     )
 }
 

@@ -229,10 +229,10 @@ func testErrForValue( v mg.Value, p objpath.PathNode ) error {
     return nil
 }
 
-type s1 struct {
+type S1 struct {
     f1 int32
     f2 []int32
-    f3 *s1
+    f3 *S1
 }
 
-type s2 struct {}
+type S2 struct {}
