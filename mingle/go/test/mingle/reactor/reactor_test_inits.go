@@ -151,6 +151,7 @@ func initBuildReactorImplTests( b *ReactorTestSetBuilder ) {
             "f3": &s1{ f1: 1 },
         },
     )
+    add( parser.MustStruct( "ns1@v1/S2" ), s2{} )
     addErr( mg.Int32( int32( -1 ) ), testErrForPath( nil ) )
     addErr( 
         mg.Int64( int64( 1 ) ), 

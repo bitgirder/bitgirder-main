@@ -22,6 +22,7 @@ func initDefaultValBindTests() {
             },
         )
     }
+    add( mg.NullVal, nil )
     add( mg.Boolean( true ), true )
     add( mg.Buffer( []byte{ 0 } ), []byte{ 0 } )
     add( mg.String( "s" ), "s" )
@@ -36,7 +37,6 @@ func initDefaultValBindTests() {
     e1V1 := parser.MustEnum( "ns1@v1/E1", "v1" )
     add( s1V1, S1{ f1: 1 } )
     add( e1V1, E1V1 )
-    add( mg.NullVal, nil )
     add( 
         mg.MustList( asType( "ns1@v1/S1*" ), s1V1, s1V1 ),
         []S1{ { f1: 1 }, { f1: 1 } },

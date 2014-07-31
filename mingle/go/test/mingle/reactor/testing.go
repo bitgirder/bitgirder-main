@@ -234,3 +234,5 @@ type s1 struct {
     f2 []int32
     f3 *s1
 }
+
+type s2 struct {}

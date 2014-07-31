@@ -152,6 +152,8 @@ type FunctionsFieldSetBuilder struct {
 
     Value interface{}
 
+    FinalValue func() interface{}
+
     flds *mg.IdentifierMap
 
     catchall struct { 
@@ -189,7 +191,8 @@ func ( fsb *FunctionsFieldSetBuilder ) RegisterField(
 func ( fsb *FunctionsFieldSetBuilder ) ProduceValue(
     ee *EndEvent ) ( interface{}, error ) {
 
-    return fsb.Value, nil
+    if fsb.FinalValue == nil { return fsb.Value, nil }
+    return fsb.FinalValue(), nil
 }
 
 func ( fsb *FunctionsFieldSetBuilder ) SetValue(

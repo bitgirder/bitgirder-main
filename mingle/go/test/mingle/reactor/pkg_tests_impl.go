@@ -156,40 +156,50 @@ func init() {
     testBuilderFactory.StructFunc = 
         func( sse *StructStartEvent ) ( FieldSetBuilder, error ) {
     
-            if ! sse.Type.Equals( mkQn( "ns1@v1/S1" ) ) { return nil, nil }
-            res := NewFunctionsFieldSetBuilder() 
-            res.Value = new( s1 )
-            res.RegisterField(
-                mkId( "f1" ),
-                func( path objpath.PathNode ) ( BuilderFactory, error ) {
-                    return testBuilderFactory, nil
-                },
-                func( val interface{}, path objpath.PathNode ) error {
-                    res.Value.( *s1 ).f1 = val.( int32 )
-                    return nil
-                },
-            )
-            res.RegisterField(
-                mkId( "f2" ),
-                func( path objpath.PathNode ) ( BuilderFactory, error ) {
-                    return testBuilderFactory, nil
-                },
-                func( val interface{}, path objpath.PathNode ) error {
-                    res.Value.( *s1 ).f2 = val.( []int32 )
-                    return nil
-                },
-            )
-            res.RegisterField(
-                mkId( "f3" ),
-                func( path objpath.PathNode ) ( BuilderFactory, error ) {
-                    return testBuilderFactory, nil
-                },
-                func( val interface{}, path objpath.PathNode ) error {
-                    res.Value.( *s1 ).f3 = val.( *s1 )
-                    return nil
-                },
-            )
-            return res, nil
+            switch {
+            case sse.Type.Equals( mkQn( "ns1@v1/S1" ) ):
+                res := NewFunctionsFieldSetBuilder() 
+                res.Value = new( s1 )
+                res.RegisterField(
+                    mkId( "f1" ),
+                    func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                        return testBuilderFactory, nil
+                    },
+                    func( val interface{}, path objpath.PathNode ) error {
+                        res.Value.( *s1 ).f1 = val.( int32 )
+                        return nil
+                    },
+                )
+                res.RegisterField(
+                    mkId( "f2" ),
+                    func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                        return testBuilderFactory, nil
+                    },
+                    func( val interface{}, path objpath.PathNode ) error {
+                        res.Value.( *s1 ).f2 = val.( []int32 )
+                        return nil
+                    },
+                )
+                res.RegisterField(
+                    mkId( "f3" ),
+                    func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                        return testBuilderFactory, nil
+                    },
+                    func( val interface{}, path objpath.PathNode ) error {
+                        res.Value.( *s1 ).f3 = val.( *s1 )
+                        return nil
+                    },
+                )
+                return res, nil
+            case sse.Type.Equals( mkQn( "ns1@v1/S2" ) ):
+                res := NewFunctionsFieldSetBuilder()
+                res.Value = new( s2 )
+                res.FinalValue = func() interface{} {
+                    return *( res.Value.( *s2 ) )
+                }
+                return res, nil
+            }
+            return nil, nil
         }
     testBuilderFactory.MapFunc = 
         func( mse *MapStartEvent ) ( FieldSetBuilder, error ) {
