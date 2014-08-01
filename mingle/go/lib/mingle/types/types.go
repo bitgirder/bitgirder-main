@@ -6,6 +6,10 @@ import (
     mg "mingle"
 )
 
+func idUnsafe( parts ...string ) *mg.Identifier {
+    return mg.NewIdentifierUnsafe( parts )
+}
+
 type DefinitionMap struct {
     m *mg.QnameMap
     builtIn *mg.QnameMap

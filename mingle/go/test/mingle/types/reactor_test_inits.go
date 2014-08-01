@@ -1456,73 +1456,73 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ).StartList().SetIndex( 1 ),
         "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
     )
-//    add(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", idStruct( "v1" ),
-//            "parts", mg.MustList( idStruct( "ns1" ) ),
-//        ),
-//        mg.TypeNamespace,
-//        mkNs( "ns1@v1" ),
-//    )
-//    add(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", idStruct( "v1" ),
-//            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
-//        ),
-//        mg.TypeNamespace,
-//        mkNs( "ns1:ns2@v1" ),
-//    )
-//    add(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", "v1",
-//            "parts", mg.MustList( "ns1", "ns2" ),
-//        ),
-//        mg.TypeNamespace,
-//        mkNs( "ns1:ns2@v1" ),
-//    )
-//    add(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", idBytes( "v1" ),
-//            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
-//        ),
-//        mg.TypeNamespace,
-//        mkNs( "ns1:ns2@v1" ),
-//    )
-//    add(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", idStruct( "v1" ),
-//            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
-//        ),
-//        mg.TypeNamespace,
-//        mkNs( "ns1:ns2@v1" ),
-//    )
-//    addErr(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", "bad$ver",
-//            "parts", mg.MustList( idStruct( "ns1" ) ),
-//        ),
-//        mg.TypeNamespace,
-//        p( "version" ),
-//        "STUB",
-//    ) 
-//    addErr(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", idStruct( "v1" ),
-//            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
-//        ),
-//        mg.TypeNamespace,
-//        p( "parts" ).StartList().SetIndex( 1 ),
-//        "STUB",
-//    ) 
-//    addErr(
-//        parser.MustStruct( mg.QnameNamespace,
-//            "version", idStruct( "v1" ),
-//            "parts", mg.MustList( idStruct( "ns1" ), badIdBytes ),
-//        ),
-//        mg.TypeNamespace,
-//        p( "parts" ).StartList().SetIndex( 1 ),
-//        "STUB",
-//    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", "v1",
+            "parts", mg.MustList( "ns1", "ns2" ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idBytes( "v1" ),
+            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
+        ),
+        mg.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    addErr(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", "bad$ver",
+            "parts", mg.MustList( idStruct( "ns1" ) ),
+        ),
+        mg.TypeNamespace,
+        p( "version" ),
+        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
+    ) 
+    addErr(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
+        ),
+        mg.TypeNamespace,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
+    ) 
+    addErr(
+        parser.MustStruct( mg.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), badIdBytes ),
+        ),
+        mg.TypeNamespace,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "[offset 0]: Expected type code 0x01 but got 0x00",
+    )
 //    idPathStruct := func( parts ...interface{} ) *mg.Struct {
 //        return parser.MustStruct( mg.QnameIdentifierPath,
 //            "parts", mg.MustList( parts... ),

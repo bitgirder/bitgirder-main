@@ -19,28 +19,55 @@ func asValueError( ve mgRct.ReactorEvent, err error ) error {
     return err
 }
 
-func idUnsafe( parts ...string ) *mg.Identifier {
-    return mg.NewIdentifierUnsafe( parts )
+func setStructFunc( 
+    b *mgRct.FunctionsBuilderFactory,
+    reg *bind.Registry,
+    f func( *bind.Registry ) mgRct.FieldSetBuilder ) {
+
+    b.StructFunc = func( 
+        _ *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
+
+        return f( reg ), nil
+    }
 }
 
-func idPartsBuilder( reg *bind.Registry ) mgRct.BuilderFactory {
-    res := bind.NewFunctionsBuilderFactory()
-    res.ListFunc = func( 
-        _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
-        
-        lb := mgRct.NewFunctionsListBuilder()
-        lb.Value = make( []string, 0, 2 )
-        lb.NextFunc = func() mgRct.BuilderFactory { 
-            return bind.NewBuilderFactory( reg )
-        }
-        lb.AddFunc = func(
-            val interface{}, path objpath.PathNode ) error {
+func setListFunc(
+    b *mgRct.FunctionsBuilderFactory, 
+    valFact func() interface{},
+    addVal func( val, acc interface{} ) interface{},
+    nextFunc func() mgRct.BuilderFactory ) {
 
-            lb.Value = append( lb.Value.( []string ), val.( string ) )
+    b.ListFunc = func( _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
+        lb := mgRct.NewFunctionsListBuilder()
+        lb.Value = valFact()
+        lb.AddFunc = func( val interface{}, path objpath.PathNode ) error {
+            lb.Value = addVal( val, lb.Value )
             return nil
         }
+        lb.NextFunc = nextFunc
         return lb, nil
     }
+}
+
+func builderFactFuncForType( 
+    typ mg.TypeReference, reg *bind.Registry ) func() mgRct.BuilderFactory {
+
+    return func() mgRct.BuilderFactory {
+        if bf, ok := reg.BuilderFactoryForType( typ ); ok { return bf }
+        return nil
+    }
+}
+
+func idPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    setListFunc(
+        res,
+        func() interface{} { return make( []string, 0, 2 ) },
+        func( val, acc interface{} ) interface{} {
+            return append( acc.( []string ), val.( string ) )
+        },
+        builderFactFuncForType( mg.TypeString, reg ),
+    )
     return res
 }
 
@@ -49,7 +76,7 @@ func idBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     idBuilder.RegisterField( 
         idUnsafe( "parts" ),
         func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            return idPartsBuilder( reg ), nil
+            return idPartsBuilderFactory( reg ), nil
         },
         func( val interface{}, path objpath.PathNode ) error {
             idBuilder.Value = mg.NewIdentifierUnsafe( val.( []string ) )
@@ -79,21 +106,62 @@ func idFromString( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
 
 func newIdBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
-    res.StructFunc = func( 
-        sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
-        
-        return idBuilderForStruct( reg ), nil
-    }
+    setStructFunc( res, reg, idBuilderForStruct )
     res.ValueFunc = 
         mgRct.NewBuildValueOkFunctionSequence( idFromBytes, idFromString )
     return res
 }
 
-func initBinders() {
-    reg := bind.RegistryForDomain( bind.DomainDefault )
-    reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
+func nsPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    setListFunc(
+        res,
+        func() interface{} { return make( []*mg.Identifier, 0, 2 ) },
+        func( val, acc interface{} ) interface{} {
+            return append( acc.( []*mg.Identifier ), val.( *mg.Identifier ) )
+        },
+        builderFactFuncForType( mg.TypeIdentifier, reg ),
+    )
+    return res
+}
+
+func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
+    res := mgRct.NewFunctionsFieldSetBuilder()
+    res.Value = new( mg.Namespace )
+    res.RegisterField(
+        idUnsafe( "version" ),
+        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
+            if bf, ok := reg.BuilderFactoryForType( mg.TypeIdentifier ); ok {
+                return bf, nil
+            }
+            return nil, nil
+        },
+        func( val interface{}, path objpath.PathNode ) error {
+            res.Value.( *mg.Namespace ).Version = val.( *mg.Identifier )
+            return nil
+        },
+    )
+    res.RegisterField(
+        idUnsafe( "parts" ),
+        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
+            return nsPartsBuilderFactory( reg ), nil
+        },
+        func( val interface{}, path objpath.PathNode ) error {
+            res.Value.( *mg.Namespace ).Parts = val.( []*mg.Identifier )
+            return nil
+        },
+    )
+    return res
+}
+
+func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    setStructFunc( res, reg, nsBuilderForStruct )
+    return res
 }
 
 func init() {
-    initBinders()
+    reg := bind.RegistryForDomain( bind.DomainDefault )
+    reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
 }

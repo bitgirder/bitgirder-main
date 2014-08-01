@@ -32,7 +32,7 @@ func initCoreV1StandardError() *SchemaDefinition {
     ed := NewSchemaDefinition()
     ed.Name = asCoreV1Qn( "StandardError" )
     fd := &FieldDefinition{
-        Name: mg.NewIdentifierUnsafe( []string{ "message" } ),
+        Name: idUnsafe( "message" ),
         Type: mg.MustNullableTypeReference( mg.TypeString ),
     }
     ed.Fields.MustAdd( fd )
@@ -104,7 +104,7 @@ func initIdentifierType( idPartTyp *AliasedTypeDefinition ) {
     sd.Name = mg.QnameIdentifier
     sd.Fields.Add( 
         &FieldDefinition{
-            Name: mg.NewIdentifierUnsafe( []string{ "parts" } ),
+            Name: idUnsafe( "parts" ),
             Type: &mg.ListTypeReference{
                 ElementType: idPartTyp.AliasedType,
                 AllowsEmpty: false,
@@ -118,9 +118,31 @@ func initIdentifierType( idPartTyp *AliasedTypeDefinition ) {
     v1Types.MustAdd( sd )
 }
 
+func initNamespaceType() {
+    sd := NewStructDefinition()
+    sd.Name = mg.QnameNamespace
+    idPtr := mg.NewPointerTypeReference( mg.TypeIdentifier )
+    sd.Fields.Add(
+        &FieldDefinition{
+            Name: idUnsafe( "version" ),
+            Type: idPtr,
+        },
+    )
+    sd.Fields.Add(
+        &FieldDefinition{
+            Name: idUnsafe( "parts" ),
+            Type: &mg.ListTypeReference{
+                ElementType: idPtr,
+                AllowsEmpty: false,
+            },
+        },
+    )
+    v1Types.MustAdd( sd )
+}
 func initLangV1Types() {
     idPartType := initIdentifierPartType()
     initIdentifierType( idPartType )
+    initNamespaceType()
 }
 
 func init() {
