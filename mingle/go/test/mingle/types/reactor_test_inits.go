@@ -1401,7 +1401,10 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
     idBytes := func( s string ) []byte {
         return mg.IdentifierAsBytes( mkId( s ) )
     }
-    badIdBytes := []byte{ 0, 0, 0, 0, 0, 0 }
+    nsBytes := func( s string ) []byte {
+        return mg.NamespaceAsBytes( mkNs( s ) )
+    }
+    badBytes := []byte{ 0, 0, 0, 0, 0, 0 }
     p := func( rootId string ) objpath.PathNode {
         return objpath.RootedAt( mkId( rootId ) )
     }
@@ -1445,7 +1448,7 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         "[<input>, line 1, col 3]: Invalid id rune: \"$\" (U+0024)",
     )
     addErr( 
-        badIdBytes,
+        badBytes,
         mg.TypeIdentifier,
         nil,
         "[offset 0]: Expected type code 0x01 but got 0x00",
@@ -1496,6 +1499,8 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         mg.TypeNamespace,
         mkNs( "ns1:ns2@v1" ),
     )
+    add( "ns1@v1", mg.TypeNamespace, mkNs( "ns1@v1" ) )
+    add( nsBytes( "ns1@v1" ), mg.TypeNamespace, mkNs( "ns1@v1" ) )
     addErr(
         parser.MustStruct( mg.QnameNamespace,
             "version", "bad$ver",
@@ -1517,11 +1522,23 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
     addErr(
         parser.MustStruct( mg.QnameNamespace,
             "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), badIdBytes ),
+            "parts", mg.MustList( idStruct( "ns1" ), badBytes ),
         ),
         mg.TypeNamespace,
         p( "parts" ).StartList().SetIndex( 1 ),
         "[offset 0]: Expected type code 0x01 but got 0x00",
+    )
+    addErr(
+        badBytes,
+        mg.TypeNamespace,
+        nil,
+        "[offset 0]: Expected type code 0x02 but got 0x00",
+    )
+    addErr(
+        "Bad@Bad",
+        mg.TypeNamespace,
+        nil,
+        "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
     )
 //    idPathStruct := func( parts ...interface{} ) *mg.Struct {
 //        return parser.MustStruct( mg.QnameIdentifierPath,
@@ -1587,7 +1604,7 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
 //        "STUB",
 //    )
 //    addErr(
-//        idPathStruct( badIdBytes ),
+//        idPathStruct( badBytes ),
 //        mg.TypeIdentifierPath,
 //        p( "parts" ).StartList(),
 //        "STUB",

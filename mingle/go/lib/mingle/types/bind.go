@@ -38,7 +38,7 @@ func setListFunc(
     nextFunc func() mgRct.BuilderFactory ) {
 
     b.ListFunc = func( _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
-        lb := mgRct.NewFunctionsListBuilder()
+        lb := bind.NewFunctionsListBuilder()
         lb.Value = valFact()
         lb.AddFunc = func( val interface{}, path objpath.PathNode ) error {
             lb.Value = addVal( val, lb.Value )
@@ -72,7 +72,7 @@ func idPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 }
 
 func idBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
-    idBuilder := mgRct.NewFunctionsFieldSetBuilder()
+    idBuilder := bind.NewFunctionsFieldSetBuilder()
     idBuilder.RegisterField( 
         idUnsafe( "parts" ),
         func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
@@ -126,7 +126,7 @@ func nsPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 }
 
 func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
-    res := mgRct.NewFunctionsFieldSetBuilder()
+    res := bind.NewFunctionsFieldSetBuilder()
     res.Value = new( mg.Namespace )
     res.RegisterField(
         idUnsafe( "version" ),
@@ -154,9 +154,34 @@ func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     return res
 }
 
+func nsFromBytes( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+    if b, ok := ve.Val.( mg.Buffer ); ok {
+        res, err := mg.NamespaceFromBytes( []byte( b ) )
+        if err != nil { err = asValueError( ve, err ) }
+        return res, err, true
+    }
+    return nil, nil, false
+}
+
+func nsFromString( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+    if s, ok := ve.Val.( mg.String ); ok {
+        res, err := parser.ParseNamespace( string( s ) )
+        if err != nil { err = asValueError( ve, err ) }
+        return res, err, true
+    }
+    return nil, nil, false
+}
+
 func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
     setStructFunc( res, reg, nsBuilderForStruct )
+    res.ValueFunc = 
+        mgRct.NewBuildValueOkFunctionSequence( nsFromBytes, nsFromString )
+    return res
+}
+
+func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
     return res
 }
 
@@ -164,4 +189,5 @@ func init() {
     reg := bind.RegistryForDomain( bind.DomainDefault )
     reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
 }

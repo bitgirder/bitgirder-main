@@ -216,3 +216,8 @@ func NewBuildReactor( bf mgRct.BuilderFactory ) *mgRct.BuildReactor {
     res.ErrorFactory = bindErrorFactory
     return res
 }
+
+var (
+    NewFunctionsListBuilder = mgRct.NewFunctionsListBuilder
+    NewFunctionsFieldSetBuilder = mgRct.NewFunctionsFieldSetBuilder
+)

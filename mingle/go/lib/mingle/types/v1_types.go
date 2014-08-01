@@ -137,12 +137,37 @@ func initNamespaceType() {
             },
         },
     )
+    sd.Constructors = append( sd.Constructors,
+        &ConstructorDefinition{ mg.TypeString },
+        &ConstructorDefinition{ mg.TypeBuffer },
+    )
     v1Types.MustAdd( sd )
 }
+
+func initIdentifierPathType() {
+    sd := NewStructDefinition()
+    sd.Name = mg.QnameIdentifierPath
+    sd.Fields.Add(
+        &FieldDefinition{
+            Name: idUnsafe( "parts" ),
+            Type: &mg.ListTypeReference{
+                ElementType: mg.TypeValue,
+                AllowsEmpty: false,
+            },
+        },
+    )
+    sd.Constructors = append( sd.Constructors,
+        &ConstructorDefinition{ mg.TypeString },
+        &ConstructorDefinition{ mg.TypeBuffer },
+    )
+    v1Types.MustAdd( sd )
+}
+
 func initLangV1Types() {
     idPartType := initIdentifierPartType()
     initIdentifierType( idPartType )
     initNamespaceType()
+    initIdentifierPathType()
 }
 
 func init() {
