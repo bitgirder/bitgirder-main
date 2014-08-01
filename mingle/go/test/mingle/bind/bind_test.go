@@ -6,6 +6,7 @@ import (
     "bitgirder/objpath"
     mg "mingle"
     mgRct "mingle/reactor"
+    "fmt"
 )
 
 // one-time guard for ensureTestBuilderFactories()
@@ -91,16 +92,24 @@ func TestRegistryAccessors( t *testing.T ) {
     a := assert.NewPathAsserter( t )
     reg := NewRegistry()
     chkGetType := func( 
-        typ mg.TypeReference, expctOk bool, bf mgRct.BuilderFactory ) {
+        key interface{}, expctOk bool, bf mgRct.BuilderFactory ) {
 
-        act, ok := reg.BuilderFactoryForType( typ )
-        ta := a.Descend( typ.ExternalForm() )
+        ta := a.Descend( fmt.Sprint( a ) )
+        var act mgRct.BuilderFactory
+        var ok bool
+        switch v := key.( type ) {
+        case mg.TypeReference: act, ok = reg.BuilderFactoryForType( v )
+        case *mg.QualifiedTypeName: act, ok = reg.BuilderFactoryForName( v )
+        default: a.Fatalf( "unhandled key: %T", key )
+        }
         ta.Descend( "ok" ).Equal( expctOk, ok )
         if ok { ta.Descend( "bf" ).Equal( bf, act ) }
     }
     strBld := mgRct.NewFunctionsBuilderFactory()
     reg.MustAddValue( mg.QnameString, strBld )
     chkGetType( mg.TypeString, true, strBld )
+    chkGetType( mg.QnameString, true, strBld )
     chkGetType( asType( `String~"a"` ), true, strBld )
     chkGetType( mg.TypeInt32, false, nil )
+    chkGetType( mg.QnameInt32, false, nil )
 }

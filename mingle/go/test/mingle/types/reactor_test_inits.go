@@ -6,6 +6,7 @@ import (
     mgRct "mingle/reactor"
     "bitgirder/objpath"
     "encoding/base64"
+    "mingle/bind"
     "fmt"
 )
 
@@ -1423,15 +1424,23 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
             },
         )
     }
-    addErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
+    addErr := func( in, typ interface{}, err error ) {
         rti.addTests(
             &BuiltinTypeTest{
                 In: mg.MustValue( in ),
                 Type: asType( typ ),
-                Err: newVcErr( path, msg ),
+                Err: err,
                 Map: dm,
             },
         )
+    }
+    addVcErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
+        addErr( in, typ, newVcErr( path, msg ) )
+    }
+    addBindErr := func( 
+        in, typ interface{}, path objpath.PathNode, msg string ) {
+
+        addErr( in, typ, bind.NewBindError( path, msg ) )
     }
     add( idStruct( "id1" ), mg.TypeIdentifier, mkId( "id1" ) )
     add( idStruct( "id1", "id2" ), mg.TypeIdentifier, mkId( "id1-id2" ) )
@@ -1441,19 +1450,19 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         mg.TypeIdentifier,
         mkId( "id1" ),
     )
-    addErr( 
+    addVcErr( 
         "id$Bad", 
         mg.TypeIdentifier, 
         nil, 
         "[<input>, line 1, col 3]: Invalid id rune: \"$\" (U+0024)",
     )
-    addErr( 
+    addVcErr( 
         badBytes,
         mg.TypeIdentifier,
         nil,
         "[offset 0]: Expected type code 0x01 but got 0x00",
     )
-    addErr(
+    addVcErr(
         idStruct( "part1", "BadPart" ),
         mg.TypeIdentifier,
         p( "parts" ).StartList().SetIndex( 1 ),
@@ -1501,7 +1510,7 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
     )
     add( "ns1@v1", mg.TypeNamespace, mkNs( "ns1@v1" ) )
     add( nsBytes( "ns1@v1" ), mg.TypeNamespace, mkNs( "ns1@v1" ) )
-    addErr(
+    addVcErr(
         parser.MustStruct( mg.QnameNamespace,
             "version", "bad$ver",
             "parts", mg.MustList( idStruct( "ns1" ) ),
@@ -1510,7 +1519,7 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "version" ),
         "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
     ) 
-    addErr(
+    addVcErr(
         parser.MustStruct( mg.QnameNamespace,
             "version", idStruct( "v1" ),
             "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
@@ -1519,7 +1528,7 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ).StartList().SetIndex( 1 ),
         "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
     ) 
-    addErr(
+    addVcErr(
         parser.MustStruct( mg.QnameNamespace,
             "version", idStruct( "v1" ),
             "parts", mg.MustList( idStruct( "ns1" ), badBytes ),
@@ -1528,111 +1537,117 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ).StartList().SetIndex( 1 ),
         "[offset 0]: Expected type code 0x01 but got 0x00",
     )
-    addErr(
+    addVcErr(
         badBytes,
         mg.TypeNamespace,
         nil,
         "[offset 0]: Expected type code 0x02 but got 0x00",
     )
-    addErr(
+    addVcErr(
         "Bad@Bad",
         mg.TypeNamespace,
         nil,
         "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
     )
-//    idPathStruct := func( parts ...interface{} ) *mg.Struct {
-//        return parser.MustStruct( mg.QnameIdentifierPath,
-//            "parts", mg.MustList( parts... ),
-//        )
-//    }
-//    add(
-//        idPathStruct(
-//            idStruct( "p1" ),
-//            idStruct( "p2" ),
-//            int32( 1 ),
-//            idStruct( "p3" ),
-//        ),
-//        mg.TypeIdentifierPath,
-//        p( "p1" ).
-//            Descend( mkId( "p2" ) ).
-//            StartList().SetIndex( 1 ).
-//            Descend( mkId( "p3" ) ),
-//    )
-//    add(
-//        idPathStruct(
-//            idStruct( "p1" ),
-//            "p2",
-//            int32( 1 ),
-//            uint32( 2 ),
-//            int64( 3 ),
-//            uint64( 4 ),
-//            idBytes( "p3" ),
-//        ),
-//        mg.TypeIdentifierPath,
-//        p( "p1" ).
-//            Descend( mkId( "p2" ) ).
-//            StartList().SetIndex( 1 ).
-//            StartList().SetIndex( 2 ).
-//            StartList().SetIndex( 3 ).
-//            StartList().SetIndex( 4 ).
-//            Descend( mkId( "p3" ) ),
-//    )
-//    add(
-//        "p1.p2.3.p4",
-//        mg.TypeIdentifierPath,
-//        p( "p1" ).
-//            Descend( mkId( "p2" ) ).
-//            StartList().SetIndex( 3 ).
-//            Descend( mkId( "p4" ) ),
-//    )
-//    addErr(
-//        "p1.bad$Id",
-//        mg.TypeIdentifierPath,
-//        nil,
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( true ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( "bad$Id" ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( badBytes ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( float32( 1 ) ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( float64( 1 ) ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( int32( -1 ) ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
-//    addErr(
-//        idPathStruct( int64( -1 ) ),
-//        mg.TypeIdentifierPath,
-//        p( "parts" ).StartList(),
-//        "STUB",
-//    )
+    idPathStruct := func( parts ...interface{} ) *mg.Struct {
+        return parser.MustStruct( mg.QnameIdentifierPath,
+            "parts", mg.MustList( parts... ),
+        )
+    }
+    add(
+        idPathStruct(
+            idStruct( "p1" ),
+            idStruct( "p2" ),
+            int32( 1 ),
+            idStruct( "p3" ),
+        ),
+        mg.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 1 ).
+            Descend( mkId( "p3" ) ),
+    )
+    add(
+        idPathStruct(
+            idStruct( "p1" ),
+            "p2",
+            int32( 1 ),
+            uint32( 2 ),
+            int64( 3 ),
+            uint64( 4 ),
+            idBytes( "p3" ),
+        ),
+        mg.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 1 ).
+            StartList().SetIndex( 2 ).
+            StartList().SetIndex( 3 ).
+            StartList().SetIndex( 4 ).
+            Descend( mkId( "p3" ) ),
+    )
+    add(
+        "p1.p2[ 3 ].p4",
+        mg.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 3 ).
+            Descend( mkId( "p4" ) ),
+    )
+    addVcErr(
+        "p1.bad$Id",
+        mg.TypeIdentifierPath,
+        nil,
+        "[<input>, line 1, col 7]: Invalid id rune: \"$\" (U+0024)",
+    )
+    addVcErr( 
+        idPathStruct(), 
+        mg.TypeIdentifierPath,
+        p( "parts" ),
+        "empty list",
+    )
+    addBindErr(
+        idPathStruct( true ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "unhandled value: mingle:core@v1/Boolean",
+    )
+    addVcErr(
+        idPathStruct( "bad$Id" ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
+    )
+    addVcErr(
+        idPathStruct( badBytes ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "[offset 0]: Expected type code 0x01 but got 0x00",
+    )
+    addBindErr(
+        idPathStruct( float32( 1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "unhandled value: mingle:core@v1/Float32",
+    )
+    addBindErr(
+        idPathStruct( float64( 1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "unhandled value: mingle:core@v1/Float64",
+    )
+    addVcErr(
+        idPathStruct( int32( -1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "value is negative",
+    )
+    addVcErr(
+        idPathStruct( int64( -1 ) ),
+        mg.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "value is negative",
+    )
 }
 
 func ( rti *rtInit ) call() {

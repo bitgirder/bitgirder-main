@@ -42,13 +42,20 @@ func NewRegistry() *Registry {
     return &Registry{ m: mg.NewQnameMap() }
 }
 
+func ( reg *Registry ) BuilderFactoryForName( 
+    nm *mg.QualifiedTypeName ) ( mgRct.BuilderFactory, bool ) {
+        
+    if v, ok := reg.m.GetOk( nm ); ok { 
+        return v.( mgRct.BuilderFactory ), true
+    }
+    return nil, false
+}
+
 func ( reg *Registry ) BuilderFactoryForType( 
     typ mg.TypeReference ) ( mgRct.BuilderFactory, bool ) {
 
     if at, ok := typ.( *mg.AtomicTypeReference ); ok {
-        if v, ok := reg.m.GetOk( at.Name ); ok { 
-            return v.( mgRct.BuilderFactory ), true
-        }
+        return reg.BuilderFactoryForName( at.Name )
     }
     return nil, false
 }

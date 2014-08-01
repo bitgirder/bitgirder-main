@@ -6,6 +6,7 @@ import (
     "mingle/bind"
     mg "mingle"
     "bitgirder/objpath"
+//    "log"
 )
 
 // if err is something that should be sent to caller as a value error, a value
@@ -180,8 +181,101 @@ func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func idPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+    negErr := func() error {
+        return mg.NewValueCastError( ve.GetPath(), "value is negative" )
+    }
+    switch v := ve.Val.( type ) {
+    case mg.Int32:
+        if int32( v ) < 0 { return nil, negErr(), true }
+        return uint64( int32( v ) ), nil, true
+    case mg.Int64:
+        if int64( v ) < 0 { return nil, negErr(), true }
+        return uint64( int64( v ) ), nil, true
+    case mg.Uint32: return uint64( uint32( v ) ), nil, true
+    case mg.Uint64: return uint64( v ), nil, true
+    }
+    return nil, nil, false
+}
+
+func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    res.StructFunc = func( 
+        sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
+
+        if qn := sse.Type; qn.Equals( mg.QnameIdentifier ) {
+            if bf, ok := reg.BuilderFactoryForName( qn ); ok {
+                return bf.StartStruct( sse )
+            }
+        }
+        return nil, nil
+    }
+    res.ValueFunc = mgRct.NewBuildValueOkFunctionSequence(
+        idFromBytes, idFromString, idPartFromValue )
+    return res
+}
+
+func idPathPartsBuilder( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    setListFunc( 
+        res,
+        func() interface{} { return make( []interface{}, 0, 4 ) },
+        func( val, acc interface{} ) interface{} {
+            return append( acc.( []interface{} ), val )
+        },
+        func() mgRct.BuilderFactory { return idPathPartBuilderFactory( reg ) },
+    )
+    return res
+}
+
+func buildIdPath( parts []interface{} ) objpath.PathNode {
+    var res objpath.PathNode
+    for _, part := range parts {
+        switch v := part.( type ) {
+        case uint64:
+            if res == nil { 
+                res = objpath.RootedAtList().SetIndex( v )
+            } else {
+                res = res.StartList().SetIndex( v )
+            }
+        case *mg.Identifier:
+            if res == nil {
+                res = objpath.RootedAt( v )
+            } else {
+                res = res.Descend( v )
+            }
+        default: panic( libErrorf( "unhandled id path part: %T", part ) )
+        }
+    }
+    return res
+}
+
+func idPathFromString( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+    if s, ok := ve.Val.( mg.String ); ok {
+        res, err := parser.ParseIdentifierPath( string( s ) )
+        if err != nil { err = asValueError( ve, err ) }
+        return res, err, true
+    }
+    return nil, nil, false
+}
+
 func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
+    setStructFunc( res, reg, func( reg *bind.Registry ) mgRct.FieldSetBuilder {
+        res := bind.NewFunctionsFieldSetBuilder()
+        res.RegisterField(
+            idUnsafe( "parts" ),
+            func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
+                return idPathPartsBuilder( reg ), nil
+            },
+            func( val interface{}, path objpath.PathNode ) error {
+                res.Value = buildIdPath( val.( []interface{} ) )
+                return nil
+            },
+        )
+        return res
+    })
+    res.ValueFunc = idPathFromString
     return res
 }
 
