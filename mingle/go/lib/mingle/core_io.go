@@ -4,7 +4,6 @@ import (
     "fmt"
     "bytes"
     "io"
-    "bitgirder/objpath"
     "time"
 //    "log"
     bgio "bitgirder/io"
@@ -40,8 +39,6 @@ const (
     IoTypeCodeStruct = IoTypeCode( uint8( 0x18 ) )
     IoTypeCodeList = IoTypeCode( uint8( 0x19 ) )
     IoTypeCodeEnd = IoTypeCode( uint8( 0x1a ) )
-    IoTypeCodeIdPath = IoTypeCode( uint8( 0x1b ) )
-    IoTypeCodeIdPathListNode = IoTypeCode( uint8( 0x1c ) )
 )
 
 type BinIoError struct { msg string }
@@ -93,28 +90,6 @@ func ( w *BinWriter ) WriteIdentifiers( ids []*Identifier ) ( err error ) {
         if err = w.WriteIdentifier( id ); err != nil { return }
     }
     return
-}
-
-type pathWriter struct { w *BinWriter }
-
-// Write the IoTypeCodeId even though WriteIdentifier does so that id path reads
-// can unconditionally read a type code as they go
-func ( pw pathWriter ) Descend( elt interface{} ) ( err error ) {
-    if err = pw.w.WriteTypeCode( IoTypeCodeId ); err != nil { return }
-    return pw.w.WriteIdentifier( elt.( *Identifier ) )
-}
-
-func ( pw pathWriter ) List( idx uint64 ) ( err error ) {
-    if err = pw.w.WriteTypeCode( IoTypeCodeIdPathListNode ); err != nil { 
-        return 
-    }
-    return pw.w.WriteUint64( idx )
-}
-
-func ( w *BinWriter ) WriteIdPath( p objpath.PathNode ) ( err error ) {
-    if err = w.WriteTypeCode( IoTypeCodeIdPath ); err != nil { return }
-    if err = objpath.Visit( p, pathWriter{ w } ); err != nil { return }
-    return w.WriteTypeCode( IoTypeCodeEnd )
 }
 
 func ( w *BinWriter ) WriteNamespace( ns *Namespace ) ( err error ) {
@@ -273,12 +248,6 @@ func TypeReferenceAsBytes( typ TypeReference ) []byte {
     })
 }
 
-func IdPathAsBytes( p objpath.PathNode ) []byte {
-    return writeAsBytes( func( w *BinWriter ) error {
-        return w.WriteIdPath( p )
-    })
-}
-
 func IdentifierAsBytes( id *Identifier ) []byte {
     return writeAsBytes( func( w *BinWriter ) error {
         return w.WriteIdentifier( id )
@@ -395,39 +364,6 @@ func ( r *BinReader ) ReadIdentifiers() ( ids []*Identifier, err error ) {
     ids = make( []*Identifier, sz )
     for i := uint8( 0 ); i < sz; i++ {
         if ids[ i ], err = r.ReadIdentifier(); err != nil { return }
-    }
-    return
-}
-
-func ( r *BinReader ) readIdPathNext( 
-    p objpath.PathNode ) ( objpath.PathNode, bool, error ) {
-    tc, err := r.ReadTypeCode()
-    if err != nil { return nil, false, err }
-    switch tc {
-    case IoTypeCodeId:
-        if id, err := r.ReadIdentifier(); err == nil { 
-            if p == nil { 
-                return objpath.RootedAt( id ), false, nil
-            } else { return p.Descend( id ), false, nil }
-        } else { return nil, false, err }
-    case IoTypeCodeIdPathListNode:
-        if i, err := r.ReadUint64(); err == nil {
-            var l *objpath.ListNode
-            if p == nil { 
-                l = objpath.RootedAtList() 
-            } else { l = p.StartList() }
-            l.SetIndex( i )
-            return l, false, nil
-        } else { return nil, false, err }
-    case IoTypeCodeEnd: return p, true, nil
-    }
-    return nil, false, r.IoErrorf( "Unrecognized id path code: 0x%02x", tc )
-}
-
-func ( r *BinReader ) ReadIdPath() ( p objpath.PathNode, err error ) {
-    if _, err = r.ExpectTypeCode( IoTypeCodeIdPath ); err != nil { return }
-    for done := false; ! done; {
-        if p, done, err = r.readIdPathNext( p ); err != nil { return }
     }
     return
 }
@@ -624,10 +560,6 @@ func ( r *BinReader ) ReadTypeReference() ( typ TypeReference, err error ) {
 
 func TypeReferenceFromBytes( buf []byte ) ( TypeReference, error ) {
     return NewReaderBytes( buf ).ReadTypeReference()
-}
-
-func IdPathFromBytes( buf []byte ) ( objpath.PathNode, error ) {
-    return NewReaderBytes( buf ).ReadIdPath()
 }
 
 func IdentifierFromBytes( buf []byte ) ( *Identifier, error ) {

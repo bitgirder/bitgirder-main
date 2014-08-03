@@ -4,6 +4,36 @@ import (
     mg "mingle"
 )
 
+var (
+    LangNsV1 *mg.Namespace
+    QnameIdentifier *mg.QualifiedTypeName
+    TypeIdentifier *mg.AtomicTypeReference
+    QnameNamespace *mg.QualifiedTypeName
+    TypeNamespace *mg.AtomicTypeReference
+    QnameIdentifierPath *mg.QualifiedTypeName
+    TypeIdentifierPath *mg.AtomicTypeReference
+)
+
+func mkLangPair( 
+    nm string ) ( *mg.QualifiedTypeName, *mg.AtomicTypeReference ) {
+
+    qn := &mg.QualifiedTypeName{
+        Namespace: LangNsV1,
+        Name: mg.NewDeclaredTypeNameUnsafe( nm ),
+    }
+    return qn, qn.AsAtomicType()
+}
+
+func initNames() {
+    LangNsV1 = &mg.Namespace{
+        Parts: []*mg.Identifier{ idUnsafe( "mingle" ), idUnsafe( "lang" ) },
+        Version: idUnsafe( "v1" ),
+    }
+    QnameIdentifier, TypeIdentifier = mkLangPair( "Identifier" )
+    QnameNamespace, TypeNamespace = mkLangPair( "Namespace" )
+    QnameIdentifierPath, TypeIdentifierPath = mkLangPair( "IdentifierPath" )
+}
+
 var v1Types *DefinitionMap
 
 func V1Types() *DefinitionMap {
@@ -84,7 +114,7 @@ func initCoreV1Exceptions() {
 }
 
 func langV1Qname( nm string ) *mg.QualifiedTypeName {
-    return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( mg.LangNsV1 )
+    return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( LangNsV1 )
 }
 
 func initIdentifierPartType() *AliasedTypeDefinition {
@@ -101,7 +131,7 @@ func initIdentifierPartType() *AliasedTypeDefinition {
 
 func initIdentifierType( idPartTyp *AliasedTypeDefinition ) {
     sd := NewStructDefinition()
-    sd.Name = mg.QnameIdentifier
+    sd.Name = QnameIdentifier
     sd.Fields.Add( 
         &FieldDefinition{
             Name: idUnsafe( "parts" ),
@@ -120,8 +150,8 @@ func initIdentifierType( idPartTyp *AliasedTypeDefinition ) {
 
 func initNamespaceType() {
     sd := NewStructDefinition()
-    sd.Name = mg.QnameNamespace
-    idPtr := mg.NewPointerTypeReference( mg.TypeIdentifier )
+    sd.Name = QnameNamespace
+    idPtr := mg.NewPointerTypeReference( TypeIdentifier )
     sd.Fields.Add(
         &FieldDefinition{
             Name: idUnsafe( "version" ),
@@ -146,7 +176,7 @@ func initNamespaceType() {
 
 func initIdentifierPathType() {
     sd := NewStructDefinition()
-    sd.Name = mg.QnameIdentifierPath
+    sd.Name = QnameIdentifierPath
     sd.Fields.Add(
         &FieldDefinition{
             Name: idUnsafe( "parts" ),
@@ -170,7 +200,7 @@ func initLangV1Types() {
     initIdentifierPathType()
 }
 
-func init() {
+func initV1Types() {
     v1Types = NewDefinitionMap()
     initCoreV1Prims()
     initCoreV1ValueTypes()

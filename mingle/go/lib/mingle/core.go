@@ -1070,12 +1070,6 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
-    QnameIdentifier *QualifiedTypeName
-    TypeIdentifier *AtomicTypeReference
-    QnameNamespace *QualifiedTypeName
-    TypeNamespace *AtomicTypeReference
-    QnameIdentifierPath *QualifiedTypeName
-    TypeIdentifierPath *AtomicTypeReference
     QnameRequest *QualifiedTypeName
     TypeRequest *AtomicTypeReference
     QnameResponse *QualifiedTypeName
@@ -1099,15 +1093,6 @@ var PrimitiveTypes []*AtomicTypeReference
 var NumericTypeNames []*QualifiedTypeName
 
 var CoreNsV1 *Namespace
-var LangNsV1 *Namespace
-
-func mkInitPair( 
-    nm string, ns *Namespace ) ( *QualifiedTypeName, *AtomicTypeReference ) {
-
-    dn := NewDeclaredTypeNameUnsafe( nm )
-    qn := &QualifiedTypeName{ Namespace: ns, Name: dn }
-    return qn, &AtomicTypeReference{ Name: qn }
-}
 
 func init() {
     id := func( s string ) *Identifier {
@@ -1115,10 +1100,6 @@ func init() {
     }
     CoreNsV1 = &Namespace{
         Parts: []*Identifier{ id( "mingle" ), id( "core" ) },
-        Version: id( "v1" ),
-    }
-    LangNsV1 = &Namespace{
-        Parts: []*Identifier{ id( "mingle" ), id( "lang" ) },
         Version: id( "v1" ),
     }
     makeQn := func( s string ) *QualifiedTypeName {
@@ -1167,10 +1148,6 @@ func init() {
         QnameFloat32,
         QnameFloat64,
     }
-    QnameIdentifier, TypeIdentifier = mkInitPair( "Identifier", LangNsV1 )
-    QnameNamespace, TypeNamespace = mkInitPair( "Namespace", LangNsV1 )
-    QnameIdentifierPath, TypeIdentifierPath = 
-        mkInitPair( "IdentifierPath", LangNsV1 )
     QnameRequest, TypeRequest = f1( "Request" )
     QnameResponse, TypeResponse = f1( "Response" )
     IdNamespace = id( "namespace" )

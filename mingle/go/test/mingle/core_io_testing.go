@@ -2,7 +2,6 @@ package mingle
 
 import (
     "bytes"
-    "bitgirder/objpath"
     "strings"
     "fmt"
     "math"
@@ -102,18 +101,6 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "list-scalars", MustList( int32( 1 ), "hello" ) )
     b.setVal( "list-nested",
         MustList( int32( 1 ), MustList(), MustList( "hello" ), NullVal ) )
-}
-
-func ( b *binIoRoundtripTestBuilder ) addPathTests() {
-    setPath := func( nm string, p objpath.PathNode ) objpath.PathNode {
-        return b.setVal( nm, p ).( objpath.PathNode )
-    }
-    id := func( i int ) *Identifier { return mkId( fmt.Sprintf( "id%d", i ) ) }
-    p1 := setPath( "p1", objpath.RootedAt( id( 1 ) ) )
-    p2 := setPath( "p2", p1.Descend( id( 2 ) ) )
-    p3 := setPath( "p3", p2.StartList().Next().Next() )
-    setPath( "p4", p3.Descend( id( 3 ) ) )
-    setPath( "p5", objpath.RootedAtList().Descend( id( 1 ) ) )
 }
 
 func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
@@ -229,7 +216,6 @@ func addBinIoRoundtripTests( tests []interface{} ) []interface{} {
     b.nmCheck = map[ string ]interface{}{}
     b.tests = []interface{}{}
     b.addValueTests()
-    b.addPathTests()
     b.addDefinitionTests()
     return b.tests
 }

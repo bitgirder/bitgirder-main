@@ -3,7 +3,6 @@ package mingle
 import (
     "testing"
     "bitgirder/assert"
-    "bitgirder/objpath"
     "bytes"
 )
 
@@ -11,7 +10,6 @@ func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
     switch v := val.( type ) {
     case Value: return w.WriteScalarValue( v )
     case *Identifier: return w.WriteIdentifier( v )
-    case objpath.PathNode: return w.WriteIdPath( v )
     case *Namespace: return w.WriteNamespace( v )
     case TypeName: return w.WriteTypeName( v )
     case TypeReference: return w.WriteTypeReference( v )
@@ -39,10 +37,6 @@ func assertBinIoRoundtripRead(
     case *Identifier:
         if id, err := rd.ReadIdentifier(); err == nil { 
             a.True( v.Equals( id ) )
-        } else { a.Fatal( err ) }
-    case objpath.PathNode:
-        if n, err := rd.ReadIdPath(); err == nil {
-            a.Equal( v, n ) 
         } else { a.Fatal( err ) }
     case *Namespace:
         if ns, err := rd.ReadNamespace(); err == nil {
@@ -75,8 +69,7 @@ func TestCoreIo( t *testing.T ) {
             switch v := rt.Val.( type ) {
             case *Null, Boolean, Buffer, String, *Enum, Int32, Uint32, Int64,
                  Uint64, Float32, Float64, Timestamp, *Identifier, *Namespace,
-                 *QualifiedTypeName, TypeReference, *DeclaredTypeName, 
-                 objpath.PathNode:
+                 *QualifiedTypeName, TypeReference, *DeclaredTypeName:
                 assertBinIoRoundtrip( v, a.Descend( rt.Name ) )
             case *SymbolMap, *List, *Struct: ; // okay but skip
             default: a.Fatalf( "unhandled rt val: %T", rt.Val )
@@ -97,11 +90,6 @@ func TestAsAndFromBytes( t *testing.T ) {
     }
     typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
     if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }
-    p := idPathRootVal.Descend( mkId( "id1" ) )
-    p2, err := IdPathFromBytes( IdPathAsBytes( p ) )
-    if err == nil { 
-        a.Equal( FormatIdPath( p ), FormatIdPath( p2 ) ) 
-    } else { a.Fatal( err ) }
     id := mkId( "id1" )
     id2, err := IdentifierFromBytes( IdentifierAsBytes( id ) )
     if err == nil { a.True( id.Equals( id2 ) ) } else { a.Fatal( err ) }

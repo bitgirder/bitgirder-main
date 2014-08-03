@@ -121,7 +121,7 @@ func nsPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         func( val, acc interface{} ) interface{} {
             return append( acc.( []*mg.Identifier ), val.( *mg.Identifier ) )
         },
-        builderFactFuncForType( mg.TypeIdentifier, reg ),
+        builderFactFuncForType( TypeIdentifier, reg ),
     )
     return res
 }
@@ -132,7 +132,7 @@ func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     res.RegisterField(
         idUnsafe( "version" ),
         func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            if bf, ok := reg.BuilderFactoryForType( mg.TypeIdentifier ); ok {
+            if bf, ok := reg.BuilderFactoryForType( TypeIdentifier ); ok {
                 return bf, nil
             }
             return nil, nil
@@ -203,7 +203,7 @@ func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res.StructFunc = func( 
         sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
 
-        if qn := sse.Type; qn.Equals( mg.QnameIdentifier ) {
+        if qn := sse.Type; qn.Equals( QnameIdentifier ) {
             if bf, ok := reg.BuilderFactoryForName( qn ); ok {
                 return bf.StartStruct( sse )
             }
@@ -279,9 +279,9 @@ func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
-func init() {
+func initBind() {
     reg := bind.RegistryForDomain( bind.DomainDefault )
-    reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
-    reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
-    reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
+    reg.MustAddValue( QnameIdentifier, newIdBuilderFactory( reg ) )
+    reg.MustAddValue( QnameNamespace, newNsBuilderFactory( reg ) )
+    reg.MustAddValue( QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
 }
