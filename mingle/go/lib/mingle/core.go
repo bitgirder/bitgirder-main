@@ -1070,22 +1070,10 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
-    QnameRequest *QualifiedTypeName
-    TypeRequest *AtomicTypeReference
-    QnameResponse *QualifiedTypeName
-    TypeResponse *AtomicTypeReference
     QnameValue *QualifiedTypeName
     TypeValue *AtomicTypeReference
     TypeNullableValue *NullableTypeReference
     TypeOpaqueList *ListTypeReference
-    IdNamespace *Identifier
-    IdService *Identifier
-    IdOperation *Identifier
-    IdParameters *Identifier
-    IdAuthentication *Identifier
-    IdResult *Identifier
-    IdError *Identifier
-    IdBuffer *Identifier
 )
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
@@ -1102,12 +1090,9 @@ func init() {
         Parts: []*Identifier{ id( "mingle" ), id( "core" ) },
         Version: id( "v1" ),
     }
-    makeQn := func( s string ) *QualifiedTypeName {
-        return &QualifiedTypeName{ CoreNsV1, &DeclaredTypeName{ s } }
-    }
     coreQnameResolver = make( map[ string ]*QualifiedTypeName )
     f1 := func( s string ) ( *QualifiedTypeName, *AtomicTypeReference ) {
-        qn := makeQn( s )
+        qn := &QualifiedTypeName{ CoreNsV1, &DeclaredTypeName{ s } }
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
         return qn, &AtomicTypeReference{ Name: qn }
     }
@@ -1148,16 +1133,6 @@ func init() {
         QnameFloat32,
         QnameFloat64,
     }
-    QnameRequest, TypeRequest = f1( "Request" )
-    QnameResponse, TypeResponse = f1( "Response" )
-    IdNamespace = id( "namespace" )
-    IdService = id( "service" )
-    IdOperation = id( "operation" )
-    IdParameters = id( "parameters" )
-    IdAuthentication = id( "authentication" )
-    IdResult = id( "result" )
-    IdError =id( "error" )
-    IdBuffer = id( "buffer" )
 }
 
 func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {

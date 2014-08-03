@@ -5,6 +5,8 @@ import (
     "log"
 )
 
+var idAuthentication = idUnsafe( "authentication" )
+
 // returns the *PrototypeDefinition matching secQn, but does not check that it
 // is otherwise valid as a security prototype
 func expectProtoDef( 
@@ -20,7 +22,7 @@ func expectAuthTypeOf(
 
     protDef := expectProtoDef( secQn, dm )
     flds := protDef.Signature.GetFields()
-    if fd := flds.Get( mg.IdAuthentication ); fd != nil { return fd.Type }
+    if fd := flds.Get( idAuthentication ); fd != nil { return fd.Type }
     panic( libErrorf( "no auth for security: %s", secQn ) )
 }
 
