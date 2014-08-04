@@ -347,15 +347,24 @@ func ( r *BinReader ) ExpectTypeCode( expct IoTypeCode ) ( IoTypeCode, error ) {
 
 func ( r *BinReader ) readBool() ( bool, error ) { return r.ReadBool() }
 
+func ( r *BinReader ) readIdPart() ( string, error ) {
+    s, err := r.ReadUtf8()
+    if err != nil { return "", err }
+    if err := getIdentifierPartError( s ); err != nil { 
+        return "", &BinIoError{ err.Error() }
+    }
+    return s, nil
+}
+
 func ( r *BinReader ) ReadIdentifier() ( id *Identifier, err error ) {
     if _, err = r.ExpectTypeCode( IoTypeCodeId ); err != nil { return }
     var sz uint8
     if sz, err = r.ReadUint8(); err != nil { return }
-    id = &Identifier{ make( []string, sz ) }
+    parts := make( []string, sz )
     for i := uint8( 0 ); i < sz; i++ {
-        if id.parts[ i ], err = r.ReadUtf8(); err != nil { return }
+        if parts[ i ], err = r.readIdPart(); err != nil { return }
     }
-    return    
+    return NewIdentifierUnsafe( parts ), nil
 }
 
 func ( r *BinReader ) ReadIdentifiers() ( ids []*Identifier, err error ) {

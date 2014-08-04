@@ -248,6 +248,8 @@ type BinIoInvalidDataTest struct {
     Input []byte
 }
 
+type utf8Input string
+
 func appendInput( data interface{}, w *BinWriter ) {
     switch v := data.( type ) {
     case *Identifier: 
@@ -258,6 +260,8 @@ func appendInput( data interface{}, w *BinWriter ) {
     case IoTypeCode: if err := w.WriteTypeCode( v ); err != nil { panic( err ) }
     case int32: if err := w.WriteInt32( v ); err != nil { panic( err ) }
     case uint64: if err := w.WriteUint64( v ); err != nil { panic( err ) }
+    case utf8Input: 
+        if err := w.WriteUtf8( string( v ) ); err != nil { panic( err ) }
     case *QualifiedTypeName: 
         if err := w.WriteQualifiedTypeName( v ); err != nil { panic( err ) }
     case TypeReference:
@@ -286,8 +290,7 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             Name: "unexpected-symmap-val-type-code",
             ErrMsg: `[offset 39]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
-                IoTypeCodeStruct, 
-                    int32( -1 ), qnNsV1S,
+                IoTypeCodeStruct, int32( -1 ), qnNsV1S,
                 IoTypeCodeField, idF1, binIoInvalidTypeCode,
             ),
         },
@@ -295,8 +298,7 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             Name: "unexpected-list-val-type-code",
             ErrMsg: `[offset 96]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
-                IoTypeCodeStruct, 
-                    int32( -1 ), qnNsV1S,
+                IoTypeCodeStruct, int32( -1 ), qnNsV1S,
                 IoTypeCodeField, idF1,
                 IoTypeCodeList, 
                     &ListTypeReference{
@@ -306,6 +308,16 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
                     int32( -1 ), // size
                 IoTypeCodeInt32, int32( 10 ), // an okay list val
                 binIoInvalidTypeCode,
+            ),
+        },
+        &BinIoInvalidDataTest{
+            Name: "invalid-identifier-part",
+            ErrMsg: `invalid identifier part: Part`,
+            Input: makeBinIoInvalidDataTest(
+                IoTypeCodeStruct, int32( -1 ), qnNsV1S,
+                IoTypeCodeField, 
+                    IoTypeCodeId, 
+                        uint8( 2 ), utf8Input( "bad" ), utf8Input( "Part" ),
             ),
         },
     )

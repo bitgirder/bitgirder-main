@@ -52,6 +52,21 @@ func MustIdentifierFormatString( nm string ) IdentifierFormat {
 var IdentifierFormats = 
     []IdentifierFormat{ LcUnderscore, LcHyphenated, LcCamelCapped }
 
+var idPartRegexp = regexp.MustCompile( "^[a-z][a-z0-9]*$" )
+
+type IdentifierPartFormatError struct { Part string }
+
+func ( e *IdentifierPartFormatError ) Error() string {
+    return fmt.Sprintf( "invalid identifier part: %s", e.Part )
+}
+
+func getIdentifierPartError( s string ) error {
+    if res := idPartRegexp.FindStringIndex( s ); res == nil {
+        return &IdentifierPartFormatError{ s }
+    }
+    return nil
+}
+    
 type Identifier struct {
     parts []string
 }
