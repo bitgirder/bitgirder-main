@@ -7,4 +7,5 @@ import (
 var (
     mkNs = parser.MustNamespace
     mkId = parser.MustIdentifier
+    asType = parser.AsTypeReference
 )
