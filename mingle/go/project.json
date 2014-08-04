@@ -7,7 +7,8 @@
         "mingle/io",
         "mingle/bind",
         "mingle/types",
-        "mingle/parser"
+        "mingle/parser",
+        "mingle/service"
     ],
     "test-commands": {
         "write-core-io-tests": {},

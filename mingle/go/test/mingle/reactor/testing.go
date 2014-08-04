@@ -46,8 +46,6 @@ type testInitContext struct {
 
 var testInits []testInitContext
 
-//func init() { testInits = make( []ReactorTestSetInitializer, 0, 4 ) }
-
 func AddTestInitializer( ns *mg.Namespace, ti ReactorTestSetInitializer ) {
     if testInits == nil { testInits = make( []testInitContext, 0, 4 ) }
     testInits = append( testInits, testInitContext{ ns: ns, ti: ti } )
