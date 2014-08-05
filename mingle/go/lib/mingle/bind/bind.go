@@ -60,6 +60,13 @@ func ( reg *Registry ) BuilderFactoryForType(
     return nil, false
 }
 
+func ( reg *Registry ) MustBuilderFactoryForType( 
+    typ mg.TypeReference ) mgRct.BuilderFactory {
+
+    if res, ok := reg.BuilderFactoryForType( typ ); ok { return res }
+    panic( libErrorf( "no builder factory for type: %s", typ ) )
+}
+
 func ( reg *Registry ) MustAddValue( 
     qn *mg.QualifiedTypeName, bf mgRct.BuilderFactory ) {
 

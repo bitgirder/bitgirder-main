@@ -82,6 +82,8 @@ func NewBuildReactor( bf BuilderFactory ) *BuildReactor {
     return res
 }
 
+func ( br *BuildReactor ) HasValue() bool { return br.hasVal }
+
 func ( br *BuildReactor ) GetValue() interface{} {
     if ! br.hasVal { panic( libError( "builder has no value" ) ) }
     return br.val

@@ -442,18 +442,3 @@ func newEventAccContext( ev ReactorEvent ) *eventAccContext {
 func ( ctx *eventAccContext ) saveEvent( ev ReactorEvent ) {
     ctx.evs = append( ctx.evs, CopyEvent( ev, false ) )
 }
-
-func CheckBuiltValue( 
-    expct mg.Value, br *BuildReactor, a *assert.PathAsserter ) {
-
-    if expct == nil {
-        if br != nil {
-            act := br.GetValue().( mg.Value )
-            a.Fatalf( "unexpected value: %s", mg.QuoteValue( act ) )
-        }
-    } else { 
-        a.Falsef( br == nil, "expecting value %s but value builder is nil", 
-            mg.QuoteValue( expct ) )
-        mg.AssertEqualValues( expct, br.GetValue().( mg.Value ), a ) 
-    }
-}

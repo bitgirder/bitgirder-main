@@ -42,6 +42,8 @@ func V1Types() *DefinitionMap {
     return res
 }
 
+func MustAddBuiltinType( def Definition ) { v1Types.MustAdd( def ) }
+
 func asCoreV1Qn( nm string ) *mg.QualifiedTypeName {
     return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( mg.CoreNsV1 )
 }
@@ -50,12 +52,12 @@ func initCoreV1Prims() {
     for _, primTyp := range mg.PrimitiveTypes {
         pd := &PrimitiveDefinition{}
         pd.Name = primTyp.Name
-        v1Types.MustAdd( pd )
+        MustAddBuiltinType( pd )
     }
 }
 
 func initCoreV1ValueTypes() {
-    v1Types.MustAdd( &PrimitiveDefinition{ Name: mg.QnameValue } )
+    MustAddBuiltinType( &PrimitiveDefinition{ Name: mg.QnameValue } )
 }
 
 func initCoreV1StandardError() *SchemaDefinition {
@@ -66,7 +68,7 @@ func initCoreV1StandardError() *SchemaDefinition {
         Type: mg.MustNullableTypeReference( mg.TypeString ),
     }
     ed.Fields.MustAdd( fd )
-    v1Types.MustAdd( ed )
+    MustAddBuiltinType( ed )
     return ed
 }
 
@@ -87,22 +89,22 @@ func newCoreV1StandardError(
 
 func initCoreV1MissingFieldsError( stdErr *SchemaDefinition ) {
     ed := newCoreV1StandardError( "MissingFieldsError", stdErr )
-    v1Types.MustAdd( ed )
+    MustAddBuiltinType( ed )
 }
 
 func initCoreV1UnrecognizedFieldError( stdErr *SchemaDefinition ) {
     ed := newCoreV1StandardError( "UnrecognizedFieldError", stdErr )
-    v1Types.MustAdd( ed )
+    MustAddBuiltinType( ed )
 }
 
 func initCoreV1ValueCastError( stdErr *SchemaDefinition ) {
     ed := newCoreV1StandardError( "ValueCastError", stdErr )
-    v1Types.MustAdd( ed )
+    MustAddBuiltinType( ed )
 }
 
 func initServiceV1EndpointError( stdErr *SchemaDefinition ) {
     ed := newCoreV1StandardError( "EndpointError", stdErr )
-    v1Types.MustAdd( ed )
+    MustAddBuiltinType( ed )
 }
 
 func initCoreV1Exceptions() {
@@ -125,7 +127,7 @@ func initIdentifierPartType() *AliasedTypeDefinition {
             Restriction: mg.MustRegexRestriction( "^[a-z][a-z0-9]*$" ),
         },
     }
-    v1Types.MustAdd( res )
+    MustAddBuiltinType( res )
     return res
 }
 
@@ -145,7 +147,7 @@ func initIdentifierType( idPartTyp *AliasedTypeDefinition ) {
         &ConstructorDefinition{ mg.TypeString },
         &ConstructorDefinition{ mg.TypeBuffer },
     )
-    v1Types.MustAdd( sd )
+    MustAddBuiltinType( sd )
 }
 
 func initNamespaceType() {
@@ -171,7 +173,7 @@ func initNamespaceType() {
         &ConstructorDefinition{ mg.TypeString },
         &ConstructorDefinition{ mg.TypeBuffer },
     )
-    v1Types.MustAdd( sd )
+    MustAddBuiltinType( sd )
 }
 
 func initIdentifierPathType() {
@@ -190,7 +192,7 @@ func initIdentifierPathType() {
         &ConstructorDefinition{ mg.TypeString },
         &ConstructorDefinition{ mg.TypeBuffer },
     )
-    v1Types.MustAdd( sd )
+    MustAddBuiltinType( sd )
 }
 
 func initLangV1Types() {

@@ -252,6 +252,24 @@ func ( vv valueVisit ) visitValue( mv mg.Value ) error {
     return vv.rep.ProcessEvent( NewValueEvent( mv ) )
 }
 
+type pathSetterCaller struct {
+    ps *PathSettingProcessor
+    rep ReactorEventProcessor
+}
+
+func ( c pathSetterCaller ) ProcessEvent( ev ReactorEvent ) error {
+    return c.ps.ProcessEvent( ev, c.rep )
+}
+
+func VisitValuePath( 
+    mv mg.Value, rep ReactorEventProcessor, path objpath.PathNode ) error {
+
+    ps := NewPathSettingProcessor()
+    if path != nil { ps.SetStartPath( path ) }
+    vv := valueVisit{ rep: pathSetterCaller{ ps, rep } }
+    return vv.visitValue( mv )
+}
+
 func VisitValue( mv mg.Value, rep ReactorEventProcessor ) error {
     return ( valueVisit{ rep: rep } ).visitValue( mv )
 }
