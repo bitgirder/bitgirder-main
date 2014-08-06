@@ -8,18 +8,35 @@ import (
 //    "log"
 )
 
-func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
-    addTyped := func( t *ReactorBaseTest ) {
-        t.Type = QnameRequest
-        b.AddTests( t )
-    }
-    add := func( in mg.Value, expct interface{} ) {
-        addTyped( &ReactorBaseTest{ In: in, Expect: expct } )
-    }
-    addErr := func( in mg.Value, err error ) {
-        addTyped( &ReactorBaseTest{ In: in, Error: err } )
-    }
-    add(
+type reactorTestBuilder struct {
+    b *mgRct.ReactorTestSetBuilder
+    typ *mg.QualifiedTypeName
+    profile string
+}
+
+func ( b *reactorTestBuilder ) withProfile( 
+    profile string ) *reactorTestBuilder {
+
+    return &reactorTestBuilder{ b: b.b, typ: b.typ, profile: profile }
+}
+
+func ( b *reactorTestBuilder ) add( t *ReactorTest ) {
+    t.Type = b.typ
+    t.Profile = b.profile
+    b.b.AddTests( t )
+}
+
+func ( b *reactorTestBuilder ) addOk( in mg.Value, expct interface{} ) {
+    b.add( &ReactorTest{ In: in, Expect: expct } )
+}
+
+func ( b *reactorTestBuilder ) addErr( in mg.Value, err error ) {
+    b.add( &ReactorTest{ In: in, Error: err } )
+}
+
+func initBaseRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
+    b := &reactorTestBuilder{ b: tsb, typ: QnameRequest, profile: ProfileBase }
+    b.addOk(
         parser.MustStruct( QnameRequest,
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -37,7 +54,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             auth: mg.Int32( 1 ),
         },
     )
-    add(
+    b.addOk(
         parser.MustSymbolMap(
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -55,7 +72,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             auth: mg.Int32( 1 ),
         },
     )
-    add(
+    b.addOk(
         parser.MustStruct( QnameRequest,
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -70,7 +87,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             params: mg.EmptySymbolMap(),
         },
     )
-    add(
+    b.addOk(
         parser.MustSymbolMap(
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -86,7 +103,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             params: parser.MustSymbolMap( "f1", int32( 1 ) ),
         },
     )
-    add(
+    b.addOk(
         parser.MustSymbolMap(
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -107,22 +124,22 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
         },
     )
     typReq := QnameRequest.AsAtomicType()
-    addErr(
+    b.addErr(
         mg.Int32( 1 ),
         mg.NewTypeCastError( typReq, mg.TypeInt32, nil ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( "ns1@v1/Bad" ),
         mg.NewTypeCastError( typReq, asType( "ns1@v1/Bad" ), nil ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest, "namespace", "Bad" ),
         mg.NewValueCastError( 
             objpath.RootedAt( mkId( "namespace" ) ), 
             "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
         ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest, 
             "namespace", "ns1@v1",
             "service", "bad$id",
@@ -132,7 +149,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
         ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest, 
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -143,7 +160,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
         ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest ),
         mg.NewMissingFieldsError(
             nil,
@@ -154,11 +171,11 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             },
         ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest, "f1", int32( 1 ) ),
         mg.NewUnrecognizedFieldError( nil, mkId( "f1" ) ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest,
             "namespace", "bad@v1",
             "service", "svc1",
@@ -166,7 +183,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
         ),
         &testError{ msg: "test-error-bad-ns" },
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest,
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -178,7 +195,7 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             "test-error-no-auth-expected",
         },
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameRequest,
             "namespace", "ns1@v1",
             "service", "svc1",
@@ -191,22 +208,13 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
     )
 }
 
-func initBaseResponseTests( b *mgRct.ReactorTestSetBuilder ) {
-    addTyped := func( t *ReactorBaseTest ) {
-        t.Type = QnameResponse
-        b.AddTests( t )
-    }
-    add := func( in mg.Value, expct interface{} ) {
-        addTyped( &ReactorBaseTest{ In: in, Expect: expct } )
-    }
-    addErr := func( in mg.Value, err error ) {
-        addTyped( &ReactorBaseTest{ In: in, Error: err } )
-    }
-    add(
+func initBaseResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
+    b := &reactorTestBuilder{ b: tsb, typ: QnameResponse, profile: ProfileBase }
+    b.addOk(
         parser.MustStruct( QnameResponse, "result", int32( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    add(
+    b.addOk(
         parser.MustStruct( QnameResponse, 
             "result", parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
         ),
@@ -214,47 +222,42 @@ func initBaseResponseTests( b *mgRct.ReactorTestSetBuilder ) {
             result: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
         },
     )
-    add(
+    b.addOk(
         parser.MustStruct( QnameResponse, "error", int32( 1 ) ),
         &responseExpect{ err: mg.Int32( 1 ) },
     )
-    add( 
+    b.addOk( 
         parser.MustSymbolMap( "result", int32( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    add(
+    b.addOk(
         parser.MustStruct( QnameResponse,
             "error", mg.NullVal,
             "result", mg.NullVal,
         ),
         &responseExpect{},
     )
-    add( parser.MustStruct( QnameResponse ), &responseExpect{} )
-    add( parser.MustSymbolMap(), &responseExpect{} )
-    addErr(
+    b.addOk( parser.MustStruct( QnameResponse ), &responseExpect{} )
+    b.addOk( parser.MustSymbolMap(), &responseExpect{} )
+    b.addErr(
         parser.MustStruct( QnameResponse, "f1", int32( 1 ) ),
         mg.NewUnrecognizedFieldError( nil, mkId( "f1" ) ),
     )
-    addErr(
+    b.addErr(
         parser.MustStruct( QnameResponse,
             "result", int32( 1 ),
             "error", int32( 1 ),
         ),
         NewResponseError( nil, respErrMsgMultipleResponseFields ),
     )
-    addTyped(
-        &ReactorBaseTest{
-            In: parser.MustStruct( QnameResponse, "result", int32( 1 ) ),
-            Error: &testError{ objpath.RootedAt( IdResult ), "impl-error" },
-            Profile: ProfileImplError,
-        },
+    errBldr := b.withProfile( ProfileImplError )
+    errBldr.addErr(
+        parser.MustStruct( QnameResponse, "result", int32( 1 ) ),
+        &testError{ objpath.RootedAt( IdResult ), "impl-error" },
     )
-    addTyped(
-        &ReactorBaseTest{
-            In: parser.MustStruct( QnameResponse, "error", int32( 1 ) ),
-            Error: &testError{ objpath.RootedAt( IdError ), "impl-error" },
-            Profile: ProfileImplError,
-        },
+    errBldr.addErr(
+        parser.MustStruct( QnameResponse, "error", int32( 1 ) ),
+        &testError{ objpath.RootedAt( IdError ), "impl-error" },
     )
 }
 
@@ -263,8 +266,14 @@ func initBaseReactorTests( b *mgRct.ReactorTestSetBuilder ) {
     initBaseResponseTests( b )
 }
 
+//func initTypedReactorTests( b ) {
+//    initTypedRequestTests( b )
+//    initTypedResponseTests( b )
+//}
+
 func initReactorTests( b *mgRct.ReactorTestSetBuilder ) {
     initBaseReactorTests( b )
+//    initTypedReactorTests( b )
 }
 
 func init() {

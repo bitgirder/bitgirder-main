@@ -6,10 +6,11 @@ import (
 )
 
 const (
+    ProfileBase = "base"
     ProfileImplError = "impl-error"
 )
 
-type ReactorBaseTest struct {
+type ReactorTest struct {
     Type *mg.QualifiedTypeName
     Expect interface{}
     Error error
