@@ -7,7 +7,13 @@ import (
 )
 
 func ( t *CastReactorTest ) newCastReactor() *CastReactor {
-    return NewCastReactor( t.Type, t.Map )
+    res := NewCastReactor( t.Type, t.Map )
+    switch t.Profile {
+    case ProfileCastDisable: 
+        res.AddPassthroughField( mkQn( "ns1@v1/S1" ), mkId( "f1" ) )
+        res.AddPassthroughField( mkQn( "ns1@v1/Schema1" ), mkId( "f1" ) )
+    }
+    return res
 }
 
 func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
@@ -15,13 +21,15 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     if p := t.Path; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
-    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
+//    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
     rcts = append( rcts, t.newCastReactor() )
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     rcts = append( rcts, vb )
     pip := mgRct.InitReactorPipeline( rcts... )
-    c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( t.In ) )
-    if err := mgRct.VisitValue( t.In, pip ); err == nil {
+    if inVal, ok := t.In.( mg.Value ); ok {
+        c.Logf( "casting as %s: %s", t.Type, mg.QuoteValue( inVal ) )
+    }
+    if err := mgRct.FeedSource( t.In, pip ); err == nil {
         mgRct.CheckNoError( t.Err, c )
         act := vb.GetValue().( mg.Value )
         c.Logf( "got %s, expect %s", mg.QuoteValue( act ),

@@ -1302,29 +1302,100 @@ func ( rti *rtInit ) addDefaultCastTests() {
     )
 }
 
-//func ( rti *rtInit ) addCastDisabledTests() {
-//    dm := MakeV1DefMap()
-//    add := func( in mg.Value ) {
-//        rti.addTests(
-//            &CastReactorTest{
-//                Profile: ProfileCastDisabled,
-//                Map: dm,
-//                In: in,
-//                Type: mg.TypeOf( in ),
-//                Expect: in,
-//            },
-//        )
-//    }
-//    add( mg.Int32( 1 ) )
-//    add( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
-//    add( parser.MustEnum( "ns1@v1/E1", "e1" ) )
-//    add( 
-//        mg.MustList( 
-//            asType( "bad1@v1/S1*" ), 
-//            parser.MustStruct( "bad1@v1/S1" ),
-//        ),
-//    )
-//}
+func ( rti *rtInit ) addCastDisableTests() {
+    dm := MakeV1DefMap(
+        MakeStructDef( "ns1@v1/S1",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", mg.TypeNullableValue, nil ),
+                MakeFieldDef( "f2", "ns1@v1/S2", nil ),
+            },
+        ),
+        MakeSchemaDef( "ns1@v1/Schema1",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", mg.TypeNullableValue, nil ),
+            },
+        ),
+        MakeStructDef( "ns1@v1/S2", nil ),
+    )
+    add := func( t *CastReactorTest ) {
+        t.Profile = ProfileCastDisable
+        t.Map = dm
+        rti.addTests( t )
+    }
+    addOkTyped := func( in mg.Value, typ mg.TypeReference ) {
+        add( &CastReactorTest{ In: in, Type: typ, Expect: in } )
+    }
+    addOk := func( in mg.Value ) { addOkTyped( in, mg.TypeOf( in ) ) }
+    addOk( mg.Int32( 1 ) )
+    addOk( parser.MustStruct( "ns1@v1/S2" ) )
+    addOk( 
+        parser.MustStruct( "ns1@v1/S1", 
+            "f1", int32( 1 ),
+            "f2", parser.MustStruct( "ns1@v1/S2" ),
+        ),
+    )
+    addOk( 
+        parser.MustStruct( "ns1@v1/S1", 
+            "f1", parser.MustStruct( "ns1@v1/S2" ),
+            "f2", parser.MustStruct( "ns1@v1/S2" ),
+        ),
+    )
+    addOk( 
+        parser.MustStruct( "ns1@v1/S1", 
+            "f1", parser.MustStruct( "ns2@v1/S1",
+                "f1", parser.MustStruct( "ns1@v1/S1", 
+                    "ignored-unrecognized-field", int32( 1 ),
+                ),
+                "f2", parser.MustEnum( "ns2@v1/E1", "e1" ),
+            ),
+            "f2", parser.MustStruct( "ns1@v1/S2" ),
+        ),
+    )
+    addOk(
+        parser.MustStruct( "ns1@v1/S1",
+            "f1", mg.MustList( asType( "ns2@v1/S1*" ),
+                parser.MustStruct( "ns2@v1/S1" ),
+            ),
+            "f2", parser.MustStruct( "ns1@v1/S2" ),
+        ),
+    )
+    addOk(
+        parser.MustStruct( "ns1@v1/S1",
+            "f1", parser.MustEnum( "ns2@v1/E1", "e1" ),
+            "f2", parser.MustStruct( "ns1@v1/S2" ),
+        ),
+    )
+    addOkTyped(
+        parser.MustSymbolMap(
+            "f1", parser.MustStruct( "ns2@v1/S1",
+                "f1", parser.MustStruct( "ns1@v1/S1", 
+                    "ignored-unrecognized-field", int32( 1 ),
+                ),
+                "f2", parser.MustEnum( "ns2@v1/E1", "e1" ),
+            ),
+            "f2", parser.MustStruct( "ns1@v1/S2" ),
+        ),
+        asType( "ns1@v1/Schema1" ),
+    )
+    // we explicitly feed the disabled field first to test that the disabling
+    // does not remain in effect when an enabled field follows a disabled field
+    add(
+        &CastReactorTest{
+            Type: asType( "ns1@v1/S1" ),
+            Err: newTcErr( "ns1@v1/S2", "ns2@v1/S2", mg.MakeTestIdPath( 2 ) ),
+            In: []mgRct.ReactorEvent{
+                mgRct.NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
+                    mgRct.NewFieldStartEvent( mkId( "f1" ) ),
+                        mgRct.NewStructStartEvent( mkQn( "ns2@v1/S1" ) ),
+                        mgRct.NewEndEvent(),
+                    mgRct.NewFieldStartEvent( mkId( "f2" ) ),
+                        mgRct.NewStructStartEvent( mkQn( "ns2@v1/S2" ) ),
+                        mgRct.NewEndEvent(),
+                mgRct.NewEndEvent(),
+            },
+        },
+    )
+}
 
 func ( rti *rtInit ) addDefaultPathTests() {
     dm := MakeV1DefMap(
@@ -1695,7 +1766,7 @@ func ( rti *rtInit ) call() {
     rti.addDefaultCastTests()
     rti.addConstructorCastTests()
     rti.addDefaultPathTests()
-//    rti.addCastDisabledTests()
+    rti.addCastDisableTests()
     rti.addBuiltinTypeTests()
 }
 

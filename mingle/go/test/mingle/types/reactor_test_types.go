@@ -7,14 +7,14 @@ import (
 )
 
 const (
-    ProfileCastDisabled = "cast-disabled"
+    ProfileCastDisable = "cast-disable"
 )
 
 type CastReactorTest struct {
     Path objpath.PathNode
     Map *DefinitionMap
     Type mg.TypeReference
-    In mg.Value
+    In interface{}
     Expect mg.Value
     Err error
     Profile string

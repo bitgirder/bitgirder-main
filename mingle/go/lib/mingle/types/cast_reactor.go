@@ -23,16 +23,6 @@ func notAFieldSetTypeError(
     return mg.NewValueCastErrorf( p, "not a type with fields: %s", qn )
 }
 
-func newUnrecognizedTypeError(
-    p objpath.PathNode, qn *mg.QualifiedTypeName ) error {
-
-    return mg.NewValueCastErrorf( p, "unrecognized type: %s", qn )
-}
-
-func notAnEnumTypeError( typ mg.TypeReference, path objpath.PathNode ) error {
-    return mg.NewValueCastErrorf( path, "not an enum type: %s", typ )
-}
-
 func fieldSetForTypeInDefMap(
     qn *mg.QualifiedTypeName, 
     dm *DefinitionMap, 
@@ -45,7 +35,7 @@ func fieldSetForTypeInDefMap(
         default: return nil, notAFieldSetTypeError( path, qn )
         } 
     } 
-    return nil, newUnrecognizedTypeError( path, qn )
+    return nil, mg.NewValueCastErrorf( path, "unrecognized type: %s", qn )
 }
 
 type fieldTyper interface {
@@ -69,9 +59,11 @@ type CastReactor struct {
 
     stack *stack.Stack
 
-    SkipPathSetter bool
+    passFieldsByQn *mg.QnameMap
 
-    disabled bool
+    passthroughTracker *mgRct.DepthTracker
+
+    SkipPathSetter bool
 }
 
 func ( cr *CastReactor ) dumpStack( pref string ) {
@@ -90,9 +82,33 @@ func ( cr *CastReactor ) dumpStack( pref string ) {
 }
 
 func NewCastReactor( expct mg.TypeReference, dm *DefinitionMap ) *CastReactor {
-    res := &CastReactor{ stack: stack.NewStack(), dm: dm }
+    res := &CastReactor{ 
+        stack: stack.NewStack(), 
+        dm: dm,
+        passFieldsByQn: mg.NewQnameMap(),
+    }
     res.stack.Push( expct )
     return res
+}
+
+func ( cr *CastReactor ) passFieldsForQn( 
+    qn *mg.QualifiedTypeName ) *mg.IdentifierMap {
+
+    if v, ok := cr.passFieldsByQn.GetOk( qn ); ok {
+        return v.( *mg.IdentifierMap )
+    }
+    return nil
+}
+
+func ( cr *CastReactor ) AddPassthroughField( 
+    qn *mg.QualifiedTypeName, fld *mg.Identifier ) {
+
+    pf := cr.passFieldsForQn( qn )
+    if pf == nil {
+        pf = mg.NewIdentifierMap()
+        cr.passFieldsByQn.Put( qn, pf )
+    }
+    pf.Put( fld, true )
 }
 
 func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
@@ -100,9 +116,28 @@ func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     if ! cr.SkipPathSetter { mgRct.EnsurePathSettingProcessor( pip ) }
 }
 
+func ( cr *CastReactor ) processPassthrough(
+    ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) error {
+
+    if err := next.ProcessEvent( ev ); err != nil { return err }
+    if err := cr.passthroughTracker.ProcessEvent( ev ); err != nil { 
+        return err 
+    }
+    if cr.passthroughTracker.Depth() == 0 { cr.passthroughTracker = nil }
+    return nil
+}
+
 type fieldCast struct {
     ft fieldTyper
     await *mg.IdentifierMap
+    passFields *mg.IdentifierMap
+}
+
+func ( fc *fieldCast ) isPassthroughField( fld *mg.Identifier ) bool {
+    if m := fc.passFields; m != nil {
+        if _, pass := m.GetOk( fld ); pass { return true }
+    }
+    return false
 }
 
 func ( fc *fieldCast ) removeOptFields() {
@@ -196,7 +231,9 @@ func ( cr *CastReactor ) castStructConstructor(
     }
     if ev, ok := v.( *mg.Enum ); ok {
         if ev.Type.Equals( sd.Name ) { 
-            return nil, notAnEnumTypeError( sd.Name.AsAtomicType(), path ), true
+            err := mg.NewValueCastErrorf( 
+                path, "not an enum type: %s", sd.Name )
+            return nil, err, true
         }
     }
     return nil, nil, false
@@ -319,9 +356,10 @@ func ( cr *CastReactor ) implMapStart(
     ev mgRct.ReactorEvent, 
     ft fieldTyper, 
     fs *FieldSet,
+    passFields *mg.IdentifierMap,
     next mgRct.ReactorEventProcessor ) error {
 
-    fc := &fieldCast{ ft: ft }
+    fc := &fieldCast{ ft: ft, passFields: passFields }
     if fs != nil {
         fc.await = mg.NewIdentifierMap()
         fs.EachDefinition( func( fd *FieldDefinition ) {
@@ -388,7 +426,8 @@ func ( cr *CastReactor ) completeStartStruct(
     if def, ok := cr.dm.GetOk( ss.Type ); ok {
         if _, ok := def.( *SchemaDefinition ); ok { ev = asMapStartEvent( ss ) }
     } 
-    return cr.implMapStart( ev, ft, fs, next )
+    pf := cr.passFieldsForQn( ss.Type )
+    return cr.implMapStart( ev, ft, fs, pf, next )
 }
 
 func ( cr *CastReactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
@@ -419,7 +458,7 @@ func ( cr *CastReactor ) processMapStartWithAtomicType(
     next mgRct.ReactorEventProcessor ) error {
 
     if at.Equals( mg.TypeSymbolMap ) || at.Equals( mg.TypeValue ) {
-        return cr.implMapStart( me, valueFieldTyper( 1 ), nil, next )
+        return cr.implMapStart( me, valueFieldTyper( 1 ), nil, nil, next )
     }
 
     if err, ok := cr.inferStructForMap( me, at, next ); ok { return err }
@@ -465,10 +504,14 @@ func ( cr *CastReactor ) processFieldStart(
     fc := cr.stack.Peek().( *fieldCast )
     if fc.await != nil { fc.await.Delete( fs.Field ) }
     
-    typ, err := fc.ft.fieldTypeFor( fs.Field, fs.GetPath().Parent() )
-    if err != nil { return err }
+    if fc.isPassthroughField( fs.Field ) {
+        cr.passthroughTracker = mgRct.NewDepthTracker()
+    } else {
+        typ, err := fc.ft.fieldTypeFor( fs.Field, fs.GetPath().Parent() )
+        if err != nil { return err }
+        cr.stack.Push( typ )
+    }
 
-    cr.stack.Push( typ )
     return next.ProcessEvent( fs )
 }
 
@@ -635,7 +678,7 @@ func ( cr *CastReactor ) processListStart(
 func ( cr *CastReactor ) ProcessEvent(
     ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) ( err error ) {
 
-    if cr.disabled { return next.ProcessEvent( ev ) }
+    if cr.passthroughTracker != nil { return cr.processPassthrough( ev, next ) }
 //    cr.dumpStack( "entering ProcessEvent()" )
 //    defer cr.dumpStack( "after ProcessEvent()" )
     switch v := ev.( type ) {

@@ -5,11 +5,16 @@ import (
     "bitgirder/objpath"
 )
 
+const (
+    ProfileImplError = "impl-error"
+)
+
 type ReactorBaseTest struct {
     Type *mg.QualifiedTypeName
     Expect interface{}
     Error error
     In mg.Value
+    Profile string
 }
 
 type requestExpect struct {

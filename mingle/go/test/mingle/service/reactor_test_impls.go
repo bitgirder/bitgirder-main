@@ -1,6 +1,7 @@
 package service
 
 import (
+    mg "mingle"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
@@ -49,6 +50,9 @@ func ( b *reqValueBuilder ) StartParameters(
 func ( t *ReactorBaseTest ) feedSource( 
     rct mgRct.ReactorEventProcessor, c *mgRct.ReactorTestCall ) bool {
 
+    if mv, ok := t.In.( mg.Value ); ok {
+        c.Logf( "feeding %s", mg.QuoteValue( mv ) )
+    }
     err := mgRct.FeedSource( t.In, rct )
     if err == nil { 
         c.Falsef( t.Expect == nil, "did not expect a value" )
@@ -72,22 +76,32 @@ func ( t *ReactorBaseTest ) callRequest( c *mgRct.ReactorTestCall ) {
 type respValueBuilder struct {
     resBldr *mgRct.BuildReactor
     errBldr *mgRct.BuildReactor
+    t *ReactorBaseTest
+}
+
+func ( b *respValueBuilder ) implError( path objpath.PathNode ) error {
+    if b.t.Profile == ProfileImplError { 
+        return &testError{ path, "impl-error" } 
+    }
+    return nil
 }
 
 func ( b *respValueBuilder ) StartResult( 
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
+    if err := b.implError( path ); err != nil { return nil, err }
     return setBuilder( &b.resBldr )
 }
 
 func ( b *respValueBuilder ) StartError( 
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
+    if err := b.implError( path ); err != nil { return nil, err }
     return setBuilder( &b.errBldr )
 }
 
 func ( t *ReactorBaseTest ) callResponse( c *mgRct.ReactorTestCall ) {
-    respBld := &respValueBuilder{}
+    respBld := &respValueBuilder{ t: t }
     rct := NewResponseReactor( respBld )
     pip := mgRct.InitReactorPipeline( rct )
     if ! t.feedSource( pip, c ) { return }

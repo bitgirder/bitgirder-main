@@ -72,3 +72,8 @@ type FieldOrderPathTest struct {
     Expect []EventExpectation
     Orders []FieldOrderReactorTestOrder
 }
+
+type DepthTrackerTest struct {
+    Source []ReactorEvent
+    Expect []int
+}

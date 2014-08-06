@@ -930,11 +930,68 @@ func initFieldOrderReactorTests( b *ReactorTestSetBuilder ) {
     initFieldOrderPathTests( b )
 }
 
+func initDepthTrackerTests( b *ReactorTestSetBuilder ) {
+    b.AddTests(
+        &DepthTrackerTest{
+            Source: []ReactorEvent{ NewValueEvent( mg.Int32( 1 ) ) },
+            Expect: []int{ 0 },
+        },
+        &DepthTrackerTest{
+            Source: []ReactorEvent{
+                NewListStartEvent( mg.TypeOpaqueList ),
+                NewEndEvent(),
+            },
+            Expect: []int{ 1, 0 },
+        },
+        &DepthTrackerTest{
+            Source: []ReactorEvent{
+                NewListStartEvent( mg.TypeOpaqueList ),
+                    NewListStartEvent( mg.TypeOpaqueList ),
+                        NewValueEvent( mg.Int32( 1 ) ),
+                    NewEndEvent(),
+                    NewValueEvent( mg.Int32( 1 ) ),
+                NewEndEvent(),
+            },
+            Expect: []int{ 1, 2, 2, 1, 1, 0 },
+        },
+        &DepthTrackerTest{
+            Source: []ReactorEvent{
+                NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
+                NewEndEvent(),
+            },
+            Expect: []int{ 1, 0 },
+        },
+        &DepthTrackerTest{
+            Source: []ReactorEvent{ NewMapStartEvent(), NewEndEvent() },
+            Expect: []int{ 1, 0 },
+        },
+        &DepthTrackerTest{
+            Source: []ReactorEvent{
+                NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
+                    NewFieldStartEvent( mkId( "f1" ) ),
+                        NewValueEvent( mg.Int32( 1 ) ),
+                    NewFieldStartEvent( mkId( "f2" ) ),
+                        NewListStartEvent( mg.TypeOpaqueList ),
+                            NewValueEvent( mg.Int32( 1 ) ),
+                        NewEndEvent(),
+                    NewFieldStartEvent( mkId( "f3" ) ),
+                        NewMapStartEvent(),
+                            NewFieldStartEvent( mkId( "f1" ) ),
+                                NewValueEvent( mg.Int32( 1 ) ),
+                        NewEndEvent(),
+                NewEndEvent(),
+            },
+            Expect: []int{ 1, 1, 1, 1, 2, 2, 1, 1, 2, 2, 2, 1, 0 },
+        },
+    )
+}
+
 func initReactorTests( b *ReactorTestSetBuilder ) {
     initStructuralReactorTests( b )
     initBuildReactorTests( b )
     initEventPathTests( b )
     initFieldOrderReactorTests( b )
+    initDepthTrackerTests( b )
 }
 
 func init() { 

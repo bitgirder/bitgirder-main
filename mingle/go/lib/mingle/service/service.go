@@ -1,7 +1,6 @@
 package service
 
 import (
-    "bitgirder/objpath"
     mg "mingle"
     "mingle/types"
 )
@@ -20,19 +19,6 @@ var (
     IdResult *mg.Identifier
     IdError *mg.Identifier
 )
-
-type ResponseError struct { 
-    Path objpath.PathNode
-    Message string
-}
-
-func ( e *ResponseError ) Error() string {
-    return mg.FormatError( e.Path, e.Message )
-}
-
-func NewResponseError( path objpath.PathNode, msg string ) *ResponseError {
-    return &ResponseError{ Path: path, Message: msg }
-}
 
 type RequestContext struct {
     Namespace *mg.Namespace

@@ -84,7 +84,10 @@ func ( r *RequestReactor ) processBuilderEvent( ev mgRct.ReactorEvent ) error {
 }
 
 func ( r *RequestReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    pip.Add( types.NewCastReactor( TypeRequest, types.V1Types() ) )
+    cr := types.NewCastReactor( TypeRequest, types.V1Types() )
+    cr.AddPassthroughField( QnameRequest, IdParameters )
+    cr.AddPassthroughField( QnameRequest, IdAuthentication )
+    pip.Add( cr )
     pip.Add( mgRct.NewFieldOrderReactor( reqOrder ) )
 }
 
@@ -135,7 +138,7 @@ func ( r *RequestReactor ) startProc(
     rct mgRct.ReactorEventProcessor, startErr error ) error {
 
     if startErr != nil { return startErr }
-    r.proc = &proxyProc{ proc: rct }
+    r.proc = newProxyProc( rct )
     return nil
 }
 

@@ -240,7 +240,21 @@ func initBaseResponseTests( b *mgRct.ReactorTestSetBuilder ) {
             "result", int32( 1 ),
             "error", int32( 1 ),
         ),
-        NewResponseError( nil, "response contains both result and error" ),
+        NewResponseError( nil, respErrMsgMultipleResponseFields ),
+    )
+    addTyped(
+        &ReactorBaseTest{
+            In: parser.MustStruct( QnameResponse, "result", int32( 1 ) ),
+            Error: &testError{ objpath.RootedAt( IdResult ), "impl-error" },
+            Profile: ProfileImplError,
+        },
+    )
+    addTyped(
+        &ReactorBaseTest{
+            In: parser.MustStruct( QnameResponse, "error", int32( 1 ) ),
+            Error: &testError{ objpath.RootedAt( IdError ), "impl-error" },
+            Profile: ProfileImplError,
+        },
     )
 }
 

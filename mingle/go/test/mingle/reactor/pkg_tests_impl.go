@@ -430,15 +430,32 @@ func ( t *FieldOrderPathTest ) Call( c *ReactorTestCall ) {
     chk.Complete()
 }
 
-type eventAccContext struct {
-    event ReactorEvent
-    evs []ReactorEvent
+type depthTrackerCheck struct {
+    dt *DepthTracker
+    expct []int
+    *ReactorTestCall
+    idx int
+    la *assert.PathAsserter
 }
 
-func newEventAccContext( ev ReactorEvent ) *eventAccContext {
-    return &eventAccContext{ event: ev, evs: make( []ReactorEvent, 0, 4 ) }
+func ( c *depthTrackerCheck ) ProcessEvent( _ ReactorEvent ) error {
+    defer func() { 
+        c.idx++
+        c.la = c.la.Next()
+    }()
+    if c.la == nil { c.la = c.StartList() }
+    expctLen := len( c.expct )
+    c.la.Falsef( c.idx >= expctLen, "expected only %d events", expctLen )
+    c.la.Equal( c.expct[ c.idx ], c.dt.Depth() )
+    return nil
 }
 
-func ( ctx *eventAccContext ) saveEvent( ev ReactorEvent ) {
-    ctx.evs = append( ctx.evs, CopyEvent( ev, false ) )
+func ( c *depthTrackerCheck ) complete() { c.Equal( len( c.expct ), c.idx ) }
+
+func ( t *DepthTrackerTest ) Call( c *ReactorTestCall ) {
+    dt := NewDepthTracker()
+    chk := &depthTrackerCheck{ dt: dt, expct: t.Expect, ReactorTestCall: c }
+    pip := InitReactorPipeline( dt, chk )
+    AssertFeedSource( t.Source, pip, c )
+    chk.complete()
 }

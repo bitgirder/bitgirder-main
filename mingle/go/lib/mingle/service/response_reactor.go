@@ -6,7 +6,24 @@ import (
     "mingle/types"
     "bitgirder/pipeline"
     "bitgirder/objpath"
+//    "log"
 )
+
+type ResponseError struct { 
+    Path objpath.PathNode
+    Message string
+}
+
+func ( e *ResponseError ) Error() string {
+    return mg.FormatError( e.Path, e.Message )
+}
+
+func NewResponseError( path objpath.PathNode, msg string ) *ResponseError {
+    return &ResponseError{ Path: path, Message: msg }
+}
+
+const respErrMsgMultipleResponseFields =
+    "response contains both a result and an error"
 
 type ResponseReactorInterface interface {
     
@@ -22,6 +39,8 @@ type ResponseReactor struct {
     proc *proxyProc
 
     nextFld *mg.Identifier
+
+    sawNonNullField bool
 }
 
 func NewResponseReactor( iface ResponseReactorInterface ) *ResponseReactor {
@@ -29,7 +48,10 @@ func NewResponseReactor( iface ResponseReactorInterface ) *ResponseReactor {
 }
 
 func ( r *ResponseReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    pip.Add( types.NewCastReactor( TypeResponse, types.V1Types() ) )
+    cr := types.NewCastReactor( TypeResponse, types.V1Types() )
+    cr.AddPassthroughField( QnameResponse, IdResult )
+    cr.AddPassthroughField( QnameResponse, IdError )
+    pip.Add( cr )
 }
 
 func ( r *ResponseReactor ) processProcEvent( ev mgRct.ReactorEvent ) error {
@@ -38,22 +60,38 @@ func ( r *ResponseReactor ) processProcEvent( ev mgRct.ReactorEvent ) error {
     return nil
 }
 
+// returns ( skip, err ) pair, where non-nil err should be returned to the even
+// processor, and a skip value of true indicates that the caller should ignore
+// ev entirely for the field
+func ( r *ResponseReactor ) checkNextFieldEventOk( 
+    ev mgRct.ReactorEvent ) ( bool, error ) {
+    
+    if ve, ok := ev.( *mgRct.ValueEvent ); ok {
+        if _, skip := ve.Val.( *mg.Null ); skip { return true, nil }
+    } 
+    if r.sawNonNullField {
+        err := NewResponseError( objpath.ParentOf( ev.GetPath() ),
+            respErrMsgMultipleResponseFields )
+        return false, err
+    }
+    return false, nil
+}
+
 func ( r *ResponseReactor ) processNextFieldEvent(
     ev mgRct.ReactorEvent ) error {
 
     defer func() { r.nextFld = nil }()
-    if ve, ok := ev.( *mgRct.ValueEvent ); ok {
-        if _, isNull := ve.Val.( *mg.Null ); isNull { return nil }
-    }
+    skip, err := r.checkNextFieldEventOk( ev )
+    if err != nil { return err }
+    if skip { return nil } else { r.sawNonNullField = true }
     var rct mgRct.ReactorEventProcessor
-    var err error
     switch p := ev.GetPath(); {
     case r.nextFld.Equals( IdResult ): rct, err = r.iface.StartResult( p )
     case r.nextFld.Equals( IdError ): rct, err = r.iface.StartError( p )
     default: panic( libErrorf( "unhandled field: %s", r.nextFld ) )
     }
     if err != nil { return err }
-    r.proc = &proxyProc{ proc: rct }
+    r.proc = newProxyProc( rct )
     return r.ProcessEvent( ev )
 }
 
