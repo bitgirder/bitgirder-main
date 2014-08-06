@@ -86,6 +86,26 @@ func initBaseRequestTests( b *mgRct.ReactorTestSetBuilder ) {
             params: parser.MustSymbolMap( "f1", int32( 1 ) ),
         },
     )
+    add(
+        parser.MustSymbolMap(
+            "namespace", "ns1@v1",
+            "service", "svc1",
+            "operation", "op1",
+            "parameters", parser.MustSymbolMap( 
+                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            ),
+        ),
+        &requestExpect{
+            ctx: &RequestContext{
+                Namespace: mkNs( "ns1@v1" ),
+                Service: mkId( "svc1" ),
+                Operation: mkId( "op1" ),
+            },
+            params: parser.MustSymbolMap( 
+                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            ),
+        },
+    )
     typReq := QnameRequest.AsAtomicType()
     addErr(
         mg.Int32( 1 ),
@@ -187,6 +207,14 @@ func initBaseResponseTests( b *mgRct.ReactorTestSetBuilder ) {
         &responseExpect{ result: mg.Int32( 1 ) },
     )
     add(
+        parser.MustStruct( QnameResponse, 
+            "result", parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
+        ),
+        &responseExpect{
+            result: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
+        },
+    )
+    add(
         parser.MustStruct( QnameResponse, "error", int32( 1 ) ),
         &responseExpect{ err: mg.Int32( 1 ) },
     )
@@ -218,7 +246,7 @@ func initBaseResponseTests( b *mgRct.ReactorTestSetBuilder ) {
 
 func initBaseReactorTests( b *mgRct.ReactorTestSetBuilder ) {
     initBaseRequestTests( b )
-//    initBaseResponseTests( b )
+    initBaseResponseTests( b )
 }
 
 func initReactorTests( b *mgRct.ReactorTestSetBuilder ) {

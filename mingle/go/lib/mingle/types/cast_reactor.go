@@ -70,6 +70,8 @@ type CastReactor struct {
     stack *stack.Stack
 
     SkipPathSetter bool
+
+    disabled bool
 }
 
 func ( cr *CastReactor ) dumpStack( pref string ) {
@@ -633,6 +635,7 @@ func ( cr *CastReactor ) processListStart(
 func ( cr *CastReactor ) ProcessEvent(
     ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) ( err error ) {
 
+    if cr.disabled { return next.ProcessEvent( ev ) }
 //    cr.dumpStack( "entering ProcessEvent()" )
 //    defer cr.dumpStack( "after ProcessEvent()" )
     switch v := ev.( type ) {

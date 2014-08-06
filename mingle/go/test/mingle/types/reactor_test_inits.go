@@ -1302,6 +1302,30 @@ func ( rti *rtInit ) addDefaultCastTests() {
     )
 }
 
+//func ( rti *rtInit ) addCastDisabledTests() {
+//    dm := MakeV1DefMap()
+//    add := func( in mg.Value ) {
+//        rti.addTests(
+//            &CastReactorTest{
+//                Profile: ProfileCastDisabled,
+//                Map: dm,
+//                In: in,
+//                Type: mg.TypeOf( in ),
+//                Expect: in,
+//            },
+//        )
+//    }
+//    add( mg.Int32( 1 ) )
+//    add( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) )
+//    add( parser.MustEnum( "ns1@v1/E1", "e1" ) )
+//    add( 
+//        mg.MustList( 
+//            asType( "bad1@v1/S1*" ), 
+//            parser.MustStruct( "bad1@v1/S1" ),
+//        ),
+//    )
+//}
+
 func ( rti *rtInit ) addDefaultPathTests() {
     dm := MakeV1DefMap(
         MakeStructDef( "ns1@v1/S1",
@@ -1671,6 +1695,7 @@ func ( rti *rtInit ) call() {
     rti.addDefaultCastTests()
     rti.addConstructorCastTests()
     rti.addDefaultPathTests()
+//    rti.addCastDisabledTests()
     rti.addBuiltinTypeTests()
 }
 

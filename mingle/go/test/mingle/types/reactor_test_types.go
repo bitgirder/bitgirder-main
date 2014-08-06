@@ -6,6 +6,10 @@ import (
     "bitgirder/objpath"
 )
 
+const (
+    ProfileCastDisabled = "cast-disabled"
+)
+
 type CastReactorTest struct {
     Path objpath.PathNode
     Map *DefinitionMap
@@ -13,6 +17,7 @@ type CastReactorTest struct {
     In mg.Value
     Expect mg.Value
     Err error
+    Profile string
 }
 
 type EventPathTest struct {

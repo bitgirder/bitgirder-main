@@ -7,7 +7,7 @@ import (
     "mingle/bind"
     "bitgirder/pipeline"
     "bitgirder/objpath"
-    "log"
+//    "log"
 )
 
 type reqOrderSlice mgRct.FieldOrder
@@ -63,9 +63,6 @@ type RequestReactor struct {
     // present when we send events to a downstream processor (auth, params)
     proc *proxyProc
 
-    // the structural reactor ahead of this instance
-    sr *mgRct.StructuralReactor
-
     sawParams bool
 }
 
@@ -89,15 +86,6 @@ func ( r *RequestReactor ) processBuilderEvent( ev mgRct.ReactorEvent ) error {
 func ( r *RequestReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     pip.Add( types.NewCastReactor( TypeRequest, types.V1Types() ) )
     pip.Add( mgRct.NewFieldOrderReactor( reqOrder ) )
-    pip.Add( 
-        mgRct.NewDebugReactor( 
-            mgRct.DebugLoggerFunc( func( s string ) { log.Print( s ) } ),
-        ),
-    )
-    pip.VisitReverse( func( elt interface{} ) {
-        if r.sr != nil { return }
-        if sr, ok := elt.( *mgRct.StructuralReactor ); ok { r.sr = sr }
-    })
 }
 
 func ( r *RequestReactor ) setBuilder(

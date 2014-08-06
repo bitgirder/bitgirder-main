@@ -17,6 +17,8 @@ var (
     IdOperation *mg.Identifier
     IdAuthentication *mg.Identifier
     IdParameters *mg.Identifier
+    IdResult *mg.Identifier
+    IdError *mg.Identifier
 )
 
 type ResponseError struct { 
@@ -62,6 +64,8 @@ func initNames() {
     IdOperation = mkId( "operation" )
     IdAuthentication = mkId( "authentication" )
     IdParameters = mkId( "parameters" )
+    IdResult = mkId( "result" )
+    IdError = mkId( "error" )
 }
 
 func initReqType() {
@@ -79,6 +83,19 @@ func initReqType() {
     types.MustAddBuiltinType( sd )
 }
 
+func initRespType() {
+    sd := types.NewStructDefinition()
+    sd.Name = QnameResponse
+    addFld := func( nm *mg.Identifier ) {
+        sd.Fields.Add(
+            &types.FieldDefinition{ Name: nm, Type: mg.TypeNullableValue } )
+    }
+    addFld( IdResult )
+    addFld( IdError )
+    types.MustAddBuiltinType( sd )
+}
+
 func initTypes() {
     initReqType()
+    initRespType()
 }

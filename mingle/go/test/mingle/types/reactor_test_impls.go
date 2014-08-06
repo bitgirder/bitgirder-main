@@ -6,13 +6,17 @@ import (
     mgRct "mingle/reactor"
 )
 
+func ( t *CastReactorTest ) newCastReactor() *CastReactor {
+    return NewCastReactor( t.Type, t.Map )
+}
+
 func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     rcts := []interface{}{}
     if p := t.Path; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
     rcts = append( rcts, mgRct.NewDebugReactor( c ) )
-    rcts = append( rcts, NewCastReactor( t.Type, t.Map ) )
+    rcts = append( rcts, t.newCastReactor() )
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     rcts = append( rcts, vb )
     pip := mgRct.InitReactorPipeline( rcts... )
