@@ -6,8 +6,9 @@ import (
 )
 
 const (
-    ProfileBase = "base"
-    ProfileImplError = "impl-error"
+    ReactorProfileBase = "base"
+    ReactorProfileTyped = "typed"
+    ErrorProfileImpl = "impl-error"
 )
 
 type ReactorTest struct {
@@ -15,7 +16,8 @@ type ReactorTest struct {
     Expect interface{}
     Error error
     In mg.Value
-    Profile string
+    ReactorProfile string
+    ErrorProfile string
 }
 
 type requestExpect struct {

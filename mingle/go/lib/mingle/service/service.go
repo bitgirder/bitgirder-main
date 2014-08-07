@@ -3,6 +3,7 @@ package service
 import (
     mg "mingle"
     "mingle/types"
+    "bitgirder/objpath"
 )
 
 var (
@@ -85,3 +86,32 @@ func initTypes() {
     initReqType()
     initRespType()
 }
+
+type RequestError struct {
+    Path objpath.PathNode
+    Message string
+}
+
+func ( e *RequestError ) Error() string {
+    return mg.FormatError( e.Path, e.Message )
+}
+
+func NewRequestError( path objpath.PathNode, msg string ) *RequestError {
+    return &RequestError{ Path: path, Message: msg }
+}
+
+type ResponseError struct { 
+    Path objpath.PathNode
+    Message string
+}
+
+func ( e *ResponseError ) Error() string {
+    return mg.FormatError( e.Path, e.Message )
+}
+
+func NewResponseError( path objpath.PathNode, msg string ) *ResponseError {
+    return &ResponseError{ Path: path, Message: msg }
+}
+
+const respErrMsgMultipleResponseFields =
+    "response contains both a result and an error"

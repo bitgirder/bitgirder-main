@@ -69,7 +69,7 @@ type respValueBuilder struct {
 }
 
 func ( b *respValueBuilder ) implError( path objpath.PathNode ) error {
-    if b.t.Profile == ProfileImplError { 
+    if b.t.ErrorProfile == ErrorProfileImpl { 
         return &testError{ path, "impl-error" } 
     }
     return nil
@@ -162,9 +162,4 @@ func ( t *reactorTestCall ) call() {
 
 func ( t *ReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     ( &reactorTestCall{ ReactorTestCall: c, t: t } ).call()
-//    switch {
-//    case t.Type.Equals( QnameRequest ): t.callRequest( c )
-//    case t.Type.Equals( QnameResponse ): t.callResponse( c )
-//    default: c.Fatalf( "unhandled expect type: %s", t.Type )
-//    }
 }

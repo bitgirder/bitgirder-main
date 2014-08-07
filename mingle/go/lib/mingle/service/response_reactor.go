@@ -9,22 +9,6 @@ import (
 //    "log"
 )
 
-type ResponseError struct { 
-    Path objpath.PathNode
-    Message string
-}
-
-func ( e *ResponseError ) Error() string {
-    return mg.FormatError( e.Path, e.Message )
-}
-
-func NewResponseError( path objpath.PathNode, msg string ) *ResponseError {
-    return &ResponseError{ Path: path, Message: msg }
-}
-
-const respErrMsgMultipleResponseFields =
-    "response contains both a result and an error"
-
 type ResponseReactorInterface interface {
     
     StartResult( path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error )
