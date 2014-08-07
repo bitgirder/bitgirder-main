@@ -17,7 +17,7 @@ func expectProtoDef(
     panic( libErrorf( "not a prototype: %s", qn ) )
 }
 
-func expectAuthTypeOf( 
+func MustAuthTypeOf( 
     secQn *mg.QualifiedTypeName, dm *DefinitionMap ) mg.TypeReference {
 
     protDef := expectProtoDef( secQn, dm )

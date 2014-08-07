@@ -31,11 +31,11 @@ func ( b *reactorTestBuilder ) add( t *ReactorTest ) {
     b.b.AddTests( t )
 }
 
-func ( b *reactorTestBuilder ) addOk( in mg.Value, expct interface{} ) {
+func ( b *reactorTestBuilder ) addOk( in, expct interface{} ) {
     b.add( &ReactorTest{ In: in, Expect: expct } )
 }
 
-func ( b *reactorTestBuilder ) addErr( in mg.Value, err error ) {
+func ( b *reactorTestBuilder ) addErr( in interface{}, err error ) {
     b.add( &ReactorTest{ In: in, Error: err } )
 }
 
@@ -302,18 +302,26 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
     addErr := func( ns, svc, op string, err error, tail ...interface{} ) {
         b.addErr( makeReq( ns, svc, op, tail... ), err )
     }
-    addOk( "ns1@v1", "svc1", "noOp",
+    addOk( "ns1@v1", "svc1", "op1",
         &requestExpect{ params: mg.EmptySymbolMap() },
     )
-    addOk( "ns1@v1", "svc1", "op1",
-        &requestExpect{ params: parser.MustSymbolMap( "f1", int32( 1 ) ) },
+    addOk( "ns1@v1", "svc1", "op2",
+        &requestExpect{ 
+            params: parser.MustSymbolMap( 
+                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            ),
+        },
         "parameters", parser.MustSymbolMap( "f1", int32( 1 ) ),
     )
-    addOk( "ns1@v1", "svc1", "op1",
-        &requestExpect{ params: parser.MustSymbolMap( "f1", int32( 1 ) ) },
+    addOk( "ns1@v1", "svc1", "op2",
+        &requestExpect{ 
+            params: parser.MustSymbolMap( 
+                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            ),
+        },
         "parameters", parser.MustSymbolMap( "f1", int64( 1 ) ),
     )
-    addOk( "ns1@v1", "svc1", "op1",
+    addOk( "ns1@v1", "svc1", "op2",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
                 "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
@@ -402,9 +410,124 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
     )
 }
 
+func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
+    b := &reactorTestBuilder{
+        b: tsb, 
+        typ: QnameResponse, 
+        rctProfile: ReactorProfileTyped,
+    }
+    mkInput := func( ns, svc, op string, in mg.Value ) *responseInput {
+        return &responseInput{
+            in: in,
+            reqCtx: &RequestContext{
+                Namespace: mkNs( ns ),
+                Service: mkId( svc ),
+                Operation: mkId( op ),
+            },
+        }
+    }
+    addOk := func( ns, svc, op string, in mg.Value, expct interface{} ) {
+        b.addOk( mkInput( ns, svc, op, in ), expct )
+    }
+    addErr := func( ns, svc, op string, in mg.Value, err error ) {
+        b.addErr( mkInput( ns, svc, op, in ), err )
+    }
+    mkResp := func( fld string, val interface{} ) mg.Value {
+        return parser.MustStruct( QnameResponse, fld, val )
+    }
+    mkRes := func( val interface{} ) mg.Value { return mkResp( "result", val ) }
+    mkErr := func( val interface{} ) mg.Value { return mkResp( "error", val ) }
+    addImplicitErrCoverage := func( ns, svc, op string ) {
+        addOk( ns, svc, op,
+            mkErr( 
+                parser.MustStruct( QnameRequestError, 
+                    "message", "test-message",
+                ),
+            ),
+            &responseExpect{ 
+                err: parser.MustStruct( QnameRequestError, 
+                    "message", "test-message",
+                ),
+            },
+        )
+    }
+    addImplicitErrCoverage( "ns1@v1", "svc1", "op1" )
+    addImplicitErrCoverage( "ns1@v1", "svc1", "op2" )
+    addImplicitErrCoverage( "ns1@v1", "svc2", "op1" )
+    addOk( "ns1@v1", "svc1", "op1",
+        mkRes( int32( 1 ) ),
+        &responseExpect{ result: mg.Int32( 1 ) },
+    )
+    addOk( "ns1@v1", "svc1", "op1",
+        mkRes( int64( 1 ) ),
+        &responseExpect{ result: mg.Int32( 1 ) },
+    )
+    addOk( "ns@v1", "svc1", "op2",
+        mkRes( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
+        &responseExpect{
+            result: parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        },
+    )
+    addOk( "ns@v1", "svc1", "op2",
+        mkRes( parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ) ),
+        &responseExpect{
+            result: parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        },
+    )
+    addOk( "ns1@v1", "svc1", "op2",
+        mkErr( parser.MustStruct( "ns1@v1/Err1", "f1", int64( 1 ) ) ),
+        &responseExpect{
+            err: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
+        },
+    )
+    addOk( "ns1@v1", "svc1", "op2",
+        mkErr( parser.MustStruct( "ns1@v1/AuthErr1", "f1", int64( 1 ) ) ),
+        &responseExpect{
+            err: parser.MustStruct( "ns1@v1/AuthErr1", "f1", int32( 1 ) ),
+        },
+    )
+    addErr( "ns1@v1", "svc1", "op1",
+        mkErr( parser.MustStruct( "ns1@v1/Err1", "f1", []byte{ 0 } ) ),
+        mg.NewTypeCastError(
+            mg.TypeInt32,
+            mg.TypeBuffer,
+            objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),
+        ),
+    )
+    addErr( "ns1@v1", "svc1", "op1",
+        mkErr( parser.MustStruct( "ns1@v1/Err2" ) ),
+        NewResponseError( 
+            objpath.RootedAt( IdError ),
+            "unexpected error: ns1@v1/Err2",
+        ),
+    )
+    addErr( "ns1@v1", "svc1", "op2",
+        mkErr( parser.MustStruct( "ns1@v1/Err2" ) ),
+        NewResponseError( 
+            objpath.RootedAt( IdError ),
+            "unexpected error: ns1@v1/Err2",
+        ),
+    )
+    addErr( "ns1@v1", "svc2", "op1",
+        mkErr( parser.MustStruct( "ns1@v1/Err2" ) ),
+        NewResponseError( 
+            objpath.RootedAt( IdError ),
+            "unexpected error: ns1@v1/Err2",
+        ),
+    )
+    addErr( "ns1@v1", "svc2", "op1",
+        mkErr( parser.MustStruct( "ns1@v1/AuthErr", "f1", []byte{ 0 } ) ),
+        mg.NewTypeCastError(
+            mg.TypeInt32,
+            mg.TypeBuffer,
+            objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),
+        ),
+    )
+}
+
 func initTypedReactorTests( b *mgRct.ReactorTestSetBuilder ) {
     initTypedRequestTests( b )
-//    initTypedResponseTests( b )
+    initTypedResponseTests( b )
 }
 
 func initReactorTests( b *mgRct.ReactorTestSetBuilder ) {

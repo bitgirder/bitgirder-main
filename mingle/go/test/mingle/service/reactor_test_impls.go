@@ -6,6 +6,10 @@ import (
     "bitgirder/objpath"
 )
 
+type reactorTestChecker interface {
+    checkValue( t *reactorTestCall )
+}
+
 func setBuilder(
     addr **mgRct.BuildReactor ) ( mgRct.ReactorEventProcessor, error ) {
 
@@ -13,13 +17,13 @@ func setBuilder(
     return *addr, nil
 }
 
-type reqValueBuilder struct {
+type baseReqBuilder struct {
     ctx *RequestContext
     authBldr *mgRct.BuildReactor
     paramsBldr *mgRct.BuildReactor
 }
 
-func ( b *reqValueBuilder ) StartRequest( 
+func ( b *baseReqBuilder ) StartRequest( 
     ctx *RequestContext, path objpath.PathNode ) error {
 
     b.ctx = ctx
@@ -29,7 +33,7 @@ func ( b *reqValueBuilder ) StartRequest(
     return nil
 }
 
-func ( b *reqValueBuilder ) StartAuthentication( 
+func ( b *baseReqBuilder ) StartAuthentication( 
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
     if b.ctx.Operation.Equals( mkId( "noAuthOp" ) ) {
@@ -38,7 +42,7 @@ func ( b *reqValueBuilder ) StartAuthentication(
     return setBuilder( &b.authBldr )
 }
 
-func ( b *reqValueBuilder ) StartParameters(
+func ( b *baseReqBuilder ) StartParameters(
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
     if b.ctx.Operation.Equals( mkId( "badParams" ) ) {
@@ -47,19 +51,10 @@ func ( b *reqValueBuilder ) StartParameters(
     return setBuilder( &b.paramsBldr )
 }
 
-func ( t *ReactorTest ) feedSource( 
-    rct mgRct.ReactorEventProcessor, c *mgRct.ReactorTestCall ) bool {
-
-    if mv, ok := t.In.( mg.Value ); ok {
-        c.Logf( "feeding %s", mg.QuoteValue( mv ) )
-    }
-    err := mgRct.FeedSource( t.In, rct )
-    if err == nil { 
-        c.Falsef( t.Expect == nil, "did not expect a value" )
-        return true
-    }
-    c.EqualErrors( t.Error, err )
-    return false
+func ( b *baseReqBuilder ) checkValue( t *reactorTestCall ) {
+    expct := t.t.Expect.( *requestExpect )
+    mgRct.CheckBuiltValue( expct.auth, b.authBldr, t.Descend( "auth" ) )
+    mgRct.CheckBuiltValue( expct.params, b.paramsBldr, t.Descend( "params" ) )
 }
 
 type respValueBuilder struct {
@@ -89,27 +84,61 @@ func ( b *respValueBuilder ) StartError(
     return setBuilder( &b.errBldr )
 }
 
+func ( b *respValueBuilder ) checkValue( t *reactorTestCall ) {
+    expct := t.t.Expect.( *responseExpect )
+    mgRct.CheckBuiltValue( expct.result, b.resBldr, t.Descend( "result" ) )
+    mgRct.CheckBuiltValue( expct.err, b.errBldr, t.Descend( "error" ) )
+}
+
 type reactorTestCall struct {
 
     *mgRct.ReactorTestCall
     t *ReactorTest
 
-    reqBld *reqValueBuilder
-    respBld *respValueBuilder
+    chkObj reactorTestChecker
 }
 
-func ( t *reactorTestCall ) createRequestReactor() mgRct.ReactorEventProcessor {
-    t.reqBld = &reqValueBuilder{}
-    rct := NewRequestReactor( t.reqBld )
+func ( t *reactorTestCall ) initBaseRequestTest() RequestReactorInterface {
+    res := &baseReqBuilder{}
+    t.chkObj = res 
+    return res
+}
+
+func ( t *reactorTestCall ) initTypedRequestTest() RequestReactorInterface {
+    res := &baseReqBuilder{}
+    m := NewOperationMap( testTypeDefs )
+    m.MustAddServiceInstance( 
+        mkNs( "ns1@v1" ), mkId( "svc1" ), mkQn( "ns1@v1/Service1" ) )
+    m.MustAddServiceInstance( 
+        mkNs( "ns1@v1" ), mkId( "svc2" ), mkQn( "ns1@v1/Service2" ) )
+    t.chkObj = res
+    return AsTypedRequestReactorInterface( res, m )
+}
+
+func ( t *reactorTestCall ) initRequestTest() mgRct.ReactorEventProcessor {
+    var reqIface RequestReactorInterface
+    switch t.t.ReactorProfile {
+    case ReactorProfileBase: reqIface = t.initBaseRequestTest()
+    case ReactorProfileTyped: reqIface = t.initTypedRequestTest()
+    default: t.Fatalf( "unhandled profile: %s", t.t.ReactorProfile )
+    }
+    rct := NewRequestReactor( reqIface )
     return mgRct.InitReactorPipeline( rct )
 }
 
-func ( t *reactorTestCall ) createResponseReactor(
-    ) mgRct.ReactorEventProcessor {
-
-    t.respBld = &respValueBuilder{ t: t.t }
-    rct := NewResponseReactor( t.respBld )
+func ( t *reactorTestCall ) initResponseTest() mgRct.ReactorEventProcessor {
+    respBld := &respValueBuilder{ t: t.t }
+    rct := NewResponseReactor( respBld )
+    t.chkObj = respBld
     return mgRct.InitReactorPipeline( rct )
+}
+
+func ( t *reactorTestCall ) initTest() mgRct.ReactorEventProcessor {
+    switch typ := t.t.Type; {
+    case typ.Equals( QnameRequest ): return t.initRequestTest()
+    case typ.Equals( QnameResponse ): return t.initResponseTest()
+    }
+    panic( libErrorf( "unhandled expect type: %s", t.t.Type ) )
 }
 
 func ( t *reactorTestCall ) feedSource( rct mgRct.ReactorEventProcessor ) bool {
@@ -125,39 +154,9 @@ func ( t *reactorTestCall ) feedSource( rct mgRct.ReactorEventProcessor ) bool {
     return false
 }
 
-func ( t *reactorTestCall ) createReactor() mgRct.ReactorEventProcessor {
-    switch typ := t.t.Type; {
-    case typ.Equals( QnameRequest ): return t.createRequestReactor()
-    case typ.Equals( QnameResponse ): return t.createResponseReactor()
-    }
-    panic( libErrorf( "unhandled expect type: %s", t.t.Type ) )
-}
-
-func ( t *reactorTestCall ) completeRequest() {
-    expct := t.t.Expect.( *requestExpect )
-    mgRct.CheckBuiltValue( expct.auth, t.reqBld.authBldr, t.Descend( "auth" ) )
-    mgRct.CheckBuiltValue( 
-        expct.params, t.reqBld.paramsBldr, t.Descend( "params" ) )
-}
-
-func ( t *reactorTestCall ) completeResponse() {
-    expct := t.t.Expect.( *responseExpect )
-    mgRct.CheckBuiltValue( 
-        expct.result, t.respBld.resBldr, t.Descend( "result" ) )
-    mgRct.CheckBuiltValue( expct.err, t.respBld.errBldr, t.Descend( "error" ) )
-}
-
-func ( t *reactorTestCall ) complete() { 
-    switch typ := t.t.Type; {
-    case typ.Equals( QnameRequest ): t.completeRequest()
-    case typ.Equals( QnameResponse ): t.completeResponse()
-    default: t.Fatalf( "unhandled type: %s", typ )
-    }
-}
-
 func ( t *reactorTestCall ) call() {
-    rct := t.createReactor()
-    if t.t.feedSource( rct, t.ReactorTestCall ) { t.complete() }
+    rct := t.initTest()
+    if t.feedSource( rct ) { t.chkObj.checkValue( t ) }
 }
 
 func ( t *ReactorTest ) Call( c *mgRct.ReactorTestCall ) {

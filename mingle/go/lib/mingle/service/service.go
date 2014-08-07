@@ -1,6 +1,7 @@
 package service
 
 import (
+    "fmt"
     mg "mingle"
     "mingle/types"
     "bitgirder/objpath"
@@ -8,10 +9,19 @@ import (
 
 var (
     NsService *mg.Namespace
+
     QnameRequest *mg.QualifiedTypeName
     TypeRequest *mg.AtomicTypeReference
+
     QnameResponse *mg.QualifiedTypeName
     TypeResponse *mg.AtomicTypeReference
+
+    QnameRequestError *mg.QualifiedTypeName
+    TypeRequestError *mg.AtomicTypeReference
+
+    QnameResponseError *mg.QualifiedTypeName
+    TypeResponseError *mg.AtomicTypeReference
+
     IdNamespace *mg.Identifier
     IdService *mg.Identifier
     IdOperation *mg.Identifier
@@ -27,25 +37,29 @@ type RequestContext struct {
     Operation *mg.Identifier
 }
 
+// assumes that NsService has been initialized
+func initNamePair ( 
+    nm string ) ( *mg.QualifiedTypeName, *mg.AtomicTypeReference ) {
+
+    qn := &mg.QualifiedTypeName{
+        Namespace: NsService,
+        Name: mg.NewDeclaredTypeNameUnsafe( nm ),
+    }
+    return qn, qn.AsAtomicType()
+}
+
 func initNames() {
     mkId := func( parts ...string ) *mg.Identifier {
         return mg.NewIdentifierUnsafe( parts )
     }
-    declNm := mg.NewDeclaredTypeNameUnsafe
     NsService = &mg.Namespace{
         Parts: []*mg.Identifier{ mkId( "mingle" ), mkId( "service" ) },
         Version: mkId( "v1" ),
     }
-    QnameRequest = &mg.QualifiedTypeName{
-        Namespace: NsService,
-        Name: declNm( "Request" ),
-    }
-    TypeRequest = QnameRequest.AsAtomicType()
-    QnameResponse = &mg.QualifiedTypeName{
-        Namespace: NsService,
-        Name: declNm( "Response" ),
-    }
-    TypeResponse = QnameResponse.AsAtomicType()
+    QnameRequest, TypeRequest = initNamePair( "Request" )
+    QnameResponse, TypeResponse = initNamePair( "Response" )
+    QnameRequestError, TypeRequestError = initNamePair( "RequestError" )
+    QnameResponseError, TypeResponseError = initNamePair( "ResponseError" )
     IdNamespace = mkId( "namespace" )
     IdService = mkId( "service" )
     IdOperation = mkId( "operation" )
@@ -98,6 +112,12 @@ func ( e *RequestError ) Error() string {
 
 func NewRequestError( path objpath.PathNode, msg string ) *RequestError {
     return &RequestError{ Path: path, Message: msg }
+}
+
+func NewRequestErrorf( 
+    path objpath.PathNode, tmpl string, args ...interface{} ) *RequestError {
+
+    return &RequestError{ Path: path, Message: fmt.Sprintf( tmpl, args... ) }
 }
 
 type ResponseError struct { 
