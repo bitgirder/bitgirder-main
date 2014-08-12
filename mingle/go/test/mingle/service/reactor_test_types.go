@@ -94,106 +94,136 @@ func ( t *testError ) Error() string { return mg.FormatError( t.path, t.msg ) }
 //
 //  namespace mingle:service
 //
+//  struct Err1 { f1 Int32 }
+//
 //  service Service1 {
 //
 //      failStartAuthentication() Null
 //
 //      failStartParameters() Null
+//
+//      failResponse() Int32 throws Err1
 //  }
 //
-
-var testTypeDefs = types.MakeV1DefMap(
-    types.MakeServiceDef( "ns1@v1/Service1", "",
-        types.MakeOpDef( "op1",
-            types.MakeCallSig( 
-                []*types.FieldDefinition{}, 
-                "Int32", 
-                []string{},
+// ---------------------------------------------------
+//
+// Note that this is a method and not a package-level 'var' since we want it to
+// include the builtin types, some of which are added in this package's init,
+// making them unavailable to a package-level var initializer
+func getTestTypeDefs() *types.DefinitionMap {
+    return types.MakeV1DefMap(
+        types.MakeServiceDef( "ns1@v1/Service1", "",
+            types.MakeOpDef( "op1",
+                types.MakeCallSig( 
+                    []*types.FieldDefinition{}, 
+                    "Int32", 
+                    []string{},
+                ),
+            ),
+            types.MakeOpDef( "op2",
+                types.MakeCallSig(
+                    []*types.FieldDefinition{ 
+                        types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
+                    },
+                    "ns1@v1/S1",
+                    []string{ "ns1@v1/Err1" },
+                ),
+            ),
+            types.MakeOpDef( "op3",
+                types.MakeCallSig(
+                    []*types.FieldDefinition{},
+                    "Null",
+                    []string{},
+                ),
             ),
         ),
-        types.MakeOpDef( "op2",
-            types.MakeCallSig(
-                []*types.FieldDefinition{ 
-                    types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
-                },
-                "ns1@v1/S1",
-                []string{ "ns1@v1/Err1" },
+        types.MakeServiceDef( "ns1@v1/Service2", "ns1@v1/Auth1",
+            types.MakeOpDef( "op1",
+                types.MakeCallSig(
+                    []*types.FieldDefinition{},
+                    "Int32",
+                    []string{},
+                ),
+            ),
+            types.MakeOpDef( "op2",
+                types.MakeCallSig(
+                    []*types.FieldDefinition{
+                        types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
+                    },
+                    "ns1@v1/S1",
+                    []string{ "ns1@v1/Err1" },
+                ),
             ),
         ),
-        types.MakeOpDef( "op3",
-            types.MakeCallSig(
-                []*types.FieldDefinition{},
-                "Null",
-                []string{},
+        types.MakeServiceDef( "mingle:service:fail@v1/Service1", "",
+            types.MakeOpDef( "op1",
+                types.MakeCallSig( 
+                    []*types.FieldDefinition{}, "Null", []string{} ),
             ),
         ),
-    ),
-    types.MakeServiceDef( "ns1@v1/Service2", "ns1@v1/Auth1",
-        types.MakeOpDef( "op1",
-            types.MakeCallSig(
-                []*types.FieldDefinition{},
-                "Int32",
-                []string{},
+        types.MakeServiceDef( 
+            "mingle:service@v1/Service1", 
+            "mingle:service@v1/Auth1",
+            types.MakeOpDef( "failStartAuthentication",
+                types.MakeCallSig( 
+                    []*types.FieldDefinition{}, "Null", []string{} ),
+            ),
+            types.MakeOpDef( "failStartParameters",
+                types.MakeCallSig( 
+                    []*types.FieldDefinition{}, "Null", []string{} ),
+            ),
+            types.MakeOpDef( "failResponse",
+                types.MakeCallSig( 
+                    []*types.FieldDefinition{}, 
+                    "Null", 
+                    []string{ "mingle:service@v1/Err1" },
+                ),
             ),
         ),
-        types.MakeOpDef( "op2",
-            types.MakeCallSig(
+        types.MakeStructDef( "mingle:service@v1/Err1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+            },
+        ),
+        &types.PrototypeDefinition{
+            Name: parser.MustQualifiedTypeName( "mingle:service@v1/Auth1" ),
+            Signature: types.MakeCallSig(
                 []*types.FieldDefinition{
-                    types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
+                    types.MakeFieldDef( "authentication", "Int32", nil ),
                 },
-                "ns1@v1/S1",
-                []string{ "ns1@v1/Err1" },
+                "String",
+                []string{ "ns1@v1/AuthErr1" },
             ),
-        ),
-    ),
-    types.MakeServiceDef( "mingle:service:fail@v1/Service1", "",
-        types.MakeOpDef( "op1",
-            types.MakeCallSig( []*types.FieldDefinition{}, "Null", []string{} ),
-        ),
-    ),
-    types.MakeServiceDef( 
-        "mingle:service@v1/Service1", 
-        "mingle:service@v1/Auth1",
-        types.MakeOpDef( "failStartAuthentication",
-            types.MakeCallSig( []*types.FieldDefinition{}, "Null", []string{} ),
-        ),
-        types.MakeOpDef( "failStartParameters",
-            types.MakeCallSig( []*types.FieldDefinition{}, "Null", []string{} ),
-        ),
-    ),
-    &types.PrototypeDefinition{
-        Name: parser.MustQualifiedTypeName( "mingle:service@v1/Auth1" ),
-        Signature: types.MakeCallSig(
+        },
+        &types.PrototypeDefinition{
+            Name: parser.MustQualifiedTypeName( "ns1@v1/Auth1" ),
+            Signature: types.MakeCallSig(
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "authentication", "Int32", nil ),
+                },
+                "String",
+                []string{ "ns1@v1/AuthErr1" },
+            ),
+        },
+        types.MakeStructDef( "ns1@v1/S1",
             []*types.FieldDefinition{
-                types.MakeFieldDef( "authentication", "Int32", nil ),
+                types.MakeFieldDef( "f1", "Int32", nil ),
             },
-            "String",
-            []string{ "ns1@v1/AuthErr1" },
         ),
-    },
-    &types.PrototypeDefinition{
-        Name: parser.MustQualifiedTypeName( "ns1@v1/Auth1" ),
-        Signature: types.MakeCallSig(
+        types.MakeStructDef( "ns1@v1/Err1",
             []*types.FieldDefinition{
-                types.MakeFieldDef( "authentication", "Int32", nil ),
+                types.MakeFieldDef( "f1", "Int32", nil ),
             },
-            "String",
-            []string{ "ns1@v1/AuthErr1" },
         ),
-    },
-    types.MakeStructDef( "ns1@v1/S1",
-        []*types.FieldDefinition{
-            types.MakeFieldDef( "f1", "Int32", nil ),
-        },
-    ),
-    types.MakeStructDef( "ns1@v1/Err1",
-        []*types.FieldDefinition{
-            types.MakeFieldDef( "f1", "Int32", nil ),
-        },
-    ),
-    types.MakeStructDef( "ns1@v1/AuthErr1",
-        []*types.FieldDefinition{
-            types.MakeFieldDef( "f1", "Int32", nil ),
-        },
-    ),
-)
+        types.MakeStructDef( "ns1@v1/Err2",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+            },
+        ),
+        types.MakeStructDef( "ns1@v1/AuthErr1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+            },
+        ),
+    )
+}

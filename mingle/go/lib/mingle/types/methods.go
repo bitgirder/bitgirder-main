@@ -7,9 +7,8 @@ import (
 
 var idAuthentication = idUnsafe( "authentication" )
 
-// returns the *PrototypeDefinition matching secQn, but does not check that it
-// is otherwise valid as a security prototype
-func expectProtoDef( 
+// returns the *PrototypeDefinition matching qn
+func MustPrototypeDefinition( 
     qn *mg.QualifiedTypeName, dm DefinitionGetter ) *PrototypeDefinition {
  
     def := MustGetDefinition( qn, dm )
@@ -17,13 +16,10 @@ func expectProtoDef(
     panic( libErrorf( "not a prototype: %s", qn ) )
 }
 
-func MustAuthTypeOf( 
-    secQn *mg.QualifiedTypeName, dm DefinitionGetter ) mg.TypeReference {
-
-    protDef := expectProtoDef( secQn, dm )
-    flds := protDef.Signature.GetFields()
+func MustAuthenticationType( pd *PrototypeDefinition ) mg.TypeReference {
+    flds := pd.Signature.GetFields()
     if fd := flds.Get( idAuthentication ); fd != nil { return fd.Type }
-    panic( libErrorf( "no auth for security: %s", secQn ) )
+    panic( libErrorf( "no auth for security: %s", pd.Name ) )
 }
 
 func canAssignToStruct( 
@@ -54,12 +50,12 @@ func canAssignType( t1, t2 *mg.QualifiedTypeName, dm DefinitionGetter ) bool {
     return false
 }
 
-func canThrowErrorOfType( 
+func CanFailWithError( 
     qn *mg.QualifiedTypeName, 
-    sig *CallSignature,
+    typs []mg.TypeReference,
     dm DefinitionGetter ) ( mg.TypeReference, bool ) {
 
-    for _, typ := range sig.Throws {
+    for _, typ := range typs {
         if canAssignType( mg.TypeNameIn( typ ), qn, dm ) { return typ, true }
     }
     return nil, false

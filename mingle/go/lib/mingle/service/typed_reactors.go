@@ -5,18 +5,13 @@ import (
     mgRct "mingle/reactor"
     "mingle/types"
     "bitgirder/objpath"
-//    "log"
+    "log"
 )
 
 type RequestDefinition struct {
     Operation *types.OperationDefinition
+    Security *types.PrototypeDefinition
     AuthenticationType mg.TypeReference
-}
-
-func newRequestDefinition( 
-    opDef *types.OperationDefinition ) *RequestDefinition {
-
-    return &RequestDefinition{ Operation: opDef }
 }
 
 type OperationMap struct {
@@ -31,13 +26,15 @@ func NewOperationMap( defs *types.DefinitionMap ) *OperationMap {
 func ( m *OperationMap ) mustAddRequestDefinitions(
     opMaps *mg.IdentifierMap, sd *types.ServiceDefinition ) {
 
-    var authTyp mg.TypeReference
+    var authDef *types.PrototypeDefinition
+    var authType mg.TypeReference
     if secQn := sd.Security; secQn != nil { 
-        authTyp = types.MustAuthTypeOf( secQn, m.defs )
+        authDef = types.MustPrototypeDefinition( secQn, m.defs )
+        authType = types.MustAuthenticationType( authDef )
     }
     for _, opDef := range sd.Operations {
-        reqDef := newRequestDefinition( opDef )
-        if authTyp != nil { reqDef.AuthenticationType = authTyp }
+        reqDef := &RequestDefinition{ Operation: opDef, Security: authDef }
+        if authType != nil { reqDef.AuthenticationType = authType }
         opMaps.Put( opDef.Name, reqDef )
     }
 }
@@ -130,4 +127,79 @@ func AsTypedRequestReactorInterface(
     iface RequestReactorInterface, m *OperationMap ) RequestReactorInterface {
 
     return &typedReqIface{ iface: iface, m: m }
+}
+
+type errorTypeChecker struct {
+    errTypes []mg.TypeReference
+    dg types.DefinitionGetter
+    sawTop bool
+}
+
+func ( c *errorTypeChecker ) addErrorTypes( sig *types.CallSignature ) {
+    for _, typ := range sig.Throws { log.Printf( "adding error type %s", typ ) }
+    c.errTypes = append( c.errTypes, sig.Throws... )
+}
+
+func ( c *errorTypeChecker ) ProcessEvent( ev mgRct.ReactorEvent ) error {
+    if c.sawTop { return nil }
+    c.sawTop = true
+    if ss, ok := ev.( *mgRct.StructStartEvent ); ok {
+        if isExternalErrorType( ss.Type ) { return nil }
+        if _, ok = types.CanFailWithError( ss.Type, c.errTypes, c.dg ); ok { 
+            return nil 
+        }
+    }
+    typ := mgRct.TypeOfEvent( ev )
+    return NewResponseErrorf( ev.GetPath(), "unexpected error: %s", typ )
+}
+
+type typedRespIface struct {
+    iface ResponseReactorInterface
+    opDef *types.OperationDefinition
+    secDef *types.PrototypeDefinition
+    dg types.DefinitionGetter
+}
+
+func ( i *typedRespIface ) newCastReactor( 
+    typ mg.TypeReference ) *types.CastReactor {
+
+    res := types.NewCastReactor( typ, i.dg )
+    res.SkipPathSetter = true
+    return res
+}
+
+func ( i *typedRespIface ) StartResult(
+    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+
+    rct, err := i.iface.StartResult( path )
+    if err != nil { return nil, err }
+    cr := i.newCastReactor( i.opDef.Signature.Return )
+    return mgRct.InitReactorPipeline( cr, rct ), nil
+}
+
+func ( i *typedRespIface ) StartError(
+    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+
+    rct, err := i.iface.StartError( path )
+    if err != nil { return nil, err }
+    cr := i.newCastReactor( mg.TypeValue )
+    errChk := &errorTypeChecker{ dg: i.dg }
+    errChk.errTypes = make( []mg.TypeReference, 0, 4 )
+    errChk.addErrorTypes( i.opDef.Signature )
+    if sec := i.secDef; sec != nil { errChk.addErrorTypes( sec.Signature ) }
+    return mgRct.InitReactorPipeline( errChk, cr, rct ), nil
+}
+
+func AsTypedResponseReactorInterface(
+    iface ResponseReactorInterface,
+    opDef *types.OperationDefinition,
+    secDef *types.PrototypeDefinition,
+    dg types.DefinitionGetter ) ResponseReactorInterface {
+
+    return &typedRespIface{ 
+        iface: iface, 
+        opDef: opDef, 
+        secDef: secDef,
+        dg: dg,
+    }
 }

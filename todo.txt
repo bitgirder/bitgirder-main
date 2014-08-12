@@ -6,3 +6,7 @@
 - (compiler/types) disallow duplicate constructor types and constructor types of
   SymbolMap (sym map is ambiguous when used with a cast reactor that infers
   structs on symbol maps)
+
+- (compiler) allow only atomic struct or pointer-to-atomic struct types as
+  errors, and do not allow any two thrown types to have the same base atomic
+  type

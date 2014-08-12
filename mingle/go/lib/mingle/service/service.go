@@ -4,6 +4,7 @@ import (
     "fmt"
     mg "mingle"
     "mingle/types"
+    "mingle/types/builtin"
     "bitgirder/objpath"
 )
 
@@ -34,6 +35,8 @@ var (
     IdParameters *mg.Identifier
     IdResult *mg.Identifier
     IdError *mg.Identifier
+
+    externalErrorTypes = mg.NewQnameMap()
 )
 
 type RequestContext struct {
@@ -76,6 +79,10 @@ func initNames() {
     IdError = mkId( "error" )
 }
 
+func initExternalErrorTypes() {
+    externalErrorTypes.Put( QnameRequestError, true )
+}
+
 func initReqType() {
     sd := types.NewStructDefinition()
     sd.Name = QnameRequest
@@ -103,9 +110,15 @@ func initRespType() {
     types.MustAddBuiltinType( sd )
 }
 
+func initErrType( qn *mg.QualifiedTypeName ) {
+    types.MustAddBuiltinType( builtin.NewLocatableErrorDefinition( qn ) )
+}
+
 func initTypes() {
     initReqType()
     initRespType()
+    initErrType( QnameRequestError )
+    initErrType( QnameResponseError )
 }
 
 type RequestError struct {
@@ -138,6 +151,12 @@ func ( e *ResponseError ) Error() string {
 
 func NewResponseError( path objpath.PathNode, msg string ) *ResponseError {
     return &ResponseError{ Path: path, Message: msg }
+}
+
+func NewResponseErrorf( 
+    path objpath.PathNode, tmpl string, argv ...interface{} ) *ResponseError {
+
+    return &ResponseError{ Path: path, Message: fmt.Sprintf( tmpl, argv... ) }
 }
 
 const respErrMsgMultipleResponseFields =
@@ -217,3 +236,7 @@ func ( m *InstanceMap ) getRequestValue(
 }
 
 const errMsgNoAuthExpected = "service does not accept authentication"
+
+func isExternalErrorType( qn *mg.QualifiedTypeName ) bool {
+    return externalErrorTypes.HasKey( qn )
+}

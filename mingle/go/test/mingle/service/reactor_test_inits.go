@@ -83,12 +83,25 @@ func ( b *reactorTestBuilder ) addRequestImplErrorTests() {
 
 func ( b *reactorTestBuilder ) addResponseImplErrorTests() {
     b2 := b.makeImplErrorBuilder()
+    reqCtx := &RequestContext{
+        Namespace: mkNs( "mingle:service@v1" ),
+        Service: mkId( "svc1" ),
+        Operation: mkId( "failResponse" ),
+    }
     b2.addErr(
-        parser.MustStruct( QnameResponse, "result", int32( 1 ) ),
+        &responseInput{
+            in: parser.MustStruct( QnameResponse, "result", int32( 1 ) ),
+            reqCtx: reqCtx,
+        },
         &testError{ objpath.RootedAt( IdResult ), "impl-error" },
     )
     b2.addErr(
-        parser.MustStruct( QnameResponse, "error", int32( 1 ) ),
+        &responseInput{
+            in: parser.MustStruct( QnameResponse, 
+                "error", parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
+            ),
+            reqCtx: reqCtx,
+        },
         &testError{ objpath.RootedAt( IdError ), "impl-error" },
     )
 }
@@ -491,13 +504,13 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
         mkRes( int64( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    addOk( "ns@v1", "svc1", "op2",
+    addOk( "ns1@v1", "svc1", "op2",
         mkRes( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
         &responseExpect{
             result: parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "ns@v1", "svc1", "op2",
+    addOk( "ns1@v1", "svc1", "op2",
         mkRes( parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ) ),
         &responseExpect{
             result: parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
@@ -509,13 +522,13 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
             err: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "ns1@v1", "svc1", "op2",
+    addOk( "ns1@v1", "svc2", "op1",
         mkErr( parser.MustStruct( "ns1@v1/AuthErr1", "f1", int64( 1 ) ) ),
         &responseExpect{
             err: parser.MustStruct( "ns1@v1/AuthErr1", "f1", int32( 1 ) ),
         },
     )
-    addErr( "ns1@v1", "svc1", "op1",
+    addErr( "ns1@v1", "svc1", "op2",
         mkErr( parser.MustStruct( "ns1@v1/Err1", "f1", []byte{ 0 } ) ),
         mg.NewTypeCastError(
             mg.TypeInt32,
@@ -524,7 +537,7 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
         ),
     )
     addErr( "ns1@v1", "svc1", "op1",
-        mkErr( parser.MustStruct( "ns1@v1/Err2" ) ),
+        mkErr( parser.MustStruct( "ns1@v1/Err2", "f1", int32( 1 ) ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
             "unexpected error: ns1@v1/Err2",
@@ -545,18 +558,19 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
         ),
     )
     addErr( "ns1@v1", "svc2", "op1",
-        mkErr( parser.MustStruct( "ns1@v1/AuthErr", "f1", []byte{ 0 } ) ),
+        mkErr( parser.MustStruct( "ns1@v1/AuthErr1", "f1", []byte{ 0 } ) ),
         mg.NewTypeCastError(
             mg.TypeInt32,
             mg.TypeBuffer,
             objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),
         ),
     )
+    b.addResponseImplErrorTests()
 }
 
 func initTypedReactorTests( b *mgRct.ReactorTestSetBuilder ) {
     initTypedRequestTests( b )
-//    initTypedResponseTests( b )
+    initTypedResponseTests( b )
 }
 
 func initReactorTests( b *mgRct.ReactorTestSetBuilder ) {

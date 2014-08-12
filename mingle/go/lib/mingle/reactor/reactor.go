@@ -145,6 +145,16 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     return res
 }
 
+func TypeOfEvent( ev ReactorEvent ) mg.TypeReference {
+    switch v := ev.( type ) {
+    case *ValueEvent: return mg.TypeOf( v.Val )
+    case *ListStartEvent: return v.Type
+    case *MapStartEvent: return mg.TypeSymbolMap
+    case *StructStartEvent: return v.Type.AsAtomicType()
+    }
+    panic( libErrorf( "can't get type for: %T", ev ) )
+}
+
 type ReactorTopType int
 
 const (

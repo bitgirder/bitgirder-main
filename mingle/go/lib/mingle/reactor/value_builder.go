@@ -18,14 +18,7 @@ func defaultBuilderErrorFactory( path objpath.PathNode, msg string ) error {
 
 func failBuilderBadInput( ev ReactorEvent, errFact BuilderErrorFactory ) error {
     if errFact == nil { errFact = defaultBuilderErrorFactory }
-    var typ interface { ExternalForm() string }
-    switch v := ev.( type ) {
-    case *ValueEvent: typ = mg.TypeOf( v.Val )
-    case *ListStartEvent: typ = v.Type
-    case *MapStartEvent: typ = mg.TypeSymbolMap
-    case *StructStartEvent: typ = v.Type
-    default: panic( libErrorf( "can't get type for: %T", ev ) )
-    }
+    typ := TypeOfEvent( ev )
     msg := fmt.Sprintf( "unhandled value: %s", typ.ExternalForm() )
     return errFact( ev.GetPath(), msg )
 }

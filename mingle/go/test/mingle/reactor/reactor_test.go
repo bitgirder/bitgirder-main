@@ -97,3 +97,16 @@ func TestVisitPath( t *testing.T ) {
         },
     )
 }
+
+func TestTypeOfEvent( t *testing.T ) {
+    a := assert.Asserter{ t }
+    chk := func( ev ReactorEvent, typ mg.TypeReference ) {
+        a.Truef( typ.Equals( TypeOfEvent( ev ) ), "blah" )
+    }
+    chk( NewValueEvent( mg.Int32( 1 ) ), mg.TypeInt32 )
+    lt1 := parser.MustTypeReference( "ns1@v1/S1*" ).( *mg.ListTypeReference )
+    chk( NewListStartEvent( lt1 ), lt1 )
+    chk( NewMapStartEvent(), mg.TypeSymbolMap )
+    st1 := parser.MustQualifiedTypeName( "ns1@v1/S1" )
+    chk( NewStructStartEvent( st1 ), st1.AsAtomicType() )
+}

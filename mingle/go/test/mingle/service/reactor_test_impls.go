@@ -6,6 +6,19 @@ import (
     "bitgirder/objpath"
 )
 
+func newTestOperationMap() *OperationMap {
+    res := NewOperationMap( getTestTypeDefs() )
+    add := func( svc, qnStr string ) {
+        qn := mkQn( qnStr )
+        res.MustAddServiceInstance( qn.Namespace, mkId( svc ), qn )
+    }
+    add( "svc1", "ns1@v1/Service1" )
+    add( "svc2", "ns1@v1/Service2" )
+    add( "svc1", "mingle:service:fail@v1/Service1" )
+    add( "svc1", "mingle:service@v1/Service1" )
+    return res
+}
+
 type reactorTestChecker interface {
     checkValue( t *reactorTestCall )
 }
@@ -119,17 +132,8 @@ func ( t *reactorTestCall ) initBaseRequestTest() RequestReactorInterface {
 
 func ( t *reactorTestCall ) initTypedRequestTest() RequestReactorInterface {
     res := &baseReqBuilder{}
-    m := NewOperationMap( testTypeDefs )
-    add := func( svc, qnStr string ) {
-        qn := mkQn( qnStr )
-        m.MustAddServiceInstance( qn.Namespace, mkId( svc ), qn )
-    }
-    add( "svc1", "ns1@v1/Service1" )
-    add( "svc2", "ns1@v1/Service2" )
-    add( "svc1", "mingle:service:fail@v1/Service1" )
-    add( "svc1", "mingle:service@v1/Service1" )
     t.chkObj = res
-    return AsTypedRequestReactorInterface( res, m )
+    return AsTypedRequestReactorInterface( res, newTestOperationMap() )
 }
 
 func ( t *reactorTestCall ) initRequestTest() mgRct.ReactorEventProcessor {
@@ -143,10 +147,36 @@ func ( t *reactorTestCall ) initRequestTest() mgRct.ReactorEventProcessor {
     return mgRct.InitReactorPipeline( rct )
 }
 
+func ( t *reactorTestCall ) newRespValueBuilder() *respValueBuilder {
+    return &respValueBuilder{ t: t.t }
+}
+
+func ( t *reactorTestCall ) initBaseResponseTest() ResponseReactorInterface {
+    res := t.newRespValueBuilder()
+    t.chkObj = res
+    return res
+}
+
+func ( t *reactorTestCall ) initTypedResponseTest() ResponseReactorInterface {
+    m := newTestOperationMap()
+    ri := t.t.In.( *responseInput )
+    reqDef, err := m.ExpectOperationForRequest( ri.reqCtx, nil )
+    if err != nil { panic( err ) }
+    bldr := t.newRespValueBuilder()
+    t.chkObj = bldr
+    opDef := reqDef.Operation
+    authDef := reqDef.Security
+    return AsTypedResponseReactorInterface( bldr, opDef, authDef, m.defs )
+}
+
 func ( t *reactorTestCall ) initResponseTest() mgRct.ReactorEventProcessor {
-    respBld := &respValueBuilder{ t: t.t }
-    rct := NewResponseReactor( respBld )
-    t.chkObj = respBld
+    var respIface ResponseReactorInterface
+    switch t.t.ReactorProfile {
+    case ReactorProfileBase: respIface = t.initBaseResponseTest()
+    case ReactorProfileTyped: respIface = t.initTypedResponseTest()
+    default: t.Fatalf( "unhandled profile: %s", t.t.ReactorProfile )
+    }
+    rct := NewResponseReactor( respIface )
     return mgRct.InitReactorPipeline( rct )
 }
 
@@ -171,10 +201,7 @@ func ( t *reactorTestCall ) feedSource( rct mgRct.ReactorEventProcessor ) bool {
         t.Logf( "feeding %s", mg.QuoteValue( mv ) )
     }
     err := mgRct.FeedSource( src, rct )
-    if err == nil { 
-        t.Falsef( t.t.Expect == nil, "did not expect a value" )
-        return true
-    }
+    if err == nil && t.t.Expect != nil { return true }
     t.EqualErrors( t.t.Error, err )
     return false
 }
