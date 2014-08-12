@@ -2,6 +2,7 @@ package service
 
 import (
     mg "mingle"
+    "mingle/types"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
@@ -164,9 +165,15 @@ func ( t *reactorTestCall ) initTypedResponseTest() ResponseReactorInterface {
     if err != nil { panic( err ) }
     bldr := t.newRespValueBuilder()
     t.chkObj = bldr
-    opDef := reqDef.Operation
-    authDef := reqDef.Security
-    return AsTypedResponseReactorInterface( bldr, opDef, authDef, m.defs )
+    opSig := reqDef.Operation.Signature
+    retTyp := opSig.Return
+    errTyps := make( []mg.TypeReference, 0, 4 )
+    errTyps = append( errTyps, opSig.Throws... )
+    if secQn := reqDef.Service.Security; secQn != nil {
+        authDef := types.MustPrototypeDefinition( secQn, m.defs )
+        errTyps = append( errTyps, authDef.Signature.Throws... )
+    }
+    return AsTypedResponseReactorInterface( bldr, retTyp, errTyps, m.defs )
 }
 
 func ( t *reactorTestCall ) initResponseTest() mgRct.ReactorEventProcessor {
