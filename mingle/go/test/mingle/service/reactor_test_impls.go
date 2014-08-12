@@ -27,8 +27,8 @@ func ( b *baseReqBuilder ) StartRequest(
     ctx *RequestContext, path objpath.PathNode ) error {
 
     b.ctx = ctx
-    if b.ctx.Namespace.Equals( mkNs( "bad@v1" ) ) {
-        return &testError{ path, "test-error-bad-ns" }
+    if b.ctx.Namespace.Equals( mkNs( "mingle:service:fail@v1" ) ) {
+        return &testError{ path, "start-request-impl-error" }
     }
     return nil
 }
@@ -36,8 +36,8 @@ func ( b *baseReqBuilder ) StartRequest(
 func ( b *baseReqBuilder ) StartAuthentication( 
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
-    if b.ctx.Operation.Equals( mkId( "noAuthOp" ) ) {
-        return nil, &testError{ path, "test-error-no-auth-expected" }
+    if b.ctx.Operation.Equals( mkId( "failStartAuthentication" ) ) {
+        return nil, &testError{ path, "start-authentication-impl-error" }
     }
     return setBuilder( &b.authBldr )
 }
@@ -45,14 +45,27 @@ func ( b *baseReqBuilder ) StartAuthentication(
 func ( b *baseReqBuilder ) StartParameters(
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
-    if b.ctx.Operation.Equals( mkId( "badParams" ) ) {
-        return nil, &testError{ path, "test-error-bad-params" }
+    if b.ctx.Operation.Equals( mkId( "failStartParameters" ) ) {
+        return nil, &testError{ path, "start-parameters-impl-error" }
     }
     return setBuilder( &b.paramsBldr )
 }
 
 func ( b *baseReqBuilder ) checkValue( t *reactorTestCall ) {
     expct := t.t.Expect.( *requestExpect )
+    qt := func( val interface{} ) string {
+        switch v := val.( type ) {
+        case nil: return "nil"
+        case *mgRct.BuildReactor: 
+            if v == nil { return "<nil>" }
+            return mg.QuoteValue( v.GetValue().( mg.Value ) )
+        case mg.Value: return mg.QuoteValue( v )
+        }
+        panic( libErrorf( "unhandled val: %T", val ) )
+    }
+    t.Logf( "got auth=%s, params=%s, expecting auth=%s, params=%s",
+        qt( b.authBldr ), qt( b.paramsBldr ), qt( expct.auth ),
+        qt( expct.params ) )
     mgRct.CheckBuiltValue( expct.auth, b.authBldr, t.Descend( "auth" ) )
     mgRct.CheckBuiltValue( expct.params, b.paramsBldr, t.Descend( "params" ) )
 }
@@ -107,10 +120,14 @@ func ( t *reactorTestCall ) initBaseRequestTest() RequestReactorInterface {
 func ( t *reactorTestCall ) initTypedRequestTest() RequestReactorInterface {
     res := &baseReqBuilder{}
     m := NewOperationMap( testTypeDefs )
-    m.MustAddServiceInstance( 
-        mkNs( "ns1@v1" ), mkId( "svc1" ), mkQn( "ns1@v1/Service1" ) )
-    m.MustAddServiceInstance( 
-        mkNs( "ns1@v1" ), mkId( "svc2" ), mkQn( "ns1@v1/Service2" ) )
+    add := func( svc, qnStr string ) {
+        qn := mkQn( qnStr )
+        m.MustAddServiceInstance( qn.Namespace, mkId( svc ), qn )
+    }
+    add( "svc1", "ns1@v1/Service1" )
+    add( "svc2", "ns1@v1/Service2" )
+    add( "svc1", "mingle:service:fail@v1/Service1" )
+    add( "svc1", "mingle:service@v1/Service1" )
     t.chkObj = res
     return AsTypedRequestReactorInterface( res, m )
 }
@@ -141,11 +158,19 @@ func ( t *reactorTestCall ) initTest() mgRct.ReactorEventProcessor {
     panic( libErrorf( "unhandled expect type: %s", t.t.Type ) )
 }
 
+func ( t *reactorTestCall ) getFeedSource() interface{} {
+    switch v := t.t.In.( type ) {
+    case *responseInput: return v.in
+    }
+    return t.t.In
+}
+
 func ( t *reactorTestCall ) feedSource( rct mgRct.ReactorEventProcessor ) bool {
-    if mv, ok := t.t.In.( mg.Value ); ok {
+    src := t.getFeedSource()
+    if mv, ok := src.( mg.Value ); ok {
         t.Logf( "feeding %s", mg.QuoteValue( mv ) )
     }
-    err := mgRct.FeedSource( t.t.In, rct )
+    err := mgRct.FeedSource( src, rct )
     if err == nil { 
         t.Falsef( t.t.Expect == nil, "did not expect a value" )
         return true

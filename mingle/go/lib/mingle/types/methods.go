@@ -10,15 +10,15 @@ var idAuthentication = idUnsafe( "authentication" )
 // returns the *PrototypeDefinition matching secQn, but does not check that it
 // is otherwise valid as a security prototype
 func expectProtoDef( 
-    qn *mg.QualifiedTypeName, dm *DefinitionMap ) *PrototypeDefinition {
+    qn *mg.QualifiedTypeName, dm DefinitionGetter ) *PrototypeDefinition {
  
-    def := dm.MustGet( qn )
+    def := MustGetDefinition( qn, dm )
     if protDef, ok := def.( *PrototypeDefinition ); ok { return protDef }
     panic( libErrorf( "not a prototype: %s", qn ) )
 }
 
 func MustAuthTypeOf( 
-    secQn *mg.QualifiedTypeName, dm *DefinitionMap ) mg.TypeReference {
+    secQn *mg.QualifiedTypeName, dm DefinitionGetter ) mg.TypeReference {
 
     protDef := expectProtoDef( secQn, dm )
     flds := protDef.Signature.GetFields()
@@ -27,7 +27,7 @@ func MustAuthTypeOf(
 }
 
 func canAssignToStruct( 
-    targ *StructDefinition, def Definition, dm *DefinitionMap ) bool {
+    targ *StructDefinition, def Definition, dm DefinitionGetter ) bool {
 
     sd, ok := def.( *StructDefinition )
     if ! ok { return false }
@@ -35,7 +35,7 @@ func canAssignToStruct(
 }
 
 func canAssignToSchema(
-    targ *SchemaDefinition, def Definition, dm *DefinitionMap ) bool {
+    targ *SchemaDefinition, def Definition, dm DefinitionGetter ) bool {
 
     if sd, ok := def.( *StructDefinition ); ok {
         log.Printf( "checking whether %s satisfies schema %s", 
@@ -45,8 +45,8 @@ func canAssignToSchema(
     return false
 }
 
-func canAssignType( t1, t2 *mg.QualifiedTypeName, dm *DefinitionMap ) bool {
-    d1, d2 := dm.MustGet( t1 ), dm.MustGet( t2 )
+func canAssignType( t1, t2 *mg.QualifiedTypeName, dm DefinitionGetter ) bool {
+    d1, d2 := MustGetDefinition( t1, dm ), MustGetDefinition( t2, dm )
     switch v1 := d1.( type ) {
     case *StructDefinition: return canAssignToStruct( v1, d2, dm )
     case *SchemaDefinition: return canAssignToSchema( v1, d2, dm )
@@ -57,7 +57,7 @@ func canAssignType( t1, t2 *mg.QualifiedTypeName, dm *DefinitionMap ) bool {
 func canThrowErrorOfType( 
     qn *mg.QualifiedTypeName, 
     sig *CallSignature,
-    dm *DefinitionMap ) ( mg.TypeReference, bool ) {
+    dm DefinitionGetter ) ( mg.TypeReference, bool ) {
 
     for _, typ := range sig.Throws {
         if canAssignType( mg.TypeNameIn( typ ), qn, dm ) { return typ, true }

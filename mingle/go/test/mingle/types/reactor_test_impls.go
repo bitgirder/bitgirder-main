@@ -4,16 +4,44 @@ import (
     mg "mingle"
     "mingle/bind"
     mgRct "mingle/reactor"
+    "bitgirder/objpath"
 )
 
-func ( t *CastReactorTest ) newCastReactor() *CastReactor {
-    res := NewCastReactor( t.Type, t.Map )
+type customFieldSetFactory struct {
+    dt *mgRct.DepthTracker
+    c *mgRct.ReactorTestCall
+}
+
+func ( f customFieldSetFactory ) GetFieldSet( 
+    path objpath.PathNode ) ( *FieldSet, error ) {
+
+    f.c.Logf( "depth is %d at path %s", f.dt.Depth(), mg.FormatIdPath( path ) )
+    switch d := f.dt.Depth(); {
+    case d == 3: return nil, nil
+    case d < 4:
+        fs := MakeFieldSet(
+            MakeFieldDef( "f1", "String?", nil ),
+            MakeFieldDef( "f2", "SymbolMap?", nil ),
+        )
+        return fs, nil
+    }
+    return nil, mg.NewValueCastError( path, "custom-field-set-test-error" )
+}
+
+func ( t *CastReactorTest ) addCastReactor( 
+    rcts []interface{}, c *mgRct.ReactorTestCall ) []interface{} {
+
+    cr := NewCastReactor( t.Type, t.Map )
     switch t.Profile {
     case ProfileCastDisable: 
-        res.AddPassthroughField( mkQn( "ns1@v1/S1" ), mkId( "f1" ) )
-        res.AddPassthroughField( mkQn( "ns1@v1/Schema1" ), mkId( "f1" ) )
+        cr.AddPassthroughField( mkQn( "ns1@v1/S1" ), mkId( "f1" ) )
+        cr.AddPassthroughField( mkQn( "ns1@v1/Schema1" ), mkId( "f1" ) )
+    case ProfileCustomFieldSet:
+        dt := mgRct.NewDepthTracker()
+        rcts = append( rcts, dt )
+        cr.FieldSetFactory = customFieldSetFactory{ dt, c }
     }
-    return res
+    return append( rcts, cr )
 }
 
 func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
@@ -22,7 +50,7 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
 //    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
-    rcts = append( rcts, t.newCastReactor() )
+    rcts = t.addCastReactor( rcts, c )
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     rcts = append( rcts, vb )
     pip := mgRct.InitReactorPipeline( rcts... )

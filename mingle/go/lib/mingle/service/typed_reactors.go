@@ -5,7 +5,7 @@ import (
     mgRct "mingle/reactor"
     "mingle/types"
     "bitgirder/objpath"
-    "bitgirder/stub"
+//    "log"
 )
 
 type RequestDefinition struct {
@@ -13,13 +13,19 @@ type RequestDefinition struct {
     AuthenticationType mg.TypeReference
 }
 
+func newRequestDefinition( 
+    opDef *types.OperationDefinition ) *RequestDefinition {
+
+    return &RequestDefinition{ Operation: opDef }
+}
+
 type OperationMap struct {
-    nsMap *mg.NamespaceMap
+    instMap *InstanceMap
     defs *types.DefinitionMap
 }
 
 func NewOperationMap( defs *types.DefinitionMap ) *OperationMap {
-    return &OperationMap{ defs: defs, nsMap: mg.NewNamespaceMap() }
+    return &OperationMap{ defs: defs, instMap: NewInstanceMap() }
 }
 
 func ( m *OperationMap ) mustAddRequestDefinitions(
@@ -30,7 +36,7 @@ func ( m *OperationMap ) mustAddRequestDefinitions(
         authTyp = types.MustAuthTypeOf( secQn, m.defs )
     }
     for _, opDef := range sd.Operations {
-        reqDef := &RequestDefinition{ Operation: opDef }
+        reqDef := newRequestDefinition( opDef )
         if authTyp != nil { reqDef.AuthenticationType = authTyp }
         opMaps.Put( opDef.Name, reqDef )
     }
@@ -39,84 +45,85 @@ func ( m *OperationMap ) mustAddRequestDefinitions(
 func ( m *OperationMap ) MustAddServiceInstance(
     ns *mg.Namespace, svc *mg.Identifier, typ *mg.QualifiedTypeName ) {
 
-    sd := m.defs.MustGet( typ ).( *types.ServiceDefinition )
-    var svcMaps *mg.IdentifierMap
-    if v, ok := m.nsMap.GetOk( ns ); ok {
-        svcMaps = v.( *mg.IdentifierMap )
+    if _, miss := m.instMap.GetOk( ns, svc ); miss == nil {
+        panic( libErrorf( "map already has instnace: %s", 
+            FormatInstanceId( ns, svc ) ) )
     } else {
-        svcMaps = mg.NewIdentifierMap()
-        m.nsMap.Put( ns, svcMaps )
+        reqDefs := mg.NewIdentifierMap()
+        m.instMap.Put( ns, svc, reqDefs )
+        def := types.MustGetDefinition( typ, m.defs )
+        sd := def.( *types.ServiceDefinition )
+        m.mustAddRequestDefinitions( reqDefs, sd )
     }
-    if _, ok := svcMaps.GetOk( svc ); ok {
-        panic( libErrorf( "%s.%s already has an instance", ns, svc ) )
-    } else {
-        opMaps := mg.NewIdentifierMap()
-        m.mustAddRequestDefinitions( opMaps, sd )
-        svcMaps.Put( svc, opMaps )
-    }
-}
-
-func ( m *OperationMap ) errUnknownEndpoint(
-    ctx *RequestContext, errFld *mg.Identifier, path objpath.PathNode ) error {
-
-    var tmpl string
-    args := make( []interface{}, 0, 2 )
-    switch {
-    case errFld.Equals( IdNamespace ):
-        tmpl = "endpoint has no such namespace: %s"
-        args = append( args, ctx.Namespace )
-    case errFld.Equals( IdService ):
-        tmpl = "namespace %s has no such service: %s"
-        args = append( args, ctx.Namespace, ctx.Service )
-    case errFld.Equals( IdOperation ):
-        tmpl = "service %s.%s has no such operation: %s"
-        args = append( args, ctx.Namespace, ctx.Service, ctx.Operation )
-    default: panic( libErrorf( "unhandled errFld: %s", errFld ) )
-    }
-    return NewRequestErrorf( path, tmpl, args... )
 }
 
 func ( m *OperationMap ) ExpectOperationForRequest(
-    ctx *RequestContext, 
-    path objpath.PathNode ) ( *types.OperationDefinition, error ) {
+    ctx *RequestContext, path objpath.PathNode ) ( *RequestDefinition, error ) {
 
-    if svcMapVal, ok := m.nsMap.GetOk( ctx.Namespace ); ok {
-        svcMap := svcMapVal.( *mg.IdentifierMap )
-        if opMapVal, ok := svcMap.GetOk( ctx.Service ); ok {
-            opMap := opMapVal.( *mg.IdentifierMap )
-            if opDefVal, ok := opMap.GetOk( ctx.Operation ); ok {
-                return opDefVal.( *types.OperationDefinition ), nil
-            }
-            return nil, m.errUnknownEndpoint( ctx, IdOperation, path )
-        }
-        return nil, m.errUnknownEndpoint( ctx, IdService, path )
-    }
-    return nil, m.errUnknownEndpoint( ctx, IdNamespace, path )
+    def, err := m.instMap.getRequestValue( ctx, path )
+    if err == nil { return def.( *RequestDefinition ), nil }
+    return nil, err
 }
 
 type typedReqIface struct {
     iface RequestReactorInterface
     m *OperationMap
-    od *types.OperationDefinition
+    reqDef *RequestDefinition
 }
 
 func ( i *typedReqIface ) StartRequest( 
     ctx *RequestContext, path objpath.PathNode ) ( err error ) {
 
-    i.od, err = i.m.ExpectOperationForRequest( ctx, path )
-    return
+    if i.reqDef, err = i.m.ExpectOperationForRequest( ctx, path ); err != nil {
+        return err
+    }
+    return i.iface.StartRequest( ctx, path )
+}
+
+func ( i *typedReqIface ) newCastReactor( 
+    typ mg.TypeReference ) *types.CastReactor {
+    
+    res := types.NewCastReactor( typ, i.m.defs )
+    res.SkipPathSetter = true
+    return res
 }
 
 func ( i *typedReqIface ) StartAuthentication( 
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
-    return nil, stub.Unimplemented()
+    authTyp := i.reqDef.AuthenticationType 
+    if authTyp == nil { 
+        return nil, NewRequestError( path, errMsgNoAuthExpected )
+    }
+    rct, err := i.iface.StartAuthentication( path )
+    if err != nil { return nil, err }
+    cr := i.newCastReactor( authTyp )
+    return mgRct.InitReactorPipeline( cr, rct ), nil
+}
+
+type typedReqParamsFactory struct {
+    dt *mgRct.DepthTracker
+    iface *typedReqIface
+}
+
+func ( f typedReqParamsFactory ) GetFieldSet(
+    path objpath.PathNode ) ( *types.FieldSet, error ) {
+
+    if f.dt.Depth() == 1 { 
+        return f.iface.reqDef.Operation.Signature.Fields, nil
+    }
+    return nil, nil
 }
 
 func ( i *typedReqIface ) StartParameters( 
     path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
 
-    return nil, stub.Unimplemented()
+    rct, err := i.iface.StartParameters( path )
+    if err != nil { return nil, err }
+    fsf := typedReqParamsFactory{ dt: mgRct.NewDepthTracker(), iface: i }
+    cr := i.newCastReactor( mg.TypeSymbolMap )
+    cr.FieldSetFactory = fsf
+    return mgRct.InitReactorPipeline( fsf.dt, cr, rct ), nil
 }
 
 func AsTypedRequestReactorInterface( 

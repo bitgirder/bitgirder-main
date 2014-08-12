@@ -47,21 +47,17 @@ func ( t *testError ) Error() string { return mg.FormatError( t.path, t.msg ) }
 
 // manually creating typedefs that would correspond to:
 //
+// ---------------------------------------------------
+//
 //  @version v1
 //
 //  namespace ns1
 //
-//  struct S1 {
-//      f1 Int32
-//  }
+//  struct S1 { f1 Int32 }
 //
-//  struct Err1 {
-//      f1 Int32
-//  }
+//  struct Err1 { f1 Int32 }
 //
-//  struct AuthErr1 {
-//      f1 Int32
-//  }
+//  struct AuthErr1 { f1 Int32 }
 //
 //  prototype Auth1( authentication Int32 ): String,
 //      throws AuthErr1
@@ -71,17 +67,41 @@ func ( t *testError ) Error() string { return mg.FormatError( t.path, t.msg ) }
 //      op op1(): Int32
 //
 //      op op2( f1 S1 ): S1 throws Err1
+//
+//      op op3(): Null
 //  }
 //
 //  service Service2 {
 //  
 //      @security Auth1
 //
-//      op op1(): Null
+//      op op1(): Int32
 //
 //      op op2( f1 S1 ): S1 throws Err1
 //  }
 //
+// ---------------------------------------------------
+//
+//  @version v1
+//
+//  namespace mingle:service:fail
+//
+//  service Service1 { op1() Null }
+//
+// ---------------------------------------------------
+//
+//  @version v1
+//
+//  namespace mingle:service
+//
+//  service Service1 {
+//
+//      failStartAuthentication() Null
+//
+//      failStartParameters() Null
+//  }
+//
+
 var testTypeDefs = types.MakeV1DefMap(
     types.MakeServiceDef( "ns1@v1/Service1", "",
         types.MakeOpDef( "op1",
@@ -100,12 +120,19 @@ var testTypeDefs = types.MakeV1DefMap(
                 []string{ "ns1@v1/Err1" },
             ),
         ),
+        types.MakeOpDef( "op3",
+            types.MakeCallSig(
+                []*types.FieldDefinition{},
+                "Null",
+                []string{},
+            ),
+        ),
     ),
     types.MakeServiceDef( "ns1@v1/Service2", "ns1@v1/Auth1",
         types.MakeOpDef( "op1",
             types.MakeCallSig(
                 []*types.FieldDefinition{},
-                "Null",
+                "Int32",
                 []string{},
             ),
         ),
@@ -119,6 +146,31 @@ var testTypeDefs = types.MakeV1DefMap(
             ),
         ),
     ),
+    types.MakeServiceDef( "mingle:service:fail@v1/Service1", "",
+        types.MakeOpDef( "op1",
+            types.MakeCallSig( []*types.FieldDefinition{}, "Null", []string{} ),
+        ),
+    ),
+    types.MakeServiceDef( 
+        "mingle:service@v1/Service1", 
+        "mingle:service@v1/Auth1",
+        types.MakeOpDef( "failStartAuthentication",
+            types.MakeCallSig( []*types.FieldDefinition{}, "Null", []string{} ),
+        ),
+        types.MakeOpDef( "failStartParameters",
+            types.MakeCallSig( []*types.FieldDefinition{}, "Null", []string{} ),
+        ),
+    ),
+    &types.PrototypeDefinition{
+        Name: parser.MustQualifiedTypeName( "mingle:service@v1/Auth1" ),
+        Signature: types.MakeCallSig(
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "authentication", "Int32", nil ),
+            },
+            "String",
+            []string{ "ns1@v1/AuthErr1" },
+        ),
+    },
     &types.PrototypeDefinition{
         Name: parser.MustQualifiedTypeName( "ns1@v1/Auth1" ),
         Signature: types.MakeCallSig(

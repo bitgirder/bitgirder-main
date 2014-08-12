@@ -22,6 +22,11 @@ var (
     QnameResponseError *mg.QualifiedTypeName
     TypeResponseError *mg.AtomicTypeReference
 
+    // pkg-only for the moment, though could become public if needed; only used
+    // as a synthetic struct type for request parameter casts at the moment
+    qnameRequestParameters *mg.QualifiedTypeName
+    typeRequestParameters *mg.AtomicTypeReference
+
     IdNamespace *mg.Identifier
     IdService *mg.Identifier
     IdOperation *mg.Identifier
@@ -60,6 +65,8 @@ func initNames() {
     QnameResponse, TypeResponse = initNamePair( "Response" )
     QnameRequestError, TypeRequestError = initNamePair( "RequestError" )
     QnameResponseError, TypeResponseError = initNamePair( "ResponseError" )
+    qnameRequestParameters, typeRequestParameters = 
+        initNamePair( "RequestParameters" )
     IdNamespace = mkId( "namespace" )
     IdService = mkId( "service" )
     IdOperation = mkId( "operation" )
@@ -135,3 +142,78 @@ func NewResponseError( path objpath.PathNode, msg string ) *ResponseError {
 
 const respErrMsgMultipleResponseFields =
     "response contains both a result and an error"
+
+func FormatInstanceId( ns *mg.Namespace, svc *mg.Identifier ) string {
+    return fmt.Sprintf( "%s.%s", ns.ExternalForm(), svc.ExternalForm() )
+}
+
+type InstanceMap struct {
+    nsMap *mg.NamespaceMap
+}
+
+func NewInstanceMap() *InstanceMap {
+    return &InstanceMap{ nsMap: mg.NewNamespaceMap() }
+}
+
+func ( m *InstanceMap ) getSvcMap( 
+    ns *mg.Namespace, create bool ) *mg.IdentifierMap {
+
+    if res, ok := m.nsMap.GetOk( ns ); ok { return res.( *mg.IdentifierMap ) }
+    if ! create { return nil }
+    res := mg.NewIdentifierMap()
+    m.nsMap.Put( ns, res )
+    return res
+}
+
+func ( m *InstanceMap ) GetOk( 
+    ns *mg.Namespace, svc *mg.Identifier ) ( interface{}, *mg.Identifier ) {
+
+    if svcMap := m.getSvcMap( ns, false ); svcMap != nil {
+        if res, ok := svcMap.GetOk( svc ); ok { return res, nil }
+        return nil, IdService
+    }
+    return nil, IdNamespace
+}
+
+func ( m *InstanceMap ) Put(
+    ns *mg.Namespace, svc *mg.Identifier, val interface{} ) {
+
+    m.getSvcMap( ns, true ).Put( svc, val )
+}
+
+func newUnknownEndpointError(
+    ctx *RequestContext, errFld *mg.Identifier, path objpath.PathNode ) error {
+
+    var tmpl string
+    args := make( []interface{}, 0, 2 )
+    switch {
+    case errFld.Equals( IdNamespace ):
+        tmpl = "no services in namespace: %s"
+        args = append( args, ctx.Namespace )
+    case errFld.Equals( IdService ):
+        tmpl = "namespace %s has no service with id: %s"
+        args = append( args, ctx.Namespace, ctx.Service )
+    case errFld.Equals( IdOperation ):
+        tmpl = "service %s has no such operation: %s"
+        instId := FormatInstanceId( ctx.Namespace, ctx.Service )
+        args = append( args, instId, ctx.Operation )
+    default: panic( libErrorf( "unhandled errFld: %s", errFld ) )
+    }
+    return NewRequestErrorf( path, tmpl, args... )
+}
+
+// could make this public if needed at some point
+func ( m *InstanceMap ) getRequestValue( 
+    ctx *RequestContext, path objpath.PathNode ) ( interface{}, error ) {
+
+    v, miss := m.GetOk( ctx.Namespace, ctx.Service )
+    if miss == nil {
+        if res, ok := v.( *mg.IdentifierMap ).GetOk( ctx.Operation ); ok {
+            return res, nil
+        }
+        return nil, newUnknownEndpointError( ctx, IdOperation, path )
+    }
+    return nil, newUnknownEndpointError( ctx, miss, path )
+}
+
+const errMsgNoAuthExpected = "service does not accept authentication"

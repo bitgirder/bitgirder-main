@@ -8,6 +8,7 @@ import (
 
 const (
     ProfileCastDisable = "cast-disable"
+    ProfileCustomFieldSet = "custom-field-set"
 )
 
 type CastReactorTest struct {

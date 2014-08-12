@@ -1397,6 +1397,85 @@ func ( rti *rtInit ) addCastDisableTests() {
     )
 }
 
+func ( rti *rtInit ) addCustomFieldSetTests() {
+    defs := MakeV1DefMap(
+        MakeStructDef( "ns1@v1/S1",
+            []*FieldDefinition{
+                MakeFieldDef( "f1", "&Int32?", nil ),
+                MakeFieldDef( "f2", "SymbolMap?", nil ),
+            },
+        ),
+    )
+    add := func( typ interface{}, t *CastReactorTest ) {
+        t.Map = defs
+        t.Type = asType( typ )
+        t.Profile = ProfileCustomFieldSet
+        rti.addTests( t )
+    }
+    addOk := func( in interface{}, expct mg.Value, typ interface{} ) {
+        add( typ, &CastReactorTest{ In: in, Expect: expct } )
+    }
+    addErr := func( in interface{}, err error, typ interface{} ) {
+        add( typ, &CastReactorTest{ In: in, Err: err } )
+    }
+    addOk(
+        parser.MustStruct( "ns1@v1/S1",
+            "f1", int64( 1 ),
+            "f2", parser.MustSymbolMap( "f1", "stuff" ),
+        ),
+        parser.MustStruct( "ns1@v1/S1",
+            "f1", int32( 1 ),
+            "f2", parser.MustSymbolMap( "f1", "stuff" ),
+        ),
+        "ns1@v1/S1",
+    )
+    addOk(
+        parser.MustSymbolMap(
+            "f1", int64( 1 ),
+            "f2", parser.MustSymbolMap( "f1", "stuff" ),
+        ),
+        parser.MustSymbolMap(
+            "f1", "1",
+            "f2", parser.MustSymbolMap( "f1", "stuff" ),
+        ),
+        "SymbolMap",
+    )
+    addOk(
+        parser.MustSymbolMap(
+            "f2", parser.MustSymbolMap(
+                "f1", int64( 1 ),
+                "f2", parser.MustSymbolMap(
+                    "f1", []byte{ 0 },
+                ),
+            ),
+        ),
+        parser.MustSymbolMap(
+            "f2", parser.MustSymbolMap(
+                "f1", "1",
+                "f2", parser.MustSymbolMap(
+                    "f1", []byte{ 0 },
+                ),
+            ),
+        ),
+        "SymbolMap",
+    )
+    addErr(
+        parser.MustSymbolMap(
+            "f1", int64( 1 ),
+            "f2", parser.MustSymbolMap( 
+                "f2", parser.MustSymbolMap(
+                    "f2", mg.EmptySymbolMap(),
+                ),
+            ),
+        ),
+        newVcErr( 
+            mg.MakeTestIdPath( 2, 2, 2 ), 
+            "custom-field-set-test-error",
+        ),
+        "SymbolMap",
+    )
+}
+
 func ( rti *rtInit ) addDefaultPathTests() {
     dm := MakeV1DefMap(
         MakeStructDef( "ns1@v1/S1",
@@ -1767,6 +1846,7 @@ func ( rti *rtInit ) call() {
     rti.addConstructorCastTests()
     rti.addDefaultPathTests()
     rti.addCastDisableTests()
+    rti.addCustomFieldSetTests()
     rti.addBuiltinTypeTests()
 }
 

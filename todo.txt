@@ -6,5 +6,3 @@
 - (compiler/types) disallow duplicate constructor types and constructor types of
   SymbolMap (sym map is ambiguous when used with a cast reactor that infers
   structs on symbol maps)
-
-- (mingle io) add failure checks for invalid id part strings

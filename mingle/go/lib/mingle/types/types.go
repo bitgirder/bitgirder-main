@@ -10,6 +10,17 @@ func idUnsafe( parts ...string ) *mg.Identifier {
     return mg.NewIdentifierUnsafe( parts )
 }
 
+type DefinitionGetter interface {
+    GetDefinition( qn *mg.QualifiedTypeName ) ( Definition, bool )
+}
+
+func MustGetDefinition( 
+    qn *mg.QualifiedTypeName, dg DefinitionGetter ) Definition {
+
+    if res, ok := dg.GetDefinition( qn ); ok { return res }
+    panic( libErrorf( "no definition found for name: %s", qn ) )
+}
+
 type DefinitionMap struct {
     m *mg.QnameMap
     builtIn *mg.QnameMap
@@ -25,7 +36,7 @@ func ( dm *DefinitionMap ) setBuiltIn( qn *mg.QualifiedTypeName ) {
 
 func ( m *DefinitionMap ) Len() int { return m.m.Len() }
 
-func ( m *DefinitionMap ) GetOk( 
+func ( m *DefinitionMap ) GetDefinition( 
     qn *mg.QualifiedTypeName ) ( Definition, bool ) {
     d, ok := m.m.GetOk( qn  )
     if ok { return d.( Definition ), true }
@@ -33,13 +44,8 @@ func ( m *DefinitionMap ) GetOk(
 }
 
 func ( m *DefinitionMap ) Get( qn *mg.QualifiedTypeName ) Definition {
-    if d, ok := m.GetOk( qn ); ok { return d }
+    if d, ok := m.GetDefinition( qn ); ok { return d }
     return nil
-}
-
-func ( m *DefinitionMap ) MustGet( qn *mg.QualifiedTypeName ) Definition {
-    if res, ok := m.GetOk( qn ); ok { return res }
-    panic( libErrorf( "no definition for type: %s", qn ) )
 }
 
 func ( m *DefinitionMap ) HasKey( qn *mg.QualifiedTypeName ) bool {
@@ -303,60 +309,4 @@ func ( sd *ServiceDefinition ) mustFindOperation(
     res := sd.findOperation( op )
     if ( res != nil ) { return res }
     panic( libErrorf( "service %s has no operation %s", sd.Name, op ) )
-}
-
-type ServiceDefinitionMap struct {
-    defs *DefinitionMap
-    nsMap *mg.NamespaceMap
-}
-
-func NewServiceDefinitionMap( defs *DefinitionMap ) *ServiceDefinitionMap {
-    return &ServiceDefinitionMap{ defs: defs, nsMap: mg.NewNamespaceMap() }
-}
-
-func ( m *ServiceDefinitionMap ) GetDefinitionMap() *DefinitionMap {
-    return m.defs
-}
-
-func ( m *ServiceDefinitionMap ) Put( 
-    ns *mg.Namespace, svc *mg.Identifier, qn *mg.QualifiedTypeName ) error {
-    if def, ok := m.defs.GetOk( qn ); ok {
-        if sd, ok := def.( *ServiceDefinition ); ok {
-            svcMap, ok := m.nsMap.GetOk( ns )
-            if ! ok {
-                svcMap = mg.NewIdentifierMap()
-                m.nsMap.Put( ns, svcMap )
-            }
-            svcMap.( *mg.IdentifierMap ).Put( svc, sd )
-            return nil
-        }
-        return libErrorf( "(%T).Put(): %s is not a service", m, qn )
-    }
-    return libErrorf( "(%T).Put(): no definition for name %s", qn )
-}
-
-func ( m *ServiceDefinitionMap ) MustPut(
-    ns *mg.Namespace, svc *mg.Identifier, qn *mg.QualifiedTypeName ) {
-    if err := m.Put( ns, svc, qn ); err != nil { panic( err ) }
-}
-
-func ( m *ServiceDefinitionMap ) HasNamespace( ns *mg.Namespace ) bool {
-    return m.nsMap.HasKey( ns )
-}
-
-func ( m *ServiceDefinitionMap ) GetOk( 
-    ns *mg.Namespace, svc *mg.Identifier ) ( *ServiceDefinition, bool ) {
-    if svcMap, ok := m.nsMap.GetOk( ns ); ok {
-        if sd, ok := svcMap.( *mg.IdentifierMap ).GetOk( svc ); ok {
-            return sd.( *ServiceDefinition ), true
-        }
-    }
-    return nil, false
-}
-
-func ( m *ServiceDefinitionMap ) MustGet(
-    ns *mg.Namespace, svc *mg.Identifier ) *ServiceDefinition {
-    if res, ok := m.GetOk( ns, svc ); ok { return res }
-    panic( 
-        libErrorf( "no service matches namespace '%s' and id '%s'", ns, svc ) )
 }
