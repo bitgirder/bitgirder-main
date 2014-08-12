@@ -8,6 +8,7 @@
         "mingle/bind",
         "mingle/types",
         "mingle/types/builtin",
+        "mingle/tck",
         "mingle/parser",
         "mingle/service"
     ],

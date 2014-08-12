@@ -346,78 +346,82 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
     addErr := func( ns, svc, op string, err error, tail ...interface{} ) {
         b.addErr( makeReq( ns, svc, op, tail... ), err )
     }
-    addOk( "ns1@v1", "svc1", "op1",
+    addOk( "mingle:tck@v1", "svc1", "op1",
         &requestExpect{ params: mg.EmptySymbolMap() },
     )
-    addOk( "ns1@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "op2",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
-                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+                "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
             ),
         },
         "parameters", parser.MustSymbolMap( 
-            "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         ),
     )
-    addOk( "ns1@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "op2",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
-                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+                "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
             ),
         },
         "parameters", parser.MustSymbolMap( 
             "f1", parser.MustSymbolMap( "f1", int64( 1 ) ),
         ),
     )
-    addOk( "ns1@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "op2",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
-                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+                "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
             ),
         },
         "parameters", parser.MustSymbolMap( 
-            "f1", parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ),
+            "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ),
         ),
     )
-    addOk( "ns1@v1", "svc2", "op1",
+    addOk( "mingle:tck@v1", "svc2", "op1",
         &requestExpect{ auth: mg.Int32( 1 ), params: mg.EmptySymbolMap() },
         "authentication", int32( 1 ),
     )
-    addOk( "ns1@v1", "svc2", "op1",
+    addOk( "mingle:tck@v1", "svc2", "op1",
         &requestExpect{ auth: mg.Int32( 1 ), params: mg.EmptySymbolMap() },
         "authentication", int64( 1 ),
     )
-    addOk( "ns1@v1", "svc2", "op2",
+    addOk( "mingle:tck@v1", "svc2", "op2",
         &requestExpect{
             params: parser.MustSymbolMap( 
-                "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+                "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
             ),
             auth: mg.Int32( 1 ),
         },
         "authentication", int64( 1 ),
         "parameters", parser.MustSymbolMap( 
-            "f1", parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ),
+            "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ),
         ),
     )
     addErr( "no:such@v1", "svc1", "op1",
         NewRequestError( nil, "no services in namespace: no:such@v1" ),
     )
-    addErr( "ns1@v1", "noSuchService", "op1",
+    addErr( "mingle:tck@v1", "noSuchService", "op1",
         NewRequestError( 
-            nil, "namespace ns1@v1 has no service with id: no-such-service" ),
+            nil, 
+            "namespace mingle:tck@v1 has no service with id: no-such-service",
+        ),
     )
-    addErr( "ns1@v1", "svc1", "noSuchOp",
+    addErr( "mingle:tck@v1", "svc1", "noSuchOp",
         NewRequestError( 
-            nil, "service ns1@v1.svc1 has no such operation: no-such-op" ),
+            nil, 
+            "service mingle:tck@v1.svc1 has no such operation: no-such-op",
+        ),
     )
-    addErr( "ns1@v1", "svc1", "op1",
+    addErr( "mingle:tck@v1", "svc1", "op1",
         NewRequestError(
             objpath.RootedAt( IdAuthentication ),
             "service does not accept authentication",
         ),
         "authentication", int32( 1 ),
     )
-    addErr( "ns1@v1", "svc2", "op1",
+    addErr( "mingle:tck@v1", "svc2", "op1",
         mg.NewTypeCastError(
             mg.TypeInt32,
             mg.TypeBuffer,
@@ -425,25 +429,25 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
         ),
         "authentication", []byte{ 0 },
     )
-    addErr( "ns1@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "op2",
         mg.NewMissingFieldsError(
             objpath.RootedAt( IdParameters ),
             []*mg.Identifier{ mkId( "f1" ) },
         ),
     )
-    addErr( "ns1@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "op2",
         mg.NewUnrecognizedFieldError(
             objpath.RootedAt( IdParameters ),
             mkId( "badField" ),
         ),
         "parameters", parser.MustSymbolMap(
-            "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
             "badField", int32( 2 ),
         ),
     )
-    addErr( "ns1@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "op2",
         mg.NewTypeCastError(
-            asType( "ns1@v1/S1" ),
+            asType( "mingle:tck@v1/S1" ),
             mg.TypeBuffer,
             objpath.RootedAt( IdParameters ).Descend( mkId( "f1" ) ),
         ),
@@ -493,72 +497,77 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
             },
         )
     }
-    addImplicitErrCoverage( "ns1@v1", "svc1", "op1" )
-    addImplicitErrCoverage( "ns1@v1", "svc1", "op2" )
-    addImplicitErrCoverage( "ns1@v1", "svc2", "op1" )
-    addOk( "ns1@v1", "svc1", "op1",
+    addImplicitErrCoverage( "mingle:tck@v1", "svc1", "op1" )
+    addImplicitErrCoverage( "mingle:tck@v1", "svc1", "op2" )
+    addImplicitErrCoverage( "mingle:tck@v1", "svc2", "op1" )
+    addOk( "mingle:tck@v1", "svc1", "op1",
         mkRes( int32( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    addOk( "ns1@v1", "svc1", "op1",
+    addOk( "mingle:tck@v1", "svc1", "op1",
         mkRes( int64( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    addOk( "ns1@v1", "svc1", "op2",
-        mkRes( parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ) ),
+    addOk( "mingle:tck@v1", "svc1", "op2",
+        mkRes( parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ) ),
         &responseExpect{
-            result: parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "ns1@v1", "svc1", "op2",
-        mkRes( parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ) ),
+    addOk( "mingle:tck@v1", "svc1", "op2",
+        mkRes( parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ) ),
         &responseExpect{
-            result: parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "ns1@v1", "svc1", "op2",
-        mkErr( parser.MustStruct( "ns1@v1/Err1", "f1", int64( 1 ) ) ),
+    addOk( "mingle:tck@v1", "svc1", "op2",
+        mkErr( parser.MustStruct( "mingle:tck@v1/Err1", "f1", int64( 1 ) ) ),
         &responseExpect{
-            err: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
+            err: parser.MustStruct( "mingle:tck@v1/Err1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "ns1@v1", "svc2", "op1",
-        mkErr( parser.MustStruct( "ns1@v1/AuthErr1", "f1", int64( 1 ) ) ),
+    addOk( "mingle:tck@v1", "svc2", "op1",
+        mkErr( 
+            parser.MustStruct( "mingle:tck@v1/AuthErr1", "f1", int64( 1 ) ) ),
         &responseExpect{
-            err: parser.MustStruct( "ns1@v1/AuthErr1", "f1", int32( 1 ) ),
+            err: parser.MustStruct( "mingle:tck@v1/AuthErr1", 
+                "f1", int32( 1 ),
+            ),
         },
     )
-    addErr( "ns1@v1", "svc1", "op2",
-        mkErr( parser.MustStruct( "ns1@v1/Err1", "f1", []byte{ 0 } ) ),
+    addErr( "mingle:tck@v1", "svc1", "op2",
+        mkErr( parser.MustStruct( "mingle:tck@v1/Err1", "f1", []byte{ 0 } ) ),
         mg.NewTypeCastError(
             mg.TypeInt32,
             mg.TypeBuffer,
             objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),
         ),
     )
-    addErr( "ns1@v1", "svc1", "op1",
-        mkErr( parser.MustStruct( "ns1@v1/Err2", "f1", int32( 1 ) ) ),
+    addErr( "mingle:tck@v1", "svc1", "op1",
+        mkErr( parser.MustStruct( "mingle:tck@v1/Err2", "f1", int32( 1 ) ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
-            "unexpected error: ns1@v1/Err2",
+            "unexpected error: mingle:tck@v1/Err2",
         ),
     )
-    addErr( "ns1@v1", "svc1", "op2",
-        mkErr( parser.MustStruct( "ns1@v1/Err2" ) ),
+    addErr( "mingle:tck@v1", "svc1", "op2",
+        mkErr( parser.MustStruct( "mingle:tck@v1/Err2" ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
-            "unexpected error: ns1@v1/Err2",
+            "unexpected error: mingle:tck@v1/Err2",
         ),
     )
-    addErr( "ns1@v1", "svc2", "op1",
-        mkErr( parser.MustStruct( "ns1@v1/Err2" ) ),
+    addErr( "mingle:tck@v1", "svc2", "op1",
+        mkErr( parser.MustStruct( "mingle:tck@v1/Err2" ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
-            "unexpected error: ns1@v1/Err2",
+            "unexpected error: mingle:tck@v1/Err2",
         ),
     )
-    addErr( "ns1@v1", "svc2", "op1",
-        mkErr( parser.MustStruct( "ns1@v1/AuthErr1", "f1", []byte{ 0 } ) ),
+    addErr( "mingle:tck@v1", "svc2", "op1",
+        mkErr( 
+            parser.MustStruct( "mingle:tck@v1/AuthErr1", "f1", []byte{ 0 } ),
+        ),
         mg.NewTypeCastError(
             mg.TypeInt32,
             mg.TypeBuffer,
