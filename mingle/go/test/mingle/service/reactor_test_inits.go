@@ -484,18 +484,15 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
     mkRes := func( val interface{} ) mg.Value { return mkResp( "result", val ) }
     mkErr := func( val interface{} ) mg.Value { return mkResp( "error", val ) }
     addImplicitErrCoverage := func( ns, svc, op string ) {
-        addOk( ns, svc, op,
-            mkErr( 
-                parser.MustStruct( QnameRequestError, 
-                    "message", "test-message",
-                ),
-            ),
-            &responseExpect{ 
-                err: parser.MustStruct( QnameRequestError, 
-                    "message", "test-message",
-                ),
-            },
-        )
+        f := func( qn *mg.QualifiedTypeName ) {
+            addOk( ns, svc, op,
+                mkErr( parser.MustStruct( qn, "message", "test-message") ),
+                &responseExpect{ 
+                    err: parser.MustStruct( qn, "message", "test-message" ),
+                },
+            )
+        }
+        f( QnameRequestError )
     }
     addImplicitErrCoverage( "mingle:tck@v1", "svc1", "op1" )
     addImplicitErrCoverage( "mingle:tck@v1", "svc1", "op2" )
