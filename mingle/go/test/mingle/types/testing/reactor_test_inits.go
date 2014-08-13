@@ -5,6 +5,7 @@ import (
     "mingle/types"
     "mingle/types/builtin"
     "mingle/parser"
+    "mingle/bind"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
     "encoding/base64"
@@ -1588,6 +1589,259 @@ func ( rti *rtInit ) addConstructorCastTests() {
     )
 }
 
+func ( rti *rtInit ) addBuiltinTypeTests() {
+    dm := builtin.MakeDefMap()
+    idBytes := func( s string ) []byte {
+        return mg.IdentifierAsBytes( mkId( s ) )
+    }
+    nsBytes := func( s string ) []byte {
+        return mg.NamespaceAsBytes( mkNs( s ) )
+    }
+    badBytes := []byte{ 0, 0, 0, 0, 0, 0 }
+    p := func( rootId string ) objpath.PathNode {
+        return objpath.RootedAt( mkId( rootId ) )
+    }
+    idStruct := func( parts ...string ) *mg.Struct {
+        l := mg.NewList( asType( "String+" ).( *mg.ListTypeReference ) )
+        for _, part := range parts { l.AddUnsafe( mg.String( part ) ) }
+        return parser.MustStruct( builtin.QnameIdentifier, "parts", l )
+    }
+    add := func( in, typ, expct interface{} ) {
+        rti.addTests(
+            &BuiltinTypeTest{
+                In: mg.MustValue( in ),
+                Type: asType( typ ),
+                Expect: expct,
+                Map: dm,
+            },
+        )
+    }
+    addErr := func( in, typ interface{}, err error ) {
+        rti.addTests(
+            &BuiltinTypeTest{
+                In: mg.MustValue( in ),
+                Type: asType( typ ),
+                Err: err,
+                Map: dm,
+            },
+        )
+    }
+    addVcErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
+        addErr( in, typ, newVcErr( path, msg ) )
+    }
+    addBindErr := func( 
+        in, typ interface{}, path objpath.PathNode, msg string ) {
+
+        addErr( in, typ, bind.NewBindError( path, msg ) )
+    }
+    add( idStruct( "id1" ), builtin.TypeIdentifier, mkId( "id1" ) )
+    add( idStruct( "id1", "id2" ), builtin.TypeIdentifier, mkId( "id1-id2" ) )
+    add( idBytes( "id1" ), builtin.TypeIdentifier, mkId( "id1" ) )
+    add(
+        mkId( "id1" ).ExternalForm(),
+        builtin.TypeIdentifier,
+        mkId( "id1" ),
+    )
+    addVcErr( 
+        "id$Bad", 
+        builtin.TypeIdentifier, 
+        nil, 
+        "[<input>, line 1, col 3]: Invalid id rune: \"$\" (U+0024)",
+    )
+    addVcErr( 
+        badBytes,
+        builtin.TypeIdentifier,
+        nil,
+        "[offset 0]: Expected type code 0x01 but got 0x00",
+    )
+    addVcErr(
+        idStruct( "part1", "BadPart" ),
+        builtin.TypeIdentifier,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
+    )
+    add(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ) ),
+        ),
+        builtin.TypeNamespace,
+        mkNs( "ns1@v1" ),
+    )
+    add(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
+        ),
+        builtin.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", "v1",
+            "parts", mg.MustList( "ns1", "ns2" ),
+        ),
+        builtin.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", idBytes( "v1" ),
+            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
+        ),
+        builtin.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
+        ),
+        builtin.TypeNamespace,
+        mkNs( "ns1:ns2@v1" ),
+    )
+    add( "ns1@v1", builtin.TypeNamespace, mkNs( "ns1@v1" ) )
+    add( nsBytes( "ns1@v1" ), builtin.TypeNamespace, mkNs( "ns1@v1" ) )
+    addVcErr(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", "bad$ver",
+            "parts", mg.MustList( idStruct( "ns1" ) ),
+        ),
+        builtin.TypeNamespace,
+        p( "version" ),
+        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
+    ) 
+    addVcErr(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
+        ),
+        builtin.TypeNamespace,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
+    ) 
+    addVcErr(
+        parser.MustStruct( builtin.QnameNamespace,
+            "version", idStruct( "v1" ),
+            "parts", mg.MustList( idStruct( "ns1" ), badBytes ),
+        ),
+        builtin.TypeNamespace,
+        p( "parts" ).StartList().SetIndex( 1 ),
+        "[offset 0]: Expected type code 0x01 but got 0x00",
+    )
+    addVcErr(
+        badBytes,
+        builtin.TypeNamespace,
+        nil,
+        "[offset 0]: Expected type code 0x02 but got 0x00",
+    )
+    addVcErr(
+        "Bad@Bad",
+        builtin.TypeNamespace,
+        nil,
+        "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
+    )
+    idPathStruct := func( parts ...interface{} ) *mg.Struct {
+        return parser.MustStruct( builtin.QnameIdentifierPath,
+            "parts", mg.MustList( parts... ),
+        )
+    }
+    add(
+        idPathStruct(
+            idStruct( "p1" ),
+            idStruct( "p2" ),
+            int32( 1 ),
+            idStruct( "p3" ),
+        ),
+        builtin.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 1 ).
+            Descend( mkId( "p3" ) ),
+    )
+    add(
+        idPathStruct(
+            idStruct( "p1" ),
+            "p2",
+            int32( 1 ),
+            uint32( 2 ),
+            int64( 3 ),
+            uint64( 4 ),
+            idBytes( "p3" ),
+        ),
+        builtin.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 1 ).
+            StartList().SetIndex( 2 ).
+            StartList().SetIndex( 3 ).
+            StartList().SetIndex( 4 ).
+            Descend( mkId( "p3" ) ),
+    )
+    add(
+        "p1.p2[ 3 ].p4",
+        builtin.TypeIdentifierPath,
+        p( "p1" ).
+            Descend( mkId( "p2" ) ).
+            StartList().SetIndex( 3 ).
+            Descend( mkId( "p4" ) ),
+    )
+    addVcErr(
+        "p1.bad$Id",
+        builtin.TypeIdentifierPath,
+        nil,
+        "[<input>, line 1, col 7]: Invalid id rune: \"$\" (U+0024)",
+    )
+    addVcErr( 
+        idPathStruct(), 
+        builtin.TypeIdentifierPath,
+        p( "parts" ),
+        "empty list",
+    )
+    addBindErr(
+        idPathStruct( true ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "unhandled value: mingle:core@v1/Boolean",
+    )
+    addVcErr(
+        idPathStruct( "bad$Id" ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
+    )
+    addVcErr(
+        idPathStruct( badBytes ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "[offset 0]: Expected type code 0x01 but got 0x00",
+    )
+    addBindErr(
+        idPathStruct( float32( 1 ) ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "unhandled value: mingle:core@v1/Float32",
+    )
+    addBindErr(
+        idPathStruct( float64( 1 ) ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "unhandled value: mingle:core@v1/Float64",
+    )
+    addVcErr(
+        idPathStruct( int32( -1 ) ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "value is negative",
+    )
+    addVcErr(
+        idPathStruct( int64( -1 ) ),
+        builtin.TypeIdentifierPath,
+        p( "parts" ).StartList(),
+        "value is negative",
+    )
+}
+
 func ( rti *rtInit ) call() {
     rti.addBaseTypeTests()    
     rti.addMiscTcErrors()
@@ -1611,6 +1865,7 @@ func ( rti *rtInit ) call() {
     rti.addDefaultPathTests()
     rti.addCastDisableTests()
     rti.addCustomFieldSetTests()
+    rti.addBuiltinTypeTests()
 }
 
 func init() {
