@@ -32,7 +32,7 @@ func NewResponseReactor( iface ResponseReactorInterface ) *ResponseReactor {
 }
 
 func ( r *ResponseReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    cr := types.NewCastReactor( TypeResponse, types.V1Types() )
+    cr := types.NewCastReactor( TypeResponse, types.BuiltinTypes() )
     cr.AddPassthroughField( QnameResponse, IdResult )
     cr.AddPassthroughField( QnameResponse, IdError )
     pip.Add( cr )

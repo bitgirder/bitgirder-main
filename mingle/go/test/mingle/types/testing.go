@@ -116,7 +116,7 @@ func MakeDefMap( defs ...Definition ) *DefinitionMap {
 }
 
 func MakeV1DefMap( defs ...Definition ) *DefinitionMap {
-    return mustAddDefs( NewV1DefinitionMap(), defs )
+    return mustAddDefs( NewBuiltinDefinitionMap(), defs )
 }
 
 type DefAsserter struct {

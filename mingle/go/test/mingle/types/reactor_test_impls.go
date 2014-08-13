@@ -92,7 +92,7 @@ func ( t *BuiltinTypeTest ) createBindReactor(
 func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
     c.Logf( "expcting %s as type: %s", mg.QuoteValue( t.In ), t.Type )
     br := t.createBindReactor( c )
-    cr := NewCastReactor( t.Type, V1Types() )
+    cr := NewCastReactor( t.Type, BuiltinTypes() )
     pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), br )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
         c.Equal( t.Expect, br.GetValue() )

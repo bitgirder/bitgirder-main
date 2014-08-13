@@ -1,4 +1,4 @@
-package types
+package builtin
 
 import (
     mgRct "mingle/reactor"
@@ -280,8 +280,8 @@ func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 }
 
 func initBind() {
-//    reg := bind.RegistryForDomain( bind.DomainDefault )
-//    reg.MustAddValue( QnameIdentifier, newIdBuilderFactory( reg ) )
-//    reg.MustAddValue( QnameNamespace, newNsBuilderFactory( reg ) )
-//    reg.MustAddValue( QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
+    reg := bind.RegistryForDomain( bind.DomainDefault )
+    reg.MustAddValue( QnameIdentifier, newIdBuilderFactory( reg ) )
+    reg.MustAddValue( QnameNamespace, newNsBuilderFactory( reg ) )
+    reg.MustAddValue( QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
 }

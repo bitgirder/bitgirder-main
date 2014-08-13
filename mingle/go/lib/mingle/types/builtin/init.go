@@ -1,7 +1,6 @@
-package types
+package builtin
 
 func init() {
     initNames()
-    initBuiltinTypes()
     initBind()
 }

@@ -35,15 +35,15 @@ func initNames() {
     QnameIdentifierPath, TypeIdentifierPath = mkLangPair( "IdentifierPath" )
 }
 
-var v1Types *DefinitionMap
+var builtinTypes *DefinitionMap
 
-func V1Types() *DefinitionMap {
+func BuiltinTypes() *DefinitionMap {
     res := NewDefinitionMap()
-    res.MustAddFrom( v1Types )
+    res.MustAddFrom( builtinTypes )
     return res
 }
 
-func MustAddBuiltinType( def Definition ) { v1Types.MustAdd( def ) }
+func MustAddBuiltinType( def Definition ) { builtinTypes.MustAdd( def ) }
 
 func asCoreV1Qn( nm string ) *mg.QualifiedTypeName {
     return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( mg.CoreNsV1 )
@@ -203,8 +203,8 @@ func initLangV1Types() {
     initIdentifierPathType()
 }
 
-func initV1Types() {
-    v1Types = NewDefinitionMap()
+func initBuiltinTypes() {
+    builtinTypes = NewDefinitionMap()
     initCoreV1Prims()
     initCoreV1ValueTypes()
     initCoreV1Exceptions()
@@ -212,10 +212,10 @@ func initV1Types() {
 }
 
 // package note: not safe to call before completion of package init
-func NewV1DefinitionMap() *DefinitionMap {
+func NewBuiltinDefinitionMap() *DefinitionMap {
     res := NewDefinitionMap()
-    res.MustAddFrom( v1Types )
-    v1Types.EachDefinition( func( def Definition ) {
+    res.MustAddFrom( builtinTypes )
+    builtinTypes.EachDefinition( func( def Definition ) {
         res.setBuiltIn( def.GetName() )
     })
     return res
