@@ -71,77 +71,13 @@ func BuiltinTypes() *types.DefinitionMap {
 
 func MustAddBuiltinType( def types.Definition ) { builtinTypes.MustAdd( def ) }
 
-func asCoreV1Qn( nm string ) *mg.QualifiedTypeName {
-    return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( mg.CoreNsV1 )
-}
-
-func initCoreV1Prims() {
+func initCoreV1Types() {
     for _, primTyp := range mg.PrimitiveTypes {
         pd := &types.PrimitiveDefinition{}
         pd.Name = primTyp.Name
         MustAddBuiltinType( pd )
     }
-}
-
-func initCoreV1ValueTypes() {
     MustAddBuiltinType( &types.PrimitiveDefinition{ Name: mg.QnameValue } )
-}
-
-func initCoreV1StandardError() *types.SchemaDefinition {
-    ed := types.NewSchemaDefinition()
-    ed.Name = asCoreV1Qn( "StandardError" )
-    fd := &types.FieldDefinition{
-        Name: idUnsafe( "message" ),
-        Type: mg.MustNullableTypeReference( mg.TypeString ),
-    }
-    ed.Fields.MustAdd( fd )
-    MustAddBuiltinType( ed )
-    return ed
-}
-
-func newV1StandardError( 
-    nm string, 
-    ns *mg.Namespace, 
-    stdErr *types.SchemaDefinition ) *types.StructDefinition {
-
-    res := types.NewStructDefinition()
-    res.Name = mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( ns )
-    res.MustMixinSchema( stdErr )
-    return res
-}
-
-func newCoreV1StandardError( 
-    nm string, stdErr *types.SchemaDefinition ) *types.StructDefinition {
-
-    return newV1StandardError( nm, mg.CoreNsV1, stdErr )
-}
-
-func initCoreV1MissingFieldsError( stdErr *types.SchemaDefinition ) {
-    ed := newCoreV1StandardError( "MissingFieldsError", stdErr )
-    MustAddBuiltinType( ed )
-}
-
-func initCoreV1UnrecognizedFieldError( stdErr *types.SchemaDefinition ) {
-    ed := newCoreV1StandardError( "UnrecognizedFieldError", stdErr )
-    MustAddBuiltinType( ed )
-}
-
-func initCoreV1ValueCastError( stdErr *types.SchemaDefinition ) {
-    ed := newCoreV1StandardError( "ValueCastError", stdErr )
-    MustAddBuiltinType( ed )
-}
-
-func initServiceV1EndpointError( stdErr *types.SchemaDefinition ) {
-    ed := newCoreV1StandardError( "EndpointError", stdErr )
-    MustAddBuiltinType( ed )
-}
-
-func initCoreV1Exceptions() {
-    stdErr := initCoreV1StandardError()
-    initCoreV1MissingFieldsError( stdErr )
-    initCoreV1UnrecognizedFieldError( stdErr )
-    initCoreV1ValueCastError( stdErr )
-    initServiceV1EndpointError( stdErr )
 }
 
 func langV1Qname( nm string ) *mg.QualifiedTypeName {
@@ -233,8 +169,6 @@ func initLangV1Types() {
 
 func initBuiltinTypes() {
     builtinTypes = types.NewDefinitionMap()
-    initCoreV1Prims()
-    initCoreV1ValueTypes()
-    initCoreV1Exceptions()
+    initCoreV1Types()
     initLangV1Types()
 }
