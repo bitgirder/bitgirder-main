@@ -9,6 +9,7 @@ import (
     mg "mingle"
     "mingle/parser/tree"
     "mingle/types"
+    "mingle/types/builtin"
     "mingle/parser"
 )
 
@@ -45,7 +46,7 @@ func compileSingle( src string, f assert.Failer ) *CompilationResult {
     if err != nil { f.Fatal( err ) }
     comp := NewCompilation().
             AddSource( nsUnit ).
-            SetExternalTypes( types.V1Types() )
+            SetExternalTypes( builtin.BuiltinTypes() )
     compRes, err := comp.Execute()
     if err != nil { f.Fatal( err ) }
     return compRes
@@ -155,7 +156,7 @@ func ( et *compilerTest ) compile(
 }
 
 func ( et *compilerTest ) compileResult() *CompilationResult {
-    extTypes := types.V1Types()
+    extTypes := builtin.BuiltinTypes()
     if len( et.libs ) > 0 {
         cr := et.compile( et.libs, extTypes )
         extTypes.MustAddFrom( cr.BuiltTypes )
