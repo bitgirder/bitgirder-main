@@ -2,6 +2,7 @@ package builtin
 
 import (
     "mingle/parser"
+    "mingle/types"
 )
 
 var (
@@ -12,3 +13,9 @@ var (
     
     reactorTestNs = mkNs( "mingle:types:builtin@v1" )
 )
+
+func MakeDefMap( defs ...types.Definition ) *types.DefinitionMap {
+    res := BuiltinTypes()
+    res.MustAddAll( defs... )
+    return res
+}

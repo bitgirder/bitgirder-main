@@ -7,10 +7,11 @@
         "mingle/io",
         "mingle/bind",
         "mingle/types",
+        "mingle/types/testing",
         "mingle/types/builtin",
         "mingle/tck",
-        "mingle/parser",
-        "mingle/service"
+        "mingle/service",
+        "mingle/parser"
     ],
     "test-commands": {
         "write-core-io-tests": {},

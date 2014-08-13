@@ -67,6 +67,10 @@ func ( m *DefinitionMap ) MustAdd( d Definition ) {
     if err := m.Add( d ); err != nil { panic( err ) }
 }
 
+func ( m *DefinitionMap ) MustAddAll( defs ...Definition ) {
+    for _, def := range defs { m.MustAdd( def ) }
+}
+
 func ( m *DefinitionMap ) MustAddFrom( m2 *DefinitionMap ) {
     m2.EachDefinition( func( d Definition ) { m.MustAdd( d ) } )
 }
@@ -212,7 +216,7 @@ func ( sd *StructDefinition ) GetName() *mg.QualifiedTypeName {
 
 func ( sd *StructDefinition ) GetFields() *FieldSet { return sd.Fields }
 
-func ( sd *StructDefinition ) mustMixinSchema( schema *SchemaDefinition ) {
+func ( sd *StructDefinition ) MustMixinSchema( schema *SchemaDefinition ) {
     sd.Fields.MustAddAll( schema.Fields )
 }
 

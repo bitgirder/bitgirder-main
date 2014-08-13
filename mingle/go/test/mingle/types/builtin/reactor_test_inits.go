@@ -4,7 +4,6 @@ import (
     mg "mingle"
     "mingle/parser"
     mgRct "mingle/reactor"
-    "mingle/types"
     "bitgirder/objpath"
     "mingle/bind"
 )
@@ -12,7 +11,7 @@ import (
 var newVcErr = mg.NewValueCastError
 
 func addBuiltinTypeTests( b *mgRct.ReactorTestSetBuilder ) {
-    dm := types.MakeV1DefMap()
+    dm := MakeDefMap()
     idBytes := func( s string ) []byte {
         return mg.IdentifierAsBytes( mkId( s ) )
     }

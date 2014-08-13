@@ -4,6 +4,7 @@ import (
     mgRct "mingle/reactor"
     mg "mingle"
     "mingle/types"
+    "mingle/types/builtin"
     "mingle/bind"
     "bitgirder/pipeline"
     "bitgirder/objpath"
@@ -84,7 +85,7 @@ func ( r *RequestReactor ) processBuilderEvent( ev mgRct.ReactorEvent ) error {
 }
 
 func ( r *RequestReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    cr := types.NewCastReactor( TypeRequest, types.BuiltinTypes() )
+    cr := types.NewCastReactor( TypeRequest, builtin.BuiltinTypes() )
     cr.AddPassthroughField( QnameRequest, IdParameters )
     cr.AddPassthroughField( QnameRequest, IdAuthentication )
     pip.Add( cr )
@@ -104,7 +105,7 @@ func ( r *RequestReactor ) setBuilder(
 func ( r *RequestReactor ) startNamespace() {
     r.setBuilder(
         IdNamespace,
-        types.TypeNamespace,
+        builtin.TypeNamespace,
         func( val interface{} ) error { 
             r.reqCtx.Namespace = val.( *mg.Namespace )
             return nil
@@ -115,7 +116,7 @@ func ( r *RequestReactor ) startNamespace() {
 func ( r *RequestReactor ) startService() {
     r.setBuilder(
         IdService,
-        types.TypeIdentifier,
+        builtin.TypeIdentifier,
         func( val interface{} ) error { 
             r.reqCtx.Service = val.( *mg.Identifier )
             return nil
@@ -126,7 +127,7 @@ func ( r *RequestReactor ) startService() {
 func ( r *RequestReactor ) startOperation() {
     r.setBuilder(
         IdOperation,
-        types.TypeIdentifier,
+        builtin.TypeIdentifier,
         func( val interface{} ) error { 
             r.reqCtx.Operation = val.( *mg.Identifier )
             return r.iface.StartRequest( r.reqCtx, r.reqStartPath )

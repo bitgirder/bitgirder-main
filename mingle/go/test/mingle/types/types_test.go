@@ -2,7 +2,6 @@ package types
 
 import (
     mg "mingle"
-    mgRct "mingle/reactor"
     "testing"
     "bitgirder/assert"
 )
@@ -126,8 +125,4 @@ func TestFieldSetContainsFields( t *testing.T ) {
         la.Equal( t.eq, t.s1.ContainsFields( t.s2 ) )
         la = la.Next()
     }
-}
-
-func TestReactors( t *testing.T ) {
-    mgRct.RunReactorTestsInNamespace( reactorTestNs, t )
 }

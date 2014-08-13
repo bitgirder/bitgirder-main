@@ -89,13 +89,13 @@ func initReqType() {
     addFld := func( nm *mg.Identifier, typ mg.TypeReference ) {
         sd.Fields.Add( &types.FieldDefinition{ Name: nm, Type: typ } )
     }
-    idPtr := mg.NewPointerTypeReference( types.TypeIdentifier )
-    addFld( IdNamespace, mg.NewPointerTypeReference( types.TypeNamespace ) )
+    idPtr := mg.NewPointerTypeReference( builtin.TypeIdentifier )
+    addFld( IdNamespace, mg.NewPointerTypeReference( builtin.TypeNamespace ) )
     addFld( IdService, idPtr )
     addFld( IdOperation, idPtr )
     addFld( IdAuthentication, mg.TypeNullableValue )
     addFld( IdParameters, mg.MustNullableTypeReference( mg.TypeSymbolMap ) )
-    types.MustAddBuiltinType( sd )
+    builtin.MustAddBuiltinType( sd )
 }
 
 func initRespType() {
@@ -107,11 +107,11 @@ func initRespType() {
     }
     addFld( IdResult )
     addFld( IdError )
-    types.MustAddBuiltinType( sd )
+    builtin.MustAddBuiltinType( sd )
 }
 
 func initErrType( qn *mg.QualifiedTypeName ) {
-    types.MustAddBuiltinType( builtin.NewLocatableErrorDefinition( qn ) )
+    builtin.MustAddBuiltinType( builtin.NewLocatableErrorDefinition( qn ) )
 }
 
 func initTypes() {

@@ -4,6 +4,7 @@ import (
     mg "mingle"
     "mingle/parser"
     "mingle/types"
+    "mingle/types/builtin"
     "mingle/tck"
     "bitgirder/objpath"
 )
@@ -80,7 +81,8 @@ func ( t *testError ) Error() string { return mg.FormatError( t.path, t.msg ) }
 // in this package's init, making them unavailable to a package-level var
 // initializer
 func getTestTypeDefs() *types.DefinitionMap {
-    res := types.MakeV1DefMap(
+    res := builtin.BuiltinTypes()
+    res.MustAddAll(
         types.MakeServiceDef( "mingle:service:fail@v1/Service1", "",
             types.MakeOpDef( "op1",
                 types.MakeCallSig( 

@@ -15,16 +15,8 @@ var (
     mkId = parser.MustIdentifier
     mkNs = parser.MustNamespace
     mkTyp = parser.MustTypeReference
+    asType = parser.AsTypeReference
 )
-
-func asType( val interface{} ) mg.TypeReference {
-    switch v := val.( type ) {
-    case mg.TypeReference: return v
-    case *mg.QualifiedTypeName: return v.AsAtomicType()
-    case string: return parser.MustTypeReference( v )
-    }
-    panic( libErrorf( "Unhandled type reference: %T", val ) )
-}
 
 func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
     res := make( []*mg.Identifier, 0, m.Len() )
@@ -113,10 +105,6 @@ func mustAddDefs( dm *DefinitionMap, defs []Definition ) *DefinitionMap {
 
 func MakeDefMap( defs ...Definition ) *DefinitionMap {
     return mustAddDefs( NewDefinitionMap(), defs )
-}
-
-func MakeV1DefMap( defs ...Definition ) *DefinitionMap {
-    return mustAddDefs( NewBuiltinDefinitionMap(), defs )
 }
 
 type DefAsserter struct {

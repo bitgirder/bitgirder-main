@@ -1,10 +1,14 @@
-package types
+package testing
 
 import (
     mg "mingle"
+    "mingle/types"
     mgRct "mingle/reactor"
+    "mingle/parser"
     "bitgirder/objpath"
 )
+
+var reactorTestNs = parser.MustNamespace( "mingle:types:testing@v1" )
 
 const (
     ProfileCastDisable = "cast-disable"
@@ -13,7 +17,7 @@ const (
 
 type CastReactorTest struct {
     Path objpath.PathNode
-    Map *DefinitionMap
+    Map *types.DefinitionMap
     Type mg.TypeReference
     In interface{}
     Expect mg.Value
@@ -25,13 +29,13 @@ type EventPathTest struct {
     Source []mgRct.ReactorEvent
     Expect []mgRct.EventExpectation
     Type mg.TypeReference
-    Map *DefinitionMap
+    Map *types.DefinitionMap
 }
 
 type BuiltinTypeTest struct {
     In mg.Value
     Expect interface{}
     Type mg.TypeReference
-    Map *DefinitionMap
+    Map *types.DefinitionMap
     Err error
 }

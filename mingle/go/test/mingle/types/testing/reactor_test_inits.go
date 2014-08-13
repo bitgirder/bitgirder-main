@@ -1,16 +1,15 @@
-package types
+package testing
 
 import (
     mg "mingle"
+    "mingle/types"
+    "mingle/types/builtin"
     "mingle/parser"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
     "encoding/base64"
-    "mingle/bind"
     "fmt"
 )
-
-var reactorTestNs *mg.Namespace
 
 var newVcErr = mg.NewValueCastError
 
@@ -36,7 +35,7 @@ func ( rti *rtInit ) addTests( tests ...mgRct.ReactorTest ) {
 }
 
 func ( rti *rtInit ) addSucc( 
-    in, expct interface{}, typ interface{}, dm *DefinitionMap ) {
+    in, expct interface{}, typ interface{}, dm *types.DefinitionMap ) {
 
     rti.addTests(
         &CastReactorTest{ 
@@ -49,14 +48,14 @@ func ( rti *rtInit ) addSucc(
 }
 
 func ( rti *rtInit ) addIdent( 
-    in interface{}, typ interface{}, dm *DefinitionMap ) {
+    in interface{}, typ interface{}, dm *types.DefinitionMap ) {
 
     v := mg.MustValue( in )
     rti.addSucc( v, v, typ, dm )
 }
 
 func ( rti *rtInit ) addVcError(
-    in interface{}, typ interface{}, msg string, dm *DefinitionMap ) {
+    in interface{}, typ interface{}, msg string, dm *types.DefinitionMap ) {
 
     rti.addTests(
         &CastReactorTest{
@@ -69,13 +68,13 @@ func ( rti *rtInit ) addVcError(
 }
 
 func ( rti *rtInit ) addNullValueError( 
-    val interface{}, typ interface{}, dm *DefinitionMap ) {
+    val interface{}, typ interface{}, dm *types.DefinitionMap ) {
 
     rti.addVcError( val, typ, "Value is null", dm )
 }
 
 func ( rti *rtInit ) addTcError(
-    in interface{}, expct, act interface{}, dm *DefinitionMap ) {
+    in interface{}, expct, act interface{}, dm *types.DefinitionMap ) {
 
     rti.addTests(
         &CastReactorTest{
@@ -88,7 +87,7 @@ func ( rti *rtInit ) addTcError(
 }
 
 func ( rti *rtInit ) addBaseTypeTests() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     rti.addIdent( mg.Boolean( true ), mg.TypeBoolean, dm )
     rti.addIdent( testValBuf1, mg.TypeBuffer, dm )
     rti.addIdent( "s", mg.TypeString, dm )
@@ -125,7 +124,7 @@ func ( rti *rtInit ) addBaseTypeTests() {
 }
 
 func ( rti *rtInit ) addMiscTcErrors() {
-    dm := MakeV1DefMap( MakeStructDef( "ns1@v1/S1", nil ) )
+    dm := builtin.MakeDefMap( types.MakeStructDef( "ns1@v1/S1", nil ) )
     add := func( in interface{}, expct, act interface{} ) {
         rti.addTests(
             &CastReactorTest{
@@ -172,7 +171,7 @@ func ( rti *rtInit ) addMiscTcErrors() {
 }
 
 func ( rti *rtInit ) addMiscVcErrors() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     addErr := func( in interface{}, typ interface{}, err error ) {
         rti.addTests(
             &CastReactorTest{
@@ -201,14 +200,14 @@ func ( rti *rtInit ) addNonRootPathTestErrors() {
     rti.addTests(
         &CastReactorTest{
             Path: pathInVal,
-            Map: NewDefinitionMap(),
+            Map: types.NewDefinitionMap(),
             In: mg.MustValue( true ),
             Type: mg.TypeBuffer,
             Err: newTcErr( mg.TypeBuffer, mg.TypeBoolean, pathInVal ),
         },
         &CastReactorTest{
             Path: pathInVal,
-            Map: NewDefinitionMap(),
+            Map: types.NewDefinitionMap(),
             In: mg.MustList( testValBuf1, true ),
             Type: asType( "Buffer*" ),
             Err: newTcErr( 
@@ -218,7 +217,7 @@ func ( rti *rtInit ) addNonRootPathTestErrors() {
 }
 
 func ( rti *rtInit ) addStringTests() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     rti.addIdent( "s", "String?", dm )
     rti.addIdent( "abbbc", `String~"^ab+c$"`, dm )
     rti.addIdent( "abbbc", `String~"^ab+c$"?`, dm )
@@ -277,9 +276,9 @@ func ( rti *rtInit ) addStringTests() {
 }
 
 func ( rti *rtInit ) addIdentityNumTests() {
-    dm := MakeV1DefMap( 
-        MakeStructDef( "ns1@v1/S1", nil ),
-        MakeEnumDef( "ns1@v1/E1", "e" ),
+    dm := builtin.MakeDefMap( 
+        types.MakeStructDef( "ns1@v1/S1", nil ),
+        types.MakeEnumDef( "ns1@v1/E1", "e" ),
     )
     rti.addIdent( int64( 1 ), "Int64~[-1,1]", dm )
     rti.addIdent( int64( 1 ), "Int64~(,2)", dm )
@@ -325,7 +324,7 @@ func ( rti *rtInit ) addIdentityNumTests() {
 }
 
 func ( rti *rtInit ) addTruncateNumTests() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     posVals := 
         []mg.Value{ mg.Float32( 1.1 ), mg.Float64( 1.1 ), mg.String( "1.1" ) }
     for _, val := range posVals {
@@ -346,7 +345,7 @@ func ( rti *rtInit ) addTruncateNumTests() {
 }
 
 func ( rti *rtInit ) addNumTests() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     for _, qn := range mg.NumericTypeNames {
         rti.addVcError( "not-a-num", qn.AsAtomicType(), 
             `invalid number: not-a-num`, dm )
@@ -376,7 +375,7 @@ func ( rti *rtInit ) addNumTests() {
 }
 
 func ( rti *rtInit ) addBufferTests() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     buf1B64 := mg.String( base64.StdEncoding.EncodeToString( testValBuf1 ) )
     rti.addSucc( testValBuf1, buf1B64, mg.TypeString, dm )
     rti.addSucc( testValBuf1, buf1B64,
@@ -390,7 +389,7 @@ func ( rti *rtInit ) addBufferTests() {
 }
 
 func ( rti *rtInit ) addTimeTests() {
-    dm := NewDefinitionMap()
+    dm := types.NewDefinitionMap()
     rti.addIdent( mg.Now(),
         `Timestamp~["1970-01-01T00:00:00Z","2200-01-01T00:00:00Z"]`, dm )
     rti.addSucc( testValTm1, testValTm1.Rfc3339Nano(), mg.TypeString, dm )
@@ -406,7 +405,7 @@ func ( rti *rtInit ) addTimeTests() {
 }
 
 func ( rti *rtInit ) addNullableTests() {
-    dm := MakeV1DefMap( MakeStructDef( "ns1@v1/S1", nil ) )
+    dm := builtin.MakeDefMap( types.MakeStructDef( "ns1@v1/S1", nil ) )
     typs := []mg.TypeReference{}
     addNullSucc := func( expct interface{}, typ mg.TypeReference ) {
         rti.addSucc( nil, expct, typ, dm )
@@ -431,9 +430,12 @@ func ( rti *rtInit ) addNullableTests() {
 }
 
 func ( rti *rtInit ) addListTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", 
-            []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) } ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1", 
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "&Int32?", nil ),
+            },
+        ),
     )
     for _, quant := range []string{ "*", "**", "***" } {
         rti.addSucc( []interface{}{}, mg.MustList(), "Int64" + quant, dm )
@@ -534,9 +536,11 @@ func ( rti *rtInit ) addListTests() {
 }
 
 func ( rti *rtInit ) addMapTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", 
-            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1", 
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "Int32", nil ),
+            },
         ),
     )
     m1 := mg.MustSymbolMap
@@ -587,10 +591,10 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     s1F1 := func( val interface{} ) *mg.Struct {
         return parser.MustStruct( qn1, "f1", val )
     }
-    s1DefMap := func( typ string ) *DefinitionMap {
-        fld := MakeFieldDef( "f1", typ, nil )
-        return MakeV1DefMap( 
-            MakeStructDef( qn1Str, []*FieldDefinition{ fld } ) )
+    s1DefMap := func( typ string ) *types.DefinitionMap {
+        fld := types.MakeFieldDef( "f1", typ, nil )
+        return builtin.MakeDefMap( 
+            types.MakeStructDef( qn1Str, []*types.FieldDefinition{ fld } ) )
     }
     s1F1Add := func( in, expct interface{}, typ string, err error ) {
         t := &CastReactorTest{ 
@@ -651,25 +655,31 @@ func ( rti *rtInit ) addFieldSetCastTests() {
     id := parser.MustIdentifier
     mkId := mg.MakeTestId
     p := mg.MakeTestIdPath
-    dm := MakeV1DefMap(
-        MakeStructDef(
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef(
             "ns1@v1/S1",
-            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
-        ),
-        MakeStructDef(
-            "ns1@v1/S2",
-            []*FieldDefinition{ 
-                MakeFieldDef( "f1", "Int32", nil ),
-                MakeFieldDef( "f2", "Int32", nil ),
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "Int32", nil ),
             },
         ),
-        MakeStructDef(
-            "ns1@v1/S3",
-            []*FieldDefinition{ MakeFieldDef( "f1", "&Int32?", nil ) },
+        types.MakeStructDef(
+            "ns1@v1/S2",
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "Int32", nil ),
+                types.MakeFieldDef( "f2", "Int32", nil ),
+            },
         ),
-        MakeStructDef(
+        types.MakeStructDef(
+            "ns1@v1/S3",
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "&Int32?", nil ),
+            },
+        ),
+        types.MakeStructDef(
             "ns1@v1/S4",
-            []*FieldDefinition{ MakeFieldDef( "f1", "&ns1@v1/S1?", nil ) },
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "&ns1@v1/S1?", nil ),
+            },
         ),
     )
     addTest := func( in, expct *mg.Struct, err error ) {
@@ -717,11 +727,14 @@ func ( rti *rtInit ) addFieldSetCastTests() {
 }
 
 func ( rti *rtInit ) addStructValCastTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1",
-            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) } ),
-        MakeStructDef( "ns1@v1/S2", nil ),
-        MakeEnumDef( "ns1@v1/E1", "e" ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1",
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "Int32", nil ),
+            },
+        ),
+        types.MakeStructDef( "ns1@v1/S2", nil ),
+        types.MakeEnumDef( "ns1@v1/E1", "e" ),
     )
     t1 := asType( "ns1@v1/S1" )
     addFail := func( val interface{}, err error ) {
@@ -762,17 +775,19 @@ func ( rti *rtInit ) addStructValCastTests() {
 }
 
 func ( rti *rtInit ) addInferredStructCastTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef(
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef(
             "ns1@v1/S1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "&Int32?", nil ),
-                MakeFieldDef( "f2", "&ns1@v1/S2?", nil ),
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "&Int32?", nil ),
+                types.MakeFieldDef( "f2", "&ns1@v1/S2?", nil ),
             },
         ),
-        MakeStructDef(
+        types.MakeStructDef(
             "ns1@v1/S2",
-            []*FieldDefinition{ MakeFieldDef( "f1", "Int32", nil ) },
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "Int32", nil ),
+            },
         ),
     )
     addSucc := func( in, expct mg.Value ) {
@@ -805,39 +820,39 @@ func ( rti *rtInit ) addStructTests() {
 func ( rti *rtInit ) addSchemaCastTests() {
     schema1Nil := &mg.NullableTypeReference{ mkTyp( "ns1@v1/Schema1" ) }
     mgId := parser.MustIdentifier
-    dm := MakeV1DefMap(
-        MakeSchemaDef( 
+    dm := builtin.MakeDefMap(
+        types.MakeSchemaDef( 
             "ns1@v1/Schema1", 
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32", nil ),
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
             },
         ),
-        MakeSchemaDef(
+        types.MakeSchemaDef(
             "ns1@v1/Schema2",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
-                MakeFieldDef( "f2", schema1Nil, nil ),
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
+                types.MakeFieldDef( "f2", schema1Nil, nil ),
             },
         ),
-        MakeStructDef(
+        types.MakeStructDef(
             "ns1@v1/S1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32", nil ),
-                MakeFieldDef( "f2", "Int32", nil ),
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+                types.MakeFieldDef( "f2", "Int32", nil ),
             },
         ),
-        MakeStructDef(
+        types.MakeStructDef(
             "ns1@v1/S2",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
-                MakeFieldDef( "f2", schema1Nil, nil ),
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "ns1@v1/Schema1", nil ),
+                types.MakeFieldDef( "f2", schema1Nil, nil ),
             },
         ),
-        MakeStructDef(
+        types.MakeStructDef(
             "ns1@v1/S3",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32", nil ),
-                MakeFieldDef( "f2", "Int64", nil ),
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+                types.MakeFieldDef( "f2", "Int64", nil ),
             },
         ),
     )
@@ -1030,10 +1045,10 @@ func ( rti *rtInit ) addSchemaCastTests() {
 }
 
 func ( rti *rtInit ) addEnumValCastTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", []*FieldDefinition{} ),
-        MakeEnumDef( "ns1@v1/E1", "c1", "c2" ),
-        MakeEnumDef( "ns1@v1/E2", "c1", "c2" ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1", []*types.FieldDefinition{} ),
+        types.MakeEnumDef( "ns1@v1/E1", "c1", "c2" ),
+        types.MakeEnumDef( "ns1@v1/E2", "c1", "c2" ),
     )
     addTest := func( in, expct interface{}, typ interface{}, err error ) {
         t := &CastReactorTest{
@@ -1118,25 +1133,25 @@ func ( rti *rtInit ) addEnumValCastTests() {
 // Just coverage that structs and defined types don't cause things to go nutso
 // when nested in various ways
 func ( rti *rtInit ) addDeepCatchallTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32", int32( 1 ) ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", int32( 1 ) ),
             },
         ),
-        MakeStructDef( "ns1@v1/S2",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "ns1@v1/S1", nil ),
-                MakeFieldDef( "f2", "ns1@v1/E1", nil ),
-                MakeFieldDef( "f3", "ns1@v1/S1*", nil ),
-                MakeFieldDef( "f4", "ns1@v1/E1+", nil ),
-                MakeFieldDef( "f5", "SymbolMap", nil ),
-                MakeFieldDef( "f6", "Value", nil ),
-                MakeFieldDef( "f7", "Value", nil ),
-                MakeFieldDef( "f8", "Value*", nil ),
+        types.MakeStructDef( "ns1@v1/S2",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
+                types.MakeFieldDef( "f2", "ns1@v1/E1", nil ),
+                types.MakeFieldDef( "f3", "ns1@v1/S1*", nil ),
+                types.MakeFieldDef( "f4", "ns1@v1/E1+", nil ),
+                types.MakeFieldDef( "f5", "SymbolMap", nil ),
+                types.MakeFieldDef( "f6", "Value", nil ),
+                types.MakeFieldDef( "f7", "Value", nil ),
+                types.MakeFieldDef( "f8", "Value*", nil ),
             },
         ),
-        MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
+        types.MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
     )        
     in := parser.MustStruct( "ns1@v1/S2",
         "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 2 ) ),
@@ -1204,31 +1219,33 @@ func ( rti *rtInit ) addDefaultCastTests() {
     }
     s1FldTyps := []string{ "Int32", "String", "ns1@v1/E1", "Int32+", "Boolean" }
     if len( s1FldTyps ) != len( deflPairs ) / 2 { panic( "Mismatched len" ) }
-    s1Flds := make( []*FieldDefinition, len( s1FldTyps ) )
+    s1Flds := make( []*types.FieldDefinition, len( s1FldTyps ) )
     for i, typ := range s1FldTyps {
-        s1Flds[ i ] = MakeFieldDef(
+        s1Flds[ i ] = types.MakeFieldDef(
             deflPairs[ i * 2 ].( string ),
             typ,
             mg.MustValue( deflPairs[ ( i * 2 ) + 1 ] ),
         )
     }
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1", s1Flds ),
-        MakeStructDef( "ns1@v1/S2",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32", nil ),
-                MakeFieldDef( "f2", "Int32", mg.Int32( int32( 1 ) ) ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1", s1Flds ),
+        types.MakeStructDef( "ns1@v1/S2",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+                types.MakeFieldDef( "f2", "Int32", mg.Int32( int32( 1 ) ) ),
             },
         ),
-        MakeStructDef( "ns1@v1/S3",
-            []*FieldDefinition{ MakeFieldDef( "f1", "Int32*", nil ) } ),
-        MakeStructDef( "ns1@v1/S4",
-            []*FieldDefinition{ 
-                MakeFieldDef( "f1", "ns1@v1/S1", nil ),
-                MakeFieldDef( "f2", "Int32", int32( 1 ) ),
+        types.MakeStructDef( "ns1@v1/S3",
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "Int32*", nil ) },
+            ),
+        types.MakeStructDef( "ns1@v1/S4",
+            []*types.FieldDefinition{ 
+                types.MakeFieldDef( "f1", "ns1@v1/S1", nil ),
+                types.MakeFieldDef( "f2", "Int32", int32( 1 ) ),
             },
         ),
-        MakeEnumDef( "ns1@v1/E1", "c1", "c2" ),
+        types.MakeEnumDef( "ns1@v1/E1", "c1", "c2" ),
     )
     addSucc := func( in, expct mg.Value, typ interface{} ) {
         rti.addTests(
@@ -1303,19 +1320,19 @@ func ( rti *rtInit ) addDefaultCastTests() {
 }
 
 func ( rti *rtInit ) addCastDisableTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", mg.TypeNullableValue, nil ),
-                MakeFieldDef( "f2", "ns1@v1/S2", nil ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", mg.TypeNullableValue, nil ),
+                types.MakeFieldDef( "f2", "ns1@v1/S2", nil ),
             },
         ),
-        MakeSchemaDef( "ns1@v1/Schema1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", mg.TypeNullableValue, nil ),
+        types.MakeSchemaDef( "ns1@v1/Schema1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", mg.TypeNullableValue, nil ),
             },
         ),
-        MakeStructDef( "ns1@v1/S2", nil ),
+        types.MakeStructDef( "ns1@v1/S2", nil ),
     )
     add := func( t *CastReactorTest ) {
         t.Profile = ProfileCastDisable
@@ -1398,11 +1415,11 @@ func ( rti *rtInit ) addCastDisableTests() {
 }
 
 func ( rti *rtInit ) addCustomFieldSetTests() {
-    defs := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "&Int32?", nil ),
-                MakeFieldDef( "f2", "SymbolMap?", nil ),
+    defs := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "&Int32?", nil ),
+                types.MakeFieldDef( "f2", "SymbolMap?", nil ),
             },
         ),
     )
@@ -1477,13 +1494,13 @@ func ( rti *rtInit ) addCustomFieldSetTests() {
 }
 
 func ( rti *rtInit ) addDefaultPathTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S1",
-            []*FieldDefinition{
-                MakeFieldDef( "f1", "Int32", nil ),
-                MakeFieldDef( "f2", "Int32*", nil ),
-                MakeFieldDef( "f3", "SymbolMap", nil ),
-                MakeFieldDef( "f4", "Int32", int32( 1 ) ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "Int32", nil ),
+                types.MakeFieldDef( "f2", "Int32*", nil ),
+                types.MakeFieldDef( "f3", "SymbolMap", nil ),
+                types.MakeFieldDef( "f4", "Int32", int32( 1 ) ),
             },
         ),
     )
@@ -1529,20 +1546,20 @@ func ( rti *rtInit ) addDefaultPathTests() {
 }
 
 func ( rti *rtInit ) addConstructorCastTests() {
-    dm := MakeV1DefMap(
-        MakeStructDef( "ns1@v1/S2", nil ),
-        MakeEnumDef( "ns1@v1/E1", "e1" ),
+    dm := builtin.MakeDefMap(
+        types.MakeStructDef( "ns1@v1/S2", nil ),
+        types.MakeEnumDef( "ns1@v1/E1", "e1" ),
     )
-    s1Typ := NewStructDefinition()
+    s1Typ := types.NewStructDefinition()
     s1Typ.Name = mkQn( "ns1@v1/S1" )
-    s1Typ.Fields.MustAdd( MakeFieldDef( "f1", "Int32", nil ) )
+    s1Typ.Fields.MustAdd( types.MakeFieldDef( "f1", "Int32", nil ) )
     s1Typ.Constructors = append( s1Typ.Constructors, 
-        &ConstructorDefinition{ mg.TypeInt32 },
-        &ConstructorDefinition{ mg.TypeString },
-        &ConstructorDefinition{ asType( "String*" ) },
-        &ConstructorDefinition{ asType( "ns1@v1/S2" ) },
-        &ConstructorDefinition{ asType( "ns1@v1/S2*" ) },
-        &ConstructorDefinition{ asType( "ns1@v1/E1" ) },
+        &types.ConstructorDefinition{ mg.TypeInt32 },
+        &types.ConstructorDefinition{ mg.TypeString },
+        &types.ConstructorDefinition{ asType( "String*" ) },
+        &types.ConstructorDefinition{ asType( "ns1@v1/S2" ) },
+        &types.ConstructorDefinition{ asType( "ns1@v1/S2*" ) },
+        &types.ConstructorDefinition{ asType( "ns1@v1/E1" ) },
     )
     dm.MustAdd( s1Typ )
     s1Inst1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
@@ -1571,259 +1588,6 @@ func ( rti *rtInit ) addConstructorCastTests() {
     )
 }
 
-func ( rti *rtInit ) addBuiltinTypeTests() {
-    dm := MakeV1DefMap()
-    idBytes := func( s string ) []byte {
-        return mg.IdentifierAsBytes( mkId( s ) )
-    }
-    nsBytes := func( s string ) []byte {
-        return mg.NamespaceAsBytes( mkNs( s ) )
-    }
-    badBytes := []byte{ 0, 0, 0, 0, 0, 0 }
-    p := func( rootId string ) objpath.PathNode {
-        return objpath.RootedAt( mkId( rootId ) )
-    }
-    idStruct := func( parts ...string ) *mg.Struct {
-        l := mg.NewList( asType( "String+" ).( *mg.ListTypeReference ) )
-        for _, part := range parts { l.AddUnsafe( mg.String( part ) ) }
-        return parser.MustStruct( QnameIdentifier, "parts", l )
-    }
-    add := func( in, typ, expct interface{} ) {
-        rti.addTests(
-            &BuiltinTypeTest{
-                In: mg.MustValue( in ),
-                Type: asType( typ ),
-                Expect: expct,
-                Map: dm,
-            },
-        )
-    }
-    addErr := func( in, typ interface{}, err error ) {
-        rti.addTests(
-            &BuiltinTypeTest{
-                In: mg.MustValue( in ),
-                Type: asType( typ ),
-                Err: err,
-                Map: dm,
-            },
-        )
-    }
-    addVcErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
-        addErr( in, typ, newVcErr( path, msg ) )
-    }
-    addBindErr := func( 
-        in, typ interface{}, path objpath.PathNode, msg string ) {
-
-        addErr( in, typ, bind.NewBindError( path, msg ) )
-    }
-    add( idStruct( "id1" ), TypeIdentifier, mkId( "id1" ) )
-    add( idStruct( "id1", "id2" ), TypeIdentifier, mkId( "id1-id2" ) )
-    add( idBytes( "id1" ), TypeIdentifier, mkId( "id1" ) )
-    add(
-        mkId( "id1" ).ExternalForm(),
-        TypeIdentifier,
-        mkId( "id1" ),
-    )
-    addVcErr( 
-        "id$Bad", 
-        TypeIdentifier, 
-        nil, 
-        "[<input>, line 1, col 3]: Invalid id rune: \"$\" (U+0024)",
-    )
-    addVcErr( 
-        badBytes,
-        TypeIdentifier,
-        nil,
-        "[offset 0]: Expected type code 0x01 but got 0x00",
-    )
-    addVcErr(
-        idStruct( "part1", "BadPart" ),
-        TypeIdentifier,
-        p( "parts" ).StartList().SetIndex( 1 ),
-        "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
-    )
-    add(
-        parser.MustStruct( QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ) ),
-        ),
-        TypeNamespace,
-        mkNs( "ns1@v1" ),
-    )
-    add(
-        parser.MustStruct( QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
-        ),
-        TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add(
-        parser.MustStruct( QnameNamespace,
-            "version", "v1",
-            "parts", mg.MustList( "ns1", "ns2" ),
-        ),
-        TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add(
-        parser.MustStruct( QnameNamespace,
-            "version", idBytes( "v1" ),
-            "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
-        ),
-        TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add(
-        parser.MustStruct( QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
-        ),
-        TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
-    )
-    add( "ns1@v1", TypeNamespace, mkNs( "ns1@v1" ) )
-    add( nsBytes( "ns1@v1" ), TypeNamespace, mkNs( "ns1@v1" ) )
-    addVcErr(
-        parser.MustStruct( QnameNamespace,
-            "version", "bad$ver",
-            "parts", mg.MustList( idStruct( "ns1" ) ),
-        ),
-        TypeNamespace,
-        p( "version" ),
-        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
-    ) 
-    addVcErr(
-        parser.MustStruct( QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), "bad$Part" ),
-        ),
-        TypeNamespace,
-        p( "parts" ).StartList().SetIndex( 1 ),
-        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
-    ) 
-    addVcErr(
-        parser.MustStruct( QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ), badBytes ),
-        ),
-        TypeNamespace,
-        p( "parts" ).StartList().SetIndex( 1 ),
-        "[offset 0]: Expected type code 0x01 but got 0x00",
-    )
-    addVcErr(
-        badBytes,
-        TypeNamespace,
-        nil,
-        "[offset 0]: Expected type code 0x02 but got 0x00",
-    )
-    addVcErr(
-        "Bad@Bad",
-        TypeNamespace,
-        nil,
-        "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
-    )
-    idPathStruct := func( parts ...interface{} ) *mg.Struct {
-        return parser.MustStruct( QnameIdentifierPath,
-            "parts", mg.MustList( parts... ),
-        )
-    }
-    add(
-        idPathStruct(
-            idStruct( "p1" ),
-            idStruct( "p2" ),
-            int32( 1 ),
-            idStruct( "p3" ),
-        ),
-        TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 1 ).
-            Descend( mkId( "p3" ) ),
-    )
-    add(
-        idPathStruct(
-            idStruct( "p1" ),
-            "p2",
-            int32( 1 ),
-            uint32( 2 ),
-            int64( 3 ),
-            uint64( 4 ),
-            idBytes( "p3" ),
-        ),
-        TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 1 ).
-            StartList().SetIndex( 2 ).
-            StartList().SetIndex( 3 ).
-            StartList().SetIndex( 4 ).
-            Descend( mkId( "p3" ) ),
-    )
-    add(
-        "p1.p2[ 3 ].p4",
-        TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 3 ).
-            Descend( mkId( "p4" ) ),
-    )
-    addVcErr(
-        "p1.bad$Id",
-        TypeIdentifierPath,
-        nil,
-        "[<input>, line 1, col 7]: Invalid id rune: \"$\" (U+0024)",
-    )
-    addVcErr( 
-        idPathStruct(), 
-        TypeIdentifierPath,
-        p( "parts" ),
-        "empty list",
-    )
-    addBindErr(
-        idPathStruct( true ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "unhandled value: mingle:core@v1/Boolean",
-    )
-    addVcErr(
-        idPathStruct( "bad$Id" ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
-    )
-    addVcErr(
-        idPathStruct( badBytes ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "[offset 0]: Expected type code 0x01 but got 0x00",
-    )
-    addBindErr(
-        idPathStruct( float32( 1 ) ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "unhandled value: mingle:core@v1/Float32",
-    )
-    addBindErr(
-        idPathStruct( float64( 1 ) ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "unhandled value: mingle:core@v1/Float64",
-    )
-    addVcErr(
-        idPathStruct( int32( -1 ) ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "value is negative",
-    )
-    addVcErr(
-        idPathStruct( int64( -1 ) ),
-        TypeIdentifierPath,
-        p( "parts" ).StartList(),
-        "value is negative",
-    )
-}
-
 func ( rti *rtInit ) call() {
     rti.addBaseTypeTests()    
     rti.addMiscTcErrors()
@@ -1847,11 +1611,9 @@ func ( rti *rtInit ) call() {
     rti.addDefaultPathTests()
     rti.addCastDisableTests()
     rti.addCustomFieldSetTests()
-    rti.addBuiltinTypeTests()
 }
 
 func init() {
-    reactorTestNs = parser.MustNamespace( "mingle:types@v1" )
     f := func( b *mgRct.ReactorTestSetBuilder ) { ( &rtInit{ b: b } ).call() }
     mgRct.AddTestInitializer( reactorTestNs, f )
 }
