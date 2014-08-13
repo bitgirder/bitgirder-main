@@ -181,7 +181,7 @@ func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
-func idPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
     negErr := func() error {
         return mg.NewValueCastError( ve.GetPath(), "value is negative" )
     }
@@ -198,6 +198,17 @@ func idPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
     return nil, nil, false
 }
 
+func idPathPartFailBadVal( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+    tmpl := "invalid value for identifier path part: %s"
+    err := mg.NewValueCastErrorf( ve.GetPath(), tmpl, mgRct.TypeOfEvent( ve ) )
+    return nil, err, true
+}
+
+// note that we have ValueFunc end with idPathPartFailBadVal so that we can fail
+// with a ValueCastError instead of the default error. This is to reflect the
+// intent of IdentifierPart.parts being typed as Value+, but where the values
+// themselves are expected to be of a finite set of types (if we had union types
+// we would use that)
 func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
     res.StructFunc = func( 
@@ -211,7 +222,7 @@ func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         return nil, nil
     }
     res.ValueFunc = mgRct.NewBuildValueOkFunctionSequence(
-        idFromBytes, idFromString, idPartFromValue )
+        idFromBytes, idFromString, idPathPartFromValue, idPathPartFailBadVal )
     return res
 }
 

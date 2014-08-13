@@ -5,7 +5,6 @@ import (
     "mingle/types"
     "mingle/types/builtin"
     "mingle/parser"
-    "mingle/bind"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
     "encoding/base64"
@@ -1629,11 +1628,6 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
     addVcErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
         addErr( in, typ, newVcErr( path, msg ) )
     }
-    addBindErr := func( 
-        in, typ interface{}, path objpath.PathNode, msg string ) {
-
-        addErr( in, typ, bind.NewBindError( path, msg ) )
-    }
     add( idStruct( "id1" ), builtin.TypeIdentifier, mkId( "id1" ) )
     add( idStruct( "id1", "id2" ), builtin.TypeIdentifier, mkId( "id1-id2" ) )
     add( idBytes( "id1" ), builtin.TypeIdentifier, mkId( "id1" ) )
@@ -1798,11 +1792,11 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ),
         "empty list",
     )
-    addBindErr(
+    addVcErr(
         idPathStruct( true ),
         builtin.TypeIdentifierPath,
         p( "parts" ).StartList(),
-        "unhandled value: mingle:core@v1/Boolean",
+        "invalid value for identifier path part: mingle:core@v1/Boolean",
     )
     addVcErr(
         idPathStruct( "bad$Id" ),
@@ -1816,17 +1810,17 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ).StartList(),
         "[offset 0]: Expected type code 0x01 but got 0x00",
     )
-    addBindErr(
+    addVcErr(
         idPathStruct( float32( 1 ) ),
         builtin.TypeIdentifierPath,
         p( "parts" ).StartList(),
-        "unhandled value: mingle:core@v1/Float32",
+        "invalid value for identifier path part: mingle:core@v1/Float32",
     )
-    addBindErr(
+    addVcErr(
         idPathStruct( float64( 1 ) ),
         builtin.TypeIdentifierPath,
         p( "parts" ).StartList(),
-        "unhandled value: mingle:core@v1/Float64",
+        "invalid value for identifier path part: mingle:core@v1/Float64",
     )
     addVcErr(
         idPathStruct( int32( -1 ) ),
