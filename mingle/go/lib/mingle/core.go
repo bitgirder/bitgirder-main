@@ -1070,6 +1070,22 @@ var (
     TypeValue *AtomicTypeReference
     TypeNullableValue *NullableTypeReference
     TypeOpaqueList *ListTypeReference
+    QnameIdentifier *QualifiedTypeName
+    TypeIdentifier *AtomicTypeReference
+    QnameIdentifierPart *QualifiedTypeName
+    TypeIdentifierPart *AtomicTypeReference
+    QnameNamespace *QualifiedTypeName
+    TypeNamespace *AtomicTypeReference
+    QnameIdentifierPath *QualifiedTypeName
+    TypeIdentifierPath *AtomicTypeReference
+    QnameStandardError *QualifiedTypeName
+    TypeStandardError *AtomicTypeReference
+    QnameCastError *QualifiedTypeName
+    TypeCastError *AtomicTypeReference
+    QnameUnrecognizedFieldError *QualifiedTypeName
+    TypeUnrecognizedFieldError *AtomicTypeReference
+    QnameMissingFieldsError *QualifiedTypeName
+    TypeMissingFieldsError *AtomicTypeReference
 )
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
@@ -1129,6 +1145,15 @@ func init() {
         QnameFloat32,
         QnameFloat64,
     }
+    QnameIdentifier, TypeIdentifier = f1( "Identifier" )
+    QnameIdentifierPart, TypeIdentifierPart = f1( "IdentifierPart" )
+    QnameNamespace, TypeNamespace = f1( "Namespace" )
+    QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
+    QnameStandardError, TypeStandardError = f1( "StandardError" )
+    QnameCastError, TypeCastError = f1( "CastError" )
+    QnameUnrecognizedFieldError, TypeUnrecognizedFieldError = 
+        f1( "UnrecognizedFieldError" )
+    QnameMissingFieldsError, TypeMissingFieldsError = f1( "MissingFieldsError" )
 }
 
 func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {

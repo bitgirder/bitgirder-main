@@ -1773,7 +1773,7 @@ func ( c *Compilation ) validateConstVal(
 
     if _, err := c.castConstVal( val, typ, dm ); err != nil {
         if ve, ok := err.( *mg.ValueCastError ); ok {
-            c.addError( errLoc, ve.Message() )
+            c.addError( errLoc, ve.Message )
         } else { c.addError( errLoc, err.Error() ) }
         return false
     }

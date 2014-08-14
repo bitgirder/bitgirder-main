@@ -105,7 +105,7 @@ func ( r *RequestReactor ) setBuilder(
 func ( r *RequestReactor ) startNamespace() {
     r.setBuilder(
         IdNamespace,
-        builtin.TypeNamespace,
+        mg.TypeNamespace,
         func( val interface{} ) error { 
             r.reqCtx.Namespace = val.( *mg.Namespace )
             return nil
@@ -116,7 +116,7 @@ func ( r *RequestReactor ) startNamespace() {
 func ( r *RequestReactor ) startService() {
     r.setBuilder(
         IdService,
-        builtin.TypeIdentifier,
+        mg.TypeIdentifier,
         func( val interface{} ) error { 
             r.reqCtx.Service = val.( *mg.Identifier )
             return nil
@@ -127,7 +127,7 @@ func ( r *RequestReactor ) startService() {
 func ( r *RequestReactor ) startOperation() {
     r.setBuilder(
         IdOperation,
-        builtin.TypeIdentifier,
+        mg.TypeIdentifier,
         func( val interface{} ) error { 
             r.reqCtx.Operation = val.( *mg.Identifier )
             return r.iface.StartRequest( r.reqCtx, r.reqStartPath )

@@ -77,7 +77,7 @@ func createIdSliceBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         func( val, acc interface{} ) interface{} {
             return append( acc.( []*mg.Identifier ), val.( *mg.Identifier ) )
         },
-        builderFactFuncForType( TypeIdentifier, reg ),
+        builderFactFuncForType( mg.TypeIdentifier, reg ),
     )
     return res
 }
@@ -166,7 +166,7 @@ func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     res.RegisterField(
         idUnsafe( "version" ),
         func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            if bf, ok := reg.BuilderFactoryForType( TypeIdentifier ); ok {
+            if bf, ok := reg.BuilderFactoryForType( mg.TypeIdentifier ); ok {
                 return bf, nil
             }
             return nil, nil
@@ -244,7 +244,7 @@ func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res.StructFunc = func( 
         sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
 
-        if qn := sse.Type; qn.Equals( QnameIdentifier ) {
+        if qn := sse.Type; qn.Equals( mg.QnameIdentifier ) {
             if bf, ok := reg.BuilderFactoryForName( qn ); ok {
                 return bf.StartStruct( sse )
             }
@@ -334,7 +334,8 @@ func newLocatableErrorBuilderFactory(
         registerBoundField0( 
             errBldr, idUnsafe( "message" ), mg.TypeString, msgSet, reg )
         registerBoundField0(
-            errBldr, idUnsafe( "location" ), TypeIdentifierPath, locSet, reg )
+            errBldr, idUnsafe( "location" ), mg.TypeIdentifierPath, locSet, 
+            reg )
         if addFlds != nil { addFlds( errBldr ) }
         return errBldr
     })
@@ -343,7 +344,7 @@ func newLocatableErrorBuilderFactory(
 
 func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return newLocatableErrorBuilderFactory(     
-        QnameCastError, 
+        mg.QnameCastError, 
         func() interface{} { return new( mg.ValueCastError ) },
         func( fldVal, err interface{} ) {
             err.( *mg.ValueCastError ).Message = fldVal.( string )
@@ -360,7 +361,7 @@ func newUnrecognizedFieldErrorBuilderFactory(
     reg *bind.Registry ) mgRct.BuilderFactory {
 
     return newLocatableErrorBuilderFactory(
-        QnameUnrecognizedFieldError,
+        mg.QnameUnrecognizedFieldError,
         func() interface{} { return new( mg.UnrecognizedFieldError ) },
         func( fldVal, err interface{} ) {
             err.( *mg.UnrecognizedFieldError ).Message = fldVal.( string )
@@ -375,7 +376,7 @@ func newUnrecognizedFieldErrorBuilderFactory(
                     val.( *mg.Identifier )
             }
             registerBoundField0( 
-                fsb, idUnsafe( "field" ), TypeIdentifier, set, reg )
+                fsb, idUnsafe( "field" ), mg.TypeIdentifier, set, reg )
         },
         reg,
     )
@@ -385,7 +386,7 @@ func newMissingFieldsErrorBuilderFactory(
     reg *bind.Registry ) mgRct.BuilderFactory {
 
     return newLocatableErrorBuilderFactory(
-        QnameMissingFieldsError,
+        mg.QnameMissingFieldsError,
         func() interface{} { return new( mg.MissingFieldsError ) },
         func( fldVal, err interface{} ) {
             err.( *mg.MissingFieldsError ).Message = fldVal.( string )
@@ -409,14 +410,14 @@ func newMissingFieldsErrorBuilderFactory(
 
 func initBind() {
     reg := bind.RegistryForDomain( bind.DomainDefault )
-    reg.MustAddValue( QnameIdentifier, newIdBuilderFactory( reg ) )
-    reg.MustAddValue( QnameNamespace, newNsBuilderFactory( reg ) )
-    reg.MustAddValue( QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
-    reg.MustAddValue( QnameCastError, newCastErrorBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameCastError, newCastErrorBuilderFactory( reg ) )
     reg.MustAddValue( 
-        QnameUnrecognizedFieldError,
+        mg.QnameUnrecognizedFieldError,
         newUnrecognizedFieldErrorBuilderFactory( reg ),
     )
     reg.MustAddValue( 
-        QnameMissingFieldsError, newMissingFieldsErrorBuilderFactory( reg ) )
+        mg.QnameMissingFieldsError, newMissingFieldsErrorBuilderFactory( reg ) )
 }

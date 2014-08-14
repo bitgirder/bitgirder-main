@@ -89,8 +89,8 @@ func initReqType() {
     addFld := func( nm *mg.Identifier, typ mg.TypeReference ) {
         sd.Fields.Add( &types.FieldDefinition{ Name: nm, Type: typ } )
     }
-    idPtr := mg.NewPointerTypeReference( builtin.TypeIdentifier )
-    addFld( IdNamespace, mg.NewPointerTypeReference( builtin.TypeNamespace ) )
+    idPtr := mg.NewPointerTypeReference( mg.TypeIdentifier )
+    addFld( IdNamespace, mg.NewPointerTypeReference( mg.TypeNamespace ) )
     addFld( IdService, idPtr )
     addFld( IdOperation, idPtr )
     addFld( IdAuthentication, mg.TypeNullableValue )

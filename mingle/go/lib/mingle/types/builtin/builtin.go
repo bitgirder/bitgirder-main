@@ -5,49 +5,8 @@ import (
     mg "mingle"
 )
 
-var (
-    nsLangV1 *mg.Namespace
-    QnameIdentifier *mg.QualifiedTypeName
-    TypeIdentifier *mg.AtomicTypeReference
-    QnameNamespace *mg.QualifiedTypeName
-    TypeNamespace *mg.AtomicTypeReference
-    QnameIdentifierPath *mg.QualifiedTypeName
-    TypeIdentifierPath *mg.AtomicTypeReference
-    QnameCastError *mg.QualifiedTypeName
-    TypeCastError *mg.AtomicTypeReference
-    QnameUnrecognizedFieldError *mg.QualifiedTypeName
-    TypeUnrecognizedFieldError *mg.AtomicTypeReference
-    QnameMissingFieldsError *mg.QualifiedTypeName
-    TypeMissingFieldsError *mg.AtomicTypeReference
-)
-
 func idUnsafe( parts ...string ) *mg.Identifier {
     return mg.NewIdentifierUnsafe( parts )
-}
-
-func mkPair( 
-    ns *mg.Namespace, 
-    nm string ) ( *mg.QualifiedTypeName, *mg.AtomicTypeReference ) { 
-
-    declNm := mg.NewDeclaredTypeNameUnsafe( nm )
-    qn := &mg.QualifiedTypeName{ Namespace: ns, Name: declNm }
-    return qn, qn.AsAtomicType()
-}
-
-func initNames() {
-    nsLangV1 = &mg.Namespace{
-        Version: idUnsafe( "v1" ),
-        Parts: []*mg.Identifier{ idUnsafe( "mingle" ), idUnsafe( "lang" ) },
-    }
-    QnameIdentifier, TypeIdentifier = mkPair( nsLangV1, "Identifier" )
-    QnameNamespace, TypeNamespace = mkPair( nsLangV1, "Namespace" )
-    QnameIdentifierPath, TypeIdentifierPath = 
-        mkPair( nsLangV1, "IdentifierPath" )
-    QnameCastError, TypeCastError = mkPair( mg.CoreNsV1, "CastError" )
-    QnameUnrecognizedFieldError, TypeUnrecognizedFieldError = 
-        mkPair( mg.CoreNsV1, "UnrecognizedFieldError" )
-    QnameMissingFieldsError, TypeMissingFieldsError = 
-        mkPair( mg.CoreNsV1, "MissingFieldsError" )
 }
 
 func AddLocatableErrorFields( sd *types.StructDefinition ) {
@@ -61,7 +20,7 @@ func AddLocatableErrorFields( sd *types.StructDefinition ) {
         &types.FieldDefinition{
             Name: idUnsafe( "location" ),
             Type: mg.MustNullableTypeReference( 
-                mg.NewPointerTypeReference( TypeIdentifierPath ),
+                mg.NewPointerTypeReference( mg.TypeIdentifierPath ),
             ),
         },
     )
@@ -86,6 +45,18 @@ func BuiltinTypes() *types.DefinitionMap {
 
 func MustAddBuiltinType( def types.Definition ) { builtinTypes.MustAdd( def ) }
 
+func initStandardError() {
+    sd := types.NewSchemaDefinition()
+    sd.Name = mg.QnameStandardError
+    sd.Fields.MustAdd(
+        &types.FieldDefinition{
+            Name: idUnsafe( "message" ),
+            Type: mg.MustNullableTypeReference( mg.TypeString ),
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
 func initCoreV1Types() {
     for _, primTyp := range mg.PrimitiveTypes {
         pd := &types.PrimitiveDefinition{}
@@ -93,15 +64,14 @@ func initCoreV1Types() {
         MustAddBuiltinType( pd )
     }
     MustAddBuiltinType( &types.PrimitiveDefinition{ Name: mg.QnameValue } )
-}
-
-func langV1Qname( nm string ) *mg.QualifiedTypeName {
-    return mg.NewDeclaredTypeNameUnsafe( nm ).ResolveIn( nsLangV1 )
+    initStandardError()
 }
 
 func initIdentifierPartType() *types.AliasedTypeDefinition {
+    nm := mg.NewDeclaredTypeNameUnsafe( "IdentifierPart" )
+    qn := nm.ResolveIn( mg.CoreNsV1 )
     res := &types.AliasedTypeDefinition{
-        Name: langV1Qname( "IdentifierPart" ),
+        Name: qn,
         AliasedType: &mg.AtomicTypeReference{
             Name: mg.QnameString,
             Restriction: mg.MustRegexRestriction( "^[a-z][a-z0-9]*$" ),
@@ -113,7 +83,7 @@ func initIdentifierPartType() *types.AliasedTypeDefinition {
 
 func initIdentifierType( idPartTyp *types.AliasedTypeDefinition ) {
     sd := types.NewStructDefinition()
-    sd.Name = QnameIdentifier
+    sd.Name = mg.QnameIdentifier
     sd.Fields.Add( 
         &types.FieldDefinition{
             Name: idUnsafe( "parts" ),
@@ -132,8 +102,8 @@ func initIdentifierType( idPartTyp *types.AliasedTypeDefinition ) {
 
 func initNamespaceType() {
     sd := types.NewStructDefinition()
-    sd.Name = QnameNamespace
-    idPtr := mg.NewPointerTypeReference( TypeIdentifier )
+    sd.Name = mg.QnameNamespace
+    idPtr := mg.NewPointerTypeReference( mg.TypeIdentifier )
     sd.Fields.Add(
         &types.FieldDefinition{
             Name: idUnsafe( "version" ),
@@ -158,7 +128,7 @@ func initNamespaceType() {
 
 func initIdentifierPathType() {
     sd := types.NewStructDefinition()
-    sd.Name = QnameIdentifierPath
+    sd.Name = mg.QnameIdentifierPath
     sd.Fields.Add(
         &types.FieldDefinition{
             Name: idUnsafe( "parts" ),
@@ -177,12 +147,12 @@ func initIdentifierPathType() {
 
 func initUnrecognizedFieldError() {
     sd := types.NewStructDefinition()
-    sd.Name = QnameUnrecognizedFieldError
+    sd.Name = mg.QnameUnrecognizedFieldError
     AddLocatableErrorFields( sd )
     sd.Fields.MustAdd(
         &types.FieldDefinition{
             Name: idUnsafe( "field" ),
-            Type: mg.NewPointerTypeReference( TypeIdentifier ),
+            Type: mg.NewPointerTypeReference( mg.TypeIdentifier ),
         },
     )
     MustAddBuiltinType( sd )
@@ -190,13 +160,13 @@ func initUnrecognizedFieldError() {
 
 func initMissingFieldsError() {
     sd := types.NewStructDefinition()
-    sd.Name = QnameMissingFieldsError
+    sd.Name = mg.QnameMissingFieldsError
     AddLocatableErrorFields( sd )
     sd.Fields.MustAdd(
         &types.FieldDefinition{
             Name: idUnsafe( "fields" ),
             Type: &mg.ListTypeReference{
-                ElementType: mg.NewPointerTypeReference( TypeIdentifier ),
+                ElementType: mg.NewPointerTypeReference( mg.TypeIdentifier ),
                 AllowsEmpty: false,
             },
         },
@@ -209,7 +179,7 @@ func initLangV1Types() {
     initIdentifierType( idPartType )
     initNamespaceType()
     initIdentifierPathType()
-    MustAddBuiltinType( NewLocatableErrorDefinition( QnameCastError ) )
+    MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameCastError ) )
     initUnrecognizedFieldError()
     initMissingFieldsError()
 }
