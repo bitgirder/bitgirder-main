@@ -483,6 +483,8 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
     }
     mkRes := func( val interface{} ) mg.Value { return mkResp( "result", val ) }
     mkErr := func( val interface{} ) mg.Value { return mkResp( "error", val ) }
+    // not exhaustively testing all external error types, just checking one to
+    // confirm that external error types are in fact picked up by the reactor
     addImplicitErrCoverage := func( ns, svc, op string ) {
         f := func( qn *mg.QualifiedTypeName ) {
             addOk( ns, svc, op,

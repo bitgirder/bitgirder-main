@@ -1588,7 +1588,7 @@ func ( rti *rtInit ) addConstructorCastTests() {
     )
 }
 
-func ( rti *rtInit ) addBuiltinTypeTests() {
+func ( rti *rtInit ) addBuiltinLangTests() {
     dm := builtin.MakeDefMap()
     idBytes := func( s string ) []byte {
         return mg.IdentifierAsBytes( mkId( s ) )
@@ -1735,6 +1735,7 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         nil,
         "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
     )
+    tp := mg.MakeTestIdPath
     idPathStruct := func( parts ...interface{} ) *mg.Struct {
         return parser.MustStruct( builtin.QnameIdentifierPath,
             "parts", mg.MustList( parts... ),
@@ -1742,43 +1743,36 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
     }
     add(
         idPathStruct(
-            idStruct( "p1" ),
-            idStruct( "p2" ),
+            idStruct( "f1" ),
+            idStruct( "f2" ),
             int32( 1 ),
-            idStruct( "p3" ),
+            idStruct( "f3" ),
         ),
         builtin.TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 1 ).
-            Descend( mkId( "p3" ) ),
+        tp( 1, 2, "1", 3 ),
     )
     add(
         idPathStruct(
-            idStruct( "p1" ),
-            "p2",
+            idStruct( "f1" ),
+            "f2",
             int32( 1 ),
             uint32( 2 ),
             int64( 3 ),
             uint64( 4 ),
-            idBytes( "p3" ),
+            idBytes( "f3" ),
         ),
         builtin.TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 1 ).
-            StartList().SetIndex( 2 ).
-            StartList().SetIndex( 3 ).
-            StartList().SetIndex( 4 ).
-            Descend( mkId( "p3" ) ),
+        tp( 1, 2, "1", "2", "3", "4", 3 ),
     )
     add(
-        "p1.p2[ 3 ].p4",
+        "f1[ 2 ]",
         builtin.TypeIdentifierPath,
-        p( "p1" ).
-            Descend( mkId( "p2" ) ).
-            StartList().SetIndex( 3 ).
-            Descend( mkId( "p4" ) ),
+        tp( 1, "2" ),
+    )
+    add(
+        "f1.f2[ 3 ].f4",
+        builtin.TypeIdentifierPath,
+        tp( 1, 2, "3", 4 ),
     )
     addVcErr(
         "p1.bad$Id",
@@ -1834,6 +1828,69 @@ func ( rti *rtInit ) addBuiltinTypeTests() {
         p( "parts" ).StartList(),
         "value is negative",
     )
+}
+
+// gives simple coverage of various error types, to check that their types and
+// bindings are correctly installed.
+func ( rti *rtInit ) addBuiltinErrorTests() {
+    dm := builtin.MakeDefMap()
+    add := func( in, typ, expct interface{} ) {
+        rti.addTests(
+            &BuiltinTypeTest{
+                In: mg.MustValue( in ),
+                Type: asType( typ ),
+                Expect: expct,
+                Map: dm,
+            },
+        )
+    }
+    p := mg.MakeTestIdPath
+    add( 
+        parser.MustStruct( "mingle:core@v1/CastError",
+            "message", "test-message",
+            "location", "f1[ 2 ]",
+        ),
+        asType( "mingle:core@v1/CastError" ),
+        mg.NewValueCastError( p( 1, "2" ), "test-message" ),
+    )
+    add(
+        parser.MustStruct( "mingle:core@v1/UnrecognizedFieldError",
+            "message", "test-message",
+            "location", "f1[ 2 ]",
+            "field", "bad-field",
+        ),
+        asType( "mingle:core@v1/UnrecognizedFieldError" ),
+        &mg.UnrecognizedFieldError{
+            Location: p( 1, "2" ),
+            Message: "test-message",
+            Field: mkId( "bad-field" ),
+        },
+    )
+    add(
+        parser.MustStruct( "mingle:core@v1/MissingFieldsError",
+            "message", "test-message",
+            "location", "f1[ 2 ]",
+            "fields", mg.MustList( asType( "String+" ), 
+                "f3", "f1", "f2", // unsorted in the input
+            ),
+        ),
+        asType( "mingle:core@v1/MissingFieldsError" ),
+        func() interface{} {
+            res := &mg.MissingFieldsError{
+                Message: "test-message",
+                Location: p( 1, "2" ),
+            }
+            res.SetFields(
+                []*mg.Identifier{ mkId( "f1" ), mkId( "f2" ), mkId( "f3" ) },
+            )
+            return res
+        }(),
+    )
+} 
+
+func ( rti *rtInit ) addBuiltinTypeTests() {
+    rti.addBuiltinLangTests()
+    rti.addBuiltinErrorTests()
 }
 
 func ( rti *rtInit ) call() {

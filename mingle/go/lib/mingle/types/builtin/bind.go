@@ -50,6 +50,53 @@ func setListFunc(
     }
 }
 
+func registerBoundField0( 
+    fsb *mgRct.FunctionsFieldSetBuilder,
+    fld *mg.Identifier,
+    typ mg.TypeReference,
+    set func( fldVal, val interface{} ),
+    reg *bind.Registry ) {
+
+    fsb.RegisterField(
+        fld,
+        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
+            return reg.MustBuilderFactoryForType( typ ), nil
+        },
+        func( val interface{}, path objpath.PathNode ) error {
+            set( val, fsb.Value )
+            return nil
+        },
+    )
+}
+
+func createIdSliceBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    setListFunc(
+        res,
+        func() interface{} { return make( []*mg.Identifier, 0, 2 ) },
+        func( val, acc interface{} ) interface{} {
+            return append( acc.( []*mg.Identifier ), val.( *mg.Identifier ) )
+        },
+        builderFactFuncForType( TypeIdentifier, reg ),
+    )
+    return res
+}
+
+func registerIdSliceField(
+    fsb *mgRct.FunctionsFieldSetBuilder,
+    fld *mg.Identifier,
+    reg *bind.Registry,
+    set func( val interface{}, path objpath.PathNode ) error ) {
+    
+    fsb.RegisterField(
+        fld,
+        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
+            return createIdSliceBuilderFactory( reg ), nil
+        },
+        set,
+    )
+}
+
 func builderFactFuncForType( 
     typ mg.TypeReference, reg *bind.Registry ) func() mgRct.BuilderFactory {
 
@@ -113,19 +160,6 @@ func newIdBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
-func nsPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
-    res := bind.NewFunctionsBuilderFactory()
-    setListFunc(
-        res,
-        func() interface{} { return make( []*mg.Identifier, 0, 2 ) },
-        func( val, acc interface{} ) interface{} {
-            return append( acc.( []*mg.Identifier ), val.( *mg.Identifier ) )
-        },
-        builderFactFuncForType( TypeIdentifier, reg ),
-    )
-    return res
-}
-
 func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     res := bind.NewFunctionsFieldSetBuilder()
     res.Value = new( mg.Namespace )
@@ -142,11 +176,7 @@ func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
             return nil
         },
     )
-    res.RegisterField(
-        idUnsafe( "parts" ),
-        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            return nsPartsBuilderFactory( reg ), nil
-        },
+    registerIdSliceField( res, idUnsafe( "parts" ), reg, 
         func( val interface{}, path objpath.PathNode ) error {
             res.Value.( *mg.Namespace ).Parts = val.( []*mg.Identifier )
             return nil
@@ -290,9 +320,103 @@ func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func newLocatableErrorBuilderFactory( 
+    qn *mg.QualifiedTypeName, 
+    instFact func() interface{},
+    msgSet, locSet func( fldVal, err interface{} ),
+    addFlds func( fsb *mgRct.FunctionsFieldSetBuilder ),
+    reg *bind.Registry ) *mgRct.FunctionsBuilderFactory {
+
+    res := bind.NewFunctionsBuilderFactory()
+    setStructFunc( res, reg, func( reg *bind.Registry ) mgRct.FieldSetBuilder {
+        errBldr := bind.NewFunctionsFieldSetBuilder()
+        errBldr.Value = instFact()
+        registerBoundField0( 
+            errBldr, idUnsafe( "message" ), mg.TypeString, msgSet, reg )
+        registerBoundField0(
+            errBldr, idUnsafe( "location" ), TypeIdentifierPath, locSet, reg )
+        if addFlds != nil { addFlds( errBldr ) }
+        return errBldr
+    })
+    return res
+}
+
+func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return newLocatableErrorBuilderFactory(     
+        QnameCastError, 
+        func() interface{} { return new( mg.ValueCastError ) },
+        func( fldVal, err interface{} ) {
+            err.( *mg.ValueCastError ).Message = fldVal.( string )
+        },
+        func( fldVal, err interface{} ) {
+            err.( *mg.ValueCastError ).Location = fldVal.( objpath.PathNode )
+        },
+        nil,
+        reg,
+    )
+}
+
+func newUnrecognizedFieldErrorBuilderFactory( 
+    reg *bind.Registry ) mgRct.BuilderFactory {
+
+    return newLocatableErrorBuilderFactory(
+        QnameUnrecognizedFieldError,
+        func() interface{} { return new( mg.UnrecognizedFieldError ) },
+        func( fldVal, err interface{} ) {
+            err.( *mg.UnrecognizedFieldError ).Message = fldVal.( string )
+        },
+        func( fldVal, err interface{} ) {
+            err.( *mg.UnrecognizedFieldError ).Location = 
+                fldVal.( objpath.PathNode )
+        },
+        func( fsb *mgRct.FunctionsFieldSetBuilder ) {
+            set := func( val, err interface{} ) {
+                err.( *mg.UnrecognizedFieldError ).Field = 
+                    val.( *mg.Identifier )
+            }
+            registerBoundField0( 
+                fsb, idUnsafe( "field" ), TypeIdentifier, set, reg )
+        },
+        reg,
+    )
+}
+
+func newMissingFieldsErrorBuilderFactory( 
+    reg *bind.Registry ) mgRct.BuilderFactory {
+
+    return newLocatableErrorBuilderFactory(
+        QnameMissingFieldsError,
+        func() interface{} { return new( mg.MissingFieldsError ) },
+        func( fldVal, err interface{} ) {
+            err.( *mg.MissingFieldsError ).Message = fldVal.( string )
+        },
+        func( fldVal, err interface{} ) {
+            err.( *mg.MissingFieldsError ).Location = 
+                fldVal.( objpath.PathNode )
+        },
+        func( fsb *mgRct.FunctionsFieldSetBuilder ) {
+            registerIdSliceField( fsb, idUnsafe( "fields" ), reg,
+                func( val interface{}, _ objpath.PathNode ) error {
+                    flds := val.( []*mg.Identifier )
+                    fsb.Value.( *mg.MissingFieldsError ).SetFields( flds )
+                    return nil
+                },
+            )
+        },
+        reg,
+    )
+}
+
 func initBind() {
     reg := bind.RegistryForDomain( bind.DomainDefault )
     reg.MustAddValue( QnameIdentifier, newIdBuilderFactory( reg ) )
     reg.MustAddValue( QnameNamespace, newNsBuilderFactory( reg ) )
     reg.MustAddValue( QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
+    reg.MustAddValue( QnameCastError, newCastErrorBuilderFactory( reg ) )
+    reg.MustAddValue( 
+        QnameUnrecognizedFieldError,
+        newUnrecognizedFieldErrorBuilderFactory( reg ),
+    )
+    reg.MustAddValue( 
+        QnameMissingFieldsError, newMissingFieldsErrorBuilderFactory( reg ) )
 }

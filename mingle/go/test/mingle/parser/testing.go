@@ -32,14 +32,16 @@ func AssertParseError(
     aLoc.Descend( "Source" ).Equal( ParseSourceInput, pErr.Loc.Source )
 }
 
+// mutates opts
+func newTestLexerOptions( opts *LexerOptions, in string, strip bool ) *Lexer {
+    opts.Reader = bytes.NewBufferString( in )
+    opts.SourceName = ParseSourceInput
+    opts.Strip = strip
+    return NewLexer( opts )
+}
+
 func newTestLexer( in string, strip bool ) *Lexer {
-    return NewLexer(
-        &LexerOptions{
-            Reader: bytes.NewBufferString( in ),
-            SourceName: ParseSourceInput,
-            Strip: strip,
-        },
-    )
+    return newTestLexerOptions( &LexerOptions{}, in, strip )
 }
 
 func assertRegexRestriction( 

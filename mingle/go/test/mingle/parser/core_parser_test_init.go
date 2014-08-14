@@ -199,6 +199,11 @@ func init() {
                 Descend( id( "underscore", "stuff" ) ),
         ),
         idPathSucc(
+            "i1[ 2 ]",
+            "",
+            objpath.RootedAt( id( "i1" ) ).StartList().SetIndex( 2 ),
+        ),
+        idPathSucc(
             "i1[ 2 ].i3[ 4 ][ 5 ].i6", 
             "",
             objpath.RootedAt( id( "i1" ) ).

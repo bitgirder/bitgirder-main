@@ -104,7 +104,7 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
 }
 
 func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
-    set := func( ef extFormer ) { 
+    set := func( ef interface { ExternalForm() string } ) { 
         fqNm := fmt.Sprintf( "%T", ef )
         lastDot := strings.LastIndex( fqNm, "." )
         simplNm := fqNm[ lastDot + 1 : ]

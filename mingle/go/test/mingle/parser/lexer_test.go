@@ -31,8 +31,12 @@ type lexerAsserter struct {
     *testing.T
 }
 
+func newLexerAsserterLexer( lx *Lexer, t *testing.T ) *lexerAsserter {
+    return &lexerAsserter{ lx, t }
+}
+
 func newLexerAsserter( src string, strip bool, t *testing.T ) *lexerAsserter {
-    return &lexerAsserter{ newTestLexer( src, strip ), t }
+    return newLexerAsserterLexer( newTestLexer( src, strip ), t )
 }
 
 func ( a *lexerAsserter ) expectToken( line, col int, expct interface{} ) {
@@ -396,7 +400,8 @@ func TestUnreadOfNonSynthAfterExplicitSetSynthCancelsSynth( t *testing.T ) {
 
 func TestExternalIdsNotAsKeywords( t *testing.T ) {
     // first check our baseline: that namespace is normally a keyword
-    lx := NewLexer( &LexerOptions{ Reader: bytes.NewBufferString( "namespace" ) } )
+    lx := NewLexer( 
+        &LexerOptions{ Reader: bytes.NewBufferString( "namespace" ) } )
     if tok, _, err := lx.ReadToken(); err == nil {
         assert.Equal( KeywordNamespace, tok )
     } else { t.Fatal( err ) }
@@ -407,6 +412,13 @@ func TestExternalIdsNotAsKeywords( t *testing.T ) {
     if tok, _, err := lx.ReadToken(); err == nil {
         assert.Equal( id( "namespace" ), tok.( *mg.Identifier ) )
     } else { t.Fatal( err ) }
+}
+
+func TestExternalDisablesSynthEnd( t *testing.T ) {
+    lx := newTestLexerOptions( &LexerOptions{ IsExternal: true }, "]", false )
+    a := newLexerAsserterLexer( lx, t )
+    a.expectToken( 1, 1, SpecialTokenCloseBracket )
+    a.expectEof()
 }
 
 func TestNumberAccessorsSuccess( t *testing.T ) {

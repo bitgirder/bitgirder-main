@@ -64,11 +64,7 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
         c.Logf( "got %s, expect %s", mg.QuoteValue( act ),
             mg.QuoteValue( t.Expect ) )
         mg.AssertEqualValues( t.Expect, act, c )
-    } else { 
-        cae := mg.CastErrorAssert{ 
-            ErrExpect: t.Err, ErrAct: err, PathAsserter: c.PathAsserter }
-        cae.Call()
-    }
+    } else { c.EqualErrors( t.Err, err ) }
 }
 
 func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
@@ -96,6 +92,10 @@ func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
     cr := types.NewCastReactor( t.Type, builtin.BuiltinTypes() )
     pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), br )
     if err := mgRct.VisitValue( t.In, pip ); err == nil {
-        c.Equal( t.Expect, br.GetValue() )
+        switch v := t.Expect.( type ) {
+        case *mg.ValueCastError: 
+            mg.AssertErrors( v, br.GetValue().( error ), c.PathAsserter )
+        default: c.Equal( t.Expect, br.GetValue() )
+        }
     } else { c.EqualErrors( t.Err, err ) }
 }

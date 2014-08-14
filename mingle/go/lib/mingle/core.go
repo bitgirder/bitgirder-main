@@ -553,48 +553,28 @@ func FormatError( path objpath.PathNode, msg string ) string {
     return FormatIdPath( path ) + ": " + msg 
 }
 
-type ValueErrorImpl struct {
-    Path idPath
-}
-
-func ( e ValueErrorImpl ) Location() objpath.PathNode { 
-    if e.Path == nil { return nil }
-    return e.Path.( objpath.PathNode )
-}
-
-func ( e ValueErrorImpl ) MakeError( msg string ) string {
-    if e.Path == nil { return msg }
-    return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
-}
-
 type ValueCastError struct {
-    ve ValueErrorImpl
-    msg string
+    Location objpath.PathNode
+    Message string
 }
-
-func ( e *ValueCastError ) Message() string { return e.msg }
 
 func ( e *ValueCastError ) Error() string { 
-    return e.ve.MakeError( e.Message() ) 
-}
-
-func ( e *ValueCastError ) Location() objpath.PathNode { 
-    return e.ve.Location() 
+    return FormatError( e.Location, e.Message )
 }
 
 func NewValueCastError( path idPath, msg string ) *ValueCastError {
-    res := &ValueCastError{ msg: msg, ve: ValueErrorImpl{} }
-    res.ve.Path = path
-    return res
+    return &ValueCastError{ Message: msg, Location: path }
 }
 
 func NewValueCastErrorf(
     path idPath, tmpl string, args ...interface{} ) *ValueCastError {
+
     return NewValueCastError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 func NewTypeCastError( 
     expct, act TypeReference, path objpath.PathNode ) *ValueCastError {
+
     return NewValueCastErrorf( 
         path,
         "Expected value of type %s but found %s",
@@ -604,6 +584,7 @@ func NewTypeCastError(
 
 func NewTypeCastErrorValue( 
     t TypeReference, val Value, path objpath.PathNode ) *ValueCastError {
+
     return NewTypeCastError( t, TypeOf( val ), path )
 }
 
@@ -1352,16 +1333,24 @@ func ParseNumber( s string, qn *QualifiedTypeName ) ( val Value, err error ) {
 }
 
 type MissingFieldsError struct {
-    impl ValueErrorImpl
+    Message string
+    Location objpath.PathNode
     flds []*Identifier // stored sorted
+}
+
+func ( e *MissingFieldsError ) SetFields( flds []*Identifier ) {
+
+    e.flds = make( []*Identifier, len( flds ) )
+    copy( e.flds, flds )
+    SortIds( e.flds )
 }
 
 func NewMissingFieldsError( 
     path objpath.PathNode, flds []*Identifier ) *MissingFieldsError {
-    flds2 := make( []*Identifier, len( flds ) )
-    for i, e := 0, len( flds ); i < e; i++ { flds2[ i ] = flds[ i ] }
-    SortIds( flds2 )
-    return &MissingFieldsError{ impl: ValueErrorImpl{ path }, flds: flds2 }
+
+    res := &MissingFieldsError{ Location: path }
+    res.SetFields( flds )
+    return res
 }
 
 func idSliceToString( flds []*Identifier ) string {
@@ -1370,74 +1359,30 @@ func idSliceToString( flds []*Identifier ) string {
     return strings.Join( strs, ", " )
 }
 
-func ( e *MissingFieldsError ) Message() string {
-    return fmt.Sprintf( "missing field(s): %s", idSliceToString( e.flds ) )
-}
-
 func ( e *MissingFieldsError ) Error() string {
-    return e.impl.MakeError( e.Message() )
-}
-
-func ( e *MissingFieldsError ) Location() objpath.PathNode { 
-    return e.impl.Location() 
+    msg := e.Message
+    if msg == "" { 
+        msg = fmt.Sprintf( "missing field(s): %s", idSliceToString( e.flds ) )
+    }
+    return FormatError( e.Location, msg )
 }
 
 func ( e *MissingFieldsError ) Fields() []*Identifier { return e.flds }
 
 type UnrecognizedFieldError struct {
-    impl ValueErrorImpl
+    Message string
+    Location objpath.PathNode
     Field *Identifier
 }
 
 func NewUnrecognizedFieldError( 
     p objpath.PathNode, fld *Identifier ) *UnrecognizedFieldError {
-    return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, Field: fld }
-}
 
-func ( e *UnrecognizedFieldError ) Message() string {
-    return fmt.Sprintf( "unrecognized field: %s", e.Field )
+    return &UnrecognizedFieldError{ Location: p, Field: fld }
 }
 
 func ( e *UnrecognizedFieldError ) Error() string {
-    return e.impl.MakeError( e.Message() )
-}
-
-func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {
-    return e.impl.Location()
-}
-
-type extFormer interface { ExternalForm() string }
-
-type EndpointError struct {
-    impl ValueErrorImpl
-    desc string
-    ef extFormer
-}
-
-func ( ee *EndpointError ) Error() string {
-    msg := fmt.Sprintf( "no such %s: %s", ee.desc, ee.ef.ExternalForm() )
-    return ee.impl.MakeError( msg )
-}
-
-func ( ee *EndpointError ) Location() objpath.PathNode {
-    return ee.impl.Location()
-}
-
-func newEndpointError( desc string, ef extFormer, p idPath ) *EndpointError {
-    return &EndpointError{ desc: desc, ef: ef, impl: ValueErrorImpl{ p } }
-}
-
-func NewEndpointErrorNamespace( 
-    ns *Namespace, p objpath.PathNode ) *EndpointError {
-    return newEndpointError( "namespace", ns, p )
-}
-
-func NewEndpointErrorService(
-    svc *Identifier, p objpath.PathNode ) *EndpointError {
-    return newEndpointError( "service", svc, p )
-}
-
-func NewEndpointErrorOperation(
-    op *Identifier, p objpath.PathNode ) *EndpointError {
-    return newEndpointError( "operation", op, p )
+    msg := e.Message
+    if msg == "" { msg = fmt.Sprintf( "unrecognized field: %s", e.Field ) }
+    return FormatError( e.Location, msg )
 }

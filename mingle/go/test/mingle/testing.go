@@ -136,56 +136,34 @@ func MakeTestIdPath( elts ...interface{} ) objpath.PathNode {
     return res
 }
 
-type CastErrorAssert struct {
-    ErrExpect, ErrAct error
+type errorAssert struct {
+    expct error
+    act error
     *assert.PathAsserter
 }
 
-func ( cea CastErrorAssert ) FailActErrType() {
-    cea.Fatalf(
-        "Expected error of type %T but got %T: %s",
-        cea.ErrExpect, cea.ErrAct, cea.ErrAct )
+func ( ea errorAssert ) assertValueCast() {
+    expct := ea.expct.( *ValueCastError )
+    act, ok := ea.act.( *ValueCastError )
+    ea.Truef( ok, "not a value cast error: %T", ea.act )
+    ea.Descend( "Message" ).Equal( expct.Message, act.Message )
+    ea.Descend( "Location" ).Equal( expct.Location, act.Location )
 }
 
-// Returns a path asserter that can be used further
-func ( cea CastErrorAssert ) assertValueError( 
-    expct, act ValueError ) *assert.PathAsserter {
-    a := cea.Descend( "Err" )
-    a.Descend( "Error()" ).Equal( expct.Error(), act.Error() )
-    a.Descend( "Message()" ).Equal( expct.Message(), act.Message() )
-    a.Descend( "Location()" ).Equal( expct.Location(), act.Location() )
-    return a
+func ( ea errorAssert ) assertMissingFieldsError() {
+    expct := ea.expct.( *MissingFieldsError )
+    act, ok := ea.act.( *MissingFieldsError )
+    ea.Truef( ok, "not a missing fields error: %T", ea.act )
+    ea.Descend( "Message" ).Equal( expct.Message, act.Message )
+    ea.Descend( "Location" ).Equal( expct.Location, act.Location )
+    ea.Descend( "Fields" ).Equal( expct.Fields(), act.Fields() )
 }
 
-func ( cea CastErrorAssert ) assertVcError() {
-    if act, ok := cea.ErrAct.( *ValueCastError ); ok {
-        cea.assertValueError( cea.ErrExpect.( *ValueCastError ), act )
-    } else { cea.FailActErrType() }
-}
-
-func ( cea CastErrorAssert ) assertMissingFieldsError() {
-    if act, ok := cea.ErrAct.( *MissingFieldsError ); ok {
-        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
-    } else { cea.FailActErrType() }
-}
-
-func ( cea CastErrorAssert ) assertUnrecognizedFieldError() {
-    if act, ok := cea.ErrAct.( *UnrecognizedFieldError ); ok {
-        cea.assertValueError( cea.ErrExpect.( ValueError ), act )
-    } else { cea.FailActErrType() }
-}
-
-func ( cea CastErrorAssert ) Call() {
-    switch cea.ErrExpect.( type ) {
-    case nil: cea.Fatal( cea.ErrAct )
-    case *ValueCastError: cea.assertVcError()
-    case *MissingFieldsError: cea.assertMissingFieldsError()
-    case *UnrecognizedFieldError: cea.assertUnrecognizedFieldError()
-    default: cea.Fatalf( "Unhandled Err type: %T", cea.ErrExpect )
+func AssertErrors( expct, act error, a *assert.PathAsserter ) {
+    ea := errorAssert{ expct: expct, act: act, PathAsserter: a }
+    switch expct.( type ) {
+    case *ValueCastError: ea.assertValueCast()
+    case *MissingFieldsError: ea.assertMissingFieldsError()
+    default: ea.EqualErrors( ea.expct, ea.act )
     }
-}
-
-func AssertCastError( expct, act error, pa *assert.PathAsserter ) {
-    ca := CastErrorAssert{ ErrExpect: expct, ErrAct: act, PathAsserter: pa }
-    ca.Call()
 }

@@ -1,12 +1,12 @@
 package parser
 
 import(
-//    "log"
     mg "mingle"
     "bytes"
     "io"
     "fmt"
     "strings"
+//    "log"
 )
 
 type TokenNode struct {

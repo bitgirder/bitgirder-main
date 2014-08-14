@@ -10,20 +10,16 @@ import (
 )
 
 type ReactorError struct { 
-    ve mg.ValueErrorImpl
-    msg string 
+    Location objpath.PathNode
+    Message string
 }
 
-func ( e *ReactorError ) Error() string { return e.ve.MakeError( e.msg ) }
-
-func ( e *ReactorError ) Message() string { return e.msg }
-
-func ( e *ReactorError) Location() objpath.PathNode { return e.ve.Location() }
+func ( e *ReactorError ) Error() string { 
+    return mg.FormatError( e.Location, e.Message )
+}
 
 func NewReactorError( path objpath.PathNode, msg string ) *ReactorError { 
-    res := &ReactorError{ msg: msg, ve: mg.ValueErrorImpl{} } 
-    if path != nil { res.ve.Path = path }
-    return res
+    return &ReactorError{ Location: path, Message: msg }
 }
 
 func NewReactorErrorf( 

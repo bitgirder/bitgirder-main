@@ -390,25 +390,13 @@ func ( t *FieldOrderReactorTest ) Call( c *ReactorTestCall ) {
     mg.AssertEqualValues( t.Expect, act, c.PathAsserter )
 }
 
-func ( t *FieldOrderMissingFieldsTest ) assertMissingFieldsError(
-    mfe *mg.MissingFieldsError, 
-    err error,
-    c *ReactorTestCall ) {
-
-    if mfe == nil { c.Fatal( err ) }
-    if act, ok := err.( *mg.MissingFieldsError ); ok {
-        c.Descend( "Location" ).Equal( mfe.Location(), act.Location() )
-        c.Descend( "Error" ).Equal( mfe.Error(), act.Error() )
-    } else { c.Fatal( err ) }
-}
-
 func ( t *FieldOrderMissingFieldsTest ) Call( c *ReactorTestCall ) {
     br := NewBuildReactor( ValueBuilderFactory )
     ord := NewFieldOrderReactor( fogImpl( t.Orders ) )
     rct := InitReactorPipeline( ord, br )
     for _, ev := range t.Source {
         if err := rct.ProcessEvent( ev ); err != nil { 
-            t.assertMissingFieldsError( t.Error, err, c )
+            mg.AssertErrors( t.Error, err, c.PathAsserter )
             return
         }
     }

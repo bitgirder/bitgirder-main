@@ -772,7 +772,7 @@ func ( lx *Lexer ) readNumber() ( num *NumericToken, err error ) {
 
 // Return a stack result:
 //
-//      - if synthLoc is set and elt triggers a synth end then leave stack as it
+//      - if synthLoc is set and elt triggers a synth end then leave stack as is
 //      and return a synth end, clearing synthLoc
 //
 //      - else, pop elt and clear synthLoc (if not already clear) and return elt
@@ -865,6 +865,7 @@ func hasEol( tok Token ) bool {
 //  synthLoc if not
 //
 func ( lx *Lexer ) updateSynthLoc( tok Token ) {
+    if lx.isExternal { return }
     setLoc := false
     switch v := tok.( type ) {
     case *mg.Identifier, *mg.DeclaredTypeName, StringToken, *NumericToken: 
