@@ -24,33 +24,33 @@ import (
 //
 //  service Service1 {
 //
-//      op op1(): Int32
+//      op getFixedInt(): Int32
 //
-//      op op2( f1 S1 ): S1 throws Err1
+//      op echoS1( f1 S1 ): S1 throws Err1
 //
-//      op op3(): Null
+//      op voidOp(): Null
 //  }
 //
 //  service Service2 {
 //  
 //      @security Auth1
 //
-//      op op1(): Int32
+//      op getFixedInt(): Int32
 //
-//      op op2( f1 S1 ): S1 throws Err1
+//      op echoS1( f1 S1 ): S1 throws Err1
 //  }
 //
 func addTckDefs( m *types.DefinitionMap ) {
     m.MustAdd(
         types.MakeServiceDef( "mingle:tck@v1/Service1", "",
-            types.MakeOpDef( "op1",
+            types.MakeOpDef( "getFixedInt",
                 types.MakeCallSig( 
                     []*types.FieldDefinition{}, 
                     "Int32", 
                     []string{},
                 ),
             ),
-            types.MakeOpDef( "op2",
+            types.MakeOpDef( "echoS1",
                 types.MakeCallSig(
                     []*types.FieldDefinition{ 
                         types.MakeFieldDef( "f1", "mingle:tck@v1/S1", nil ),
@@ -59,7 +59,7 @@ func addTckDefs( m *types.DefinitionMap ) {
                     []string{ "mingle:tck@v1/Err1" },
                 ),
             ),
-            types.MakeOpDef( "op3",
+            types.MakeOpDef( "voidOp",
                 types.MakeCallSig(
                     []*types.FieldDefinition{},
                     "Null",
@@ -70,14 +70,14 @@ func addTckDefs( m *types.DefinitionMap ) {
     )
     m.MustAdd(
         types.MakeServiceDef( "mingle:tck@v1/Service2", "mingle:tck@v1/Auth1",
-            types.MakeOpDef( "op1",
+            types.MakeOpDef( "getFixedInt",
                 types.MakeCallSig(
                     []*types.FieldDefinition{},
                     "Int32",
                     []string{},
                 ),
             ),
-            types.MakeOpDef( "op2",
+            types.MakeOpDef( "echoS1",
                 types.MakeCallSig(
                     []*types.FieldDefinition{
                         types.MakeFieldDef( "f1", "mingle:tck@v1/S1", nil ),

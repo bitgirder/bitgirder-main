@@ -346,10 +346,10 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
     addErr := func( ns, svc, op string, err error, tail ...interface{} ) {
         b.addErr( makeReq( ns, svc, op, tail... ), err )
     }
-    addOk( "mingle:tck@v1", "svc1", "op1",
+    addOk( "mingle:tck@v1", "svc1", "getFixedInt",
         &requestExpect{ params: mg.EmptySymbolMap() },
     )
-    addOk( "mingle:tck@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "echoS1",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
                 "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
@@ -359,7 +359,7 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
             "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         ),
     )
-    addOk( "mingle:tck@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "echoS1",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
                 "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
@@ -369,7 +369,7 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
             "f1", parser.MustSymbolMap( "f1", int64( 1 ) ),
         ),
     )
-    addOk( "mingle:tck@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "echoS1",
         &requestExpect{ 
             params: parser.MustSymbolMap( 
                 "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
@@ -379,15 +379,15 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
             "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ),
         ),
     )
-    addOk( "mingle:tck@v1", "svc2", "op1",
+    addOk( "mingle:tck@v1", "svc2", "getFixedInt",
         &requestExpect{ auth: mg.Int32( 1 ), params: mg.EmptySymbolMap() },
         "authentication", int32( 1 ),
     )
-    addOk( "mingle:tck@v1", "svc2", "op1",
+    addOk( "mingle:tck@v1", "svc2", "getFixedInt",
         &requestExpect{ auth: mg.Int32( 1 ), params: mg.EmptySymbolMap() },
         "authentication", int64( 1 ),
     )
-    addOk( "mingle:tck@v1", "svc2", "op2",
+    addOk( "mingle:tck@v1", "svc2", "echoS1",
         &requestExpect{
             params: parser.MustSymbolMap( 
                 "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
@@ -399,10 +399,10 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
             "f1", parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ),
         ),
     )
-    addErr( "no:such@v1", "svc1", "op1",
+    addErr( "no:such@v1", "svc1", "getFixedInt",
         NewRequestError( nil, "no services in namespace: no:such@v1" ),
     )
-    addErr( "mingle:tck@v1", "noSuchService", "op1",
+    addErr( "mingle:tck@v1", "noSuchService", "getFixedInt",
         NewRequestError( 
             nil, 
             "namespace mingle:tck@v1 has no service with id: no-such-service",
@@ -414,14 +414,14 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
             "service mingle:tck@v1.svc1 has no such operation: no-such-op",
         ),
     )
-    addErr( "mingle:tck@v1", "svc1", "op1",
+    addErr( "mingle:tck@v1", "svc1", "getFixedInt",
         NewRequestError(
             objpath.RootedAt( IdAuthentication ),
             "service does not accept authentication",
         ),
         "authentication", int32( 1 ),
     )
-    addErr( "mingle:tck@v1", "svc2", "op1",
+    addErr( "mingle:tck@v1", "svc2", "getFixedInt",
         mg.NewTypeCastError(
             mg.TypeInt32,
             mg.TypeBuffer,
@@ -429,13 +429,13 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
         ),
         "authentication", []byte{ 0 },
     )
-    addErr( "mingle:tck@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "echoS1",
         mg.NewMissingFieldsError(
             objpath.RootedAt( IdParameters ),
             []*mg.Identifier{ mkId( "f1" ) },
         ),
     )
-    addErr( "mingle:tck@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "echoS1",
         mg.NewUnrecognizedFieldError(
             objpath.RootedAt( IdParameters ),
             mkId( "badField" ),
@@ -445,7 +445,7 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
             "badField", int32( 2 ),
         ),
     )
-    addErr( "mingle:tck@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "echoS1",
         mg.NewTypeCastError(
             asType( "mingle:tck@v1/S1" ),
             mg.TypeBuffer,
@@ -496,36 +496,36 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
         }
         f( QnameRequestError )
     }
-    addImplicitErrCoverage( "mingle:tck@v1", "svc1", "op1" )
-    addImplicitErrCoverage( "mingle:tck@v1", "svc1", "op2" )
-    addImplicitErrCoverage( "mingle:tck@v1", "svc2", "op1" )
-    addOk( "mingle:tck@v1", "svc1", "op1",
+    addImplicitErrCoverage( "mingle:tck@v1", "svc1", "getFixedInt" )
+    addImplicitErrCoverage( "mingle:tck@v1", "svc1", "echoS1" )
+    addImplicitErrCoverage( "mingle:tck@v1", "svc2", "getFixedInt" )
+    addOk( "mingle:tck@v1", "svc1", "getFixedInt",
         mkRes( int32( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    addOk( "mingle:tck@v1", "svc1", "op1",
+    addOk( "mingle:tck@v1", "svc1", "getFixedInt",
         mkRes( int64( 1 ) ),
         &responseExpect{ result: mg.Int32( 1 ) },
     )
-    addOk( "mingle:tck@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "echoS1",
         mkRes( parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ) ),
         &responseExpect{
             result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "mingle:tck@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "echoS1",
         mkRes( parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ) ),
         &responseExpect{
             result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "mingle:tck@v1", "svc1", "op2",
+    addOk( "mingle:tck@v1", "svc1", "echoS1",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err1", "f1", int64( 1 ) ) ),
         &responseExpect{
             err: parser.MustStruct( "mingle:tck@v1/Err1", "f1", int32( 1 ) ),
         },
     )
-    addOk( "mingle:tck@v1", "svc2", "op1",
+    addOk( "mingle:tck@v1", "svc2", "getFixedInt",
         mkErr( 
             parser.MustStruct( "mingle:tck@v1/AuthErr1", "f1", int64( 1 ) ) ),
         &responseExpect{
@@ -534,7 +534,7 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
             ),
         },
     )
-    addErr( "mingle:tck@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "echoS1",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err1", "f1", []byte{ 0 } ) ),
         mg.NewTypeCastError(
             mg.TypeInt32,
@@ -542,28 +542,28 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
             objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),
         ),
     )
-    addErr( "mingle:tck@v1", "svc1", "op1",
+    addErr( "mingle:tck@v1", "svc1", "getFixedInt",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err2", "f1", int32( 1 ) ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
             "unexpected error: mingle:tck@v1/Err2",
         ),
     )
-    addErr( "mingle:tck@v1", "svc1", "op2",
+    addErr( "mingle:tck@v1", "svc1", "echoS1",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err2" ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
             "unexpected error: mingle:tck@v1/Err2",
         ),
     )
-    addErr( "mingle:tck@v1", "svc2", "op1",
+    addErr( "mingle:tck@v1", "svc2", "getFixedInt",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err2" ) ),
         NewResponseError( 
             objpath.RootedAt( IdError ),
             "unexpected error: mingle:tck@v1/Err2",
         ),
     )
-    addErr( "mingle:tck@v1", "svc2", "op1",
+    addErr( "mingle:tck@v1", "svc2", "getFixedInt",
         mkErr( 
             parser.MustStruct( "mingle:tck@v1/AuthErr1", "f1", []byte{ 0 } ),
         ),
