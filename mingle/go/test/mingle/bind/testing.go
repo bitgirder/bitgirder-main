@@ -14,6 +14,7 @@ var asType = parser.AsTypeReference
 func bindBindTest( t *BindTest, reg *Registry, a *assert.PathAsserter ) {
     br := NewBuildReactor( NewBuilderFactory( reg ) )
     pip := mgRct.InitReactorPipeline( br )
+    a.Logf( "binding %s", mg.QuoteValue( t.Mingle ) )
     if err := mgRct.VisitValue( t.Mingle, pip ); err == nil {
         a.Equal( t.Bound, br.GetValue() )
     } else {
@@ -34,7 +35,7 @@ func visitBindTest( t *BindTest, reg *Registry, a *assert.PathAsserter ) bool {
 }
 
 func callBindTest( t *BindTest, a *assert.PathAsserter ) {
-    reg := RegistryForDomain( t.Domain )
+    reg := MustRegistryForDomain( t.Domain )
     if t.Bound != nil && t.Direction.Includes( BindTestDirectionOut ) {
         if ok := visitBindTest( t, reg, a ); ! ok { return }
     }

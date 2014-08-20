@@ -34,12 +34,22 @@ func bindErrorFactory( path objpath.PathNode, msg string ) error {
     return NewBindError( path, msg )
 }
 
+type VisitValueOkFunc func(
+    val interface{},
+    out mgRct.ReactorEventProcessor,
+    bc *BindContext,
+    path objpath.PathNode ) ( error, bool )
+
 type Registry struct {
     m *mg.QnameMap 
+    visitors []VisitValueOkFunc
 }
 
 func NewRegistry() *Registry { 
-    return &Registry{ m: mg.NewQnameMap() }
+    return &Registry{ 
+        m: mg.NewQnameMap(),
+        visitors: make( []VisitValueOkFunc, 0, 4 ),
+    }
 }
 
 func ( reg *Registry ) BuilderFactoryForName( 
@@ -76,10 +86,29 @@ func ( reg *Registry ) MustAddValue(
     reg.m.Put( qn, bf )
 }
 
+func ( reg *Registry ) AddVisitValueOkFunc( f VisitValueOkFunc ) {
+    reg.visitors = append( reg.visitors, f )
+}
+
 func NewFunctionsBuilderFactory() *mgRct.FunctionsBuilderFactory {
     res := mgRct.NewFunctionsBuilderFactory()
     res.ErrorFactory = bindErrorFactory
     return res
+}
+
+func visitPrimValueOk(
+    val interface{},
+    out mgRct.ReactorEventProcessor,
+    bc *BindContext,
+    path objpath.PathNode ) ( error, bool ) {
+    
+    switch v := val.( type ) {
+    case bool, []byte, string, int32, int64, uint32, uint64, float32, float64,
+         time.Time: 
+        return visitPrimValueOk( mg.MustValue( v ), out, bc, path )
+    case mg.Value: return mgRct.VisitValuePath( v, out, path ), true
+    }
+    return nil, false
 }
 
 // could make this public if needed
@@ -186,6 +215,7 @@ func addPrimBindings( reg *Registry ) {
             return nil, nil, false
         },
     )
+    reg.AddVisitValueOkFunc( visitPrimValueOk )
 }
 
 var regsByDomain *mg.IdentifierMap = mg.NewIdentifierMap()
@@ -201,6 +231,11 @@ func RegistryForDomain( domain *mg.Identifier ) *Registry {
         return reg.( *Registry )
     }
     return nil
+}
+
+func MustRegistryForDomain( domain *mg.Identifier ) *Registry {
+    if res := RegistryForDomain( domain ); res != nil { return res }
+    panic( libErrorf( "no registry for domain: %s", domain ) )
 }
 
 func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
@@ -249,13 +284,14 @@ type VisitError struct {
     Message string
 }
 
+func NewVisitError( path objpath.PathNode, msg string ) *VisitError {
+    return &VisitError{ Location: path, Message: msg }
+}
+
 func NewVisitErrorf( 
     path objpath.PathNode, tmpl string, args ...interface{} ) *VisitError {
 
-    return &VisitError{
-        Location: path,
-        Message: fmt.Sprintf( tmpl, args... ),
-    }
+    return NewVisitError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 func ( e *VisitError ) Error() string {
@@ -276,12 +312,11 @@ func VisitValue(
     bc *BindContext,
     path objpath.PathNode ) error {
 
-    switch v := val.( type ) {
-    case bool, []byte, string, int32, int64, uint32, uint64, float32, float64,
-         time.Time: 
-        return VisitValue( mg.MustValue( v ), out, bc, path )
-    case mg.Value: return mgRct.VisitValuePath( v, out, path )
-    case ValueVisitor: return v.VisitValue( out, bc, path ) 
+    if vv, ok := val.( ValueVisitor ); ok { 
+        return vv.VisitValue( out, bc, path )
+    }
+    for _, f := range bc.Registry.visitors {
+        if err, ok := f( val, out, bc, path ); ok { return err }
     }
     return NewVisitErrorf( path, "unknown type for visit: %T", val )
 }
