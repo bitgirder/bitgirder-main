@@ -112,9 +112,9 @@ func ( b *respValueBuilder ) StartError(
 }
 
 func ( b *respValueBuilder ) checkValue( t *reactorTestCall ) {
-    expct := t.t.Expect.( *responseExpect )
-    mgRct.CheckBuiltValue( expct.result, b.resBldr, t.Descend( "result" ) )
-    mgRct.CheckBuiltValue( expct.err, b.errBldr, t.Descend( "error" ) )
+    expct := t.t.Expect.( *ResultExpectation )
+    mgRct.CheckBuiltValue( expct.Result, b.resBldr, t.Descend( "result" ) )
+    mgRct.CheckBuiltValue( expct.Error, b.errBldr, t.Descend( "error" ) )
 }
 
 type reactorTestCall struct {

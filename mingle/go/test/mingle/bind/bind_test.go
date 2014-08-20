@@ -29,9 +29,6 @@ func ensureTestBuilderFactories() {
 
                     res := mgRct.NewFunctionsFieldSetBuilder()
                     res.Value = new( S1 )
-                    res.FinalValue = func() interface{} {
-                        return *( res.Value.( *S1 ) )
-                    }
                     res.RegisterField(
                         mkId( "f1" ),
                         func( path objpath.PathNode ) ( mgRct.BuilderFactory, 
@@ -67,25 +64,9 @@ func ensureTestBuilderFactories() {
     )
 }
 
-func callBindTest( t *BindTest, a *assert.PathAsserter ) {
-    a.Logf( "visiting %s", mg.QuoteValue( t.In ) )
+func TestBind( t *testing.T ) {
     ensureTestBuilderFactories()
-    reg := RegistryForDomain( t.Domain )
-    br := NewBuildReactor( NewBuilderFactory( reg ) )
-    pip := mgRct.InitReactorPipeline( br )
-    if err := mgRct.VisitValue( t.In, pip ); err == nil {
-        a.Equal( t.Expect, br.GetValue() )
-    } else {
-        a.EqualErrors( t.Error, err )
-    }
-}
-
-func TestBinding( t *testing.T ) {
-    la := assert.NewListPathAsserter( t )
-    for _, sbt := range stdBindTests {
-        callBindTest( sbt.( *BindTest ), la )
-        la = la.Next()
-    }
+    AssertBindTests( stdBindTests, assert.NewPathAsserter( t ) )
 }
 
 func TestRegistryAccessors( t *testing.T ) {

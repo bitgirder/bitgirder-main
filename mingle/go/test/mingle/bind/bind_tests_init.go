@@ -7,7 +7,7 @@ import (
     "time"
 )
 
-var stdBindTests = []interface{}{}
+var stdBindTests = []*BindTest{}
 
 var tm1 = mg.MustTimestamp( "2013-10-19T02:47:00-08:00" )
 
@@ -16,8 +16,8 @@ func initDefaultValBindTests() {
     add := func( in mg.Value, expct interface{} ) {
         stdBindTests = append( stdBindTests, 
             &BindTest{ 
-                In: in, 
-                Expect: expct,
+                Mingle: in, 
+                Bound: expct,
                 Domain: DomainDefault,
             },
         )
@@ -35,12 +35,12 @@ func initDefaultValBindTests() {
     add( tm1, time.Time( tm1 ) )
     s1V1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     e1V1 := parser.MustEnum( "ns1@v1/E1", "v1" )
-    add( s1V1, S1{ f1: 1 } )
+    add( s1V1, &S1{ f1: 1 } )
     add( e1V1, E1V1 )
     addErr := func( in mg.Value, path objpath.PathNode, msg string ) {
         stdBindTests = append( stdBindTests,
             &BindTest{
-                In: in,
+                Mingle: in,
                 Domain: DomainDefault,
                 Error: NewBindError( path, msg ),
             },

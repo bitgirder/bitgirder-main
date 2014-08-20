@@ -235,3 +235,53 @@ var (
     NewFunctionsListBuilder = mgRct.NewFunctionsListBuilder
     NewFunctionsFieldSetBuilder = mgRct.NewFunctionsFieldSetBuilder
 )
+
+type BindContext struct {
+    Registry *Registry
+}
+
+func NewBindContext( reg *Registry ) *BindContext {
+    return &BindContext{ Registry: reg }
+}
+
+type VisitError struct {
+    Location objpath.PathNode
+    Message string
+}
+
+func NewVisitErrorf( 
+    path objpath.PathNode, tmpl string, args ...interface{} ) *VisitError {
+
+    return &VisitError{
+        Location: path,
+        Message: fmt.Sprintf( tmpl, args... ),
+    }
+}
+
+func ( e *VisitError ) Error() string {
+    return mg.FormatError( e.Location, e.Message )
+}
+
+type ValueVisitor interface {
+
+    VisitValue( 
+        out mgRct.ReactorEventProcessor, 
+        bc *BindContext, 
+        path objpath.PathNode ) error
+}
+
+func VisitValue( 
+    val interface{}, 
+    out mgRct.ReactorEventProcessor, 
+    bc *BindContext,
+    path objpath.PathNode ) error {
+
+    switch v := val.( type ) {
+    case bool, []byte, string, int32, int64, uint32, uint64, float32, float64,
+         time.Time: 
+        return VisitValue( mg.MustValue( v ), out, bc, path )
+    case mg.Value: return mgRct.VisitValuePath( v, out, path )
+    case ValueVisitor: return v.VisitValue( out, bc, path ) 
+    }
+    return NewVisitErrorf( path, "unknown type for visit: %T", val )
+}

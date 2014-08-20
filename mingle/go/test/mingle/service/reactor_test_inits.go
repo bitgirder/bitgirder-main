@@ -271,7 +271,7 @@ func initBaseResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
     }
     b.addOk(
         mkInput( parser.MustStruct( QnameResponse, "result", int32( 1 ) ) ),
-        &responseExpect{ result: mg.Int32( 1 ) },
+        &ResultExpectation{ Result: mg.Int32( 1 ) },
     )
     b.addOk(
         mkInput(
@@ -279,17 +279,17 @@ func initBaseResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
                 "result", parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
             ),
         ),
-        &responseExpect{
-            result: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
+        &ResultExpectation{
+            Result: parser.MustStruct( "ns1@v1/Err1", "f1", int32( 1 ) ),
         },
     )
     b.addOk(
         mkInput( parser.MustStruct( QnameResponse, "error", int32( 1 ) ) ),
-        &responseExpect{ err: mg.Int32( 1 ) },
+        &ResultExpectation{ Error: mg.Int32( 1 ) },
     )
     b.addOk( 
         mkInput( parser.MustSymbolMap( "result", int32( 1 ) ) ),
-        &responseExpect{ result: mg.Int32( 1 ) },
+        &ResultExpectation{ Result: mg.Int32( 1 ) },
     )
     b.addOk(
         mkInput(
@@ -298,10 +298,13 @@ func initBaseResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
                 "result", mg.NullVal,
             ),
         ),
-        &responseExpect{},
+        &ResultExpectation{},
     )
-    b.addOk( mkInput( parser.MustStruct( QnameResponse ) ), &responseExpect{} )
-    b.addOk( mkInput( parser.MustSymbolMap() ), &responseExpect{} )
+    b.addOk( 
+        mkInput( parser.MustStruct( QnameResponse ) ), 
+        &ResultExpectation{},
+    )
+    b.addOk( mkInput( parser.MustSymbolMap() ), &ResultExpectation{} )
     b.addErr(
         mkInput( parser.MustStruct( QnameResponse, "f1", int32( 1 ) ) ),
         mg.NewUnrecognizedFieldError( nil, mkId( "f1" ) ),
@@ -489,8 +492,8 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
         f := func( qn *mg.QualifiedTypeName ) {
             addOk( ns, svc, op,
                 mkErr( parser.MustStruct( qn, "message", "test-message") ),
-                &responseExpect{ 
-                    err: parser.MustStruct( qn, "message", "test-message" ),
+                &ResultExpectation{ 
+                    Error: parser.MustStruct( qn, "message", "test-message" ),
                 },
             )
         }
@@ -501,35 +504,35 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
     addImplicitErrCoverage( "mingle:tck@v1", "svc2", "getFixedInt" )
     addOk( "mingle:tck@v1", "svc1", "getFixedInt",
         mkRes( int32( 1 ) ),
-        &responseExpect{ result: mg.Int32( 1 ) },
+        &ResultExpectation{ Result: mg.Int32( 1 ) },
     )
     addOk( "mingle:tck@v1", "svc1", "getFixedInt",
         mkRes( int64( 1 ) ),
-        &responseExpect{ result: mg.Int32( 1 ) },
+        &ResultExpectation{ Result: mg.Int32( 1 ) },
     )
     addOk( "mingle:tck@v1", "svc1", "echoS1",
         mkRes( parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ) ),
-        &responseExpect{
-            result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
+        &ResultExpectation{
+            Result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         },
     )
     addOk( "mingle:tck@v1", "svc1", "echoS1",
         mkRes( parser.MustStruct( "mingle:tck@v1/S1", "f1", int64( 1 ) ) ),
-        &responseExpect{
-            result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
+        &ResultExpectation{
+            Result: parser.MustStruct( "mingle:tck@v1/S1", "f1", int32( 1 ) ),
         },
     )
     addOk( "mingle:tck@v1", "svc1", "echoS1",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err1", "f1", int64( 1 ) ) ),
-        &responseExpect{
-            err: parser.MustStruct( "mingle:tck@v1/Err1", "f1", int32( 1 ) ),
+        &ResultExpectation{
+            Error: parser.MustStruct( "mingle:tck@v1/Err1", "f1", int32( 1 ) ),
         },
     )
     addOk( "mingle:tck@v1", "svc2", "getFixedInt",
         mkErr( 
             parser.MustStruct( "mingle:tck@v1/AuthErr1", "f1", int64( 1 ) ) ),
-        &responseExpect{
-            err: parser.MustStruct( "mingle:tck@v1/AuthErr1", 
+        &ResultExpectation{
+            Error: parser.MustStruct( "mingle:tck@v1/AuthErr1", 
                 "f1", int32( 1 ),
             ),
         },

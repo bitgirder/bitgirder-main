@@ -21,7 +21,7 @@ func Type4() ( string, error ) {
     return res, nil
 }
 
-func ExpectType4() string {
+func MustType4() string {
     res, err := Type4()
     if err != nil { panic( err ) }
     return res

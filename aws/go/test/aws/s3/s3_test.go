@@ -75,7 +75,7 @@ func init() {
 
 func nextPathString() string {
     return fmt.Sprintf( "%s/%016x/%s", 
-        objPathPrefix, time.Now().Unix(), uuid.ExpectType4() )
+        objPathPrefix, time.Now().Unix(), uuid.MustType4() )
 }
 
 func nextObjectKey() ObjectKey {
