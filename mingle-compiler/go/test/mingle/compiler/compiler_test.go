@@ -1914,6 +1914,174 @@ func TestCompiler( t *testing.T ) {
             "Alias cycle: ns2@v1/A --> ns3@v1/A --> ns1@v1/A --> ns2@v1/A" ).
         expectSrcError( "f3", 1, 37,
             "Alias cycle: ns3@v1/A --> ns1@v1/A --> ns2@v1/A --> ns3@v1/A" ),
+        
+        newCompilerTest( "source-ns-cycle-struct-to-struct" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+            struct S2 {}
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S1 { f1 &ns1/S1 }
+            struct S2 {}
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-schema-as-struct-field" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1 
+            struct S1 { f1 ns2/Schema1 }
+            struct S2 {}
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            schema Schema1 { f1 ns1/S2 }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        // without error checking during the schema inclusion phase this cycle
+        // would be erased in ns1/S1
+        newCompilerTest( "source-ns-cycle-schema-mixed-into-struct" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+            struct S1 { @schema ns2/Schema1 }
+            struct S2 {}
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            schema Schema1 { f1 ns1/S2 }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-schema-mixed-into-schema" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+            schema S1 { @schema ns2/Schema1 }
+            struct S2 {}
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            schema Schema1 { f1 &ns1/S2 }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-proto-param" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            prototype P1( arg1 ns1/S1 ): Null
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-proto-return" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            prototype P1(): ns1/S1
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-proto-throws" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            prototype P1(): Null throws ns1/S1
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-svc-op-param" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            service S1 { op op1( arg1 ns1/S1 ): Null; }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-svc-op-return" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            service S1 { op op1(): ns1/S1; }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-svc-op-throws" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            struct S1 { f1 &ns2/S2 }
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            service S1 { op op1(): Null throws ns1/S1; }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
+        
+        newCompilerTest( "source-ns-cycle-from-svc-security" ).
+        addSource( "f1", `
+            @version v1 
+            namespace ns1
+            prototype P1( authentication ns2/S2 ): Int32
+        `).
+        addSource( "f2", `
+            @version v1
+            namespace ns2
+            struct S2 {}
+            service S1 { @security ns1/P1 }
+        `).
+        expectGlobalError( 
+            `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
     }
     a := assert.NewPathAsserter( t )
     for _, test := range tests {

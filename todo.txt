@@ -1,8 +1,5 @@
 - move mingle-interpreter into mingle-compiler as an internal const evaluator
 
-- (compiler) disallow cyclic ns dependencies (equivalent to disallowing cyclic
-  imports)
-
 - (compiler/types) disallow duplicate constructor types and constructor types of
   SymbolMap (sym map is ambiguous when used with a cast reactor that infers
   structs on symbol maps)

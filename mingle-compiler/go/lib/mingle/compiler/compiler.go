@@ -76,6 +76,11 @@ type CompilationResult struct {
     Errors []*Error
 }
 
+type schemaMixin struct {
+    schema *types.SchemaDefinition
+    def types.Definition
+}
+
 type Compilation struct {
     sources []*tree.NsUnit
     typeDecls *mg.QnameMap
@@ -84,6 +89,7 @@ type Compilation struct {
     onDefaults []func()
     builtTypes *types.DefinitionMap
     errs map[ string ] *Error
+    mixedInSchemas []schemaMixin
 
     // Can be temporarily set in rare circumstances where an operation
     // which may generate compile errors needs to be invoked for the purposes of
@@ -120,11 +126,19 @@ func ( c *Compilation ) awaitDefaults( f func() ) {
     c.onDefaults = append( c.onDefaults, f )
 }
 
+func ( c *Compilation ) observeSchemaMixin( mx schemaMixin ) {
+    c.mixedInSchemas = append( c.mixedInSchemas, mx )
+}
+
 func ( c *Compilation ) SetExternalTypes( 
     extTypes *types.DefinitionMap ) *Compilation {
 
     c.extTypes = extTypes
     return c
+}
+
+func ( c *Compilation ) isSourceNs( ns *mg.Namespace ) bool {
+    return c.scopesByNs.HasKey( ns )
 }
 
 func ( c *Compilation ) buildScopeForNs( ns *mg.Namespace ) *buildScope {
@@ -957,6 +971,7 @@ type fieldSetBuilder struct {
     schemas []*tree.SchemaMixinDecl
     fs *types.FieldSet
     work *mg.IdentifierMap
+    def types.Definition // the definition associated with the field set
 }
 
 func ( fsb *fieldSetBuilder ) addDefinition( 
@@ -978,6 +993,7 @@ func ( fsb *fieldSetBuilder ) addFieldsFromSchema(
     if qn == nil { return 1 }
     switch v := fsb.c.typeDefForQn( qn ).( type ) {
     case *types.SchemaDefinition:
+        fsb.c.observeSchemaMixin( schemaMixin{ v, fsb.def } )
         v.Fields.EachDefinition( func( fd *types.FieldDefinition ) {
             fsb.addDefinition( fd, v ) 
         })
@@ -1094,7 +1110,8 @@ func ( c *Compilation ) buildFieldSet(
     bc buildContext, 
     flds []*tree.FieldDecl,
     schemas []*tree.SchemaMixinDecl,
-    fs *types.FieldSet ) bool {
+    fs *types.FieldSet,
+    def types.Definition ) bool {
 
     fsb := &fieldSetBuilder{
         c: c,
@@ -1103,6 +1120,7 @@ func ( c *Compilation ) buildFieldSet(
         schemas: schemas,
         fs: fs,
         work: mg.NewIdentifierMap(),
+        def: def,
     }
     return fsb.build()
 }
@@ -1153,7 +1171,7 @@ func ( c *Compilation ) buildStructType( bc buildContext ) {
     // always evaluate lhs even if ok is already false, so we generate possibly
     // more compiler errors in each run
     ok := true
-    ok = c.buildFieldSet( bc, decl.Fields, decl.Schemas, sd.Fields ) && ok
+    ok = c.buildFieldSet( bc, decl.Fields, decl.Schemas, sd.Fields, sd ) && ok
     ok = c.buildConstructors( bc, sd ) && ok
     if ok { c.putBuiltType( sd ) }
 }
@@ -1250,7 +1268,7 @@ func ( c *Compilation ) buildSchemaType( bc buildContext ) {
     decl := bc.td.( *tree.SchemaDecl )
     sd := types.NewSchemaDefinition()
     sd.Name = bc.qname()
-    if c.buildFieldSet( bc, decl.Fields, decl.Schemas, sd.Fields ) {
+    if c.buildFieldSet( bc, decl.Fields, decl.Schemas, sd.Fields, sd ) {
         c.putBuiltType( sd )
     }
 }
@@ -1458,6 +1476,113 @@ func ( c *Compilation ) buildServiceTypes( ctxs []buildContext ) {
     for _, bc := range ctxs {
         if _, ok := bc.td.( *tree.ServiceDecl ); ok { c.buildServiceType( bc ) }
     }
+}
+
+type nsUnitCycleCheck struct {
+    c *Compilation
+    m *mg.NamespaceMap
+}
+
+func ( c nsUnitCycleCheck ) updateWithDefDepNs(
+    depNs *mg.Namespace, def types.Definition ) {
+
+    defNs := def.GetName().Namespace
+
+    if depNs.Equals( defNs ) || ( ! c.c.isSourceNs( depNs ) ) { return }
+    var deps *mg.NamespaceMap
+    if v, ok := c.m.GetOk( defNs ); ok {
+        deps = v.( *mg.NamespaceMap )
+    } else {
+        deps = mg.NewNamespaceMap()
+        c.m.Put( defNs, deps )
+    }
+    deps.Put( depNs, true )
+}
+
+func ( c nsUnitCycleCheck ) addSchemaMixin( m schemaMixin ) {
+    c.updateWithDefDepNs( m.schema.GetName().Namespace, m.def )
+}
+
+func ( c nsUnitCycleCheck ) updateWithDefDepType( 
+    typ mg.TypeReference, def types.Definition ) {
+
+    c.updateWithDefDepNs( mg.AtomicTypeIn( typ ).Name.Namespace, def )
+}
+
+func ( c nsUnitCycleCheck ) addFieldsFromDef( 
+    fs *types.FieldSet, def types.Definition ) {
+
+    fs.EachDefinition( func( fd *types.FieldDefinition ) {
+        c.updateWithDefDepType( fd.Type, def )
+    })
+}
+
+func ( c nsUnitCycleCheck ) addSigFromDef(
+    sig *types.CallSignature, def types.Definition ) {
+
+    c.addFieldsFromDef( sig.Fields, def )
+    c.updateWithDefDepType( sig.Return, def )
+    for _, typ := range sig.Throws { c.updateWithDefDepType( typ, def ) }
+}
+
+func ( c nsUnitCycleCheck ) addSigsFromService( sd *types.ServiceDefinition ) {
+    for _, od := range sd.Operations {
+        c.addSigFromDef( od.Signature, sd )
+    }
+    if qn := sd.Security; qn != nil { c.updateWithDefDepNs( qn.Namespace, sd ) }
+}
+
+func ( c nsUnitCycleCheck ) addDef( def types.Definition ) {
+    switch v := def.( type ) {
+    case *types.StructDefinition: c.addFieldsFromDef( v.Fields, def )
+    case *types.SchemaDefinition: c.addFieldsFromDef( v.Fields, def )
+    case *types.PrototypeDefinition: c.addSigFromDef( v.Signature, def )
+    case *types.ServiceDefinition: c.addSigsFromService( v )
+    }
+}
+
+func ( c nsUnitCycleCheck ) hasActiveDeps( deps *mg.NamespaceMap ) bool {
+    active := 0
+    deps.EachPair( func( ns *mg.Namespace, _ interface{} ) {
+        if c.m.HasKey( ns ) { active++ }
+    })
+    return active > 0
+}
+
+func ( c nsUnitCycleCheck ) addCyclesError() {
+    strs := make( []string, 0, c.m.Len() )
+    c.m.EachPair( func( ns *mg.Namespace, _ interface{} ) {
+        strs = append( strs, ns.ExternalForm() )
+    })
+    sort.Strings( strs )
+    nsListStr := strings.Join( strs, ", " ) 
+    tmpl := "one or more dependency cycles exist amongst namespaces: %s"
+    c.c.addErrorf( nil, tmpl, nsListStr )
+}
+
+func ( c nsUnitCycleCheck ) check() {
+    for c.m.Len() > 0 {
+        toDel := make( []*mg.Namespace, 0, 4 )
+        c.m.EachPair( func( ns *mg.Namespace, val interface{} ) {
+            if ! c.hasActiveDeps( val.( *mg.NamespaceMap ) ) {
+                toDel = append( toDel, ns )
+            }
+        })
+        if len( toDel ) == 0 {
+            c.addCyclesError()
+            return
+        }
+        for _, ns := range toDel { c.m.Delete( ns ) }
+    }
+}
+
+func ( c *Compilation ) checkNsUnitCycles() {
+    deps := nsUnitCycleCheck{ c: c, m: mg.NewNamespaceMap() }
+    for _, m := range c.mixedInSchemas { deps.addSchemaMixin( m ) }
+    c.builtTypes.EachDefinition( func( def types.Definition ) {
+        deps.addDef( def ) 
+    })
+    deps.check()
 }
 
 type compiledExpression struct {
@@ -1902,6 +2027,7 @@ func ( c *Compilation ) Execute() ( cr *CompilationResult, err error ) {
     c.buildPrototypeTypes( ctxs )
     c.buildStructTypes( ctxs )
     c.buildServiceTypes( ctxs )
+    c.checkNsUnitCycles()
     c.setDefFieldDefaults( ctxs )
     return c.buildResult(), nil
 }
