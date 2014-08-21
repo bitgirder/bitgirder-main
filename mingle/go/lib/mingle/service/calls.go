@@ -4,6 +4,7 @@ import (
     mg "mingle"
     mgRct "mingle/reactor"
     "bitgirder/uuid"
+//    "log"
 )
 
 type EndpointCallId string
@@ -12,18 +13,30 @@ func RandomEndpointCallId() EndpointCallId {
     return EndpointCallId( uuid.MustType4() )
 }
 
+type EndpointCallContext interface {
+
+    CallId() EndpointCallId
+
+    SendResult( f ReactorUserFunc ) error
+}
+
+type EndpointCallHandler interface {
+
+    RequestReactorInterface( ctx EndpointCallContext ) RequestReactorInterface
+
+    Respond( ctx EndpointCallContext ) error
+}
+
 type Endpoint interface {
     
-    CreateCallId() EndpointCallId
-
-    StartRequest( id EndpointCallId ) ( RequestReactorInterface, error )
+    CreateHandler( ctx EndpointCallContext ) ( EndpointCallHandler, error )
 }
 
 type ClientCallInterface interface {
 
     SendRequest( out mgRct.ReactorEventProcessor ) error
 
-    StartResponse() ( ResponseReactorInterface, error )
+    ResponseReactorInterface() ResponseReactorInterface
 }
 
 type Client interface {
@@ -40,9 +53,9 @@ type RequestSend struct {
 
 func ( rs *RequestSend ) Send() error {
     pairs := append( make( []interface{}, 0, 8 ),
-        IdNamespace, rs.Context.Namespace,
-        IdService, rs.Context.Service,
-        IdOperation, rs.Context.Operation,
+        IdNamespace, rs.Context.Namespace.ExternalForm(),
+        IdService, rs.Context.Service.ExternalForm(),
+        IdOperation, rs.Context.Operation.ExternalForm(),
     )
     if p := rs.Parameters; p != nil { pairs = append( pairs, IdParameters, p ) }
     if a := rs.Authentication; a != nil { 

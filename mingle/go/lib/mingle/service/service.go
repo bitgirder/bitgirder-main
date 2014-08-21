@@ -3,9 +3,11 @@ package service
 import (
     "fmt"
     mg "mingle"
+    mgRct "mingle/reactor"
     "mingle/types"
     "mingle/types/builtin"
     "bitgirder/objpath"
+//    "log"
 )
 
 var (
@@ -38,6 +40,8 @@ var (
 
     externalErrorTypes = mg.NewQnameMap()
 )
+
+type ReactorUserFunc func( rct mgRct.ReactorEventProcessor ) error
 
 type RequestContext struct {
     Namespace *mg.Namespace

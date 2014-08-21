@@ -184,3 +184,9 @@ func ( r *RequestReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     }
     panic( libErrorf( "unhandled event: %T", ev ) )
 }
+
+func InitRequestReactorPipeline( 
+    iface RequestReactorInterface ) mgRct.ReactorEventProcessor {
+
+    return mgRct.InitReactorPipeline( NewRequestReactor( iface ) )
+}
