@@ -2,9 +2,7 @@ package testing
 
 import ( 
     mg "mingle"
-    "mingle/bind"
     "mingle/types"
-    "mingle/types/builtin"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
@@ -73,29 +71,4 @@ func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
     pip := mgRct.InitReactorPipeline( rct, chk )
     mgRct.AssertFeedSource( t.Source, pip, c )
     chk.Complete()
-}
-
-func ( t *BuiltinTypeTest ) createBindReactor( 
-    c *mgRct.ReactorTestCall ) *mgRct.BuildReactor {
-
-    reg := bind.RegistryForDomain( bind.DomainDefault )
-    if bf, ok := reg.BuilderFactoryForType( t.Type ); ok {
-        return bind.NewBuildReactor( bf )
-    }
-    c.Fatalf( "no binder for type: %s", t.Type )
-    panic( libError( "unreachable" ) )
-}
-
-func ( t *BuiltinTypeTest ) Call( c *mgRct.ReactorTestCall ) {
-    c.Logf( "expcting %s as type: %s", mg.QuoteValue( t.In ), t.Type )
-    br := t.createBindReactor( c )
-    cr := types.NewCastReactor( t.Type, builtin.BuiltinTypes() )
-    pip := mgRct.InitReactorPipeline( cr, mgRct.NewDebugReactor( c ), br )
-    if err := mgRct.VisitValue( t.In, pip ); err == nil {
-        switch v := t.Expect.( type ) {
-        case *mg.ValueCastError: 
-            mg.AssertErrors( v, br.GetValue().( error ), c.PathAsserter )
-        default: c.Equal( t.Expect, br.GetValue() )
-        }
-    } else { c.EqualErrors( t.Err, err ) }
 }
