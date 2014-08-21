@@ -40,6 +40,10 @@ type VisitContext struct {
     BindContext *BindContext
 }
 
+func ( vc VisitContext ) EventSender() mgRct.EventSender {
+    return mgRct.EventSenderForReactor( vc.Destination )
+}
+
 type VisitValueOkFunc func( val interface{}, vc VisitContext ) ( error, bool )
 
 type Registry struct {

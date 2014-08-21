@@ -408,12 +408,7 @@ func newMissingFieldsErrorBuilderFactory(
     )
 }
 
-type eventSend struct {
-    mgRct.EventSender
-    bc *bind.BindContext
-}
-
-func visitIdentifierAsStruct( id *mg.Identifier, es eventSend ) error {
+func visitIdentifierAsStruct( id *mg.Identifier, es mgRct.EventSender ) error {
     if err := es.StartStruct( mg.QnameIdentifier ); err != nil { return err }
     if err := es.StartField( identifierParts ); err != nil { return err }
     if err := es.StartList( typeIdentifierPartsList ); err != nil { return err }
@@ -425,8 +420,9 @@ func visitIdentifierAsStruct( id *mg.Identifier, es eventSend ) error {
     return nil
 }
 
-func visitIdentifier( id *mg.Identifier, es eventSend ) error {
-    switch opts := es.bc.SerialOptions; opts.Format {
+func VisitIdentifier( id *mg.Identifier, vc bind.VisitContext ) error {
+    es := vc.EventSender()
+    switch opts := vc.BindContext.SerialOptions; opts.Format {
     case bind.SerialFormatBinary:
         return es.Value( mg.Buffer( mg.IdentifierAsBytes( id ) ) )
     case bind.SerialFormatText:
@@ -435,57 +431,66 @@ func visitIdentifier( id *mg.Identifier, es eventSend ) error {
     return visitIdentifierAsStruct( id, es )
 }
 
-func visitIdentifierList( ids []*mg.Identifier, es eventSend ) ( err error ) {
+func visitIdentifierList( 
+    ids []*mg.Identifier, vc bind.VisitContext ) ( err error ) {
+
     lt := typeIdentifierPointerList
-    switch es.bc.SerialOptions.Format {
+    switch vc.BindContext.SerialOptions.Format {
     case bind.SerialFormatText: lt = typeNonEmptyStringList
     case bind.SerialFormatBinary: lt = typeNonEmptyBufferList
     }
+    es := vc.EventSender()
     if err = es.StartList( lt ); err != nil { return }
     for _, id := range ids {
-        if err = visitIdentifier( id, es ); err != nil { return }
+        if err = VisitIdentifier( id, vc ); err != nil { return }
     }
     if err = es.End(); err != nil { return }
     return
 }
 
-func visitNamespaceAsStruct( ns *mg.Namespace, es eventSend ) ( err error ) {
+func visitNamespaceAsStruct( 
+    ns *mg.Namespace, vc bind.VisitContext ) ( err error ) {
+
+    es := vc.EventSender()
     if err = es.StartStruct( mg.QnameNamespace ); err != nil { return }
     if err = es.StartField( identifierParts ); err != nil { return }
-    if err = visitIdentifierList( ns.Parts, es ); err != nil { return }
+    if err = visitIdentifierList( ns.Parts, vc ); err != nil { return }
     if err = es.StartField( identifierVersion ); err != nil { return }
-    if err = visitIdentifierAsStruct( ns.Version, es ); err != nil { return }
+    if err = VisitIdentifier( ns.Version, vc ); err != nil { return }
     if err = es.End(); err != nil { return }
     return
 }
 
-func visitNamespace( ns *mg.Namespace, es eventSend ) error {
-    switch opts := es.bc.SerialOptions; opts.Format {
+func VisitNamespace( ns *mg.Namespace, vc bind.VisitContext ) error {
+    switch opts := vc.BindContext.SerialOptions; opts.Format {
     case bind.SerialFormatText:
-        return es.Value( mg.String( ns.ExternalForm() ) )
+        return vc.EventSender().Value( mg.String( ns.ExternalForm() ) )
     case bind.SerialFormatBinary:
-        return es.Value( mg.Buffer( mg.NamespaceAsBytes( ns ) ) )
+        return vc.EventSender().Value( mg.Buffer( mg.NamespaceAsBytes( ns ) ) )
     }
-    return visitNamespaceAsStruct( ns, es )
+    return visitNamespaceAsStruct( ns, vc )
 }
 
 type idPathPartsEventSendVisitor struct {
-    es eventSend
+    vc bind.VisitContext
 }
 
 func ( vis idPathPartsEventSendVisitor ) Descend( elt interface{} ) error {
-    return visitIdentifier( elt.( *mg.Identifier ), vis.es )
+    return VisitIdentifier( elt.( *mg.Identifier ), vis.vc )
 }
 
 func ( vis idPathPartsEventSendVisitor ) List( idx uint64 ) error {
-    return vis.es.Value( mg.Uint64( idx ) )
+    return vis.vc.EventSender().Value( mg.Uint64( idx ) )
 }
 
-func visitIdPathAsStruct( p objpath.PathNode, es eventSend ) ( err error ) {
+func visitIdPathAsStruct( 
+    p objpath.PathNode, vc bind.VisitContext ) ( err error ) {
+
+    es := vc.EventSender()
     if err = es.StartStruct( mg.QnameIdentifierPath ); err != nil { return }
     if err = es.StartField( identifierParts ); err != nil { return }
     if err = es.StartList( typeIdentifierPathPartsList ); err != nil { return }
-    if err = objpath.Visit( p, idPathPartsEventSendVisitor{ es } ); err != nil {
+    if err = objpath.Visit( p, idPathPartsEventSendVisitor{ vc } ); err != nil {
         return
     }
     if err = es.End(); err != nil { return } // parts
@@ -493,58 +498,64 @@ func visitIdPathAsStruct( p objpath.PathNode, es eventSend ) ( err error ) {
     return
 }
 
-func visitIdPath( p objpath.PathNode, es eventSend ) error {
-    if es.bc.SerialOptions.Format == bind.SerialFormatText {
-        return es.Value( mg.String( mg.FormatIdPath( p ) ) )
+func VisitIdentifierPath( p objpath.PathNode, vc bind.VisitContext ) error {
+    if vc.BindContext.SerialOptions.Format == bind.SerialFormatText {
+        return vc.EventSender().Value( mg.String( mg.FormatIdPath( p ) ) )
     }
-    return visitIdPathAsStruct( p, es )
+    return visitIdPathAsStruct( p, vc )
 }
 
 func visitLocatableError( 
-    loc objpath.PathNode, msg string, es eventSend ) ( err error ) {
+    loc objpath.PathNode, msg string, vc bind.VisitContext ) ( err error ) {
 
+    es := vc.EventSender()
     if loc != nil {
         if err = es.StartField( identifierLocation ); err != nil { return }
-        if err = visitIdPath( loc, es ); err != nil { return }
+        if err = VisitIdentifierPath( loc, vc ); err != nil { return }
     }
     if err = es.StartField( identifierMessage ); err != nil { return }
     if err = es.Value( mg.String( msg ) ); err != nil { return }
     return
 }
 
-func visitValueCastError( e *mg.ValueCastError, es eventSend ) ( err error ) {
+func VisitCastError( 
+    e *mg.ValueCastError, vc bind.VisitContext ) ( err error ) {
+
+    es := vc.EventSender()
     if err = es.StartStruct( mg.QnameCastError ); err != nil { return }
-    if err = visitLocatableError( e.Location, e.Message, es ); err != nil {
+    if err = visitLocatableError( e.Location, e.Message, vc ); err != nil {
         return
     }
     if err = es.End(); err != nil { return }
     return
 }
 
-func visitUnrecognizedFieldError( 
-    e *mg.UnrecognizedFieldError, es eventSend ) ( err error ) {
+func VisitUnrecognizedFieldError( 
+    e *mg.UnrecognizedFieldError, vc bind.VisitContext ) ( err error ) {
 
+    es := vc.EventSender()
     if err = es.StartStruct( mg.QnameUnrecognizedFieldError ); err != nil {
         return
     }
-    if err = visitLocatableError( e.Location, e.Message, es ); err != nil {
+    if err = visitLocatableError( e.Location, e.Message, vc ); err != nil {
         return
     }
     if err = es.StartField( identifierField ); err != nil { return }
-    if err = visitIdentifier( e.Field, es ); err != nil { return }
+    if err = VisitIdentifier( e.Field, vc ); err != nil { return }
     if err = es.End(); err != nil { return }
     return
 }
 
-func visitMissingFieldsError( 
-    e *mg.MissingFieldsError, es eventSend ) ( err error ) {
+func VisitMissingFieldsError( 
+    e *mg.MissingFieldsError, vc bind.VisitContext ) ( err error ) {
 
+    es := vc.EventSender()
     if err = es.StartStruct( mg.QnameMissingFieldsError ); err != nil { return }
-    if err = visitLocatableError( e.Location, e.Message, es ); err != nil {
+    if err = visitLocatableError( e.Location, e.Message, vc ); err != nil {
         return
     }
     if err = es.StartField( identifierFields ); err != nil { return }
-    if err = visitIdentifierList( e.Fields(), es ); err != nil { return }
+    if err = visitIdentifierList( e.Fields(), vc ); err != nil { return }
     if err = es.End(); err != nil { return }
     return
 }
@@ -552,18 +563,14 @@ func visitMissingFieldsError(
 func visitBuiltinTypeOk(
     val interface{}, vc bind.VisitContext ) ( error, bool ) {
 
-    es := eventSend{ 
-        bc: vc.BindContext, 
-        EventSender: mgRct.EventSenderForReactor( vc.Destination ),
-    }
     switch v := val.( type ) {
-    case *mg.Identifier: return visitIdentifier( v, es ), true
-    case *mg.Namespace: return visitNamespace( v, es ), true
-    case objpath.PathNode: return visitIdPath( v, es ), true
-    case *mg.ValueCastError: return visitValueCastError( v, es ), true
+    case *mg.Identifier: return VisitIdentifier( v, vc ), true
+    case *mg.Namespace: return VisitNamespace( v, vc ), true
+    case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
+    case *mg.ValueCastError: return VisitCastError( v, vc ), true
     case *mg.UnrecognizedFieldError: 
-        return visitUnrecognizedFieldError( v, es ), true
-    case *mg.MissingFieldsError: return visitMissingFieldsError( v, es ), true
+        return VisitUnrecognizedFieldError( v, vc ), true
+    case *mg.MissingFieldsError: return VisitMissingFieldsError( v, vc ), true
     }
     return nil, false
 }
