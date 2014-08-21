@@ -55,7 +55,8 @@ func ( t *bindTestCall ) visitBindTest() bool {
     pip := mgRct.InitReactorPipeline( vb )
     bc := NewBindContext( t.reg )
     if o := t.t.SerialOptions; o != nil { bc.SerialOptions = o }
-    if err := VisitValue( t.t.Bound, pip, bc, nil ); err != nil {
+    vc := VisitContext{ BindContext: bc, Destination: pip }
+    if err := VisitValue( t.t.Bound, vc ); err != nil {
         t.EqualErrors( t.t.Error, err )
         return false
     }

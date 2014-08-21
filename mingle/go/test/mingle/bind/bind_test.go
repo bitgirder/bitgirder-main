@@ -11,9 +11,8 @@ import (
     "fmt"
 )
 
-func visitF1Struct( 
-    nm string, f1 int32, out mgRct.ReactorEventProcessor ) error {
-
+func visitF1Struct( nm string, f1 int32, vc VisitContext ) error {
+    out := vc.Destination
     return mgRct.VisitValue( parser.MustStruct( nm, "f1", f1 ), out )
 }
 
@@ -21,12 +20,8 @@ type S1 struct {
     f1 int32
 }
 
-func ( s *S1 ) VisitValue( 
-    out mgRct.ReactorEventProcessor, 
-    bc *BindContext, 
-    path objpath.PathNode ) error {
-
-    return visitF1Struct( "ns1@v1/S1", s.f1, out )
+func ( s *S1 ) VisitValue( vc VisitContext ) error {
+    return visitF1Struct( "ns1@v1/S1", s.f1, vc )
 }
 
 type E1 string 
@@ -36,14 +31,10 @@ const (
     E1V2 = E1( "v2" )
 )
 
-func ( e E1 ) VisitValue(
-    out mgRct.ReactorEventProcessor,
-    bc *BindContext,
-    path objpath.PathNode ) error {
-
+func ( e E1 ) VisitValue( vc VisitContext ) error {
     me := parser.MustEnum( "ns1@v1/E1", string( e ) )
     ve := mgRct.NewValueEvent( me )
-    return out.ProcessEvent( ve )
+    return vc.Destination.ProcessEvent( ve )
 }
 
 type unregisteredType int
@@ -52,16 +43,11 @@ type failOnVisitType int
 
 type customVisitable int32
 
-func visitOkTestFunc(
-    val interface{},
-    out mgRct.ReactorEventProcessor,
-    bc *BindContext,
-    path objpath.PathNode ) ( error, bool ) {
-
+func visitOkTestFunc( val interface{}, vc VisitContext ) ( error, bool ) {
     switch v := val.( type ) {
     case customVisitable: 
-        return visitF1Struct( "ns1@v1/CustomVisitable", int32( v ), out ), true
-    case failOnVisitType: return NewVisitError( path, "test-failure" ), true
+        return visitF1Struct( "ns1@v1/CustomVisitable", int32( v ), vc ), true
+    case failOnVisitType: return NewVisitError( vc.Path, "test-failure" ), true
     }
     return nil, false
 }

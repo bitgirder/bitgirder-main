@@ -34,11 +34,13 @@ func bindErrorFactory( path objpath.PathNode, msg string ) error {
     return NewBindError( path, msg )
 }
 
-type VisitValueOkFunc func(
-    val interface{},
-    out mgRct.ReactorEventProcessor,
-    bc *BindContext,
-    path objpath.PathNode ) ( error, bool )
+type VisitContext struct {
+    Destination mgRct.ReactorEventProcessor
+    Path objpath.PathNode
+    BindContext *BindContext
+}
+
+type VisitValueOkFunc func( val interface{}, vc VisitContext ) ( error, bool )
 
 type Registry struct {
     m *mg.QnameMap 
@@ -96,17 +98,13 @@ func NewFunctionsBuilderFactory() *mgRct.FunctionsBuilderFactory {
     return res
 }
 
-func visitPrimValueOk(
-    val interface{},
-    out mgRct.ReactorEventProcessor,
-    bc *BindContext,
-    path objpath.PathNode ) ( error, bool ) {
-    
+func visitPrimValueOk( val interface{}, vc VisitContext ) ( error, bool ) {
     switch v := val.( type ) {
     case bool, []byte, string, int32, int64, uint32, uint64, float32, float64,
          time.Time: 
-        return visitPrimValueOk( mg.MustValue( v ), out, bc, path )
-    case mg.Value: return mgRct.VisitValuePath( v, out, path ), true
+        return visitPrimValueOk( mg.MustValue( v ), vc )
+    case mg.Value: 
+        return mgRct.VisitValuePath( v, vc.Destination, vc.Path ), true
     }
     return nil, false
 }
@@ -324,23 +322,14 @@ func ( e *VisitError ) Error() string {
 
 type ValueVisitor interface {
 
-    VisitValue( 
-        out mgRct.ReactorEventProcessor, 
-        bc *BindContext, 
-        path objpath.PathNode ) error
+    VisitValue( vc VisitContext ) error
 }
 
-func VisitValue( 
-    val interface{}, 
-    out mgRct.ReactorEventProcessor, 
-    bc *BindContext,
-    path objpath.PathNode ) error {
+func VisitValue( val interface{}, vc VisitContext ) error {
 
-    if vv, ok := val.( ValueVisitor ); ok { 
-        return vv.VisitValue( out, bc, path )
+    if vv, ok := val.( ValueVisitor ); ok { return vv.VisitValue( vc ) }
+    for _, f := range vc.BindContext.Registry.visitors {
+        if err, ok := f( val, vc ); ok { return err }
     }
-    for _, f := range bc.Registry.visitors {
-        if err, ok := f( val, out, bc, path ); ok { return err }
-    }
-    return NewVisitErrorf( path, "unknown type for visit: %T", val )
+    return NewVisitErrorf( vc.Path, "unknown type for visit: %T", val )
 }

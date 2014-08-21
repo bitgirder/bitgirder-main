@@ -570,12 +570,9 @@ func visitMissingFieldsError(
 }
 
 func visitBuiltinTypeOk(
-    val interface{},
-    out mgRct.ReactorEventProcessor,
-    bc *bind.BindContext,
-    path objpath.PathNode ) ( error, bool ) {
+    val interface{}, vc bind.VisitContext ) ( error, bool ) {
 
-    es := eventSend{ out, bc }
+    es := eventSend{ vc.Destination, vc.BindContext }
     switch v := val.( type ) {
     case *mg.Identifier: return visitIdentifier( v, es ), true
     case *mg.Namespace: return visitNamespace( v, es ), true
