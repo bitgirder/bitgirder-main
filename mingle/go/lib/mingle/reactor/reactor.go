@@ -214,38 +214,68 @@ func InitReactorPipeline( elts ...interface{} ) ReactorEventProcessor {
     return res
 }
 
+type EventSender struct {
+    Destination ReactorEventProcessor
+}
+
+func EventSenderForReactor( rep ReactorEventProcessor ) EventSender {
+    return EventSender{ Destination: rep }
+}
+
+func ( es EventSender ) processEvent( ev ReactorEvent ) error {
+    return es.Destination.ProcessEvent( ev )
+}
+
+func ( es EventSender ) StartStruct( qn *mg.QualifiedTypeName ) error {
+    return es.processEvent( NewStructStartEvent( qn ) )
+}
+
+func ( es EventSender ) StartMap() error {
+    return es.processEvent( NewMapStartEvent() )
+}
+
+func ( es EventSender ) StartList( lt *mg.ListTypeReference ) error {
+    return es.processEvent( NewListStartEvent( lt ) )
+}
+
+func ( es EventSender ) StartField( fld *mg.Identifier ) error {
+    return es.processEvent( NewFieldStartEvent( fld ) )
+}
+
+func ( es EventSender ) Value( mv mg.Value ) error {
+    return es.processEvent( NewValueEvent( mv ) )
+}
+
+func ( es EventSender ) End() error { return es.processEvent( NewEndEvent() ) }
+
 type valueVisit struct {
-    rep ReactorEventProcessor
+    es EventSender
 }
 
 func ( vv valueVisit ) visitSymbolMapFields( m *mg.SymbolMap ) error {
     err := m.EachPairError( func( fld *mg.Identifier, val mg.Value ) error {
-        ev := NewFieldStartEvent( fld )
-        if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+        if err := vv.es.StartField( fld ); err != nil { return err }
         return vv.visitValue( val )
     })
     if err != nil { return err }
-    return vv.rep.ProcessEvent( NewEndEvent() )
+    return vv.es.End()
 }
 
 func ( vv valueVisit ) visitStruct( ms *mg.Struct ) error {
-    ev := NewStructStartEvent( ms.Type )
-    if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+    if err := vv.es.StartStruct( ms.Type ); err != nil { return err }
     return vv.visitSymbolMapFields( ms.Fields )
 }
 
 func ( vv valueVisit ) visitList( ml *mg.List ) error {
-    ev := NewListStartEvent( ml.Type )
-    if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+    if err := vv.es.StartList( ml.Type ); err != nil { return err }
     for _, val := range ml.Values() {
         if err := vv.visitValue( val ); err != nil { return err }
     }
-    return vv.rep.ProcessEvent( NewEndEvent() )
+    return vv.es.End()
 }
 
 func ( vv valueVisit ) visitSymbolMap( sm *mg.SymbolMap ) error {
-    ev := NewMapStartEvent()
-    if err := vv.rep.ProcessEvent( ev ); err != nil { return err }
+    if err := vv.es.StartMap(); err != nil { return err }
     return vv.visitSymbolMapFields( sm )
 }
 
@@ -255,7 +285,7 @@ func ( vv valueVisit ) visitValue( mv mg.Value ) error {
     case *mg.SymbolMap: return vv.visitSymbolMap( v )
     case *mg.List: return vv.visitList( v )
     }
-    return vv.rep.ProcessEvent( NewValueEvent( mv ) )
+    return vv.es.Value( mv )
 }
 
 type pathSetterCaller struct {
@@ -267,17 +297,16 @@ func ( c pathSetterCaller ) ProcessEvent( ev ReactorEvent ) error {
     return c.ps.ProcessEvent( ev, c.rep )
 }
 
+func VisitValue( mv mg.Value, rep ReactorEventProcessor ) error {
+    return ( valueVisit{ es: EventSenderForReactor( rep ) } ).visitValue( mv )
+}
+
 func VisitValuePath( 
     mv mg.Value, rep ReactorEventProcessor, path objpath.PathNode ) error {
 
     ps := NewPathSettingProcessor()
     if path != nil { ps.SetStartPath( path ) }
-    vv := valueVisit{ rep: pathSetterCaller{ ps, rep } }
-    return vv.visitValue( mv )
-}
-
-func VisitValue( mv mg.Value, rep ReactorEventProcessor ) error {
-    return ( valueVisit{ rep: rep } ).visitValue( mv )
+    return VisitValue( mv, pathSetterCaller{ ps, rep } )
 }
 
 func isAssignableValueType( typ mg.TypeReference ) bool {
