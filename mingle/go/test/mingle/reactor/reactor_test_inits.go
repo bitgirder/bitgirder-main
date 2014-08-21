@@ -14,32 +14,88 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
         "map1", parser.MustSymbolMap(),
         "struct1", parser.MustStruct( "ns1@v1/S2" ),
     )
-    addTest := func( v mg.Value ) { 
-        b.AddTests( 
-            &BuildReactorTest{ 
-                Val: v, 
-                Profile: builderTestProfileDefault,
-            },
-        )
+    addTest := func( t *BuildReactorTest ) {
+        t.Profile = builderTestProfileDefault
+        b.AddTests( t )
     }
-    addTest( mg.String( "hello" ) )
-    addTest( mg.MustList() )
-    addTest( mg.MustList( 1, 2, 3 ) )
-    addTest( mg.MustList( 1, mg.MustList(), mg.MustList( 1, 2 ) ) )
-    addTest( parser.MustSymbolMap() )
-    addTest( parser.MustSymbolMap( "f1", "v1", "f2", mg.MustList(), "f3", s1 ) )
-    addTest( s1 )
-    addTest( parser.MustStruct( "ns1@v1/S3" ) )
-    addTest( parser.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
+    addIdent := func( v mg.Value ) { addTest( &BuildReactorTest{ Val: v } ) }
+    addIdent( mg.String( "hello" ) )
+    addIdent( mg.MustList() )
+    addIdent( mg.MustList( 1, 2, 3 ) )
+    addIdent( mg.MustList( 1, mg.MustList(), mg.MustList( 1, 2 ) ) )
+    addIdent( parser.MustSymbolMap() )
+    addIdent( 
+        parser.MustSymbolMap( "f1", "v1", "f2", mg.MustList(), "f3", s1 ) )
+    addIdent( s1 )
+    addIdent( parser.MustStruct( "ns1@v1/S3" ) )
+    addIdent( parser.MustStruct( "ns1@v1/S3", "f1", int32( 1 ) ) )
     e1 := parser.MustEnum( "ns1@v1/E1", "e" )
-    addTest( e1 )
-    addTest( 
+    addIdent( e1 )
+    addIdent( 
         parser.MustStruct( "ns1@v1/S3",
             "f1", int32( 1 ),
             "f2", e1,
             "f3", mg.MustList( int32( 1 ), e1 ),
             "f4", parser.MustSymbolMap( "f1", e1 ),
         ),
+    )
+    addTest(
+        &BuildReactorTest{
+            Source: []ReactorEvent{
+                nextListStart( listTypeRef( "&Int32*" ) ),
+                NewValueEvent( mg.Int32( 1 ) ),
+                NewEndEvent(),
+            },
+            Val: mg.MustList( listTypeRef( "&Int32*" ), int32( 1 ) ),
+        },
+    )
+    addTest(
+        &BuildReactorTest{
+            Source: []ReactorEvent{
+                nextListStart( listTypeRef( "&(&Int32*)*" ) ),
+                    nextListStart( listTypeRef( "&Int32*" ) ),
+                        NewValueEvent( mg.Int32( 1 ) ),
+                    NewEndEvent(),
+                NewEndEvent(),
+            },
+            Val: mg.MustList( listTypeRef( "&(&Int32*)*" ), 
+                mg.MustList( listTypeRef( "&Int32*" ), int32( 1 ) ),
+            ),
+        },
+    )
+    addTest(
+        &BuildReactorTest{
+            Source: []ReactorEvent{
+                nextListStart( listTypeRef( "&ns1@v1/S1*" ) ),
+                NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
+                NewEndEvent(),
+                NewEndEvent(),
+            },
+            Val: mg.MustList(
+                listTypeRef( "&ns1@v1/S1*" ), 
+                parser.MustStruct( "ns1@v1/S1" ),
+            ),
+        },
+    )
+    addTest(
+        &BuildReactorTest{
+            Source: []ReactorEvent{
+                nextListStart( listTypeRef( "Int32~[0,100)*" ) ),
+                    NewValueEvent( mg.Int32( 1 ) ),
+                NewEndEvent(),
+            },
+            Val: mg.MustList( listTypeRef( "Int32~[0,100)*" ), int32( 1 ) ),
+        },
+    )
+    addTest(
+        &BuildReactorTest{
+            Source: []ReactorEvent{
+                nextListStart( listTypeRef( `String~"a*"*"` ) ),
+                    NewValueEvent( mg.String( "a" ) ),
+                NewEndEvent(),
+            },
+            Val: mg.MustList( listTypeRef( `String~"a*"*` ), "a" ),
+        },
     )
 }
 
@@ -298,10 +354,6 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
         { expctTyp: "Int32", 
           saw: "start of mingle:core@v1/Int32*",
           ev: nextListStart( listTypeRef( "Int32*" ) ),
-        },
-        { expctTyp: "&Int32",
-          saw: asType( "Int32" ).ExternalForm(),
-          ev: NewValueEvent( mg.Int32( int32( 1 ) ) ),
         },
         { expctTyp: "SymbolMap",
           saw: asType( "Int32" ).ExternalForm(),

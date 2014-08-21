@@ -237,9 +237,18 @@ func getBindTests() []*BindTest {
     return getDefaultValBindTests( []*BindTest{} )
 }
 
+type defaultBindTestCallInterface int
+
+func ( c defaultBindTestCallInterface ) CreateReactors( 
+    _ *BindTest ) []interface{} {
+
+    return []interface{}{}
+}
+
 func TestBind( t *testing.T ) {
     ensureTestBuilderFactories()
-    AssertBindTests( getBindTests(), assert.NewPathAsserter( t ) )
+    iface := defaultBindTestCallInterface( 1 )
+    AssertBindTests( getBindTests(), iface, assert.NewPathAsserter( t ) )
 }
 
 func TestRegistryAccessors( t *testing.T ) {

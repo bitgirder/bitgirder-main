@@ -77,6 +77,9 @@ func NewIdentifierUnsafe( parts []string ) *Identifier {
     return &Identifier{ parts }
 }
 
+// returns the live parts array
+func ( id *Identifier ) GetPartsUnsafe() []string { return id.parts }
+
 func idSeparatorFor( idFmt IdentifierFormat ) (sep byte) {
     switch idFmt {
         case LcHyphenated: sep = byte( '-' )

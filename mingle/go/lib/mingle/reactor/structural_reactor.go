@@ -118,35 +118,41 @@ func ( sr *StructuralReactor ) listValueTypeError(
         expct, sr.sawDescFor( ev ) )
 }
 
+// drops pointer and restriction expectations from effectiveType, checking only
+// that the structure of the assignment would make sense (downstream casts can
+// check the actual validity of the assignment)
+func ( sr *StructuralReactor ) recursiveCheckValueTypeForList(
+    calledType, effectiveType, valType mg.TypeReference, 
+    ev ReactorEvent ) error {
+    
+    switch typ := effectiveType.( type ) {
+    case *mg.PointerTypeReference:
+        return sr.recursiveCheckValueTypeForList( 
+            calledType, typ.Type, valType, ev )
+    case *mg.AtomicTypeReference:
+        if typ.Restriction != nil {
+            return sr.recursiveCheckValueTypeForList(
+                calledType, typ.Name.AsAtomicType(), valType, ev )
+        }
+    }
+    if mg.CanAssignType( valType, effectiveType ) { return nil }
+    return sr.listValueTypeError( calledType, ev )
+}
+
 func ( sr *StructuralReactor ) checkValueTypeForList(
     lc listStructureCheck, typ mg.TypeReference, ev ReactorEvent ) error {
 
-    if mg.CanAssignType( typ, lc.typ ) { return nil }
-    return sr.listValueTypeError( lc.typ, ev )
-}
-
-func ( sr *StructuralReactor ) checkValueEventForList(
-    lc listStructureCheck, ve *ValueEvent ) error {
-
-    if mg.CanAssign( ve.Val, lc.typ, false ) { return nil }
-    return sr.listValueTypeError( lc.typ, ve )
-}
-
-func ( sr *StructuralReactor ) checkListStartEventForList(
-    lc listStructureCheck, lse *ListStartEvent ) error {
-
-    if isAssignableValueType( lc.typ ) || lc.typ.Equals( lse.Type ) { 
-        return nil 
-    }
-    return sr.listValueTypeError( lc.typ, lse )
+    return sr.recursiveCheckValueTypeForList( lc.typ, lc.typ, typ, ev )
 }
 
 func ( sr *StructuralReactor ) checkEventForList(
     lc listStructureCheck, ev ReactorEvent ) error {
 
     switch v := ev.( type ) {
-    case *ValueEvent: return sr.checkValueEventForList( lc, v )
-    case *ListStartEvent: return sr.checkListStartEventForList( lc, v )
+    case *ValueEvent: 
+        return sr.checkValueTypeForList( lc, mg.TypeOf( v.Val ), v )
+    case *ListStartEvent: 
+        return sr.checkValueTypeForList( lc, v.Type, v )
     case *MapStartEvent: 
         return sr.checkValueTypeForList( lc, mg.TypeSymbolMap, ev )
     case *StructStartEvent: 

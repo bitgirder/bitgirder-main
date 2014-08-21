@@ -271,12 +271,36 @@ var (
     NewFunctionsFieldSetBuilder = mgRct.NewFunctionsFieldSetBuilder
 )
 
+type SerialFormat int
+
+const (
+    SerialFormatDefault = SerialFormat( iota )
+    SerialFormatBinary 
+    SerialFormatText
+)
+
+type SerialOptions struct {
+    Identifiers mg.IdentifierFormat
+    Format SerialFormat
+}
+
+func NewSerialOptions() *SerialOptions {
+    return &SerialOptions{
+        Identifiers: mg.LcHyphenated,
+        Format: SerialFormatDefault,
+    }
+}
+
 type BindContext struct {
     Registry *Registry
+    SerialOptions *SerialOptions
 }
 
 func NewBindContext( reg *Registry ) *BindContext {
-    return &BindContext{ Registry: reg }
+    return &BindContext{ 
+        Registry: reg,
+        SerialOptions: NewSerialOptions(),
+    }
 }
 
 type VisitError struct {

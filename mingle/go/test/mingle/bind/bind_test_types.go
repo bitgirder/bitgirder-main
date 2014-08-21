@@ -24,5 +24,6 @@ type BindTest struct {
     Direction BindTestDirection
     Type mg.TypeReference
     Domain *mg.Identifier
+    SerialOptions *SerialOptions
     Error error
 }
