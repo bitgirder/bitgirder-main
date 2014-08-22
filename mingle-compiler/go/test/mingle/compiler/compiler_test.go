@@ -536,7 +536,7 @@ func TestCompiler( t *testing.T ) {
                      param3 Int64 default 12,
                      param4 Alias1*,
                      param5 Alias2 ): ns1/Struct2,
-                        throws Exception1, Exception3
+                        throws &Exception1, Exception3
                 
                 op op3(): &Int64? throws Exception2
             
@@ -669,7 +669,7 @@ func TestCompiler( t *testing.T ) {
                                 "param5", "ns1@v1/Struct1", nil ),
                         },
                         "ns1@v1/Struct2",
-                        []string{ "ns1@v1/Exception1", "ns1@v1/Exception3" },
+                        []string{ "&ns1@v1/Exception1", "ns1@v1/Exception3" },
                     ),
                 ),
                 types.MakeOpDef( "op3",
@@ -1853,6 +1853,61 @@ func TestCompiler( t *testing.T ) {
         expectError( 4, 39, "Unresolved type: Blah" ).
         expectError( 5, 49,
             "Duplicate constructor signature for type mingle:core@v1/String" ),
+
+        newCompilerTest( "ambiguous-type-selector-errors" ).
+        setSource( `
+            @version v1
+            namespace ns
+            struct S1 {
+                @constructor( Int32 )
+                @constructor( &Int32 )
+                @constructor( &Int64 )
+                @constructor( &Int64? )
+                @constructor( Int32* )
+                @constructor( Int32+ )
+                @constructor( &(Int32*) )
+                @constructor( &Int32* )
+            }
+            struct Err1 {}
+            service Service1 { op op1(): Null throws Err1, &Err1; }
+            prototype Proto1(): Null throws Err1, &Err1
+            struct S2 { @constructor( SymbolMap ) }
+            struct S3 { @constructor( SymbolMap? ) }
+        ` ).
+        expectError( 4, 13,
+            "ambiguous constructors in ns@v1/S1: mingle:core@v1/Int32 ([<>, line 5, col 17]), &(mingle:core@v1/Int32) ([<>, line 6, col 17])" ).
+        expectError( 4, 13,
+            "ambiguous constructors in ns@v1/S1: &(mingle:core@v1/Int64) ([<>, line 7, col 17]), &(mingle:core@v1/Int64)? ([<>, line 8, col 17])" ).
+        expectError( 4, 13,
+            "ambiguous constructors in ns@v1/S1: mingle:core@v1/Int32+ ([<>, line 10, col 17]), &(mingle:core@v1/Int32*) ([<>, line 11, col 17]), &(mingle:core@v1/Int32)* ([<>, line 12, col 17]), mingle:core@v1/Int32* ([<>, line 9, col 17])" ).
+        expectError( 15, 35,
+            "operation op1 has ambiguous thrown types: ns@v1/Err1 ([<>, line 15, col 54]), &(ns@v1/Err1) ([<>, line 15, col 60])" ).
+        expectError( 16, 23,
+            "prototype ns@v1/Proto1 has ambiguous thrown types: ns@v1/Err1 ([<>, line 16, col 45]), &(ns@v1/Err1) ([<>, line 16, col 51])" ).
+        expectError( 17, 25, "constructor cannot take symbol map" ).
+        expectError( 18, 25, "constructor cannot take symbol map" ),
+
+        newCompilerTest( "self-constructor-fails" ).
+        setSource( `
+            @version v1
+            namespace ns
+            struct S1 { @constructor( S1 ) }
+            struct S2 { @constructor( &S2 ) }
+        ` ).
+        expectError( 4, 25, "constructor cannot take enclosing type" ).
+        expectError( 5, 25, "constructor cannot take enclosing type" ),
+
+        newCompilerTest( "thrown-type-errors" ).
+        setSource( `
+            @version v1
+            namespace ns
+            struct S1 {}
+            struct S2 {}
+            prototype P1(): Null throws Int32, S1*, &S2?
+        ` ).
+        expectError( 6, 41, "invalid thrown type: mingle:core@v1/Int32" ).
+        expectError( 6, 48, "invalid thrown list type: ns@v1/S1*" ).
+        expectError( 6, 53, "invalid thrown nullable type: &(ns@v1/S2)?" ),
     
         newCompilerTest( "alias-errors" ).
         setSource( `

@@ -1125,12 +1125,118 @@ func ( c *Compilation ) buildFieldSet(
     return fsb.build()
 }
 
+type typeSelectionCheckInput struct { 
+    typ mg.TypeReference
+    lc tree.Locatable 
+}
+
+type typeSelectionCheck struct {
+    c *Compilation
+    elts []typeSelectionCheckInput
+    errTopLoc interface{}
+    errTmpl string
+    errArgv []interface{}
+}
+
+func newTypeSelectionCheck( c *Compilation ) *typeSelectionCheck {
+    return &typeSelectionCheck{ 
+        c: c,
+        elts: make( []typeSelectionCheckInput, 0, 4 ),
+    }
+}
+
+func ( c *typeSelectionCheck ) addType( 
+    typ mg.TypeReference, lc tree.Locatable ) {
+
+    c.elts = append( c.elts, typeSelectionCheckInput{ typ, lc } )
+}
+
+func erasedTypeKeyForType( typ mg.TypeReference ) string {
+    switch v := typ.( type ) {
+    case *mg.AtomicTypeReference: return v.Name.ExternalForm()
+    case *mg.NullableTypeReference: return erasedTypeKeyForType( v.Type )
+    case *mg.PointerTypeReference: return erasedTypeKeyForType( v.Type )
+    case *mg.ListTypeReference: 
+        return erasedTypeKeyForType( v.ElementType ) + "[]"
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
+type typeSelectionCheckLocSort []typeSelectionCheckInput
+
+func ( s typeSelectionCheckLocSort ) Len() int { return len( s ) }
+
+func ( s typeSelectionCheckLocSort ) Less( i, j int ) bool {
+    lcI, lcJ := s[ i ].lc.Locate(), s[ j ].lc.Locate()
+    return lcI.String() < lcJ.String()
+}
+
+func ( s typeSelectionCheckLocSort ) Swap( i, j int ) {
+    s[ i ], s[ j ] = s[ j ], s[ i ]
+}
+
+// strips pointers, nullability, and differntiation between lists that allow
+// empty and those that do not, and organizes typs into groups that are thereby
+// equal
+func ( c *typeSelectionCheck ) ambiguousGroups() [][]typeSelectionCheckInput {
+
+    m := make( map[ string ] []typeSelectionCheckInput )
+    for _, elt := range c.elts {
+        key := erasedTypeKeyForType( elt.typ )
+        matched, ok := m[ key ]
+        if ! ok { matched = make( []typeSelectionCheckInput, 0, 2 ) }
+        matched = append( matched, elt )
+        m[ key ] = matched
+    }
+    res := make( [][]typeSelectionCheckInput, 0, len( m ) )
+    for _, v := range m { 
+        sort.Sort( typeSelectionCheckLocSort( v ) )
+        if len( v ) > 1 { res = append( res, v ) }
+    }
+    return res
+}
+
+func ( c *typeSelectionCheck ) check() bool {
+    grps := c.ambiguousGroups()
+    if len( grps ) == 0 { return true }
+    for _, grp := range grps {
+        strs := make( []string, len( grp ) )
+        argv := append( []interface{}{}, c.errArgv... )
+        for i, pair := range grp {
+            strs[ i ] = fmt.Sprintf( "%s (%s)", pair.typ, pair.lc.Locate() )
+        }
+        argv = append( argv, strings.Join( strs, ", " ) )
+        c.c.addErrorf( c.errTopLoc, c.errTmpl, argv... )
+    }
+    return false
+}
+
+func ( c *Compilation ) checkConstructorType(
+    consDecl *tree.ConstructorDecl, 
+    enclosedBy *mg.QualifiedTypeName,
+    typ mg.TypeReference ) bool {
+    
+    switch erasedKey := erasedTypeKeyForType( typ ); {
+    case enclosedBy.ExternalForm() == erasedKey:
+        c.addError( consDecl, "constructor cannot take enclosing type" )
+        return false
+    case mg.QnameSymbolMap.ExternalForm() == erasedKey:
+        c.addError( consDecl, "constructor cannot take symbol map" )
+        return false
+    }
+    return true
+}
+
 func ( c *Compilation ) processConstructor(
+    enclosedBy *mg.QualifiedTypeName,
     consDecl *tree.ConstructorDecl,
+    chk *typeSelectionCheck,
     seen map[ string ]bool,
     bs *buildScope ) *types.ConstructorDefinition {
+
     typ := bs.resolveType( consDecl.ArgType, consDecl.ArgType.Location() )
     if typ == nil { return nil }
+    if ! c.checkConstructorType( consDecl, enclosedBy, typ ) { return nil }
     keyStr := typ.ExternalForm()
     if _, hadPrev := seen[ keyStr ]; hadPrev {
         c.addErrorf( consDecl, 
@@ -1138,21 +1244,29 @@ func ( c *Compilation ) processConstructor(
         return nil
     } 
     seen[ keyStr ] = true
+    chk.addType( typ, consDecl )
     return &types.ConstructorDefinition{ typ }
 }
 
 func ( c *Compilation ) processConstructors(
     consDecls []*tree.ConstructorDecl,
     sd *types.StructDefinition,
-    bs *buildScope ) bool {
+    bc buildContext ) bool {
+
     ok := true
     seen := make( map[ string ]bool )
+    chk := newTypeSelectionCheck( c )
+    chk.errTmpl = "ambiguous constructors in %s: %s"
+    chk.errArgv = []interface{}{ sd.Name }
+    chk.errTopLoc = bc.td
     for _, consDecl := range consDecls {
-        if consDef := c.processConstructor( consDecl, seen, bs ); 
-           consDef == nil {
+        consDef := 
+            c.processConstructor( sd.Name, consDecl, chk, seen, bc.scope )
+        if consDef == nil {
             ok = false
         } else { sd.Constructors = append( sd.Constructors, consDef ) }
     }
+    ok = ok && chk.check()
     return ok
 }
 
@@ -1161,7 +1275,7 @@ func ( c *Compilation ) buildConstructors(
 
     arr := bc.td.( *tree.StructDecl ).Constructors
     if len( arr ) == 0 { return true }
-    return c.processConstructors( arr, sd, bc.scope )
+    return c.processConstructors( arr, sd, bc )
 }
 
 func ( c *Compilation ) buildStructType( bc buildContext ) {
@@ -1353,8 +1467,32 @@ func ( c *Compilation ) setCallSignatureFields(
     return errs == 0
 }
 
+func ( c *Compilation ) checkThrownType(
+    callTyp, chkTyp mg.TypeReference, typLoc tree.Locatable ) bool {
+
+    switch v := chkTyp.( type ) {
+    case *mg.AtomicTypeReference: 
+        def := c.typeDefForQn( v.Name )
+        if _, ok := def.( *types.StructDefinition ); ok { return true }
+        c.addErrorf( typLoc, "invalid thrown type: %s", callTyp )
+        return false
+    case *mg.PointerTypeReference: 
+        return c.checkThrownType( callTyp, v.Type, typLoc )
+    case *mg.NullableTypeReference:
+        c.addErrorf( typLoc, "invalid thrown nullable type: %s", callTyp )
+        return false
+    case *mg.ListTypeReference:
+        c.addErrorf( typLoc, "invalid thrown list type: %s", callTyp )
+        return false
+    }
+    return true
+}
+
 func ( c *Compilation ) buildCallSignature(
-    decl *tree.CallSignature, bs *buildScope ) *types.CallSignature {
+    decl *tree.CallSignature, 
+    bs *buildScope, 
+    chk *typeSelectionCheck ) *types.CallSignature {
+
     res, ok := types.NewCallSignature(), true
     ok = c.setCallSignatureFields( decl, res, bs ) && ok
     if retTyp := bs.resolveType( decl.Return, decl.Return.Location() ); 
@@ -1365,24 +1503,40 @@ func ( c *Compilation ) buildCallSignature(
         if thrownTyp := bs.resolveType( thrown.Type, thrown.Type.Location() );
            thrownTyp == nil {
             ok = false
-        } else { res.Throws = append( res.Throws, thrownTyp ) }
+        } else { 
+            chkOk := c.checkThrownType( thrownTyp, thrownTyp, thrown )
+            if ok = ok && chkOk; ! ok { continue }
+            chk.addType( thrownTyp, thrown )
+            res.Throws = append( res.Throws, thrownTyp ) 
+        }
     }
+    ok = ok && chk.check()
     if ok { return res }
     return nil
 }
 
 func ( c *Compilation ) buildPrototypeType( bc buildContext ) {
     decl := bc.td.( *tree.PrototypeDecl )
-    if sig := c.buildCallSignature( decl.Sig, bc.scope ); sig != nil {
-        proto := &types.PrototypeDefinition{ Name: bc.qname(), Signature: sig }
+    resName := bc.qname()
+    chk := newTypeSelectionCheck( c )
+    chk.errTopLoc = decl.NameLoc
+    chk.errTmpl = "prototype %s has ambiguous thrown types: %s"
+    chk.errArgv = []interface{}{ resName }
+    if sig := c.buildCallSignature( decl.Sig, bc.scope, chk ); sig != nil {
+        proto := &types.PrototypeDefinition{ Name: resName, Signature: sig }
         c.putBuiltType( proto )
     }
 }
 
 func ( c *Compilation ) buildOpDef(
     opDecl *tree.OperationDecl, bs *buildScope ) *types.OperationDefinition {
+
     res := &types.OperationDefinition{ Name: opDecl.Name }
-    if res.Signature = c.buildCallSignature( opDecl.Call, bs );
+    chk := newTypeSelectionCheck( c )
+    chk.errTopLoc = opDecl.NameLoc
+    chk.errTmpl = "operation %s has ambiguous thrown types: %s"
+    chk.errArgv = []interface{}{ res.Name }
+    if res.Signature = c.buildCallSignature( opDecl.Call, bs, chk );
        res.Signature == nil {
         return nil
     }
@@ -2024,8 +2178,8 @@ func ( c *Compilation ) Execute() ( cr *CompilationResult, err error ) {
     c.buildAliasedTypes( ctxs )
     c.buildEnumTypes( ctxs )
     c.buildSchemaTypes( ctxs )
-    c.buildPrototypeTypes( ctxs )
     c.buildStructTypes( ctxs )
+    c.buildPrototypeTypes( ctxs )
     c.buildServiceTypes( ctxs )
     c.checkNsUnitCycles()
     c.setDefFieldDefaults( ctxs )
