@@ -50,7 +50,8 @@ class MingleTestGen
 
             while ( true )
             {
-                MingleStruct ms = (MingleStruct) r.readValue();
+                MingleStruct ms = (MingleStruct) 
+                    MingleTestMethods.readValue( r );
 
                 if ( ms.getType().equals( TYPE_END ) ) break;
                 

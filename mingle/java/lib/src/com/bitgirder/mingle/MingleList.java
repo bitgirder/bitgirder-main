@@ -79,4 +79,41 @@ implements Iterable< MingleValue >,
 
         return asList( type, Lang.< MingleValue >asList( vals ) );
     }
+
+    // class impl is as-if it were public, but keeping package-only for the
+    // moment.
+    final
+    static
+    class Builder
+    {
+        private final List< MingleValue > l;
+        private ListTypeReference type;
+
+        public Builder() { l = Lang.newList(); }
+
+        public
+        Builder
+        addUnsafe( MingleValue mv )
+        {
+            inputs.notNull( mv, "mv" );
+            l.add( mv );
+
+            return this;
+        }
+
+        public
+        Builder
+        setType( ListTypeReference type )
+        {
+            this.type = inputs.notNull( type, "type" );
+            return this;
+        }
+
+        public
+        MingleList
+        buildLive()
+        {
+            return MingleList.createLive( type, l );
+        }
+    }
 }

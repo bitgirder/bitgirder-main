@@ -41,9 +41,8 @@ implements MingleValueReactor,
     {
         if ( obj instanceof MingleSymbolMap.BuilderImpl ) {
             return ( (MingleSymbolMap.BuilderImpl< ?, ? >) obj ).build();
-        } else if ( obj instanceof List< ? > ) {
-            List< MingleValue > mvList = Lang.castUnchecked( obj );
-            return MingleList.asList( Mingle.TYPE_OPAQUE_LIST, mvList );
+        } else if ( obj instanceof MingleList.Builder ) {
+            return ( (MingleList.Builder) obj ).buildLive();
         }
 
         throw state.failf( "unhandled object value from stack top: %s", obj );
@@ -63,14 +62,11 @@ implements MingleValueReactor,
                 (MingleSymbolMap.BuilderImpl< ?, ? >) stack.peek();
             
             b.set( fld, mv );
-            return;
         }
-        else if ( obj instanceof List ) {
-            Lang.< List< Object > >castUnchecked( obj ).add( mv );
-            return;
+        else if ( obj instanceof MingleList.Builder ) {
+            ( (MingleList.Builder) obj ).addUnsafe( mv );
         }
-        
-        state.failf( "unexpected stack top %s for value %s", obj, mv );
+        else state.failf( "unexpected stack top %s for value %s", obj, mv );
     }
 
     private
@@ -105,7 +101,9 @@ implements MingleValueReactor,
             stack.push( new MingleStruct.Builder().setType( ev.structType() ) );
             return;
         case FIELD_START: stack.push( ev.field() ); return;
-        case LIST_START: stack.push( Lang.< Object >newList() ); return;
+        case LIST_START: 
+            stack.push( new MingleList.Builder().setType( ev.listType() ) );
+            return;
         case VALUE: processValue( ev.value() ); return;
         case END: processEnd(); return;
         }

@@ -1,1 +1,5 @@
 - move mingle-interpreter into mingle-compiler as an internal const evaluator
+
+- mingle/io: remove size from list/struct. we can add it back when used
+
+- mingle/io: add declared type name format check (fail for $Bad, "", etc)

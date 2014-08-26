@@ -35,6 +35,8 @@ class MingleValueReactorEvent
 
     private QualifiedTypeName structType; // valid for STRUCT_START
 
+    private ListTypeReference listType; // valid for START_LIST
+
     private MingleValue val; // valid for VALUE
 
     private ObjectPath< MingleIdentifier > path;
@@ -76,7 +78,13 @@ class MingleValueReactorEvent
         this.type = type;
     }
 
-    public void setStartList() { resetTo( Type.LIST_START ); }
+    public 
+    void 
+    setStartList( ListTypeReference listType ) 
+    { 
+        this.listType = inputs.notNull( listType, "listType" );
+        resetTo( Type.LIST_START ); 
+    }
 
     public void setStartMap() { resetTo( Type.MAP_START ); }
 
@@ -118,6 +126,13 @@ class MingleValueReactorEvent
     structType()
     {
         return checkType( structType, Type.STRUCT_START, "structType()" );
+    }
+
+    public
+    ListTypeReference
+    listType()
+    {
+        return checkType( listType, Type.LIST_START, "listType()" );
     }
 
     public
@@ -166,6 +181,7 @@ class MingleValueReactorEvent
         switch ( type ) {
         case FIELD_START: addPair( res, "field", fld ); break;
         case STRUCT_START: addPair( res, "structType", structType ); break;
+        case LIST_START: addPair( res, "listType", listType ); break;
         case VALUE: addPair( res, "value", Mingle.inspect( val ) ); break;
         }
 

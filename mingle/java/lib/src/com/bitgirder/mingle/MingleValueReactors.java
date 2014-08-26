@@ -112,7 +112,7 @@ class MingleValueReactors
                MingleValueReactorEvent ev )
         throws Exception
     {
-        ev.setStartList();
+        ev.setStartList( ml.type() );
         rct.processEvent( ev );
 
         for ( MingleValue mv : ml ) visitValue( mv, rct, ev );

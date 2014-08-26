@@ -117,12 +117,20 @@ class CoreIoTests
         }
 
         final
+        MingleValue
+        readMingleValue( MingleBinReader rd )
+            throws Exception
+        {
+            return MingleTestMethods.readValue( rd );
+        }
+
+        final
         Object
         readValue( MingleBinReader rd,
                    Object rep )
             throws Exception
         {
-            if ( rep instanceof MingleValue ) return rd.readValue();
+            if ( rep instanceof MingleValue ) return readMingleValue( rd );
 
             if ( rep instanceof QualifiedTypeName ) {
                 return rd.readQualifiedTypeName();
@@ -338,7 +346,7 @@ class CoreIoTests
             MingleBinReader rd = createReader();
 
             try {
-                MingleValue val = rd.readValue();
+                MingleValue val = readMingleValue( rd );
                 state.failf( "was able to read value: %s", val );
             } catch ( MingleBinaryException mbe ) { 
                 assertBinaryException( mbe ); 
