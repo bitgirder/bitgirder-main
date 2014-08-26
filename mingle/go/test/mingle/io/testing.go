@@ -18,14 +18,31 @@ func WriteBinIoTestValue( obj interface{}, w io.Writer ) error {
     panic( libErrorf( "unhandled value: %T", obj ) )
 }
 
-func assertReadValue( rd *BinReader, expct mg.Value, a *assert.PathAsserter ) {
-    if act, err := rd.ReadValue(); err == nil {
-        mg.AssertEqualValues( expct, act, a )
-    } else { a.Fatalf( "read val failed: %s", err ) }
+func assertReadValue( 
+    rd *BinReader, expct interface{}, a *assert.PathAsserter ) {
+
+    fail := func( err error ) { a.Fatalf( "read val failed: %s", err ) }
+    switch v := expct.( type ) {
+    case mg.Value: 
+        if act, err := rd.ReadValue(); err == nil {
+            mg.AssertEqualValues( v, act, a )
+        } else { fail( err ) }
+    default: mg.AssertBinIoRoundtripRead( rd.BinReader, expct, a )
+    }
 }
 
-func AssertRoundtripReadValue(
+func AssertRoundtripRead(
     rt *mg.BinIoRoundtripTest, rd *BinReader, a *assert.PathAsserter ) {
     
-    assertReadValue( rd, rt.Val.( mg.Value ), a )
+    assertReadValue( rd, rt.Val, a )
+}
+
+func AssertSequenceRoundtripRead(
+    rt *mg.BinIoSequenceRoundtripTest, rd *BinReader, a *assert.PathAsserter ) {
+
+    la := a.StartList()
+    for _, val := range rt.Seq {
+        assertReadValue( rd, val, la )
+        la = la.Next()
+    }
 }

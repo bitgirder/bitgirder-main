@@ -150,7 +150,19 @@ class CoreIoTests
         {
             Object act = readValue( rd, expct );
             state.equal( expct.getClass(), act.getClass() );
-            state.equal( expct, act ); 
+
+            if ( ! expct.equals( act ) ) 
+            {
+                Object expctDesc = expct;
+                Object actDesc = act;
+
+                if ( expct instanceof MingleValue ) {
+                    expctDesc = Mingle.inspect( (MingleValue) expct );
+                    actDesc = Mingle.inspect( (MingleValue) act );
+                }
+            
+                state.failf( "expected %s, got %s", expctDesc, actDesc );
+            }
 
             return act;
         }
@@ -265,7 +277,6 @@ class CoreIoTests
             throws Exception
         {
             Object expct = valueExpected();
-            code( "expct:", expct );
  
             MingleBinReader mgRd = createReader();
             Object act = expectValue( mgRd, expct );
@@ -492,6 +503,7 @@ class CoreIoTests
                 new MingleSymbolMap.Builder().
                     setInt32( "k1", 1 ).
                     setInt32( "k2", 2 ).
+                    setInt32( "k3", 1 ).
                     build(),
             
             "symmap-nested",
@@ -512,18 +524,27 @@ class CoreIoTests
                     setInt32( "k1", 1 ).
                     build(),
 
-            "list-empty", MingleList.empty(),
+            "list-empty", emptyList(),
 
             "list-scalars", 
                 MingleList.asList(
+                    Mingle.TYPE_OPAQUE_LIST,
                     new MingleInt32( 1 ), new MingleString( "hello" ) ),
 
             "list-nested",
                 MingleList.asList(
+                    Mingle.TYPE_OPAQUE_LIST,
                     new MingleInt32( 1 ),
-                    MingleList.empty(),
-                    MingleList.asList( new MingleString( "hello" ) ),
+                    emptyList(),
+                    MingleList.asList( 
+                        Mingle.TYPE_OPAQUE_LIST, new MingleString( "hello" ) ),
                     MingleNull.getInstance()
+                ),
+
+            "list-typed",
+                MingleList.asList(
+                    listType( Mingle.TYPE_INT32, true ),
+                    new MingleInt32( 0 ), new MingleInt32( 1 )
                 )
         );
 
@@ -651,12 +672,28 @@ class CoreIoTests
 
             nullableType( listType( atomic( qname( "ns1@v1/T1" ) ), true ) ),
  
-            nullableType( atomic( qname( "ns1@v1/T1" ) ) )
+            nullableType( atomic( qname( "ns1@v1/T1" ) ) ),
+
+            ptrType( atomic( qname( "ns1@v1/T1" ) ) ),
+
+            nullableType( ptrType( atomic( qname( "ns1@v1/T1" ) ) ) ),
+
+            listType(
+                nullableType(
+                    listType(
+                        nullableType(
+                            ptrType( atomic( qname( "ns1@v1/T1" ) ) )
+                        ),
+                        false
+                    )
+                ),
+                true
+            )
         );
 
         // due to differences in how we serialize some values ("0" vs "0.0"), we
         // handcode the key for a few test values
-        
+ 
         putRoundtripValue( 
             "AtomicTypeReference/mingle:core@v1/Timestamp~" +
                 "[\"2012-01-01T00:00:00Z\",\"2012-02-01T00:00:00Z\"]",
@@ -696,6 +733,19 @@ class CoreIoTests
                 )
             )
         );
+
+        putRoundtripValue(
+            "AtomicTypeReference/mingle:core@v1/Uint64~[0,0]",
+            atomic( qname( "mingle:core@v1/Uint64" ),
+                MingleRangeRestriction.create(
+                    true,
+                    new MingleUint64( 0 ),
+                    new MingleUint64( 0 ),
+                    true,
+                    MingleUint64.class
+                )
+            )
+        );
     }
 
     private
@@ -725,6 +775,7 @@ class CoreIoTests
             Lang.newMap( String.class, Object.class,
                 "struct-sequence",
                     MingleList.asList(
+                        Mingle.TYPE_OPAQUE_LIST,
                         new MingleStruct.Builder().
                             setType( "ns1@v1/S1" ).
                             build(),
@@ -746,9 +797,11 @@ class CoreIoTests
             "unexpected-top-level-type-code",
                 "[offset 0]: Expected mingle value but saw type code 0x64",
             "unexpected-list-val-type-code",
-                "[offset 49]: Expected list value but saw type code 0x64",
+                "[offset 96]: Expected list value but saw type code 0x64",
             "unexpected-symmap-val-type-code",
-                "[offset 39]: Expected mingle value but saw type code 0x64"
+                "[offset 39]: Expected mingle value but saw type code 0x64",
+            "invalid-list-type",
+                "[offset 1]: Expected list type reference but saw type code 0x05"
         ));
     }
 

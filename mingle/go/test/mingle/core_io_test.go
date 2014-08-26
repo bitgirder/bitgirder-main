@@ -17,49 +17,12 @@ func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
     panic( libErrorf( "Unhandled expct obj: %T", val ) )
 }
 
-func assertReadScalar( expct Value, rd *BinReader, a *assert.PathAsserter ) {
-    if tc, err := rd.ReadTypeCode(); err == nil {
-        if act, err := rd.ReadScalarValue( tc ); err == nil {
-            AssertEqualValues( expct, act, a )
-        } else {
-            a.Fatalf( "couldn't read act: %s", err )
-        }
-    } else {
-        a.Fatalf( "couldn't get type code: %s", err )
-    }
-}
-
-func assertBinIoRoundtripRead(
-    expct interface{}, rd *BinReader, a *assert.PathAsserter ) {
-
-    switch v := expct.( type ) {
-    case Value: assertReadScalar( v, rd, a )
-    case *Identifier:
-        if id, err := rd.ReadIdentifier(); err == nil { 
-            a.True( v.Equals( id ) )
-        } else { a.Fatal( err ) }
-    case *Namespace:
-        if ns, err := rd.ReadNamespace(); err == nil {
-            a.True( v.Equals( ns ) )
-        } else { a.Fatal( err ) }
-    case TypeName:
-        if nm, err := rd.ReadTypeName(); err == nil {
-            a.True( v.Equals( nm ) )
-        } else { a.Fatal( err ) }
-    case TypeReference:
-        if typ, err := rd.ReadTypeReference(); err == nil {
-            a.Truef( v.Equals( typ ), "expct (%v) != act (%v)", v, typ )
-        } else { a.Fatal( err ) }
-    default: a.Fatalf( "Unhandled expct expct: %T", expct )
-    }
-}
-
 func assertBinIoRoundtrip( val interface{}, a *assert.PathAsserter ) {
     bb := &bytes.Buffer{}
     if err := writeBinIoTestValue( val, NewWriter( bb ) ); err != nil { 
         a.Fatal( err ) 
     }
-    assertBinIoRoundtripRead( val, NewReader( bb ), a )
+    AssertBinIoRoundtripRead( NewReader( bb ), val, a )
 }
 
 func TestCoreIo( t *testing.T ) {

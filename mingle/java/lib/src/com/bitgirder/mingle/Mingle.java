@@ -61,6 +61,8 @@ class Mingle
     public final static MingleTypeReference TYPE_NULL;
     public final static QualifiedTypeName QNAME_VALUE;
     public final static MingleTypeReference TYPE_VALUE;
+    public final static NullableTypeReference TYPE_NULLABLE_VALUE;
+    public final static ListTypeReference TYPE_OPAQUE_LIST;
 
     public final static QualifiedTypeName QNAME_REQUEST;
     public final static MingleTypeReference TYPE_REQUEST;
@@ -83,9 +85,6 @@ class Mingle
     private final static 
         Map< MingleTypeReference, Class< ? extends MingleValue > > 
             VALUE_CLASSES;
-
-    public final static NullableTypeReference TYPE_NULLABLE_VALUE;
-    public final static ListTypeReference TYPE_VALUE_LIST;
 
     private final static ObjectPathFormatter< MingleIdentifier > 
         PATH_FORMATTER = new PathFormatterImpl();
@@ -153,6 +152,10 @@ class Mingle
         {
             return typeNameIn(
                 ( (NullableTypeReference) t ).getValueType() );
+        }
+        else if ( t instanceof PointerTypeReference )
+        {
+            return typeNameIn( ( (PointerTypeReference) t ).getType() );
         }
         else throw state.createFail( "Unhandled type reference:", t );
     }
@@ -404,7 +407,7 @@ class Mingle
         if ( mv instanceof MingleBuffer ) return TYPE_BUFFER;
         if ( mv instanceof MingleTimestamp ) return TYPE_TIMESTAMP;
         if ( mv instanceof MingleSymbolMap ) return TYPE_SYMBOL_MAP;
-        if ( mv instanceof MingleList ) return TYPE_VALUE_LIST;
+        if ( mv instanceof MingleList ) return TYPE_OPAQUE_LIST;
         if ( mv instanceof MingleNull ) return TYPE_NULL;
 
         if ( mv instanceof TypedMingleValue ) {
@@ -1066,9 +1069,10 @@ class Mingle
         TYPE_NULL = initCoreType( QNAME_NULL );
         QNAME_VALUE = initCoreQname( "Value" );
         TYPE_VALUE = initCoreType( QNAME_VALUE );
+        TYPE_NULLABLE_VALUE = NullableTypeReference.create( TYPE_VALUE );
 
-        TYPE_NULLABLE_VALUE = new NullableTypeReference( TYPE_VALUE );
-        TYPE_VALUE_LIST = new ListTypeReference( TYPE_VALUE, true );
+        TYPE_OPAQUE_LIST = 
+            ListTypeReference.create( TYPE_NULLABLE_VALUE, true );
 
         QNAME_REQUEST = initCoreQname( "Request" );
         TYPE_REQUEST = new AtomicTypeReference( QNAME_REQUEST, null );

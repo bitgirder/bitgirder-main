@@ -312,19 +312,24 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
                         ElementType: TypeInt32,
                     }, // type
                     int32( -1 ), // size
-                IoTypeCodeInt32, int32( 10 ), // an okay list val
-                binIoInvalidTypeCode,
+                    IoTypeCodeInt32, int32( 10 ), // an okay list val
+                    binIoInvalidTypeCode,
             ),
         },
         &BinIoInvalidDataTest{
             Name: "invalid-identifier-part",
-            ErrMsg: `invalid identifier part: Part`,
+            ErrMsg: `[offset 40]: invalid identifier part: Part`,
             Input: makeBinIoInvalidDataTest(
                 IoTypeCodeStruct, int32( -1 ), qnNsV1S,
                 IoTypeCodeField, 
                     IoTypeCodeId, 
                         uint8( 2 ), utf8Input( "bad" ), utf8Input( "Part" ),
             ),
+        },
+        &BinIoInvalidDataTest{
+            Name: "invalid-list-type",
+            ErrMsg: `[offset 1]: Expected type code 0x06 but got 0x05`,
+            Input: makeBinIoInvalidDataTest( IoTypeCodeList, TypeInt32 ),
         },
     )
 }

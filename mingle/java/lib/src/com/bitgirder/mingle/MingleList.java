@@ -17,16 +17,22 @@ implements Iterable< MingleValue >,
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static MingleList EMPTY =
-        new MingleList( Lang.< MingleValue >emptyList() );
-
+    private final ListTypeReference type;
     private final Iterable< MingleValue > vals;
 
-    private MingleList( Iterable< MingleValue > vals ) { this.vals = vals; }
+    private 
+    MingleList( ListTypeReference type,
+                Iterable< MingleValue > vals )
+    {   
+        this.type = type;
+        this.vals = vals; 
+    }
 
     public Iterator< MingleValue > iterator() { return vals.iterator(); }
 
-    public int hashCode() { return vals.hashCode(); }
+    public ListTypeReference type() { return type; }
+
+    public int hashCode() { return type.hashCode() ^ vals.hashCode(); }
 
     public
     boolean
@@ -35,33 +41,42 @@ implements Iterable< MingleValue >,
         if ( o == this ) return true;
         if ( ! ( o instanceof MingleList ) ) return false;
 
-        return vals.equals( ( (MingleList) o ).vals );
+        MingleList o2 = (MingleList) o;
+
+        return type.equals( o2.type ) && vals.equals( o2.vals );
     }
 
     static
     MingleList
-    createLive( Iterable< MingleValue > vals )
+    createLive( ListTypeReference type,
+                Iterable< MingleValue > vals )
     {
-        return new MingleList( state.notNull( vals, "vals" ) );
+        inputs.notNull( type, "type" );
+        inputs.notNull( vals, "vals" );
+
+        return new MingleList( type, vals );
     }
 
     public
     static
     MingleList
-    asList( List< MingleValue > vals )
+    asList( ListTypeReference type,
+            List< MingleValue > vals )
     {
-        return new MingleList( inputs.noneNull( vals, "vals" ) );
+        inputs.notNull( type, "type" );
+        inputs.noneNull( vals, "vals" );
+
+        return new MingleList( type, vals );
     }
 
     public
     static
     MingleList
-    asList( MingleValue... vals )
+    asList( ListTypeReference type,
+            MingleValue... vals )
     {
         inputs.notNull( vals, "vals" );
 
-        return asList( Lang.< MingleValue >asList( vals ) );
+        return asList( type, Lang.< MingleValue >asList( vals ) );
     }
-
-    public static MingleList empty() { return EMPTY; }
 }

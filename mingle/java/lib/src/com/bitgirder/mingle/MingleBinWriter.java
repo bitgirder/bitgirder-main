@@ -126,6 +126,7 @@ class MingleBinWriter
         throws IOException
     {
         writeTypeCode( TC_LIST );
+        writeTypeReference( ml.type() );
         w.writeInt( -1 );
 
         for ( MingleValue mv : ml ) implWriteValue( mv );
@@ -296,6 +297,15 @@ class MingleBinWriter
         writeTypeReference( typ.getValueType() );
     }
 
+    private
+    void
+    writePointerTypeReference( PointerTypeReference typ )
+        throws IOException
+    {
+        writeTypeCode( TC_POINTER_TYP );
+        writeTypeReference( typ.getType() );
+    }
+
     public
     void
     writeTypeReference( MingleTypeReference typ )
@@ -309,6 +319,8 @@ class MingleBinWriter
             writeListTypeReference( (ListTypeReference) typ );
         } else if ( typ instanceof NullableTypeReference ) {
             writeNullableTypeReference( (NullableTypeReference) typ );
+        } else if ( typ instanceof PointerTypeReference ) {
+            writePointerTypeReference( (PointerTypeReference) typ );
         } else {
             state.failf( "unhandled type reference: %s", typ.getClass() );
         }

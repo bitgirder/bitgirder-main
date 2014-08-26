@@ -45,6 +45,10 @@ type BinIoError struct { msg string }
 
 func ( e *BinIoError ) Error() string { return e.msg }
 
+func NewBinIoErrorOffset( off int64, msg string ) *BinIoError {
+    return &BinIoError{ fmt.Sprintf( "[offset %d]: %s", off, msg ) }
+} 
+
 type BinWriter struct { *bgio.BinWriter }
 
 func AsWriter( w *bgio.BinWriter ) *BinWriter { return &BinWriter{ w } }
@@ -318,10 +322,7 @@ func ( r *BinReader ) offset() int64 {
 }
 
 func ( r *BinReader ) IoErrorf( tmpl string, args ...interface{} ) *BinIoError {
-    str := &bytes.Buffer{}
-    fmt.Fprintf( str, "[offset %d]: ", r.offset() - 1 )
-    fmt.Fprintf( str, tmpl, args... )
-    return &BinIoError{ str.String() }
+    return NewBinIoErrorOffset( r.offset() - 1, fmt.Sprintf( tmpl, args... ) )
 }
 
 func ( r *BinReader ) ReadTypeCode() ( IoTypeCode, error ) {
@@ -348,10 +349,11 @@ func ( r *BinReader ) ExpectTypeCode( expct IoTypeCode ) ( IoTypeCode, error ) {
 func ( r *BinReader ) readBool() ( bool, error ) { return r.ReadBool() }
 
 func ( r *BinReader ) readIdPart() ( string, error ) {
+    off := r.offset()
     s, err := r.ReadUtf8()
     if err != nil { return "", err }
     if err := getIdentifierPartError( s ); err != nil { 
-        return "", &BinIoError{ err.Error() }
+        return "", NewBinIoErrorOffset( off, err.Error() )
     }
     return s, nil
 }

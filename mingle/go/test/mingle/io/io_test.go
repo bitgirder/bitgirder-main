@@ -18,7 +18,7 @@ func assertRoundtrip( rt *mg.BinIoRoundtripTest, a *assert.PathAsserter ) {
     if ! ok { return }
     bb := &bytes.Buffer{}
     assertWriteValue( NewWriter( bb ), val, a )
-    AssertRoundtripReadValue( rt, NewReader( bb ), a )
+    AssertRoundtripRead( rt, NewReader( bb ), a )
 }
 
 func assertSequenceRoundtrip( 
@@ -31,11 +31,7 @@ func assertSequenceRoundtrip(
         assertWriteValue( wr, val, la )
         la = la.Next()
     }
-    la = a.StartList()
-    for _, val := range rt.Seq {
-        assertReadValue( rd, val, la )
-        la = la.Next()
-    }
+    AssertSequenceRoundtripRead( rt, rd, a )
 }
 
 func assertInvalidData( t *mg.BinIoInvalidDataTest, a *assert.PathAsserter ) {

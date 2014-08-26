@@ -57,7 +57,9 @@ func ( ci *checkInstance ) callWriteValueAssert( test interface{} ) {
     a := assert.NewPathAsserter( ci )
     rd := mgIo.NewReader( bytes.NewBuffer( ci.buffer ) )
     switch v := test.( type ) {
-    case *mg.BinIoRoundtripTest: mgIo.AssertRoundtripReadValue( v, rd, a )
+    case *mg.BinIoRoundtripTest: mgIo.AssertRoundtripRead( v, rd, a )
+    case *mg.BinIoSequenceRoundtripTest: 
+        mgIo.AssertSequenceRoundtripRead( v, rd, a )
     default: ci.err = fmt.Errorf( "unhandled test type: %T", test )
     }
 }

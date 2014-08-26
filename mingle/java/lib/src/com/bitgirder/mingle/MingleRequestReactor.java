@@ -205,7 +205,7 @@ implements MingleValueReactor,
         case FIELD_START: startField( ev ); return;
         case STRUCT_START: startStruct( ev ); return;
         case LIST_START: 
-            failInvalidValue( ev.path(), Mingle.TYPE_VALUE_LIST ); return;
+            failInvalidValue( ev.path(), Mingle.TYPE_OPAQUE_LIST ); return;
         case MAP_START: 
             failInvalidValue( ev.path(), Mingle.TYPE_SYMBOL_MAP ); return;
         case VALUE: value( ev ); return;

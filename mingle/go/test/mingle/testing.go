@@ -167,3 +167,40 @@ func AssertErrors( expct, act error, a *assert.PathAsserter ) {
     default: ea.EqualErrors( ea.expct, ea.act )
     }
 }
+
+func assertReadScalar( expct Value, rd *BinReader, a *assert.PathAsserter ) {
+    if tc, err := rd.ReadTypeCode(); err == nil {
+        if act, err := rd.ReadScalarValue( tc ); err == nil {
+            AssertEqualValues( expct, act, a )
+        } else {
+            a.Fatalf( "couldn't read act: %s", err )
+        }
+    } else {
+        a.Fatalf( "couldn't get type code: %s", err )
+    }
+}
+
+func AssertBinIoRoundtripRead(
+    rd *BinReader, expct interface{}, a *assert.PathAsserter ) {
+
+    switch v := expct.( type ) {
+    case Value: assertReadScalar( v, rd, a )
+    case *Identifier:
+        if id, err := rd.ReadIdentifier(); err == nil { 
+            a.True( v.Equals( id ) )
+        } else { a.Fatal( err ) }
+    case *Namespace:
+        if ns, err := rd.ReadNamespace(); err == nil {
+            a.True( v.Equals( ns ) )
+        } else { a.Fatal( err ) }
+    case TypeName:
+        if nm, err := rd.ReadTypeName(); err == nil {
+            a.True( v.Equals( nm ) )
+        } else { a.Fatal( err ) }
+    case TypeReference:
+        if typ, err := rd.ReadTypeReference(); err == nil {
+            a.Truef( v.Equals( typ ), "expct (%v) != act (%v)", v, typ )
+        } else { a.Fatal( err ) }
+    default: a.Fatalf( "Unhandled expct val: %T", expct )
+    }
+}

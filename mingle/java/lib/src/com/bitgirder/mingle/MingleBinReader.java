@@ -39,6 +39,10 @@ class MingleBinReader
         TC_REGEX_RESTRICT
     };
 
+    private final static byte[] LIST_TYPE_REFERENCE_CODES = new byte[] {
+        TC_LIST_TYP
+    };
+
     private final static byte[] VAL_TYPE_CODES = new byte[] {
         TC_NULL,
         TC_BOOL,
@@ -135,7 +139,18 @@ class MingleBinReader
         int sz = Lang.asOctet( rd.readByte() );
 
         String[] parts = new String[ sz ];
-        for ( int i = 0; i < sz; ++i ) parts[ i ] = rd.readUtf8();
+
+        for ( int i = 0; i < sz; ++i ) 
+        {
+            long pos = cis.position();
+            String part = rd.readUtf8();
+
+            if ( ! MingleIdentifier.isValidPart( part ) ) {
+                throw failf( pos, "invalid identifier part: %s", part );
+            }
+
+            parts[ i ] = part;
+        }
 
         return new MingleIdentifier( parts );
     }
@@ -299,11 +314,28 @@ class MingleBinReader
     }
 
     private
+    ListTypeReference
+    expectListType()
+        throws IOException
+    {
+        nextTc( "list type reference", LIST_TYPE_REFERENCE_CODES );
+        return processListType();
+    }
+
+    private
     NullableTypeReference
     processNullableType()
         throws IOException
     {
         return new NullableTypeReference( readTypeReference() );
+    }
+
+    private
+    PointerTypeReference
+    processPointerType()
+        throws IOException
+    {
+        return new PointerTypeReference( readTypeReference() );
     }
 
     private
@@ -369,6 +401,7 @@ class MingleBinReader
     processList()
         throws IOException
     {
+        ListTypeReference lt = expectListType();
         readSize();
 
         List< MingleValue > l = Lang.newList();
@@ -377,9 +410,8 @@ class MingleBinReader
         {
             byte tc = nextTc();
 
-            if ( acceptTc( tc, null, TC_END_ARR ) == TC_END )
-            {
-                return MingleList.createLive( l );
+            if ( acceptTc( tc, null, TC_END_ARR ) == TC_END ) {
+                return MingleList.createLive( lt, l );
             }
 
             acceptTc( tc, "list value", VAL_TYPE_CODES );
@@ -405,6 +437,7 @@ class MingleBinReader
             case TC_REGEX_RESTRICT: return processRegexRestriction();
             case TC_LIST_TYP: return processListType();
             case TC_NULLABLE_TYP: return processNullableType();
+            case TC_POINTER_TYP: return processPointerType();
             case TC_NULL: return MingleNull.getInstance();
             case TC_BOOL: return MingleBoolean.valueOf( rd.readBoolean() ); 
             case TC_INT32: return new MingleInt32( rd.readInt() );
@@ -465,7 +498,7 @@ class MingleBinReader
         throws IOException
     {
         byte tc = nextTc( "type reference", 
-            TC_ATOM_TYP, TC_LIST_TYP, TC_NULLABLE_TYP);
+            TC_ATOM_TYP, TC_LIST_TYP, TC_NULLABLE_TYP, TC_POINTER_TYP );
 
         return (MingleTypeReference) processNext( tc );
     }

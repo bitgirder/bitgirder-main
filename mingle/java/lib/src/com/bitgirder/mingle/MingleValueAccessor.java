@@ -40,14 +40,14 @@ class MingleValueAccessor
     }
 
     // we take advantage here of the fact that all accessor cast targets are
-    // atomic types or ar TYPE_VALUE_LIST
+    // atomic types or ar TYPE_OPAQUE_LIST
     private
     MingleValue
     castValue( MingleValue val,
                MingleTypeReference typ,
                ObjectPath< MingleIdentifier > path )
     {
-        if ( typ.equals( Mingle.TYPE_VALUE_LIST ) ) {
+        if ( typ.equals( Mingle.TYPE_OPAQUE_LIST ) ) {
             if ( val instanceof MingleList ) return val;
             throw Mingle.failCastType( typ, val, path );
         }

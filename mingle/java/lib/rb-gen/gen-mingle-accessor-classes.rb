@@ -140,7 +140,7 @@ class Generator < AbstractApplication
 
             AccDef.new( 
                 mg_type: "MingleList",
-                mg_type_var: "Mingle.TYPE_VALUE_LIST",
+                mg_type_var: "Mingle.TYPE_OPAQUE_LIST",
                 jv_type: "MingleListAccessor",
                 jv_getter_type_name: "listAccessor",
                 jv_res_exp: "MingleListAccessor.forList( %s, %s )",

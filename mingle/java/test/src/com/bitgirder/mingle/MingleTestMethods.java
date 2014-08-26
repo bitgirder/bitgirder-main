@@ -3,6 +3,8 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.lang.Lang;
+
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
 
@@ -83,6 +85,15 @@ class MingleTestMethods
 
     public
     static
+    PointerTypeReference
+    ptrType( MingleTypeReference typ )
+    {
+        inputs.notNull( typ, "typ" );
+        return new PointerTypeReference( typ );
+    }
+
+    public
+    static
     ObjectPath< MingleIdentifier >
     idPathRoot( MingleIdentifier id )
     {
@@ -97,6 +108,22 @@ class MingleTestMethods
     {
         inputs.notNull( id, "id" );
         return idPathRoot( MingleIdentifier.create( id ) );
+    }
+
+    public
+    static
+    MingleList
+    emptyList( ListTypeReference typ )
+    {
+        return MingleList.createLive( typ, Lang.< MingleValue >emptyList() );
+    }
+
+    public
+    static
+    MingleList
+    emptyList()
+    {
+        return emptyList( Mingle.TYPE_OPAQUE_LIST );
     }
 
     public

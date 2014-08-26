@@ -284,12 +284,12 @@ implements MingleValueReactorPipeline.Processor,
         if ( at.equals( Mingle.TYPE_VALUE ) ) 
         {
             processStartListWithType( 
-                ev, Mingle.TYPE_VALUE_LIST, callTyp, next );
+                ev, Mingle.TYPE_OPAQUE_LIST, callTyp, next );
 
             return;
         }
 
-        failCastType( ev, callTyp, Mingle.TYPE_VALUE_LIST );
+        failCastType( ev, callTyp, Mingle.TYPE_OPAQUE_LIST );
     }
 
     private
@@ -312,7 +312,7 @@ implements MingleValueReactorPipeline.Processor,
             MingleTypeReference valTyp = nt.getValueType();
             processStartListWithType( ev, valTyp, callTyp, next );
         } else {
-            failCastType( ev, callTyp, Mingle.TYPE_VALUE_LIST );
+            failCastType( ev, callTyp, Mingle.TYPE_OPAQUE_LIST );
         }
     }
 

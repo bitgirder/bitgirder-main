@@ -43,7 +43,7 @@ implements MingleValueReactor,
             return ( (MingleSymbolMap.BuilderImpl< ?, ? >) obj ).build();
         } else if ( obj instanceof List< ? > ) {
             List< MingleValue > mvList = Lang.castUnchecked( obj );
-            return MingleList.asList( mvList );
+            return MingleList.asList( Mingle.TYPE_OPAQUE_LIST, mvList );
         }
 
         throw state.failf( "unhandled object value from stack top: %s", obj );

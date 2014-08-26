@@ -120,15 +120,23 @@ class MingleTests
 
         assertInspection( MingleNull.getInstance(), "null" );
 
-        assertInspection( MingleList.empty(), "[]" );
+        assertInspection( emptyList(), "[]" );
 
-        assertInspection( MingleList.asList( new MingleInt32( 1 ) ), "[1]" );
+        assertInspection( 
+            MingleList.asList( 
+                listType( Mingle.TYPE_INT32, true ), 
+                new MingleInt32( 1 ) 
+            ), 
+            "[1]"
+        );
 
         assertInspection( 
             MingleList.asList(
+                Mingle.TYPE_OPAQUE_LIST,
                 MingleNull.getInstance(),
                 new MingleString( "s" ),
                 MingleList.asList( 
+                    Mingle.TYPE_OPAQUE_LIST,
                     new MingleInt32( 1 ),
                     new MingleFloat32( 1.1f )
                 )
@@ -141,7 +149,11 @@ class MingleTests
         assertInspection(
             new MingleSymbolMap.Builder().
                 setInt32( "id1", 1 ).
-                set( "id2", MingleList.asList( new MingleInt32( 1 ) ) ).
+                set( 
+                    "id2", 
+                    MingleList.asList( 
+                        Mingle.TYPE_OPAQUE_LIST, new MingleInt32( 1 ) )
+                ).
                 build(),
             "{id1:1, id2:[1]}", "{id2:[1], id1:1}"
         );
@@ -380,12 +392,14 @@ class MingleTests
         MingleTypeReference ref = TYPE_STRING;
         
         assertTypeNameIn( qn, ref );
-        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
-        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
-        assertTypeNameIn( qn, ref = new ListTypeReference( ref, true ) );
-        assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
-        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
-        assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
+        assertTypeNameIn( qn, ref = nullableType( ref ) );
+        assertTypeNameIn( qn, ref = nullableType( ref ) );
+        assertTypeNameIn( qn, ref = listType( ref, true ) );
+        assertTypeNameIn( qn, ref = listType( ref, false ) );
+        assertTypeNameIn( qn, ref = nullableType( ref ) );
+        assertTypeNameIn( qn, ref = listType( ref, false ) );
+        assertTypeNameIn( qn, ref = ptrType( ref ) );
+        assertTypeNameIn( qn, ref = listType( ref, true ) );
     }
 
     @Test
@@ -518,7 +532,7 @@ class MingleTests
             set( "null1", MingleNull.getInstance() ).
             set( "struct1", 
                 new MingleStruct.Builder().setType( "ns1@v1/S1" ).build() ).
-            set( "list1", MingleList.empty() ).
+            set( "list1", emptyList() ).
             build();
         
         final MingleSymbolMapAccessor acc = MingleSymbolMapAccessor.forMap( m );
@@ -589,6 +603,7 @@ class MingleTests
     {
         MingleListAccessor acc = MingleListAccessor.forList(
             MingleList.asList(
+                Mingle.TYPE_OPAQUE_LIST,
                 new MingleString( "str1" ),
                 new MingleString( "str2" ),
                 new MingleInt32( 1 ),
