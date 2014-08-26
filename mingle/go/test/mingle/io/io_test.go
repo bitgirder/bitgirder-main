@@ -13,18 +13,12 @@ func assertWriteValue( wr *BinWriter, val mg.Value, a *assert.PathAsserter ) {
     }
 }
 
-func assertReadValue( rd *BinReader, expct mg.Value, a *assert.PathAsserter ) {
-    if act, err := rd.ReadValue(); err == nil {
-        mg.AssertEqualValues( expct, act, a )
-    } else { a.Fatalf( "read val failed: %s", err ) }
-}
-
 func assertRoundtrip( rt *mg.BinIoRoundtripTest, a *assert.PathAsserter ) {
     val, ok := rt.Val.( mg.Value )
     if ! ok { return }
     bb := &bytes.Buffer{}
     assertWriteValue( NewWriter( bb ), val, a )
-    assertReadValue( NewReader( bb ), val, a )
+    AssertRoundtripReadValue( rt, NewReader( bb ), a )
 }
 
 func assertSequenceRoundtrip( 

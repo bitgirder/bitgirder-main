@@ -5,9 +5,11 @@ import (
     "bytes"
     "fmt"
     mg "mingle"
+    mgIo "mingle/io"
 )
 
 type typeCode int8
+
 const (
     tcEnd = typeCode( iota )
     tcInvalidDataTest
@@ -22,8 +24,7 @@ func writeTypeCode( tc typeCode, w *mg.BinWriter ) error {
 }
 
 func writeValue( val interface{}, bb *bytes.Buffer ) error {
-    w := mg.NewWriter( bb )
-    return mg.WriteBinIoTestValue( val, w )
+    return mgIo.WriteBinIoTestValue( val, bb )
 }
 
 func writeTestName( test interface{}, w *mg.BinWriter ) error {
@@ -48,9 +49,8 @@ func writeRoundtripTest( t *mg.BinIoRoundtripTest, w *mg.BinWriter ) error {
 }
 
 func writeSequenceTest(
-    t *mg.BinIoSequenceRoundtripTest,
-    w *mg.BinWriter,
-) error {
+    t *mg.BinIoSequenceRoundtripTest, w *mg.BinWriter,) error {
+
     if err := writeTypeCode( tcSequenceRoundtripTest, w ); err != nil { 
         return err 
     }

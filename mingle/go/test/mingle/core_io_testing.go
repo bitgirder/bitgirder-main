@@ -101,6 +101,12 @@ func ( b *binIoRoundtripTestBuilder ) addValueTests() {
     b.setVal( "list-scalars", MustList( int32( 1 ), "hello" ) )
     b.setVal( "list-nested",
         MustList( int32( 1 ), MustList(), MustList( "hello" ), NullVal ) )
+    b.setVal( "list-typed",
+        MustList( 
+            &ListTypeReference{ TypeInt32, true }, 
+            int32( 0 ), int32( 1 ),
+        ),
+    )
 }
 
 func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {

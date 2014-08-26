@@ -10,9 +10,6 @@ import com.bitgirder.log.CodeLoggers;
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.ObjectReceiver;
 
-import com.bitgirder.lang.path.ObjectPath;
-import com.bitgirder.lang.path.ObjectPaths;
-
 import com.bitgirder.test.Test;
 import com.bitgirder.test.Before;
 import com.bitgirder.test.After;
@@ -126,7 +123,6 @@ class CoreIoTests
             throws Exception
         {
             if ( rep instanceof MingleValue ) return rd.readValue();
-            if ( rep instanceof ObjectPath ) return rd.readIdPath();
 
             if ( rep instanceof QualifiedTypeName ) {
                 return rd.readQualifiedTypeName();
@@ -146,17 +142,6 @@ class CoreIoTests
             throw state.failf( "unhandled read type: %s", rep.getClass() );
         }
 
-        private
-        void
-        assertIdPaths( Object expct,
-                       Object act )
-        {
-            ObjectPath< MingleIdentifier > p1 = Lang.castUnchecked( expct );
-            ObjectPath< MingleIdentifier > p2 = Lang.castUnchecked( act );
-
-            state.isTrue( ObjectPaths.areEqual( p1, p2 ) );
-        }
-
         final
         Object
         expectValue( MingleBinReader rd,
@@ -165,12 +150,7 @@ class CoreIoTests
         {
             Object act = readValue( rd, expct );
             state.equal( expct.getClass(), act.getClass() );
-
-            if ( expct instanceof ObjectPath ) {
-                assertIdPaths( expct, act );
-            } else { 
-                state.equal( expct, act ); 
-            }
+            state.equal( expct, act ); 
 
             return act;
         }
@@ -205,8 +185,6 @@ class CoreIoTests
                 mgWr.writeDeclaredTypeName( (DeclaredTypeName) val );
             } else if ( val instanceof QualifiedTypeName ) {
                 mgWr.writeQualifiedTypeName( (QualifiedTypeName) val );
-            } else if ( val instanceof ObjectPath ) {
-                mgWr.writeIdentifierPath( Mingle.castIdPath( val ) );
             } else if ( val instanceof MingleTypeReference ) {
                 mgWr.writeTypeReference( (MingleTypeReference) val );
             } else {
@@ -287,6 +265,7 @@ class CoreIoTests
             throws Exception
         {
             Object expct = valueExpected();
+            code( "expct:", expct );
  
             MingleBinReader mgRd = createReader();
             Object act = expectValue( mgRd, expct );
@@ -555,27 +534,6 @@ class CoreIoTests
 
     private
     static
-    void
-    putPathRoundtrips()
-    {
-        ObjectPath< MingleIdentifier > p1 = 
-            putRoundtripValue( "p1", idPathRoot( "id1" ) );
-        
-        ObjectPath< MingleIdentifier > p2 = 
-            putRoundtripValue( "p2", p1.descend( id( "id2" ) ) );
-
-        ObjectPath< MingleIdentifier > p3 =
-            putRoundtripValue( "p3", p2.startImmutableList().next().next() );
-        
-        ObjectPath< MingleIdentifier > p4 =
-            putRoundtripValue( "p4", p3.descend( id( "id3" ) ) );
-
-        putRoundtripValue( "p5", 
-            ObjectPath.getRoot().startImmutableList().descend( id( "id1" ) ) );
-    }
-
-    private
-    static
     String
     keyForType( Object val )
     {
@@ -747,7 +705,6 @@ class CoreIoTests
     {
         putValueRoundtrips();
         putDefinitionRoundtrips();
-        putPathRoundtrips();
     }
 
     private

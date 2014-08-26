@@ -6,8 +6,6 @@ import com.bitgirder.log.CodeLoggers;
 
 import com.bitgirder.lang.Lang;
 
-import com.bitgirder.lang.path.ObjectPath;
-
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
@@ -317,30 +315,6 @@ class MingleBinReader
     }
 
     private
-    ObjectPath< MingleIdentifier >
-    processIdPath()
-        throws IOException
-    {
-        ObjectPath< MingleIdentifier > res = ObjectPath.getRoot();
-
-        while ( true )
-        {
-            byte tc = nextTc( "id path", TC_END, TC_ID, TC_ID_PATH_LIST_NODE );
-    
-            switch ( tc )
-            {
-                case TC_END: return res;
-                case TC_ID: res = res.descend( readIdentifier() ); break;
-    
-                case TC_ID_PATH_LIST_NODE: 
-                    int idx = expectPosInt32( "id path list index" );
-                    res = res.startImmutableList( idx );
-                    break;
-            }
-        }
-    }
-
-    private
     MingleTimestamp
     processTimestamp()
         throws IOException
@@ -431,7 +405,6 @@ class MingleBinReader
             case TC_REGEX_RESTRICT: return processRegexRestriction();
             case TC_LIST_TYP: return processListType();
             case TC_NULLABLE_TYP: return processNullableType();
-            case TC_ID_PATH: return processIdPath();
             case TC_NULL: return MingleNull.getInstance();
             case TC_BOOL: return MingleBoolean.valueOf( rd.readBoolean() ); 
             case TC_INT32: return new MingleInt32( rd.readInt() );
@@ -504,17 +477,6 @@ class MingleBinReader
     {
         byte tc = nextTc( "atomic type reference", TC_ATOM_TYP );
         return (AtomicTypeReference) processNext( tc );
-    }
-
-    public
-    ObjectPath< MingleIdentifier >
-    readIdPath()
-        throws IOException
-    {
-        byte tc = nextTc( "identifier path", TC_ID_PATH );
-        Object res = processNext( tc );
-
-        return Lang.< ObjectPath< MingleIdentifier > >castUnchecked( res );
     }
 
     public

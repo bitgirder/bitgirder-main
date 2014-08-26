@@ -8,7 +8,6 @@ import com.bitgirder.validation.State;
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.ObjectReceiver;
 
-import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ListPath;
 import com.bitgirder.lang.path.DictionaryPath;
 
@@ -69,58 +68,6 @@ class MingleBinWriter
     {
         writeUint8( ids.size() );
         for ( MingleIdentifier id : ids ) writeIdentifier( id );
-    }
-
-    private
-    void
-    writePathNode( ObjectPath< MingleIdentifier > n )
-        throws Exception
-    {
-        if ( n instanceof DictionaryPath )
-        {
-            writeTypeCode( TC_ID );
-
-            writeIdentifier( 
-                (MingleIdentifier) ( (DictionaryPath< ? >) n ).getKey() );
-        }
-        else
-        {
-            writeTypeCode( TC_ID_PATH_LIST_NODE );
-            w.writeInt( ( (ListPath< ? >) n ).getIndex() );
-        }
-    }
-
-    private
-    void
-    writePathNodes( ObjectPath< MingleIdentifier > p )
-        throws Exception
-    {
-        p.visitDescent( new ObjectReceiver< ObjectPath< MingleIdentifier > >() {
-            public void receive( ObjectPath< MingleIdentifier > node )
-                throws Exception
-            {
-                writePathNode( node );
-            }
-        });
-    }
-
-    public
-    void
-    writeIdentifierPath( ObjectPath< MingleIdentifier > p )
-        throws IOException
-    {
-        inputs.notNull( p, "p" );
-
-        writeTypeCode( TC_ID_PATH );
-
-        try { writePathNodes( p ); }
-        catch ( IOException ioe ) { throw ioe; }
-        catch ( RuntimeException re ) { throw re; }
-        catch ( Exception ex ) {
-            throw new RuntimeException( "unhandled write error", ex );
-        }
-
-        writeTypeCode( TC_END );
     }
 
     public
