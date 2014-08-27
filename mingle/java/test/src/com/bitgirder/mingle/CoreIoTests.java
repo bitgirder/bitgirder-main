@@ -808,13 +808,13 @@ class CoreIoTests
             "unexpected-top-level-type-code",
                 "[offset 0]: Expected mingle value but saw type code 0x64",
             "unexpected-list-val-type-code",
-                "[offset 96]: Expected mingle value but saw type code 0x64",
+                "[offset 88]: Expected mingle value but saw type code 0x64",
             "unexpected-symmap-val-type-code",
-                "[offset 39]: Expected mingle value but saw type code 0x64",
+                "[offset 35]: Expected mingle value but saw type code 0x64",
             "invalid-list-type",
                 "[offset 1]: Expected list type reference but saw type code 0x05",
             "invalid-declared-type-name",
-                "[offset 25]: (at or near char 2) Illegal type name rune: \"$\" (U+0024)"
+                "[offset 21]: (at or near char 2) Illegal type name rune: \"$\" (U+0024)"
         ));
     }
 

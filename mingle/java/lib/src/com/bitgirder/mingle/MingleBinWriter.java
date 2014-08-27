@@ -275,7 +275,6 @@ class MingleBinWriter
         {
             writeTypeCode( TC_LIST );
             writeTypeReference( lt );
-            w.writeInt( -1 );
         }
         
         private
@@ -293,7 +292,6 @@ class MingleBinWriter
             throws IOException
         {
             writeTypeCode( TC_STRUCT );
-            w.writeInt( -1 );
             writeQualifiedTypeName( qn );
         }
 

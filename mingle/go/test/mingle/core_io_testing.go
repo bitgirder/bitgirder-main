@@ -297,24 +297,23 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-symmap-val-type-code",
-            ErrMsg: `[offset 39]: unrecognized value code: 0x64`,
+            ErrMsg: `[offset 35]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
-                IoTypeCodeStruct, int32( -1 ), qnNsV1S,
+                IoTypeCodeStruct, qnNsV1S,
                 IoTypeCodeField, idF1, binIoInvalidTypeCode,
             ),
         },
         &BinIoInvalidDataTest{
             Name: "unexpected-list-val-type-code",
-            ErrMsg: `[offset 96]: unrecognized value code: 0x64`,
+            ErrMsg: `[offset 88]: unrecognized value code: 0x64`,
             Input: makeBinIoInvalidDataTest(
-                IoTypeCodeStruct, int32( -1 ), qnNsV1S,
+                IoTypeCodeStruct, qnNsV1S,
                 IoTypeCodeField, idF1,
                 IoTypeCodeList, 
                     &ListTypeReference{
                         AllowsEmpty: true,
                         ElementType: TypeInt32,
                     }, // type
-                    int32( -1 ), // size
                     IoTypeCodeInt32, int32( 10 ), // an okay list val
                     binIoInvalidTypeCode,
             ),
@@ -326,9 +325,9 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
         },
         &BinIoInvalidDataTest{
             Name: "invalid-identifier-part",
-            ErrMsg: `[offset 40]: invalid identifier part: Part`,
+            ErrMsg: `[offset 36]: invalid identifier part: Part`,
             Input: makeBinIoInvalidDataTest(
-                IoTypeCodeStruct, int32( -1 ), qnNsV1S,
+                IoTypeCodeStruct, qnNsV1S,
                 IoTypeCodeField, 
                     IoTypeCodeId, 
                         uint8( 2 ), utf8Input( "bad" ), utf8Input( "Part" ),
@@ -336,9 +335,9 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
         },
         &BinIoInvalidDataTest{
             Name: "invalid-declared-type-name",
-            ErrMsg: `[offset 25]: invalid type name: "A$BadName"`,
+            ErrMsg: `[offset 21]: invalid type name: "A$BadName"`,
             Input: makeBinIoInvalidDataTest(
-                IoTypeCodeStruct, int32( -1 ),
+                IoTypeCodeStruct,
                     IoTypeCodeQn, 
                         nsV1, 
                         IoTypeCodeDeclNm, utf8Input( "A$BadName" ),

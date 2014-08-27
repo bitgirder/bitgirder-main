@@ -377,9 +377,6 @@ class MingleBinReader
         throw state.failf( "unhandled scalar type: 0x%02x", tc );
     }
 
-    // read but drop size val
-    private void readSize() throws IOException { rd.readInt(); }
-
     private
     final
     static
@@ -412,8 +409,6 @@ class MingleBinReader
     {
         f.ev.setStartList( implReadListTypeReference( false ) );
         f.feedNext();
-
-        readSize();
 
         while ( true )
         {
@@ -465,8 +460,6 @@ class MingleBinReader
     feedStruct( Feed f )
         throws Exception
     {
-        readSize();
-
         f.ev.setStartStruct( readQualifiedTypeName() );
         f.feedNext();
 

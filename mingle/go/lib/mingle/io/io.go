@@ -16,7 +16,6 @@ type writeReactor struct { *BinWriter }
 
 func ( w writeReactor ) startStruct( qn *mg.QualifiedTypeName ) error {
     if err := w.WriteTypeCode( mg.IoTypeCodeStruct ); err != nil { return err }
-    if err := w.WriteInt32( int32( -1 ) ); err != nil { return err }
     return w.WriteQualifiedTypeName( qn )
 }
 
@@ -28,7 +27,7 @@ func ( w writeReactor ) startField( fld *mg.Identifier ) error {
 func ( w writeReactor ) startList( lse *mgRct.ListStartEvent ) error { 
     if err := w.WriteTypeCode( mg.IoTypeCodeList ); err != nil { return err }
     if err := w.WriteListTypeReference( lse.Type ); err != nil { return err }
-    return w.WriteInt32( -1 )
+    return nil
 }
 
 func ( w writeReactor ) startMap() error { 
@@ -102,7 +101,6 @@ func ( r *BinReader ) readSymbolMap( rep mgRct.ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readStruct( rep mgRct.ReactorEventProcessor ) error {
-    if _, err := r.ReadInt32(); err != nil { return err }
     if qn, err := r.ReadQualifiedTypeName(); err == nil {
         ev := mgRct.NewStructStartEvent( qn )
         if err = rep.ProcessEvent( ev ); err != nil { return err }
@@ -119,7 +117,6 @@ func ( r *BinReader ) readListHeader( rep mgRct.ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) readListValues( rep mgRct.ReactorEventProcessor ) error {
-    if _, err := r.ReadInt32(); err != nil { return err } // skip size
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
