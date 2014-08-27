@@ -195,9 +195,12 @@ class CoreIoTests
         {
             MingleBinWriter mgWr = getWriter();
 
-            if ( val instanceof MingleValue ) {
-                mgWr.writeValue( (MingleValue) val );
-            } else if ( val instanceof MingleIdentifier ) {
+            if ( val instanceof MingleValue ) 
+            {
+                MingleValueReactors.visitValue( 
+                    (MingleValue) val, mgWr.asReactor() );
+            } 
+            else if ( val instanceof MingleIdentifier ) {
                 mgWr.writeIdentifier( (MingleIdentifier) val );
             } else if ( val instanceof MingleNamespace ) {
                 mgWr.writeNamespace( (MingleNamespace) val );

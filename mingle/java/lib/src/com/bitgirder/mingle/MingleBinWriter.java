@@ -118,60 +118,9 @@ class MingleBinWriter
         writeDeclaredTypeName( qn.getName() );
     }
 
-    private void writeEnd() throws IOException { writeTypeCode( TC_END ); }
-
     private
     void
-    writeList( MingleList ml )
-        throws IOException
-    {
-        writeTypeCode( TC_LIST );
-        writeTypeReference( ml.type() );
-        w.writeInt( -1 );
-
-        for ( MingleValue mv : ml ) implWriteValue( mv );
-
-        writeEnd();
-    }
-
-    private
-    void
-    endMapWrite( MingleSymbolMap ms )
-        throws IOException
-    {
-        for ( Map.Entry< MingleIdentifier, MingleValue > e : ms.entrySet() )
-        {
-            writeTypeCode( TC_FIELD );
-            writeIdentifier( e.getKey() );
-            implWriteValue( e.getValue() );
-        }
-
-        writeEnd();
-    }
-
-    private
-    void
-    writeSymbolMap( MingleSymbolMap ms )
-        throws IOException
-    {
-        writeTypeCode( TC_SYM_MAP );
-        endMapWrite( ms );
-    }
-
-    private
-    void
-    writeStruct( MingleStruct ms )
-        throws IOException
-    {
-        writeTypeCode( TC_STRUCT );
-        w.writeInt( -1 );
-        writeQualifiedTypeName( ms.getType() );
-        endMapWrite( ms.getFields() );
-    }
-
-    private
-    void
-    implWriteValue( MingleValue mv )
+    writeScalar( MingleValue mv )
         throws IOException
     {
         if ( mv instanceof MingleNull ) writeTypeCode( TC_NULL );
@@ -212,23 +161,9 @@ class MingleBinWriter
             MingleEnum me = (MingleEnum) mv;
             writeQualifiedTypeName( me.getType() );
             writeIdentifier( me.getValue() );
-        } else if ( mv instanceof MingleList ) { 
-            writeList( (MingleList) mv );
-        } else if ( mv instanceof MingleSymbolMap ) {
-            writeSymbolMap( (MingleSymbolMap) mv );
-        } else if ( mv instanceof MingleStruct ) {
-            writeStruct( (MingleStruct) mv );
         } else {
-            state.failf( "unhandled write value: %s", mv.getClass() );
+            state.failf( "not a scalar: %s", mv.getClass() );
         }
-    }
-
-    public
-    void
-    writeValue( MingleValue mv )
-        throws IOException
-    {
-        implWriteValue( inputs.notNull( mv, "mv" ) );
     }
 
     private
@@ -236,7 +171,7 @@ class MingleBinWriter
     writeRangeValue( MingleValue mv )
         throws IOException
     {
-        implWriteValue( mv == null ? MingleNull.getInstance() : mv );
+        writeScalar( mv == null ? MingleNull.getInstance() : mv );
     }
 
     private
@@ -325,6 +260,61 @@ class MingleBinWriter
             state.failf( "unhandled type reference: %s", typ.getClass() );
         }
     }
+
+    private
+    final
+    class ReactorImpl
+    implements MingleValueReactor
+    {
+        private void writeEnd() throws IOException { writeTypeCode( TC_END ); }
+
+        private
+        void
+        writeListStart( ListTypeReference lt )
+            throws IOException
+        {
+            writeTypeCode( TC_LIST );
+            writeTypeReference( lt );
+            w.writeInt( -1 );
+        }
+        
+        private
+        void
+        writeFieldStart( MingleIdentifier fld )
+            throws IOException
+        {
+            writeTypeCode( TC_FIELD );
+            writeIdentifier( fld );
+        }
+
+        private
+        void
+        writeStructStart( QualifiedTypeName qn )
+            throws IOException
+        {
+            writeTypeCode( TC_STRUCT );
+            w.writeInt( -1 );
+            writeQualifiedTypeName( qn );
+        }
+
+        public
+        void
+        processEvent( MingleValueReactorEvent ev )
+            throws Exception
+        {
+            switch ( ev.type() ) {
+            case VALUE: writeScalar( ev.value() ); return;
+            case LIST_START: writeListStart( ev.listType() ); return;
+            case MAP_START: writeTypeCode( TC_SYM_MAP ); return;
+            case STRUCT_START: writeStructStart( ev.structType() ); return;
+            case FIELD_START: writeFieldStart( ev.field() ); return;
+            case END: writeEnd(); return;
+            default: state.failf( "unhandled type: %s", ev.type() );
+            }
+        }
+    }
+
+    public MingleValueReactor asReactor() { return new ReactorImpl(); }
 
     public
     static
