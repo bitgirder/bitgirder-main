@@ -805,7 +805,7 @@ class CoreIoTests
             "unexpected-top-level-type-code",
                 "[offset 0]: Expected mingle value but saw type code 0x64",
             "unexpected-list-val-type-code",
-                "[offset 96]: Expected list value but saw type code 0x64",
+                "[offset 96]: Expected mingle value but saw type code 0x64",
             "unexpected-symmap-val-type-code",
                 "[offset 39]: Expected mingle value but saw type code 0x64",
             "invalid-list-type",

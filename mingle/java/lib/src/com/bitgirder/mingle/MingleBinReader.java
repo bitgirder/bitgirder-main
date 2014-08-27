@@ -95,6 +95,17 @@ class MingleBinReader
     }
 
     private
+    static
+    MingleBinaryException
+    failTc( long pos,
+            String desc,
+            byte tc )
+    {
+        return failf( pos, "Expected %s but saw type code 0x%02x", 
+            desc, tc );
+    }
+
+    private
     int
     expectPosInt32( String errDesc )
         throws IOException
@@ -127,7 +138,7 @@ class MingleBinReader
         if ( desc == null ) return (byte) -1;
 
         long errPos = cis.position() - 1L;
-        throw failf( errPos, "Expected %s but saw type code 0x%02x", desc, tc );
+        throw failTc( errPos, desc, tc );
     }
 
     private
@@ -473,9 +484,7 @@ class MingleBinReader
         case TC_LIST: feedList( f ); break;
         case TC_SYM_MAP: feedSymbolMap( f ); break;
         case TC_STRUCT: feedStruct( f ); break;
-        default: 
-            long pos = cis.position() - 1;
-            failf( pos, "unhandled val type code: 0x%02x", tc );
+        default: throw failTc( cis.position() - 1, "mingle value", tc );
         }
     }
 
