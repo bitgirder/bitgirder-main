@@ -66,7 +66,7 @@ func getIdentifierPartError( s string ) error {
     }
     return nil
 }
-    
+ 
 type Identifier struct {
     parts []string
 }
@@ -200,11 +200,29 @@ type TypeName interface{
     typeNameImpl()
 }
 
+type DeclaredTypeNameError struct { msg string }
+
+func newDeclaredTypeNameError( msg string ) *DeclaredTypeNameError {
+    return &DeclaredTypeNameError{ msg }
+}
+
+func ( e *DeclaredTypeNameError ) Error() string { return e.msg }
+
 type DeclaredTypeName struct { nm string }
 
 func NewDeclaredTypeNameUnsafe( nm string ) *DeclaredTypeName {
     return &DeclaredTypeName{ nm }
 }
+
+var declNmRegexp = regexp.MustCompile( "^([A-Z][a-z0-9]*)+$" )
+
+func CreateDeclaredTypeName( nm string ) ( *DeclaredTypeName, error ) {
+    if res := declNmRegexp.FindStringIndex( nm ); res == nil {
+        msg := fmt.Sprintf( "invalid type name: %q", nm )
+        return nil, newDeclaredTypeNameError( msg )
+    }
+    return NewDeclaredTypeNameUnsafe( nm ), nil
+} 
 
 func ( n *DeclaredTypeName ) typeNameImpl() {}
 

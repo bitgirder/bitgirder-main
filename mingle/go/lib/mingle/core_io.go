@@ -391,8 +391,11 @@ func ( r *BinReader ) ReadDeclaredTypeName() ( nm *DeclaredTypeName,
                                                err error ) {
     if _, err = r.ExpectTypeCode( IoTypeCodeDeclNm ); err != nil { return }
     var s string
+    off := r.offset()
     if s, err = r.ReadUtf8(); err != nil { return }
-    nm = &DeclaredTypeName{ s }
+    if nm, err = CreateDeclaredTypeName( s ); err != nil {
+        err = NewBinIoErrorOffset( off, err.Error() )
+    }
     return
 }
 

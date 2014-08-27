@@ -812,7 +812,9 @@ class CoreIoTests
             "unexpected-symmap-val-type-code",
                 "[offset 39]: Expected mingle value but saw type code 0x64",
             "invalid-list-type",
-                "[offset 1]: Expected list type reference but saw type code 0x05"
+                "[offset 1]: Expected list type reference but saw type code 0x05",
+            "invalid-declared-type-name",
+                "[offset 25]: (at or near char 2) Illegal type name rune: \"$\" (U+0024)"
         ));
     }
 

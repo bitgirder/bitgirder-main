@@ -258,8 +258,6 @@ type utf8Input string
 
 func appendInput( data interface{}, w *BinWriter ) {
     switch v := data.( type ) {
-    case *Identifier: 
-        if err := w.WriteIdentifier( v ); err != nil { panic( err ) }
     case string: 
         if err := w.WriteScalarValue( String( v ) ); err != nil { panic( err ) }
     case uint8: if err := w.WriteUint8( v ); err != nil { panic( err ) }
@@ -268,6 +266,10 @@ func appendInput( data interface{}, w *BinWriter ) {
     case uint64: if err := w.WriteUint64( v ); err != nil { panic( err ) }
     case utf8Input: 
         if err := w.WriteUtf8( string( v ) ); err != nil { panic( err ) }
+    case *Identifier: 
+        if err := w.WriteIdentifier( v ); err != nil { panic( err ) }
+    case *Namespace:
+        if err := w.WriteNamespace( v ); err != nil { panic( err ) }
     case *QualifiedTypeName: 
         if err := w.WriteQualifiedTypeName( v ); err != nil { panic( err ) }
     case TypeReference:
@@ -284,7 +286,8 @@ func makeBinIoInvalidDataTest( data ...interface{} ) []byte {
 }
 
 func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
-    qnNsV1S := mkQn( mkNs( mkId( "v1" ), mkId( "ns" ) ), mkDeclNm( "S" ) )
+    nsV1 := mkNs( mkId( "v1" ), mkId( "ns" ) )
+    qnNsV1S := mkQn( nsV1, mkDeclNm( "S" ) )
     idF1 := mkId( "f1" )
     return append( tests, 
         &BinIoInvalidDataTest{
@@ -317,6 +320,11 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             ),
         },
         &BinIoInvalidDataTest{
+            Name: "invalid-list-type",
+            ErrMsg: `[offset 1]: Expected type code 0x06 but got 0x05`,
+            Input: makeBinIoInvalidDataTest( IoTypeCodeList, TypeInt32 ),
+        },
+        &BinIoInvalidDataTest{
             Name: "invalid-identifier-part",
             ErrMsg: `[offset 40]: invalid identifier part: Part`,
             Input: makeBinIoInvalidDataTest(
@@ -327,9 +335,14 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             ),
         },
         &BinIoInvalidDataTest{
-            Name: "invalid-list-type",
-            ErrMsg: `[offset 1]: Expected type code 0x06 but got 0x05`,
-            Input: makeBinIoInvalidDataTest( IoTypeCodeList, TypeInt32 ),
+            Name: "invalid-declared-type-name",
+            ErrMsg: `[offset 25]: invalid type name: "A$BadName"`,
+            Input: makeBinIoInvalidDataTest(
+                IoTypeCodeStruct, int32( -1 ),
+                    IoTypeCodeQn, 
+                        nsV1, 
+                        IoTypeCodeDeclNm, utf8Input( "A$BadName" ),
+            ),
         },
     )
 }

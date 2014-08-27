@@ -1309,3 +1309,19 @@ func TestEqualValues( t *testing.T ) {
         la = la.Next()
     }
 }
+
+func TestCreateDeclaredTypeNameError( t *testing.T ) {
+    type dnTest struct { in string; msg string }
+    la := assert.NewListPathAsserter( t )
+    for _, test := range []dnTest{
+        { in: "", msg: `invalid type name: ""` },
+        { in: "A Name", msg: `invalid type name: "A Name"` },
+        { in: "A$Bad", msg: `invalid type name: "A$Bad"` },
+        { in: " WhitespaceBad ", msg: `invalid type name: " WhitespaceBad "` },
+    } {
+        expct := newDeclaredTypeNameError( test.msg )
+        _, err := CreateDeclaredTypeName( test.in )
+        la.EqualErrors( expct, err )
+        la = la.Next()
+    }
+}

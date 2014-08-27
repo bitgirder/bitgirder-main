@@ -84,14 +84,21 @@ class MingleBinReader
     private
     static
     MingleBinaryException
+    fail( long pos,
+          String msg )
+    {
+        String errMsg = String.format( "[offset %d]: %s", pos, msg );
+        return new MingleBinaryException( errMsg );
+    }
+
+    private
+    static
+    MingleBinaryException
     failf( long pos,
            String tmpl,
            Object... args )
     {
-        StringBuilder sb = new StringBuilder();
-        sb.append( "[offset " ).append( pos ).append( "]: " );
-        sb.append( String.format( tmpl, args ) );
-        return new MingleBinaryException( sb.toString() );
+        return fail( pos, String.format( tmpl, args ) );
     }
 
     private
@@ -204,7 +211,13 @@ class MingleBinReader
         throws IOException
     {
         nextTc( "declared type name", TC_DECL_NM );
-        return new DeclaredTypeName( rd.readUtf8() );
+
+        long off = cis.position();
+
+        try { return DeclaredTypeName.parse( rd.readUtf8() ); }
+        catch ( MingleSyntaxException mse ) {
+            throw fail( off, mse.getMessage() );
+        }
     }
 
     private
