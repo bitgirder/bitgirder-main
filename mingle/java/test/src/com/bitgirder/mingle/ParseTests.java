@@ -11,6 +11,9 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
 import com.bitgirder.lang.TypedString;
 
+import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ObjectPaths;
+
 import com.bitgirder.test.Test;
 import com.bitgirder.test.TestCall;
 import com.bitgirder.test.LabeledTestObject;
@@ -35,7 +38,8 @@ class ParseTests
         IDENTIFIER,
         NAMESPACE,
         DECLARED_TYPE_NAME,
-        QUALIFIED_TYPE_NAME;
+        QUALIFIED_TYPE_NAME,
+        IDENTIFIER_PATH;
     }
 
     private final static Map< ErrorOverrideKey, Object > ERR_OVERRIDES =
@@ -49,9 +53,36 @@ class ParseTests
             
             errMsgKey( TestType.IDENTIFIER, "a-bad-ch@r" ),
                 "Unexpected trailing data \"@\" (U+0040)",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "i1[ xx ]" ),
+                "Expected path index but found: xx",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "#stuff" ),
+                "Unrecognized token start: \"#\" (U+0023)" ,
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "bad$Id" ),
+                "Unexpected identifier character: \"$\" (U+0024)" ,
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "[]" ),
+                "Expected path index but found: ]",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "i1[ ]" ),
+                "Expected path index but found: ]",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "i1[ 1.0 ]" ),
+                "invalid decimal index",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "i1[ 1.1e1 ]" ),
+                "invalid decimal index",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "i1[ 1e1 ]" ),
+                "invalid decimal index",
+
+            errMsgKey( TestType.IDENTIFIER_PATH, "[ 1 ].bad$Id" ),
+                "Unexpected identifier character: \"$\" (U+0024)",
             
             errMsgKey( TestType.DECLARED_TYPE_NAME, "Bad-Char" ),
-                "Illegal type name rune: \"-\" (U+002D)",
+                "Unexpected trailing data \"-\" (U+002D)",
             
             errMsgKey( TestType.NAMESPACE, "ns1:ns2@v1:ns3" ),
                 "Unexpected trailing data \":\" (U+003A)",
@@ -63,16 +94,19 @@ class ParseTests
                 "Unexpected trailing data \"/\" (U+002F)",
             
             errMsgKey( TestType.NAMESPACE, "ns1.ns2@v1" ),
-                "Expected ':' or '@' but found: '.'",
+                "Expected : or @ but found: .",
+            
+            errMsgKey( TestType.NAMESPACE, "ns1:ns2" ),
+                "Expected : or @ but found: END",
             
             errMsgKey( TestType.NAMESPACE, "ns1 : ns2:ns3@v1" ),
-                "Unexpected identifier character: \" \" (U+0020)",
+                "Unrecognized token start: \" \" (U+0020)",
             
             errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1/T1" ),
-                "Expected ':' or '@' but found: '/'",
+                "Expected : or @ but found: /",
             
             errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1@v1" ),
-                "Expected '/' but found: END",
+                "Expected / but found: END",
             
             errMsgKey( TestType.QUALIFIED_TYPE_NAME, "ns1@v1/T1/" ),
                 "Unexpected trailing data \"/\" (U+002F)"
@@ -200,15 +234,38 @@ class ParseTests
             case DECLARED_TYPE_NAME: return DeclaredTypeName.parse( in );
             case NAMESPACE: return MingleNamespace.parse( in );
             case QUALIFIED_TYPE_NAME: return QualifiedTypeName.parse( in );
+            case IDENTIFIER_PATH: return MingleParser.parseIdentifierPath( in );
             }
             throw state.failf( "Unhandled test type: %s", tt );
         }
 
         private
         void
+        assertEqualPaths( Object val )
+        {
+            ObjectPath< MingleIdentifier > pathExpct = 
+                Lang.castUnchecked( expct );
+
+            ObjectPath< MingleIdentifier > act = Lang.castUnchecked( val );
+
+            state.isTruef( ObjectPaths.areEqual( pathExpct, act ),
+                "expct != act: %s != %s",
+                Mingle.formatIdPath( pathExpct ),
+                Mingle.formatIdPath( act )
+            );
+        }
+
+        private
+        void
         assertExpectVal( Object val )
         {
-            if ( errExpct == null ) state.equal( expct, val );
+            if ( errExpct == null ) {
+                if ( tt == TestType.IDENTIFIER_PATH ) {
+                    assertEqualPaths( val );
+                } else {
+                    state.equal( expct, val );
+                }
+            }
             else state.failf( "Got %s but expected error %s", val, errExpct );
         }
 
@@ -328,11 +385,10 @@ class ParseTests
 
         private
         Object
-        convertFromBuffer( MingleSymbolMap map,
+        convertFromBuffer( byte[] buf,
                            String typ )
             throws Exception
         {
-            byte[] buf = mapExpect( map, "buffer", byte[].class );
             MingleBinReader rd = MingleBinReader.create( buf );
 
             if ( typ.equals( "Identifier" ) ) {
@@ -350,6 +406,52 @@ class ParseTests
 
         private
         Object
+        convertFromBuffer( MingleSymbolMap map,
+                           String typ )
+            throws Exception
+        {
+            byte[] buf = mapExpect( map, "buffer", byte[].class );
+            return convertFromBuffer( buf, typ );
+        }
+
+        private
+        ObjectPath< MingleIdentifier >
+        extendPath( ObjectPath< MingleIdentifier > path,
+                    MingleValue mv )
+            throws Exception
+        {
+            if ( mv instanceof MingleUint64 ) {
+                int idx = ( (MingleUint64) mv ).intValue();
+                return path.startImmutableList( idx );
+            } 
+            else if ( mv instanceof MingleBuffer ) 
+            {
+                byte[] buf = ( (MingleBuffer) mv ).array();
+
+                MingleIdentifier id = (MingleIdentifier) 
+                    convertFromBuffer( buf, "Identifier" );
+
+                return path.descend( id );
+            }
+            else throw state.failf( "unhandled path elt: %s", mv.getClass() );
+        }
+
+        private
+        ObjectPath< MingleIdentifier >
+        convertIdPath( MingleSymbolMap map )
+            throws Exception
+        {
+            MingleList ml = mapExpect( map, "path", MingleList.class );
+
+            ObjectPath< MingleIdentifier > res = ObjectPath.getRoot();
+
+            for ( MingleValue mv : ml ) res = extendPath( res, mv );
+
+            return res;
+        }
+
+        private
+        Object
         convertValue( MingleStruct ms )
             throws Exception
         {
@@ -358,8 +460,7 @@ class ParseTests
             String typ = ms.getType().getName().getExternalForm().toString();
             MingleSymbolMap map = ms.getFields();
 
-            if ( typ.equals( "ParseErrorExpect" ) ) 
-            {
+            if ( typ.equals( "ParseErrorExpect" ) ) {
                 return convertParseErrorExpect( map );
             } 
             else if ( typ.equals( "Identifier" ) || typ.equals( "Namespace" ) ||
@@ -367,6 +468,9 @@ class ParseTests
                       typ.equals( "QualifiedTypeName" ) ) 
             {
                 return convertFromBuffer( map, typ );
+            }
+            else if ( typ.equals( "IdentifierPath" ) ) {
+                return convertIdPath( map );
             }
 
             throw state.failf( "unhandled type: %s", typ );

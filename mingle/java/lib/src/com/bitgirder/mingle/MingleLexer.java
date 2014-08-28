@@ -5,9 +5,8 @@ import com.bitgirder.validation.State;
 
 import com.bitgirder.lang.Lang;
 
-import com.bitgirder.log.CodeLoggers;
+import static com.bitgirder.log.CodeLoggers.Statics.*;
 
-import com.bitgirder.io.Rfc4627Reader;
 import com.bitgirder.io.IoUtils;
 import com.bitgirder.io.CharReader;
 import com.bitgirder.io.CountingCharReader;
@@ -25,31 +24,50 @@ class MingleLexer
 
     private final CountingCharReader cr;
 
+    private long posAdj;
+
     private 
     MingleLexer( CharReader cr ) 
     { 
         this.cr = new CountingCharReader( cr ); 
     }
+
+    void
+    setPositionAdjust( long posAdj )
+    {
+        this.posAdj = posAdj;
+    }
     
+    // not all tokens are used as part of successful inputs, but some serve to
+    // allow upstream parsing to recognize them and give more precise error
+    // messages (example: "-" at the beginning of the negative list index "[ -2
+    // ]"
     enum SpecialLiteral
     {
         COLON( ":" ),
         OPEN_BRACKET( "[" ),
         CLOSE_BRACKET( "]" ),
+        OPEN_PAREN( "(" ),
+        CLOSE_PAREN( ")" ),
         FORWARD_SLASH( "/" ),
         PERIOD( "." ),
+        MINUS( "-" ),
+        SEMICOLON( ";" ),
         ASPERAND( "@" );
     
         private final String lit;
     
         private SpecialLiteral( String lit ) { this.lit = lit; }
 
-        String inspect() { return "'" + lit + "'"; }
+//        String inspect() { return "'" + lit + "'"; }
+        String inspect() { return lit; }
 
         static
         boolean
-        couldStartWith( char ch ) 
+        couldStartWith( int v )
         {
+            char ch = (char) v;
+
             for ( SpecialLiteral sl : SpecialLiteral.class.getEnumConstants() )
             {
                 if ( sl.lit.charAt( 0 ) == ch ) return true;
@@ -59,7 +77,16 @@ class MingleLexer
         }
     }
 
-    long position() { return cr.position(); }
+    final
+    static
+    class IndexToken
+    {
+        final String s;
+
+        private IndexToken( String s ) { this.s = s; }
+    }
+
+    long position() { return posAdj + cr.position(); }
 
     private
     MingleSyntaxException
@@ -91,15 +118,6 @@ class MingleLexer
            Object... args )
     {
         return failf( 0, tmpl, args );
-    }
-
-    private
-    MingleSyntaxException
-    asSyntaxFailure( Rfc4627Reader.ReadResult rr,
-                     int startCol )
-    {
-        return new MingleSyntaxException( 
-            rr.errorMessage(), startCol + rr.errorCol() );
     }
 
     private
@@ -141,6 +159,13 @@ class MingleLexer
 
         throw failf( 1, 
             "Unexpected trailing data \"%c\" (U+%04X)", (char) v, v );
+    }
+
+    private
+    boolean 
+    isWhitespace( int v )
+    {
+        return Character.isWhitespace( (char) v );
     }
 
     private
@@ -273,7 +298,7 @@ class MingleLexer
 
     private
     void
-    checkIdEnd()
+    checkImplicitEnd( String tokName )
         throws MingleSyntaxException,
                IOException
     {
@@ -281,11 +306,10 @@ class MingleLexer
 
         if ( v < 0 ) return;
 
-        if ( ! SpecialLiteral.couldStartWith( (char) v ) )
+        if ( ! ( isWhitespace( v ) || SpecialLiteral.couldStartWith( v ) ) )
         {
-            throw failf( 1, 
-                "Unexpected identifier character: \"%c\" (U+%04X)", (char) v, v
-            );
+            throw failf( 1, "Unexpected %s character: \"%c\" (U+%04X)", 
+                tokName, (char) v, v );
         }
     }
 
@@ -307,7 +331,7 @@ class MingleLexer
             while ( nextIsIdSep( fmt ) ) parts.add( expectIdPart( fmt ) );
         }
 
-        checkIdEnd();
+        checkImplicitEnd( "identifier" );
         if ( parts.isEmpty() ) throw fail( "Empty identifier" );
  
         String[] partsArr = new String[ parts.size() ];
@@ -325,7 +349,7 @@ class MingleLexer
     boolean
     isSpecStart( int v )
     {
-        return SpecialLiteral.couldStartWith( (char) v );
+        return SpecialLiteral.couldStartWith( v );
     }
 
     private
@@ -384,13 +408,40 @@ class MingleLexer
         
         switch ( v ) {
         case (int) ':': return SpecialLiteral.COLON;
+        case (int) ';': return SpecialLiteral.SEMICOLON;
         case (int) '[': return SpecialLiteral.OPEN_BRACKET;
         case (int) ']': return SpecialLiteral.CLOSE_BRACKET;
         case (int) '/': return SpecialLiteral.FORWARD_SLASH;
         case (int) '.': return SpecialLiteral.PERIOD;
         case (int) '@': return SpecialLiteral.ASPERAND;
+        case (int) '-': return SpecialLiteral.MINUS;
+        case (int) ')': return SpecialLiteral.CLOSE_PAREN;
+        case (int) '(': return SpecialLiteral.OPEN_PAREN;
         }
         throw state.failf( "Unhandled spec start: %c", (char) v );
+    }
+
+    private
+    IndexToken
+    parseIndex()
+        throws MingleSyntaxException,
+               IOException
+    {
+        int errPos = (int) position();
+
+        StringBuilder sb = new StringBuilder();
+        while ( isDigit( cr.peek() ) ) sb.append( (char) cr.read() );
+        state.isTrue( sb.length() > 0 );
+
+        // checkImplicitEnd() is good for most things but we special case a few
+        // error conditions to give a more meaningful error message.
+        int next = cr.peek();
+        if ( next == (int) '.' || next == (int) 'e' || next == (int) 'E' ) {
+            throw new MingleSyntaxException( "invalid decimal index", errPos );
+        }
+        checkImplicitEnd( "index" ); 
+
+        return new IndexToken( sb.toString() );
     }
 
     private
@@ -413,8 +464,20 @@ class MingleLexer
         if ( isIdStart( v ) ) return parseIdentifier( null );
         if ( isDeclNmStart( v ) ) return parseDeclaredTypeName();
         if ( isSpecStart( v ) ) return parseSpecial();
+        if ( isDigit( v ) ) return parseIndex();
 
         throw unrecognizedTokStart( v );
+    }
+
+    void
+    skipWs()
+        throws IOException
+    {
+        while ( true ) {
+            int v = cr.peek();
+            if ( v < 0 || ( ! isWhitespace( v ) ) ) return;
+            cr.read();
+        }
     }
 
     static
