@@ -1,10 +1,9 @@
 {
     "$type": "bitgirder:ops:build:java@v1/JavaProject",
 
-    "direct-deps": [ "core", "parser", "log", "io" ],
+    "direct-deps": [ "core", "log", "io" ],
 
     "test-deps": [ "go/gen-test-data/mingle" ],
 
     "codegen": { "lib": { "rb-gen": [ "java/lib/rb-gen/*" ] } }
-
 }

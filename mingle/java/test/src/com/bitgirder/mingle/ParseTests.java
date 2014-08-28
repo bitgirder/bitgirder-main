@@ -51,7 +51,7 @@ class ParseTests
                 "Unexpected trailing data \"@\" (U+0040)",
             
             errMsgKey( TestType.DECLARED_TYPE_NAME, "Bad-Char" ),
-                "Unexpected trailing data \"-\" (U+002D)",
+                "Illegal type name rune: \"-\" (U+002D)",
             
             errMsgKey( TestType.NAMESPACE, "ns1:ns2@v1:ns3" ),
                 "Unexpected trailing data \":\" (U+003A)",

@@ -116,8 +116,6 @@ class MingleParser
     errStringFor( Object tok )
     {
         if ( tok == null ) return "END";
-        else if ( tok instanceof MingleString ) return "STRING";
-        else if ( tok instanceof MingleLexer.Number ) return "NUMBER";
         else if ( tok instanceof MingleIdentifier ) return "IDENTIFIER";
         else if ( tok instanceof SpecialLiteral ) {
             return ( (SpecialLiteral) tok ).inspect();
