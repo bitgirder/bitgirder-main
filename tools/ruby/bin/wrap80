@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+
+$cols = 80
+
+STDIN.each_line do |line|
+    line = line.strip
+    off = 0
+    while off < line.size do
+        puts line[ off, $cols ]
+        off += $cols
+    end
+end
