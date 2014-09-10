@@ -178,15 +178,17 @@ func CheckNoError( err error, c *ReactorTestCall ) {
     if err != nil { c.Fatalf( "Got no error but expected %T: %s", err, err ) }
 }
 
-type testError struct { 
-    path objpath.PathNode
-    msg string 
+type TestError struct { 
+    Location objpath.PathNode
+    Message string 
 }
 
-func ( e *testError ) Error() string { return mg.FormatError( e.path, e.msg ) }
+func ( e *TestError ) Error() string { 
+    return mg.FormatError( e.Location, e.Message ) 
+}
 
-func newTestError( path objpath.PathNode, msg string ) *testError {
-    return &testError{ path: path, msg: msg }
+func newTestError( path objpath.PathNode, msg string ) *TestError {
+    return &TestError{ Location: path, Message: msg }
 }
 
 func testErrForPath( p objpath.PathNode ) error {
@@ -203,9 +205,9 @@ func testErrForValue( v mg.Value, p objpath.PathNode ) error {
 }
 
 type S1 struct {
-    f1 int32
-    f2 []int32
-    f3 *S1
+    F1 int32
+    F2 []int32
+    F3 *S1
 }
 
 type S2 struct {}

@@ -171,7 +171,7 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *S1 ).f1 = val.( int32 )
+                        res.Value.( *S1 ).F1 = val.( int32 )
                         return nil
                     },
                 )
@@ -181,7 +181,7 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *S1 ).f2 = val.( []int32 )
+                        res.Value.( *S1 ).F2 = val.( []int32 )
                         return nil
                     },
                 )
@@ -191,7 +191,7 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *S1 ).f3 = val.( *S1 )
+                        res.Value.( *S1 ).F3 = val.( *S1 )
                         return nil
                     },
                 )

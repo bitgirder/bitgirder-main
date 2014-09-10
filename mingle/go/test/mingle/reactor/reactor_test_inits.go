@@ -200,7 +200,7 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
             "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
             "f3", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
         ),
-        &S1{ f1: 1, f2: []int32{ 0, 1 }, f3: &S1{ f1: 1 } },
+        &S1{ F1: 1, F2: []int32{ 0, 1 }, F3: &S1{ F1: 1 } },
     )
     add(
         parser.MustSymbolMap(
@@ -211,7 +211,7 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
         map[ string ]interface{}{
             "f1": int32( 1 ),
             "f2": []int32{ 0, 1 },
-            "f3": &S1{ f1: 1 },
+            "f3": &S1{ F1: 1 },
         },
     )
     add( parser.MustStruct( "ns1@v1/S2" ), S2{} )

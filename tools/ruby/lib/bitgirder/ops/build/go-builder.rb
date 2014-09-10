@@ -625,6 +625,7 @@ class GoTestDataGenerator < StandardProjTask
     def execute( chain )
         
         pd = ws_ctx.proj_def
+
         ( pd[ :test_data_generators ] || {} ).each_pair do |gen_id, gen_obj| 
             run_generator( gen_id, gen_obj, chain )
         end
