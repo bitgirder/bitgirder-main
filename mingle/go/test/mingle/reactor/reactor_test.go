@@ -100,7 +100,7 @@ func TestVisitPath( t *testing.T ) {
 
 func TestTypeOfEvent( t *testing.T ) {
     a := assert.Asserter{ t }
-    chk := func( ev ReactorEvent, typ mg.TypeReference ) {
+    chk := func( ev Event, typ mg.TypeReference ) {
         a.Truef( typ.Equals( TypeOfEvent( ev ) ), "blah" )
     }
     chk( NewValueEvent( mg.Int32( 1 ) ), mg.TypeInt32 )

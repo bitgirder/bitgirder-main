@@ -41,7 +41,7 @@ var (
     externalErrorTypes = mg.NewQnameMap()
 )
 
-type ReactorUserFunc func( rct mgRct.ReactorEventProcessor ) error
+type ReactorUserFunc func( rct mgRct.EventProcessor ) error
 
 type RequestContext struct {
     Namespace *mg.Namespace

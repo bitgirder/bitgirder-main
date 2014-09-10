@@ -16,7 +16,7 @@ func defaultBuilderErrorFactory( path objpath.PathNode, msg string ) error {
     return errors.New( mg.FormatError( path, msg ) )
 }
 
-func failBuilderBadInput( ev ReactorEvent, errFact BuilderErrorFactory ) error {
+func failBuilderBadInput( ev Event, errFact BuilderErrorFactory ) error {
     if errFact == nil { errFact = defaultBuilderErrorFactory }
     typ := TypeOfEvent( ev )
     msg := fmt.Sprintf( "unhandled value: %s", typ.ExternalForm() )
@@ -88,7 +88,7 @@ func ( br *BuildReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
 }
 
 func ( br *BuildReactor ) completeFieldValue( 
-    val interface{}, ev ReactorEvent ) error {
+    val interface{}, ev Event ) error {
 
     fld := br.stk.Pop().( *mg.Identifier )
     fsb := br.stk.Peek().( FieldSetBuilder )
@@ -96,7 +96,7 @@ func ( br *BuildReactor ) completeFieldValue(
 }
 
 func ( br *BuildReactor ) completeValue( 
-    val interface{}, ev ReactorEvent ) error {
+    val interface{}, ev Event ) error {
 
     if br.stk.IsEmpty() {
         br.val, br.hasVal = val, true
@@ -110,7 +110,7 @@ func ( br *BuildReactor ) completeValue(
 }
 
 func ( br *BuildReactor ) nextBuilderFact( 
-    ev ReactorEvent ) ( BuilderFactory, error ) {
+    ev Event ) ( BuilderFactory, error ) {
 
     top := br.stk.Peek()
     switch v := top.( type ) {
@@ -179,7 +179,7 @@ func ( br *BuildReactor ) processEnd( ee *EndEvent ) error {
     return br.completeValue( val, ee )
 }
 
-func ( br *BuildReactor ) ProcessEvent( ev ReactorEvent ) error {
+func ( br *BuildReactor ) ProcessEvent( ev Event ) error {
     if br.hasVal { return libError( "reactor already has a value" ) }
     switch v := ev.( type ) {
     case *ValueEvent: return br.processValue( v )

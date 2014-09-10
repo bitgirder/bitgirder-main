@@ -8,7 +8,7 @@ func NewDepthTracker() *DepthTracker { return &DepthTracker{} }
 
 func ( t *DepthTracker ) Depth() int { return t.depth }
 
-func ( t *DepthTracker ) ProcessEvent( ev ReactorEvent ) error {
+func ( t *DepthTracker ) ProcessEvent( ev Event ) error {
     switch ev.( type ) {
     case *MapStartEvent, *StructStartEvent, *ListStartEvent: t.depth++
     case *EndEvent: t.depth--

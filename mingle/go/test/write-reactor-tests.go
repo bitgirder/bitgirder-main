@@ -150,8 +150,8 @@ package main
 //func asFeedSource( src interface{} ) mg.Value {
 //    switch v := src.( type ) {
 //    case mg.Value: return mkStruct( "ValueSource", "value", v )
-//    case []mg.ReactorEvent: 
-//        return mkStruct( "ReactorEventSource", "events", asValue( v ) )
+//    case []mg.Event: 
+//        return mkStruct( "EventSource", "events", asValue( v ) )
 //    }
 //    panic( fmt.Errorf( "unhandled source: %T", src ) )
 //}
@@ -205,7 +205,7 @@ package main
 //        return mkStruct( "FieldStartEvent", "field", asValue( v.Field ) )
 //    case *mg.ListStartEvent: return mkStruct( "ListStartEvent" )
 //    case *mg.EndEvent: return mkStruct( "EndEvent" )
-//    case []mg.ReactorEvent: return sliceAsValue( v )
+//    case []mg.Event: return sliceAsValue( v )
 //    case mg.ReactorTopType: return mg.String( v.String() )
 //    case *mg.ReactorError:
 //        return mkStruct( "ReactorError", "message", v.Error() )

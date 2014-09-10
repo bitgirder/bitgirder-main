@@ -85,7 +85,7 @@ func ( i *typedReqIface ) newCastReactor(
 }
 
 func ( i *typedReqIface ) StartAuthentication( 
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     authTyp := i.reqDef.AuthenticationType 
     if authTyp == nil { 
@@ -112,7 +112,7 @@ func ( f typedReqParamsFactory ) GetFieldSet(
 }
 
 func ( i *typedReqIface ) StartParameters( 
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     rct, err := i.iface.StartParameters( path )
     if err != nil { return nil, err }
@@ -134,7 +134,7 @@ type errorTypeChecker struct {
     sawTop bool
 }
 
-func ( c *errorTypeChecker ) ProcessEvent( ev mgRct.ReactorEvent ) error {
+func ( c *errorTypeChecker ) ProcessEvent( ev mgRct.Event ) error {
     if c.sawTop { return nil }
     c.sawTop = true
     if ss, ok := ev.( *mgRct.StructStartEvent ); ok {
@@ -163,7 +163,7 @@ func ( i *typedRespIface ) newCastReactor(
 }
 
 func ( i *typedRespIface ) StartResult(
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     rct, err := i.iface.StartResult( path )
     if err != nil { return nil, err }
@@ -172,7 +172,7 @@ func ( i *typedRespIface ) StartResult(
 }
 
 func ( i *typedRespIface ) StartError(
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     rct, err := i.iface.StartError( path )
     if err != nil { return nil, err }

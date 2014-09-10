@@ -38,7 +38,7 @@ func ( w writeReactor ) value( val mg.Value ) error {
     return w.WriteScalarValue( val )
 }
 
-func ( w writeReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
+func ( w writeReactor ) ProcessEvent( ev mgRct.Event ) error {
     switch v := ev.( type ) {
     case *mgRct.ValueEvent: return w.value( v.Val )
     case *mgRct.MapStartEvent: return w.startMap()
@@ -50,7 +50,7 @@ func ( w writeReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
     panic( libErrorf( "unhandled event type: %T", ev ) )
 }
 
-func ( w *BinWriter ) AsReactor() mgRct.ReactorEventProcessor { 
+func ( w *BinWriter ) AsReactor() mgRct.EventProcessor { 
     return writeReactor{ w } 
 }
 
@@ -67,14 +67,14 @@ func NewReader( r io.Reader ) *BinReader {
 }
 
 func ( r *BinReader ) readScalarValue( 
-    tc mg.IoTypeCode, rep mgRct.ReactorEventProcessor ) error {
+    tc mg.IoTypeCode, rep mgRct.EventProcessor ) error {
 
     val, err := r.ReadScalarValue( tc )
     if err != nil { return err }
     return rep.ProcessEvent( mgRct.NewValueEvent( val ) )
 }
 
-func ( r *BinReader ) readMapFields( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) readMapFields( rep mgRct.EventProcessor ) error {
     for {
         tc, err := r.ReadTypeCode()
         if err != nil { return err }
@@ -93,14 +93,14 @@ func ( r *BinReader ) readMapFields( rep mgRct.ReactorEventProcessor ) error {
     panic( libErrorf( "unreachable" ) )
 }
 
-func ( r *BinReader ) readSymbolMap( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) readSymbolMap( rep mgRct.EventProcessor ) error {
     if err := rep.ProcessEvent( mgRct.NewMapStartEvent() ); err != nil {
         return err 
     }
     return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readStruct( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) readStruct( rep mgRct.EventProcessor ) error {
     if qn, err := r.ReadQualifiedTypeName(); err == nil {
         ev := mgRct.NewStructStartEvent( qn )
         if err = rep.ProcessEvent( ev ); err != nil { return err }
@@ -108,7 +108,7 @@ func ( r *BinReader ) readStruct( rep mgRct.ReactorEventProcessor ) error {
     return r.readMapFields( rep )
 }
 
-func ( r *BinReader ) readListHeader( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) readListHeader( rep mgRct.EventProcessor ) error {
     if typ, err := r.ReadListTypeReference(); err == nil {
         lse := mgRct.NewListStartEvent( typ )
         if err = rep.ProcessEvent( lse ); err != nil { return err }
@@ -116,7 +116,7 @@ func ( r *BinReader ) readListHeader( rep mgRct.ReactorEventProcessor ) error {
     return nil
 }
 
-func ( r *BinReader ) readListValues( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) readListValues( rep mgRct.EventProcessor ) error {
     for {
         tc, err := r.PeekTypeCode()
         if err != nil { return err }
@@ -130,12 +130,12 @@ func ( r *BinReader ) readListValues( rep mgRct.ReactorEventProcessor ) error {
     panic( libErrorf( "Unreachable" ) )
 }
 
-func ( r *BinReader ) readList( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) readList( rep mgRct.EventProcessor ) error {
     if err := r.readListHeader( rep ); err != nil { return err }
     return r.readListValues( rep )
 }
 
-func ( r *BinReader ) implReadValue( rep mgRct.ReactorEventProcessor ) error {
+func ( r *BinReader ) implReadValue( rep mgRct.EventProcessor ) error {
     tc, err := r.ReadTypeCode()
     if err != nil { return err }
     switch tc {
@@ -153,7 +153,7 @@ func ( r *BinReader ) implReadValue( rep mgRct.ReactorEventProcessor ) error {
 }
 
 func ( r *BinReader ) ReadReactorValue( 
-    rep mgRct.ReactorEventProcessor ) error {
+    rep mgRct.EventProcessor ) error {
 
     return r.implReadValue( rep )
 }

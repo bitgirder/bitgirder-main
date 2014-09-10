@@ -35,7 +35,7 @@ func bindErrorFactory( path objpath.PathNode, msg string ) error {
 }
 
 type VisitContext struct {
-    Destination mgRct.ReactorEventProcessor
+    Destination mgRct.EventProcessor
     Path objpath.PathNode
     BindContext *BindContext
 }

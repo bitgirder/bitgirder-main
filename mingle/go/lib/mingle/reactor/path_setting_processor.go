@@ -112,7 +112,7 @@ func ( proc *PathSettingProcessor ) prepareEnd() {
     if _, ok := proc.stack.Peek().( *psListContext ); ok { proc.stack.Pop() }
 }
 
-func ( proc *PathSettingProcessor ) prepareEvent( ev ReactorEvent ) {
+func ( proc *PathSettingProcessor ) prepareEvent( ev Event ) {
     switch v := ev.( type ) {
     case *ValueEvent: proc.prepareValue()
     case *ListStartEvent: proc.prepareListStart()
@@ -134,7 +134,7 @@ func ( proc *PathSettingProcessor ) processedEnd() {
     proc.processedValue()
 }
 
-func ( proc *PathSettingProcessor ) eventProcessed( ev ReactorEvent ) {
+func ( proc *PathSettingProcessor ) eventProcessed( ev Event ) {
     switch ev.( type ) {
     case *ValueEvent: proc.processedValue()
     case *EndEvent: proc.processedEnd()
@@ -142,7 +142,7 @@ func ( proc *PathSettingProcessor ) eventProcessed( ev ReactorEvent ) {
 }
 
 func ( proc *PathSettingProcessor ) ProcessEvent(
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    ev Event, rep EventProcessor ) error {
 
     proc.prepareEvent( ev )
     if err := rep.ProcessEvent( ev ); err != nil { return err }

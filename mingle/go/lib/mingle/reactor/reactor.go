@@ -28,7 +28,7 @@ func NewReactorErrorf(
     return NewReactorError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
-type ReactorEvent interface {
+type Event interface {
 
     // may be the empty path
     GetPath() objpath.PathNode
@@ -64,7 +64,7 @@ func NewStructStartEvent( typ *mg.QualifiedTypeName ) *StructStartEvent {
     return &StructStartEvent{ Type: typ, reactorEventImpl: &reactorEventImpl{} }
 }
 
-func isStructStart( ev ReactorEvent ) bool {
+func isStructStart( ev Event ) bool {
     _, ok := ev.( *StructStartEvent )
     return ok
 }
@@ -106,7 +106,7 @@ func NewEndEvent() *EndEvent {
     return &EndEvent{ reactorEventImpl: &reactorEventImpl{} }
 }
 
-func EventToString( ev ReactorEvent ) string {
+func EventToString( ev Event ) string {
     pairs := [][]string{ { "type", fmt.Sprintf( "%T", ev ) } }
     switch v := ev.( type ) {
     case *ValueEvent: 
@@ -126,8 +126,8 @@ func EventToString( ev ReactorEvent ) string {
     return fmt.Sprintf( "[ %s ]", strings.Join( elts, ", " ) )
 }
 
-func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
-    var res ReactorEvent
+func CopyEvent( ev Event, withPath bool ) Event {
+    var res Event
     switch v := ev.( type ) {
     case *ValueEvent: res = NewValueEvent( v.Val )
     case *ListStartEvent: res = NewListStartEvent( v.Type )
@@ -141,7 +141,7 @@ func CopyEvent( ev ReactorEvent, withPath bool ) ReactorEvent {
     return res
 }
 
-func TypeOfEvent( ev ReactorEvent ) mg.TypeReference {
+func TypeOfEvent( ev Event ) mg.TypeReference {
     switch v := ev.( type ) {
     case *ValueEvent: return mg.TypeOf( v.Val )
     case *ListStartEvent: return v.Type
@@ -170,31 +170,31 @@ func ( t ReactorTopType ) String() string {
     panic( libErrorf( "Unhandled reactor top type: %d", t ) )
 }
 
-type ReactorEventProcessor interface { ProcessEvent( ReactorEvent ) error }
+type EventProcessor interface { ProcessEvent( Event ) error }
 
-type ReactorEventProcessorFunc func( ev ReactorEvent ) error
+type EventProcessorFunc func( ev Event ) error
 
-func ( f ReactorEventProcessorFunc ) ProcessEvent( ev ReactorEvent ) error {
+func ( f EventProcessorFunc ) ProcessEvent( ev Event ) error {
     return f( ev )
 }
 
-var DiscardProcessor = ReactorEventProcessorFunc( 
-    func( ev ReactorEvent ) error { return nil } )
+var DiscardProcessor = EventProcessorFunc( 
+    func( ev Event ) error { return nil } )
 
 type PipelineProcessor interface {
-    ProcessEvent( ev ReactorEvent, rep ReactorEventProcessor ) error
+    ProcessEvent( ev Event, rep EventProcessor ) error
 }
 
 func makePipelineReactor( 
-    elt interface{}, next ReactorEventProcessor ) ReactorEventProcessor {
+    elt interface{}, next EventProcessor ) EventProcessor {
 
-    var f ReactorEventProcessorFunc
+    var f EventProcessorFunc
 
     switch v := elt.( type ) {
     case PipelineProcessor:
-        f = func( ev ReactorEvent ) error { return v.ProcessEvent( ev, next ) }
-    case ReactorEventProcessor:
-        f = func( ev ReactorEvent ) error { 
+        f = func( ev Event ) error { return v.ProcessEvent( ev, next ) }
+    case EventProcessor:
+        f = func( ev Event ) error { 
             if err := v.ProcessEvent( ev ); err != nil { return err }
             return next.ProcessEvent( ev )
         }
@@ -204,10 +204,10 @@ func makePipelineReactor(
     return f
 }
 
-func InitReactorPipeline( elts ...interface{} ) ReactorEventProcessor {
+func InitReactorPipeline( elts ...interface{} ) EventProcessor {
     pip := pipeline.NewPipeline()
     for _, elt := range elts { pip.Add( elt ) }
-    var res ReactorEventProcessor = DiscardProcessor
+    var res EventProcessor = DiscardProcessor
     pip.VisitReverse( func( elt interface{} ) {
         res = makePipelineReactor( elt, res ) 
     })
@@ -215,14 +215,14 @@ func InitReactorPipeline( elts ...interface{} ) ReactorEventProcessor {
 }
 
 type EventSender struct {
-    Destination ReactorEventProcessor
+    Destination EventProcessor
 }
 
-func EventSenderForReactor( rep ReactorEventProcessor ) EventSender {
+func EventSenderForReactor( rep EventProcessor ) EventSender {
     return EventSender{ Destination: rep }
 }
 
-func ( es EventSender ) processEvent( ev ReactorEvent ) error {
+func ( es EventSender ) processEvent( ev Event ) error {
     return es.Destination.ProcessEvent( ev )
 }
 
@@ -290,19 +290,19 @@ func ( vv valueVisit ) visitValue( mv mg.Value ) error {
 
 type pathSetterCaller struct {
     ps *PathSettingProcessor
-    rep ReactorEventProcessor
+    rep EventProcessor
 }
 
-func ( c pathSetterCaller ) ProcessEvent( ev ReactorEvent ) error {
+func ( c pathSetterCaller ) ProcessEvent( ev Event ) error {
     return c.ps.ProcessEvent( ev, c.rep )
 }
 
-func VisitValue( mv mg.Value, rep ReactorEventProcessor ) error {
+func VisitValue( mv mg.Value, rep EventProcessor ) error {
     return ( valueVisit{ es: EventSenderForReactor( rep ) } ).visitValue( mv )
 }
 
 func VisitValuePath( 
-    mv mg.Value, rep ReactorEventProcessor, path objpath.PathNode ) error {
+    mv mg.Value, rep EventProcessor, path objpath.PathNode ) error {
 
     ps := NewPathSettingProcessor()
     if path != nil { ps.SetStartPath( path ) }

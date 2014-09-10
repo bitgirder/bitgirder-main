@@ -45,29 +45,29 @@ func ( fo *FieldOrderReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
 type structOrderFieldState struct {
     spec FieldOrderSpecification
     seen bool
-    acc []ReactorEvent
+    acc []Event
 }
 
-func ( s *structOrderFieldState ) ProcessEvent( ev ReactorEvent ) error {
+func ( s *structOrderFieldState ) ProcessEvent( ev Event ) error {
     s.acc = append( s.acc, CopyEvent( ev, false ) )
     return nil
 }
 
 type structOrderProcessor struct {
     ord FieldOrder
-    next ReactorEventProcessor
+    next EventProcessor
     startPath objpath.PathNode
     fieldQueue *list.List
     states *mg.IdentifierMap
     cur *structOrderFieldState
 }
 
-func ( sp *structOrderProcessor ) fieldReactor() ReactorEventProcessor {
+func ( sp *structOrderProcessor ) fieldReactor() EventProcessor {
     if sp.cur == nil || sp.cur.acc == nil { return sp.next }
     return sp.cur
 }
 
-func ( sp *structOrderProcessor ) processStructStart( ev ReactorEvent ) error {
+func ( sp *structOrderProcessor ) processStructStart( ev Event ) error {
     if p := ev.GetPath(); p != nil { sp.startPath = objpath.CopyOf( p ) }
     sp.states = mg.NewIdentifierMap()
     sp.fieldQueue = &list.List{}
@@ -105,13 +105,13 @@ func ( sp *structOrderProcessor ) processFieldStart(
     } else { sp.cur = nil }
     if sp.cur != nil { sp.cur.seen = true }
     if sp.shouldAccumulate( sp.cur ) {
-        sp.cur.acc = make( []ReactorEvent, 0, 64 )
+        sp.cur.acc = make( []Event, 0, 64 )
         return nil
     }
     return sp.next.ProcessEvent( ev )
 }
 
-func ( sp *structOrderProcessor ) ProcessEvent( ev ReactorEvent ) error {
+func ( sp *structOrderProcessor ) ProcessEvent( ev Event ) error {
     switch v := ev.( type ) {
     case *StructStartEvent: return sp.processStructStart( v )
     case *FieldStartEvent: return sp.processFieldStart( v )
@@ -119,7 +119,7 @@ func ( sp *structOrderProcessor ) ProcessEvent( ev ReactorEvent ) error {
     panic( libErrorf( "unexpected event: %T", ev ) )
 }
 
-func ( sp *structOrderProcessor ) getFieldSender() ReactorEventProcessor {
+func ( sp *structOrderProcessor ) getFieldSender() EventProcessor {
 
     ps := NewPathSettingProcessor()
     if p := sp.startPath; p != nil { ps.SetStartPath( objpath.CopyOf( p ) ) }
@@ -177,7 +177,7 @@ func ( sp *structOrderProcessor ) valueEnded() error {
     return sp.completeField()
 }
 
-func ( sp *structOrderProcessor ) checkRequiredFields( ev ReactorEvent ) error {
+func ( sp *structOrderProcessor ) checkRequiredFields( ev Event ) error {
     missing := make( []*mg.Identifier, 0, 4 )
     sp.states.EachPair( func( k *mg.Identifier, v interface{} ) {
         state := v.( *structOrderFieldState )
@@ -189,15 +189,15 @@ func ( sp *structOrderProcessor ) checkRequiredFields( ev ReactorEvent ) error {
     return mg.NewMissingFieldsError( ev.GetPath(), missing )
 }
 
-func ( sp *structOrderProcessor ) endStruct( ev ReactorEvent ) error {
+func ( sp *structOrderProcessor ) endStruct( ev Event ) error {
     if err := sp.sendReadyFields( true ); err != nil { return err }
     if err := sp.checkRequiredFields( ev ); err != nil { return err }
     return sp.next.ProcessEvent( ev )
 }
 
-func ( fo *FieldOrderReactor ) peekProc() ReactorEventProcessor {
+func ( fo *FieldOrderReactor ) peekProc() EventProcessor {
     if fo.stack.IsEmpty() { return nil }
-    return fo.stack.Peek().( ReactorEventProcessor )
+    return fo.stack.Peek().( EventProcessor )
 }
 
 func ( fo *FieldOrderReactor ) peekStructProc() *structOrderProcessor {
@@ -208,14 +208,14 @@ func ( fo *FieldOrderReactor ) peekStructProc() *structOrderProcessor {
 }
 
 func ( fo *FieldOrderReactor ) pushProc( 
-    next ReactorEventProcessor, ev ReactorEvent ) error {
+    next EventProcessor, ev Event ) error {
 
     fo.stack.Push( next )
     return next.ProcessEvent( ev )
 }
 
 func ( fo *FieldOrderReactor ) processContainerStart(
-    ev ReactorEvent, next ReactorEventProcessor ) error {
+    ev Event, next EventProcessor ) error {
 
     if sp := fo.peekStructProc(); sp != nil {
         return fo.pushProc( sp.fieldReactor(), ev )
@@ -225,7 +225,7 @@ func ( fo *FieldOrderReactor ) processContainerStart(
 }
 
 func ( fo *FieldOrderReactor ) structOrderGetNextProc( 
-    next ReactorEventProcessor ) ReactorEventProcessor {
+    next EventProcessor ) EventProcessor {
     if fo.stack.IsEmpty() { return next }
     rep := fo.peekProc()
     if sp, ok := rep.( *structOrderProcessor ); ok { return sp.fieldReactor() }
@@ -233,7 +233,7 @@ func ( fo *FieldOrderReactor ) structOrderGetNextProc(
 }
 
 func ( fo *FieldOrderReactor ) processStructStart(
-    ev *StructStartEvent, next ReactorEventProcessor,
+    ev *StructStartEvent, next EventProcessor,
 ) error {
     ord := fo.fog.FieldOrderFor( ev.Type )
     if ord == nil { return fo.processContainerStart( ev, next ) }
@@ -243,15 +243,15 @@ func ( fo *FieldOrderReactor ) processStructStart(
 }
 
 func ( fo *FieldOrderReactor ) processValue( 
-    v *ValueEvent, next ReactorEventProcessor ) error {
+    v *ValueEvent, next EventProcessor ) error {
 
     if sp := fo.peekStructProc(); sp != nil { return sp.processValue( v ) }
     return fo.peekProc().ProcessEvent( v )
 }
 
 func ( fo *FieldOrderReactor ) processEnd(
-    ev ReactorEvent, next ReactorEventProcessor ) error {
-    rep := fo.stack.Pop().( ReactorEventProcessor )
+    ev Event, next EventProcessor ) error {
+    rep := fo.stack.Pop().( EventProcessor )
     if sp, ok := rep.( *structOrderProcessor ); ok {
         if err := sp.endStruct( ev ); err != nil { return err }
     } else {
@@ -262,7 +262,7 @@ func ( fo *FieldOrderReactor ) processEnd(
 }
 
 func ( fo *FieldOrderReactor ) processEventWithStack( 
-    ev ReactorEvent, next ReactorEventProcessor ) error {
+    ev Event, next EventProcessor ) error {
 
     switch v := ev.( type ) {
     case *ListStartEvent, *MapStartEvent: 
@@ -276,7 +276,7 @@ func ( fo *FieldOrderReactor ) processEventWithStack(
 }
 
 func ( fo *FieldOrderReactor ) ProcessEvent( 
-    ev ReactorEvent, next ReactorEventProcessor ) error {
+    ev Event, next EventProcessor ) error {
 
     if fo.stack.IsEmpty() && ( ! isStructStart( ev ) ) {
         return next.ProcessEvent( ev )

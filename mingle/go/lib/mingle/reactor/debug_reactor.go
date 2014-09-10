@@ -18,7 +18,7 @@ type DebugReactor struct {
     Label string
 }
 
-func ( dr *DebugReactor ) ProcessEvent( ev ReactorEvent ) error {
+func ( dr *DebugReactor ) ProcessEvent( ev Event ) error {
     msg := EventToString( ev )
     if dr.Label != "" { msg = fmt.Sprintf( "[%s] %s", dr.Label, msg ) }
     dr.l.Log( msg )

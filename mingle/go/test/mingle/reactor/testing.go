@@ -74,7 +74,7 @@ func RunReactorTestsInNamespace( ns *mg.Namespace, t *testing.T ) {
     }
 }
 
-func EqualEvents( expct, act ReactorEvent, a *assert.PathAsserter ) {
+func EqualEvents( expct, act Event, a *assert.PathAsserter ) {
 
     expct = CopyEvent( expct, true )
     act = CopyEvent( act, true )
@@ -82,12 +82,12 @@ func EqualEvents( expct, act ReactorEvent, a *assert.PathAsserter ) {
         EventToString( expct ), EventToString( act ) )
 }
 
-func flattenEvs( vals ...interface{} ) []ReactorEvent {
-    res := make( []ReactorEvent, 0, len( vals ) )
+func flattenEvs( vals ...interface{} ) []Event {
+    res := make( []Event, 0, len( vals ) )
     for _, val := range vals {
         switch v := val.( type ) {
-        case ReactorEvent: res = append( res, v )
-        case []ReactorEvent: res = append( res, v... )
+        case Event: res = append( res, v )
+        case []Event: res = append( res, v... )
         case []interface{}: res = append( res, flattenEvs( v... )... )
         default: panic( libErrorf( "Uhandled ev type for flatten: %T", v ) )
         }
@@ -98,19 +98,19 @@ func flattenEvs( vals ...interface{} ) []ReactorEvent {
 // to simplify test creation, we reuse event instances when constructing input
 // event sequences, and send them to this method only at the end to ensure that
 // we get a distinct sequence of event values for each test
-func CopySource( evs []ReactorEvent ) []ReactorEvent {
-    res := make( []ReactorEvent, len( evs ) )
+func CopySource( evs []Event ) []Event {
+    res := make( []Event, len( evs ) )
     for i, ev := range evs { res[ i ] = CopyEvent( ev, false ) }
     return res
 }
 
 type reactorEventSource interface {
     Len() int
-    EventAt( int ) ReactorEvent
+    EventAt( int ) Event
 }
 
 func FeedEventSource( 
-    src reactorEventSource, proc ReactorEventProcessor ) error {
+    src reactorEventSource, proc EventProcessor ) error {
 
     for i, e := 0, src.Len(); i < e; i++ {
         if err := proc.ProcessEvent( src.EventAt( i ) ); err != nil { 
@@ -121,34 +121,34 @@ func FeedEventSource(
 }
 
 func AssertFeedEventSource(
-    src reactorEventSource, proc ReactorEventProcessor, a assert.Failer ) {
+    src reactorEventSource, proc EventProcessor, a assert.Failer ) {
     
     if err := FeedEventSource( src, proc ); err != nil { a.Fatal( err ) }
 }
 
-type eventSliceSource []ReactorEvent
+type eventSliceSource []Event
 func ( src eventSliceSource ) Len() int { return len( src ) }
-func ( src eventSliceSource ) EventAt( i int ) ReactorEvent { return src[ i ] }
+func ( src eventSliceSource ) EventAt( i int ) Event { return src[ i ] }
 
 type eventExpectSource []EventExpectation
 
 func ( src eventExpectSource ) Len() int { return len( src ) }
 
-func ( src eventExpectSource ) EventAt( i int ) ReactorEvent {
+func ( src eventExpectSource ) EventAt( i int ) Event {
     return CopyEvent( src[ i ].Event, true )
 }
 
-func FeedSource( src interface{}, rct ReactorEventProcessor ) error {
+func FeedSource( src interface{}, rct EventProcessor ) error {
     switch v := src.( type ) {
     case reactorEventSource: return FeedEventSource( v, rct )
-    case []ReactorEvent: return FeedSource( eventSliceSource( v ), rct )
+    case []Event: return FeedSource( eventSliceSource( v ), rct )
     case mg.Value: return VisitValue( v, rct )
     }
     panic( libErrorf( "unhandled source: %T", src ) )
 }
 
 func AssertFeedSource( 
-    src interface{}, rct ReactorEventProcessor, a assert.Failer ) {
+    src interface{}, rct EventProcessor, a assert.Failer ) {
 
     if err := FeedSource( src, rct ); err != nil { a.Fatal( err ) }
 }
@@ -160,7 +160,7 @@ type eventPathCheckReactor struct {
     idx int
 }
 
-func ( r *eventPathCheckReactor ) ProcessEvent( ev ReactorEvent ) error {
+func ( r *eventPathCheckReactor ) ProcessEvent( ev Event ) error {
     r.a.Truef( r.idx < len( r.expct ), "unexpected event: %v", ev )
     ee := r.expct[ r.idx ]
     r.idx++
@@ -213,7 +213,7 @@ func testErrForPath( p objpath.PathNode ) error {
     return newTestError( p, testMsgErrorBadValue )
 }
 
-func testErrForEvent( ev ReactorEvent ) error {
+func testErrForEvent( ev Event ) error {
     return testErrForPath( ev.GetPath() )
 }
 

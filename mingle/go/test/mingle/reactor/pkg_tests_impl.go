@@ -364,7 +364,7 @@ func ( ocr *orderCheckReactor ) startField( fld *mg.Identifier ) {
 }
 
 func ( ocr *orderCheckReactor ) ProcessEvent(
-    ev ReactorEvent, rep ReactorEventProcessor ) error {
+    ev Event, rep EventProcessor ) error {
     switch v := ev.( type ) {
     case *StructStartEvent: ocr.startStruct( v.Type )
     case *ListStartEvent: ocr.push( "list" )
@@ -426,7 +426,7 @@ type depthTrackerCheck struct {
     la *assert.PathAsserter
 }
 
-func ( c *depthTrackerCheck ) ProcessEvent( _ ReactorEvent ) error {
+func ( c *depthTrackerCheck ) ProcessEvent( _ Event ) error {
     defer func() { 
         c.idx++
         c.la = c.la.Next()

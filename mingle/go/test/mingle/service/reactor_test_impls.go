@@ -25,7 +25,7 @@ type reactorTestChecker interface {
 }
 
 func setBuilder(
-    addr **mgRct.BuildReactor ) ( mgRct.ReactorEventProcessor, error ) {
+    addr **mgRct.BuildReactor ) ( mgRct.EventProcessor, error ) {
 
     *addr = mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     return *addr, nil
@@ -48,7 +48,7 @@ func ( b *baseReqBuilder ) StartRequest(
 }
 
 func ( b *baseReqBuilder ) StartAuthentication( 
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     if b.ctx.Operation.Equals( mkId( "failStartAuthentication" ) ) {
         return nil, &testError{ path, "start-authentication-impl-error" }
@@ -57,7 +57,7 @@ func ( b *baseReqBuilder ) StartAuthentication(
 }
 
 func ( b *baseReqBuilder ) StartParameters(
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     if b.ctx.Operation.Equals( mkId( "failStartParameters" ) ) {
         return nil, &testError{ path, "start-parameters-impl-error" }
@@ -98,14 +98,14 @@ func ( b *respValueBuilder ) implError( path objpath.PathNode ) error {
 }
 
 func ( b *respValueBuilder ) StartResult( 
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     if err := b.implError( path ); err != nil { return nil, err }
     return setBuilder( &b.resBldr )
 }
 
 func ( b *respValueBuilder ) StartError( 
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     if err := b.implError( path ); err != nil { return nil, err }
     return setBuilder( &b.errBldr )
@@ -137,7 +137,7 @@ func ( t *reactorTestCall ) initTypedRequestTest() RequestReactorInterface {
     return AsTypedRequestReactorInterface( res, newTestOperationMap() )
 }
 
-func ( t *reactorTestCall ) initRequestTest() mgRct.ReactorEventProcessor {
+func ( t *reactorTestCall ) initRequestTest() mgRct.EventProcessor {
     var reqIface RequestReactorInterface
     switch t.t.ReactorProfile {
     case ReactorProfileBase: reqIface = t.initBaseRequestTest()
@@ -176,7 +176,7 @@ func ( t *reactorTestCall ) initTypedResponseTest() ResponseReactorInterface {
     return AsTypedResponseReactorInterface( bldr, retTyp, errTyps, m.defs )
 }
 
-func ( t *reactorTestCall ) initResponseTest() mgRct.ReactorEventProcessor {
+func ( t *reactorTestCall ) initResponseTest() mgRct.EventProcessor {
     var respIface ResponseReactorInterface
     switch t.t.ReactorProfile {
     case ReactorProfileBase: respIface = t.initBaseResponseTest()
@@ -187,7 +187,7 @@ func ( t *reactorTestCall ) initResponseTest() mgRct.ReactorEventProcessor {
     return mgRct.InitReactorPipeline( rct )
 }
 
-func ( t *reactorTestCall ) initTest() mgRct.ReactorEventProcessor {
+func ( t *reactorTestCall ) initTest() mgRct.EventProcessor {
     switch typ := t.t.Type; {
     case typ.Equals( QnameRequest ): return t.initRequestTest()
     case typ.Equals( QnameResponse ): return t.initResponseTest()
@@ -202,7 +202,7 @@ func ( t *reactorTestCall ) getFeedSource() interface{} {
     return t.t.In
 }
 
-func ( t *reactorTestCall ) feedSource( rct mgRct.ReactorEventProcessor ) bool {
+func ( t *reactorTestCall ) feedSource( rct mgRct.EventProcessor ) bool {
     src := t.getFeedSource()
     if mv, ok := src.( mg.Value ); ok {
         t.Logf( "feeding %s", mg.QuoteValue( mv ) )

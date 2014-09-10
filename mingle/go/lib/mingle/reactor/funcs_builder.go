@@ -31,7 +31,7 @@ func NewFunctionsBuilderFactory() *FunctionsBuilderFactory {
     return &FunctionsBuilderFactory{}
 }
 
-func ( bf *FunctionsBuilderFactory ) failBadInput( ev ReactorEvent ) error {
+func ( bf *FunctionsBuilderFactory ) failBadInput( ev Event ) error {
     return failBuilderBadInput( ev, bf.ErrorFactory )
 }
 
@@ -47,7 +47,7 @@ func ( bf *FunctionsBuilderFactory ) BuildValue(
 func ( bf *FunctionsBuilderFactory ) implStartField(
     fsb FieldSetBuilder, 
     err error, 
-    srcEv ReactorEvent ) ( FieldSetBuilder, error ) {
+    srcEv Event ) ( FieldSetBuilder, error ) {
 
     if fsb == nil && err == nil { return nil, bf.failBadInput( srcEv ) }
     return fsb, err

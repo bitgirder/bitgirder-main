@@ -41,7 +41,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
     )
     addTest(
         &BuildReactorTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 nextListStart( listTypeRef( "&Int32*" ) ),
                 NewValueEvent( mg.Int32( 1 ) ),
                 NewEndEvent(),
@@ -51,7 +51,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
     )
     addTest(
         &BuildReactorTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 nextListStart( listTypeRef( "&(&Int32*)*" ) ),
                     nextListStart( listTypeRef( "&Int32*" ) ),
                         NewValueEvent( mg.Int32( 1 ) ),
@@ -65,7 +65,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
     )
     addTest(
         &BuildReactorTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 nextListStart( listTypeRef( "&ns1@v1/S1*" ) ),
                 NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
                 NewEndEvent(),
@@ -79,7 +79,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
     )
     addTest(
         &BuildReactorTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 nextListStart( listTypeRef( "Int32~[0,100)*" ) ),
                     NewValueEvent( mg.Int32( 1 ) ),
                 NewEndEvent(),
@@ -89,7 +89,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
     )
     addTest(
         &BuildReactorTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 nextListStart( listTypeRef( `String~"a*"*"` ) ),
                     NewValueEvent( mg.String( "a" ) ),
                 NewEndEvent(),
@@ -276,7 +276,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     evListStart := nextValueListStart()
     evMapStart := nextMapStart()
     mk1 := func( 
-        errMsg string, evs ...ReactorEvent ) *StructuralReactorErrorTest {
+        errMsg string, evs ...Event ) *StructuralReactorErrorTest {
         return &StructuralReactorErrorTest{
             Events: CopySource( evs ),
             Error: NewReactorError( nil, errMsg ),
@@ -285,7 +285,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     mk2 := func( 
         errMsg string, 
         tt ReactorTopType, 
-        evs ...ReactorEvent ) *StructuralReactorErrorTest {
+        evs ...Event ) *StructuralReactorErrorTest {
         res := mk1( errMsg, evs... )
         res.TopType = tt
         return res
@@ -341,12 +341,12 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
             evStartField1,
         ),
     )
-    addListFail := func( expct, saw string, evs ...ReactorEvent ) {
+    addListFail := func( expct, saw string, evs ...Event ) {
         msg := fmt.Sprintf( "expected list value of type %s but saw %s", 
             asType( expct ), saw )
         b.AddTests( mk1( msg, evs... ) )
     }
-    for _, s := range []struct { expctTyp, saw string; ev ReactorEvent } {
+    for _, s := range []struct { expctTyp, saw string; ev Event } {
         { expctTyp: "Int32", 
           saw: asType( "Int64" ).ExternalForm(),
           ev: NewValueEvent( mg.Int64( int64( 1 ) ) ),
@@ -378,7 +378,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
 
 func initEventPathTests( b *ReactorTestSetBuilder ) {
     p := mg.MakeTestIdPath
-    ee := func( ev ReactorEvent, p objpath.PathNode ) EventExpectation {
+    ee := func( ev Event, p objpath.PathNode ) EventExpectation {
         return EventExpectation{ Event: ev, Path: p }
     }
     evStartStruct1 := NewStructStartEvent( mkQn( "ns1@v1/S1" ) )
@@ -555,7 +555,7 @@ func testOrderWithIds(
 }
 
 func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
-    flds := make( []ReactorEvent, 5 )
+    flds := make( []Event, 5 )
     ids := make( []*mg.Identifier, len( flds ) )
     for i := 0; i < len( flds ); i++ {
         ids[ i ] = mg.MakeTestId( i )
@@ -582,27 +582,27 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
         return parser.MustStruct( t1, pairs... )
     }
     // val sequences for fields f0 ...
-    fldEvs := [][]ReactorEvent {
-        []ReactorEvent{ val1 },
-        []ReactorEvent{
+    fldEvs := [][]Event {
+        []Event{ val1 },
+        []Event{
             nextMapStart(), 
                 flds[ 0 ], val1, 
                 flds[ 1 ], ss2, flds[ 0 ], val1, NewEndEvent(),
             NewEndEvent(),
         },
-        []ReactorEvent{ nextValueListStart(), val1, val1, NewEndEvent() },
-        []ReactorEvent{ ss2, flds[ 0 ], val1, NewEndEvent() },
-        []ReactorEvent{ val1 },
+        []Event{ nextValueListStart(), val1, val1, NewEndEvent() },
+        []Event{ ss2, flds[ 0 ], val1, NewEndEvent() },
+        []Event{ val1 },
     }
-    mkSrc := func( ord ...int ) []ReactorEvent {
-        res := []ReactorEvent{ ss1 }
+    mkSrc := func( ord ...int ) []Event {
+        res := []Event{ ss1 }
         for _, fldNum := range ord {
             res = append( res, flds[ fldNum ] )
             res = append( res, fldEvs[ fldNum ]... )
         }
         return append( res, NewEndEvent() )
     }
-    addTest1 := func( src []ReactorEvent, expct mg.Value ) {
+    addTest1 := func( src []Event, expct mg.Value ) {
         b.AddTests(
             &FieldOrderReactorTest{ 
                 Source: CopySource( src ), 
@@ -638,7 +638,7 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
     b.AddTests(
         &FieldOrderReactorTest{
             Source: CopySource( 
-                []ReactorEvent{
+                []Event{
                     ss1, 
                         flds[ 0 ], val1,
                         flds[ 1 ], ss1,
@@ -665,7 +665,7 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
     // Test generic un-field-ordered values at the top-level as well
     for i := 0; i < 4; i++ { addTest1( fldEvs[ i ], fldVals[ i ] ) }
     // Test arbitrary values with no orders in play
-    addTest2 := func( expct mg.Value, src ...ReactorEvent ) {
+    addTest2 := func( expct mg.Value, src ...Event ) {
         b.AddTests(
             &FieldOrderReactorTest{
                 Source: CopySource( src ),
@@ -702,7 +702,7 @@ func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
     )
     t1 := mkQn( "ns1@v1/S1" )
     ords := []FieldOrderReactorTestOrder{ { Order: ord, Type: t1 } }
-    mkSrc := func( flds []int ) []ReactorEvent {
+    mkSrc := func( flds []int ) []Event {
         evs := []interface{}{ NewStructStartEvent( t1 ) }
         for _, fld := range flds {
             evs = append( evs, NewFieldStartEvent( fldId( fld ) ) )
@@ -860,13 +860,13 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
         testOrderWithIds( ss( 2 ).Type, id( 0 ), id( 1 ) ),
         testOrderWithIds( ss( 3 ).Type, id( 0 ), id( 1 ) ),
     }
-    evs := [][]ReactorEvent{
-        []ReactorEvent{ val1 },
-        []ReactorEvent{ 
+    evs := [][]Event{
+        []Event{ val1 },
+        []Event{ 
             mapStart, 
                 fld( 1 ), val1, fld( 0 ), val1, NewEndEvent() },
-        []ReactorEvent{ valListStart, val1, val1, NewEndEvent() },
-        []ReactorEvent{ 
+        []Event{ valListStart, val1, val1, NewEndEvent() },
+        []Event{ 
             ss( 2 ), 
                 fld( 0 ), val1, 
                 fld( 1 ), valListStart, val1, val1, NewEndEvent(),
@@ -874,7 +874,7 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
         },
         // val for f4 is nested and has nested ss2 instances that are in varying
         // need of reordering
-        []ReactorEvent{ 
+        []Event{ 
             ss( 1 ),
                 fld( 0 ), val1,
                 fld( 4 ), ssListStart( 3 ),
@@ -908,8 +908,8 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
             NewEndEvent(),
         },
     }
-    mkSrc := func( ord ...int ) []ReactorEvent {
-        res := []ReactorEvent{ ss( 1 ) }
+    mkSrc := func( ord ...int ) []Event {
+        res := []Event{ ss( 1 ) }
         for _, i := range ord {
             res = append( res, fld( i ) )
             res = append( res, evs[ i ]... )
@@ -932,7 +932,7 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
     b.AddTests(
         &FieldOrderPathTest{
             Source: CopySource(
-                []ReactorEvent{
+                []Event{
                     ss( 1 ),
                         fld( 0 ), val1,
                         fld( 7 ), val1,
@@ -962,7 +962,7 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
     b.AddTests(
         &FieldOrderPathTest{
             Source: CopySource(
-                []ReactorEvent{ ss( 1 ), fld( 1 ), val1, NewEndEvent() } ),
+                []Event{ ss( 1 ), fld( 1 ), val1, NewEndEvent() } ),
             Expect: []EventExpectation{
                 { ss( 1 ), nil },
                 { fld( 1 ), p( 1 ) },
@@ -985,18 +985,18 @@ func initFieldOrderReactorTests( b *ReactorTestSetBuilder ) {
 func initDepthTrackerTests( b *ReactorTestSetBuilder ) {
     b.AddTests(
         &DepthTrackerTest{
-            Source: []ReactorEvent{ NewValueEvent( mg.Int32( 1 ) ) },
+            Source: []Event{ NewValueEvent( mg.Int32( 1 ) ) },
             Expect: []int{ 0 },
         },
         &DepthTrackerTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 NewListStartEvent( mg.TypeOpaqueList ),
                 NewEndEvent(),
             },
             Expect: []int{ 1, 0 },
         },
         &DepthTrackerTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 NewListStartEvent( mg.TypeOpaqueList ),
                     NewListStartEvent( mg.TypeOpaqueList ),
                         NewValueEvent( mg.Int32( 1 ) ),
@@ -1007,18 +1007,18 @@ func initDepthTrackerTests( b *ReactorTestSetBuilder ) {
             Expect: []int{ 1, 2, 2, 1, 1, 0 },
         },
         &DepthTrackerTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
                 NewEndEvent(),
             },
             Expect: []int{ 1, 0 },
         },
         &DepthTrackerTest{
-            Source: []ReactorEvent{ NewMapStartEvent(), NewEndEvent() },
+            Source: []Event{ NewMapStartEvent(), NewEndEvent() },
             Expect: []int{ 1, 0 },
         },
         &DepthTrackerTest{
-            Source: []ReactorEvent{
+            Source: []Event{
                 NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
                     NewFieldStartEvent( mkId( "f1" ) ),
                         NewValueEvent( mg.Int32( 1 ) ),

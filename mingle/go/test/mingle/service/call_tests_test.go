@@ -16,7 +16,7 @@ type tckTest struct {
     resBld *mgRct.BuildReactor
 }
 
-func ( t *tckTest ) SendRequest( out mgRct.ReactorEventProcessor ) error {
+func ( t *tckTest ) SendRequest( out mgRct.EventProcessor ) error {
     rs := &RequestSend{
         Context: t.ct.Context,
         Parameters: t.ct.Parameters,
@@ -27,20 +27,20 @@ func ( t *tckTest ) SendRequest( out mgRct.ReactorEventProcessor ) error {
 }
 
 func ( t *tckTest ) setBuilder( 
-    addr **mgRct.BuildReactor ) ( mgRct.ReactorEventProcessor, error ) {
+    addr **mgRct.BuildReactor ) ( mgRct.EventProcessor, error ) {
 
     *addr = mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     return *addr, nil
 }
 
 func ( t *tckTest ) StartError( 
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     return t.setBuilder( &( t.errBld ) )
 }
 
 func ( t *tckTest ) StartResult(
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     return t.setBuilder( &( t.resBld ) )
 }

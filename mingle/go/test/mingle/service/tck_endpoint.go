@@ -17,7 +17,7 @@ type tckEndpointHandlerFuncInput struct {
 type tckEndpointHandlerFunc func( tckEndpointHandlerFuncInput ) error
 
 func getFixedInt( in tckEndpointHandlerFuncInput ) error {
-    resp := func( rct mgRct.ReactorEventProcessor ) error {
+    resp := func( rct mgRct.EventProcessor ) error {
         return rct.ProcessEvent( mgRct.NewValueEvent( mg.Int32( 1 ) ) )
     }
     return in.ctx.SendResult( resp )
@@ -54,20 +54,20 @@ func ( h *tckEndpointCallHandler ) StartRequest(
 }
 
 func ( h *tckEndpointCallHandler ) setBuilder( 
-    addr **mgRct.BuildReactor ) ( mgRct.ReactorEventProcessor, error ) {
+    addr **mgRct.BuildReactor ) ( mgRct.EventProcessor, error ) {
 
     *addr = mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     return *addr, nil
 }
 
 func ( h *tckEndpointCallHandler ) StartAuthentication(
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     return h.setBuilder( &( h.authBld ) )
 }
 
 func ( h *tckEndpointCallHandler ) StartParameters(
-    path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) {
+    path objpath.PathNode ) ( mgRct.EventProcessor, error ) {
 
     return h.setBuilder( &( h.paramsBld ) )
 }

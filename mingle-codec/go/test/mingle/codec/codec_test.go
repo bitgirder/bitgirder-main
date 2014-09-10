@@ -13,12 +13,12 @@ var noOpCodecErr = errors.New( "no-op codec; nothing to see here" )
 
 type NoOpCodec struct {}
 
-func ( c *NoOpCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
+func ( c *NoOpCodec ) EncoderTo( w io.Writer ) mg.EventProcessor {
     panic( noOpCodecErr )
 }
 
 func ( c *NoOpCodec ) DecodeFrom( 
-    rd io.Reader, rep mg.ReactorEventProcessor ) error {
+    rd io.Reader, rep mg.EventProcessor ) error {
     return noOpCodecErr
 }
 
@@ -56,7 +56,7 @@ type fixedValueWriteReactor struct {
     didWrite bool
 }
 
-func ( f *fixedValueWriteReactor ) ProcessEvent( _ mg.ReactorEvent ) error {
+func ( f *fixedValueWriteReactor ) ProcessEvent( _ mg.Event ) error {
     if ! f.didWrite { 
         if _, err := f.w.Write( fixedCodecBuf ); err != nil { return err }
         f.didWrite = true
@@ -64,7 +64,7 @@ func ( f *fixedValueWriteReactor ) ProcessEvent( _ mg.ReactorEvent ) error {
     return nil
 }
 
-func ( f *fixedValueCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
+func ( f *fixedValueCodec ) EncoderTo( w io.Writer ) mg.EventProcessor {
     return &fixedValueWriteReactor{ w: w }
 }
 
@@ -75,7 +75,7 @@ func ( w discardWriter ) Write( p []byte ) ( int, error ) {
 }
 
 func ( f *fixedValueCodec ) DecodeFrom( 
-    rd io.Reader, rep mg.ReactorEventProcessor ) error {
+    rd io.Reader, rep mg.EventProcessor ) error {
     if _, err := io.Copy( discardWriter( 0 ), rd ); err != nil { return err }
     return mg.VisitValue( fixedCodecStruct, rep )
 }

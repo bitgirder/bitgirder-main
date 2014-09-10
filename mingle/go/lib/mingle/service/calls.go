@@ -36,7 +36,7 @@ type Endpoint interface {
 
 type ClientCallInterface interface {
 
-    SendRequest( out mgRct.ReactorEventProcessor ) error
+    SendRequest( out mgRct.EventProcessor ) error
 
     ResponseReactorInterface() ResponseReactorInterface
 }
@@ -50,7 +50,7 @@ type RequestSend struct {
     Context *RequestContext
     Parameters *mg.SymbolMap
     Authentication mg.Value
-    Destination mgRct.ReactorEventProcessor
+    Destination mgRct.EventProcessor
 }
 
 func ( rs *RequestSend ) startRequestSend( 

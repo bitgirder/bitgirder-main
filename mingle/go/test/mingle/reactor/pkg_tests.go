@@ -26,7 +26,7 @@ type BuildReactorTest struct {
 }
 
 type EventExpectation struct {
-    Event ReactorEvent
+    Event Event
     Path objpath.PathNode
 }
 
@@ -39,13 +39,13 @@ type EventPathTest struct {
 func ( ept EventPathTest ) TestName() string { return ept.Name }
 
 type StructuralReactorErrorTest struct {
-    Events []ReactorEvent
+    Events []Event
     Error *ReactorError
     TopType ReactorTopType
 }
 
 type PointerEventCheckTest struct {
-    Events []ReactorEvent
+    Events []Event
     Error error // if nil then Events should be fed through without error
 }
 
@@ -55,25 +55,25 @@ type FieldOrderReactorTestOrder struct {
 }
 
 type FieldOrderReactorTest struct {
-    Source []ReactorEvent
+    Source []Event
     Expect mg.Value
     Orders []FieldOrderReactorTestOrder
 }
 
 type FieldOrderMissingFieldsTest struct {
     Orders []FieldOrderReactorTestOrder
-    Source []ReactorEvent
+    Source []Event
     Expect mg.Value
     Error *mg.MissingFieldsError
 }
 
 type FieldOrderPathTest struct {
-    Source []ReactorEvent
+    Source []Event
     Expect []EventExpectation
     Orders []FieldOrderReactorTestOrder
 }
 
 type DepthTrackerTest struct {
-    Source []ReactorEvent
+    Source []Event
     Expect []int
 }

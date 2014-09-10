@@ -41,10 +41,10 @@ type RequestReactorInterface interface {
     StartRequest( ctx *RequestContext, path objpath.PathNode ) error
 
     StartAuthentication( 
-        path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) 
+        path objpath.PathNode ) ( mgRct.EventProcessor, error ) 
 
     StartParameters( 
-        path objpath.PathNode ) ( mgRct.ReactorEventProcessor, error ) 
+        path objpath.PathNode ) ( mgRct.EventProcessor, error ) 
 }
 
 type RequestReactor struct {
@@ -75,7 +75,7 @@ func NewRequestReactor( iface RequestReactorInterface ) *RequestReactor {
     }
 }
 
-func ( r *RequestReactor ) processBuilderEvent( ev mgRct.ReactorEvent ) error {
+func ( r *RequestReactor ) processBuilderEvent( ev mgRct.Event ) error {
     if err := r.bldr.ProcessEvent( ev ); err != nil { return err }
     if r.bldr.HasValue() {
         if err := r.bldrSetter( r.bldr.GetValue() ); err != nil { return err }
@@ -136,14 +136,14 @@ func ( r *RequestReactor ) startOperation() {
 }
 
 func ( r *RequestReactor ) startProc( 
-    rct mgRct.ReactorEventProcessor, startErr error ) error {
+    rct mgRct.EventProcessor, startErr error ) error {
 
     if startErr != nil { return startErr }
     r.proc = newProxyProc( rct )
     return nil
 }
 
-func ( r *RequestReactor ) processProcEvent( ev mgRct.ReactorEvent ) error {
+func ( r *RequestReactor ) processProcEvent( ev mgRct.Event ) error {
     if err := r.proc.ProcessEvent( ev ); err != nil { return err }
     if r.proc.isDone() { r.proc = nil }
     return nil
@@ -172,7 +172,7 @@ func ( r *RequestReactor ) endRequest( ee *mgRct.EndEvent ) error {
     return mgRct.VisitValuePath( mg.EmptySymbolMap(), rct, path )
 }
 
-func ( r *RequestReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
+func ( r *RequestReactor ) ProcessEvent( ev mgRct.Event ) error {
     if r.bldr != nil { return r.processBuilderEvent( ev ) }
     if r.proc != nil { return r.processProcEvent( ev ) }
     switch v := ev.( type ) {
@@ -186,7 +186,7 @@ func ( r *RequestReactor ) ProcessEvent( ev mgRct.ReactorEvent ) error {
 }
 
 func InitRequestReactorPipeline( 
-    iface RequestReactorInterface ) mgRct.ReactorEventProcessor {
+    iface RequestReactorInterface ) mgRct.EventProcessor {
 
     return mgRct.InitReactorPipeline( NewRequestReactor( iface ) )
 }

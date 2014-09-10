@@ -182,7 +182,7 @@ func ( e *encoder ) end() error {
     return nil
 }
 
-func ( e *encoder ) ProcessEvent( ev mg.ReactorEvent ) error {
+func ( e *encoder ) ProcessEvent( ev mg.Event ) error {
     switch v := ev.( type ) {
     case mg.ValueEvent: e.value( v.Val )
     case mg.ListStartEvent: e.startList()
@@ -195,7 +195,7 @@ func ( e *encoder ) ProcessEvent( ev mg.ReactorEvent ) error {
     return nil
 }
 
-func ( c *JsonCodec ) EncoderTo( w io.Writer ) mg.ReactorEventProcessor {
+func ( c *JsonCodec ) EncoderTo( w io.Writer ) mg.EventProcessor {
     return &encoder{ 
         w: w, 
         c: c, 
@@ -229,7 +229,7 @@ func visitErrorf(
 func ( c *JsonCodec ) visitNumber(
     n gojson.Number,
     path objpath.PathNode,
-    rep mg.ReactorEventProcessor ) error {
+    rep mg.EventProcessor ) error {
     mgNum, err := asMingleNumber( n )
     if err != nil { return err }
     return rep.ProcessEvent( mg.ValueEvent{ mgNum } )
@@ -238,7 +238,7 @@ func ( c *JsonCodec ) visitNumber(
 func ( c *JsonCodec ) visitValue(
     goVal interface{}, 
     path objpath.PathNode, 
-    rep mg.ReactorEventProcessor ) error {
+    rep mg.EventProcessor ) error {
     switch v := goVal.( type ) {
     case nil: return rep.ProcessEvent( mg.ValueEvent{ mg.NullVal } )
     case gojson.Number: return c.visitNumber( v, path, rep )
@@ -253,7 +253,7 @@ func ( c *JsonCodec ) visitValue(
 func ( c *JsonCodec ) visitList(
     l []interface{}, 
     path objpath.PathNode, 
-    rep mg.ReactorEventProcessor ) error {
+    rep mg.EventProcessor ) error {
     lp := startList( path )
     if err := rep.ProcessEvent( mg.NewListStartEvent() ); err != nil { return err }
     for _, val := range l {
@@ -268,7 +268,7 @@ func ( c *JsonCodec ) visitEnum(
     typ *mg.QualifiedTypeName,
     m map[ string ]interface{},
     path objpath.PathNode,
-    rep mg.ReactorEventProcessor ) error {
+    rep mg.EventProcessor ) error {
     if len( m ) > 2 {
         return visitError( path, "Enum has one or more unrecognized keys" )
     }
@@ -288,7 +288,7 @@ func ( c *JsonCodec ) visitEnum(
 func ( c *JsonCodec ) visitFields(
     m map[ string ]interface{},
     path objpath.PathNode,
-    rep mg.ReactorEventProcessor ) error {
+    rep mg.EventProcessor ) error {
     for fld, val := range m {
         if fld != jsonKeyType {
             if len( fld ) > 0 && fld[ 0 ] == byte( '$' ) {
@@ -337,7 +337,7 @@ func expectQname(
 func ( c *JsonCodec ) visitMap( 
     m map[ string ]interface{}, 
     path objpath.PathNode, 
-    rep mg.ReactorEventProcessor ) error {
+    rep mg.EventProcessor ) error {
     if typVal, ok := m[ jsonKeyType ]; ok {
         if typStr, ok2 := typVal.( string ); ok2 {
             qn, err := expectQname( typStr, path, jsonKeyType )
@@ -358,7 +358,7 @@ func ( c *JsonCodec ) visitMap(
 }
 
 func ( c *JsonCodec ) DecodeFrom( 
-    r io.Reader, rep mg.ReactorEventProcessor ) error {
+    r io.Reader, rep mg.EventProcessor ) error {
     dec := gojson.NewDecoder( r )
     dec.UseNumber()
     var dest interface{}

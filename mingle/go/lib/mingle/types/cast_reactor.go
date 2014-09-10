@@ -11,7 +11,7 @@ import (
     "bytes"
 )
 
-func asMapStartEvent( ev mgRct.ReactorEvent ) *mgRct.MapStartEvent {
+func asMapStartEvent( ev mgRct.Event ) *mgRct.MapStartEvent {
     res := mgRct.NewMapStartEvent() 
     res.SetPath( ev.GetPath() )
     return res
@@ -125,7 +125,7 @@ func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
 }
 
 func ( cr *CastReactor ) processPassthrough(
-    ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) error {
+    ev mgRct.Event, next mgRct.EventProcessor ) error {
 
     if err := next.ProcessEvent( ev ); err != nil { return err }
     if err := cr.passthroughTracker.ProcessEvent( ev ); err != nil { 
@@ -163,7 +163,7 @@ func feedDefault(
     fld *mg.Identifier, 
     defl mg.Value, 
     p objpath.PathNode,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     fldPath := objpath.Descend( p, fld )
     fs := mgRct.NewFieldStartEvent( fld )
@@ -178,7 +178,7 @@ func feedDefault(
 func processDefaults(
     fc *fieldCast,
     p objpath.PathNode, 
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     vis := func( fld *mg.Identifier, val interface{} ) error {
         fd := val.( *FieldDefinition )
@@ -282,7 +282,7 @@ func ( cr *CastReactor ) processAtomicValue(
     ve *mgRct.ValueEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     err, ve2 := cr.valueEventForAtomicCast( ve, at, callTyp )
     if err != nil { return err }
@@ -306,7 +306,7 @@ func ( cr *CastReactor ) processNullableValue(
     ve *mgRct.ValueEvent,
     nt *mg.NullableTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     if _, ok := ve.Val.( *mg.Null ); ok { 
         return next.ProcessEvent( nullValueEventForType( ve, nt ) ) 
@@ -318,7 +318,7 @@ func ( cr *CastReactor ) processValueForListType(
     ve *mgRct.ValueEvent,
     typ *mg.ListTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     if _, ok := ve.Val.( *mg.Null ); ok {
         return newNullValueCastError( ve.GetPath() )
@@ -330,7 +330,7 @@ func ( cr *CastReactor ) processValueWithType(
     ve *mgRct.ValueEvent,
     typ mg.TypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference: 
@@ -346,7 +346,7 @@ func ( cr *CastReactor ) processValueWithType(
 }
 
 func ( cr *CastReactor ) processValue( 
-    ve *mgRct.ValueEvent, next mgRct.ReactorEventProcessor ) error {
+    ve *mgRct.ValueEvent, next mgRct.EventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case mg.TypeReference: 
@@ -361,11 +361,11 @@ func ( cr *CastReactor ) processValue(
 }
 
 func ( cr *CastReactor ) implMapStart(
-    ev mgRct.ReactorEvent, 
+    ev mgRct.Event, 
     ft fieldTyper, 
     fs *FieldSet,
     passFields *mg.IdentifierMap,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     fc := &fieldCast{ ft: ft, passFields: passFields }
     if fs != nil {
@@ -424,11 +424,11 @@ func ( cr *CastReactor ) fieldSetTyperFor(
 }
 
 func ( cr *CastReactor ) completeStartStruct(
-    ss *mgRct.StructStartEvent, next mgRct.ReactorEventProcessor ) error {
+    ss *mgRct.StructStartEvent, next mgRct.EventProcessor ) error {
 
     ft, err := cr.fieldSetTyperFor( ss.Type, ss.GetPath() )
     if err != nil { return err }
-    var ev mgRct.ReactorEvent = ss
+    var ev mgRct.Event = ss
     fs, err := fieldSetForTypeInDefMap( ss.Type, cr.dm, ss.GetPath() )
     if err != nil { return err }
     if def, ok := cr.dm.GetDefinition( ss.Type ); ok {
@@ -449,7 +449,7 @@ func ( cr *CastReactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
 func ( cr *CastReactor ) inferStructForMap(
     me *mgRct.MapStartEvent,
     at *mg.AtomicTypeReference,
-    next mgRct.ReactorEventProcessor ) ( error, bool ) {
+    next mgRct.EventProcessor ) ( error, bool ) {
 
     if ! cr.inferStructForQname( at.Name ) { return nil, false }
 
@@ -463,7 +463,7 @@ func ( cr *CastReactor ) processMapStartWithAtomicType(
     me *mgRct.MapStartEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     if at.Equals( mg.TypeSymbolMap ) || at.Equals( mg.TypeValue ) {
         var ft fieldTyper = valueFieldTyper( 1 )
@@ -486,7 +486,7 @@ func ( cr *CastReactor ) processMapStartWithType(
     me *mgRct.MapStartEvent, 
     typ mg.TypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference:
@@ -500,7 +500,7 @@ func ( cr *CastReactor ) processMapStartWithType(
 }
 
 func ( cr *CastReactor ) processMapStart(
-    me *mgRct.MapStartEvent, next mgRct.ReactorEventProcessor ) error {
+    me *mgRct.MapStartEvent, next mgRct.EventProcessor ) error {
     
     switch v := cr.stack.Peek().( type ) {
     case mg.TypeReference: 
@@ -515,7 +515,7 @@ func ( cr *CastReactor ) processMapStart(
 }
 
 func ( cr *CastReactor ) processFieldStart(
-    fs *mgRct.FieldStartEvent, next mgRct.ReactorEventProcessor ) error {
+    fs *mgRct.FieldStartEvent, next mgRct.EventProcessor ) error {
 
     fc := cr.stack.Peek().( *fieldCast )
     if fc.await != nil { fc.await.Delete( fs.Field ) }
@@ -540,7 +540,7 @@ func ( cr *CastReactor ) processListEnd() error {
 }
 
 func ( cr *CastReactor ) processFieldsEnd( 
-    ee *mgRct.EndEvent, next mgRct.ReactorEventProcessor ) error {
+    ee *mgRct.EndEvent, next mgRct.EventProcessor ) error {
 
     fc := cr.stack.Pop().( *fieldCast )
     if fc.await == nil { return nil }
@@ -552,7 +552,7 @@ func ( cr *CastReactor ) processFieldsEnd(
 }
 
 func ( cr *CastReactor ) processEnd(
-    ee *mgRct.EndEvent, next mgRct.ReactorEventProcessor ) error {
+    ee *mgRct.EndEvent, next mgRct.EventProcessor ) error {
 
     switch cr.stack.Peek().( type ) {
     case *listCast: if err := cr.processListEnd(); err != nil { return err }
@@ -580,7 +580,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     ss *mgRct.StructStartEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     if at.Equals( mg.TypeSymbolMap ) {
         me := asMapStartEvent( ss )
@@ -600,7 +600,7 @@ func ( cr *CastReactor ) processStructStartWithType(
     ss *mgRct.StructStartEvent,
     typ mg.TypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference:
@@ -614,7 +614,7 @@ func ( cr *CastReactor ) processStructStartWithType(
 }
 
 func ( cr *CastReactor ) processStructStart(
-    ss *mgRct.StructStartEvent, next mgRct.ReactorEventProcessor ) error {
+    ss *mgRct.StructStartEvent, next mgRct.EventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case mg.TypeReference:
@@ -632,7 +632,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
     le *mgRct.ListStartEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     if at.Equals( mg.TypeValue ) {
         return cr.processListStartWithType( 
@@ -651,7 +651,7 @@ func ( cr *CastReactor ) processListStartWithListType(
     le *mgRct.ListStartEvent,
     lt *mg.ListTypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
     
     sp := objpath.CopyOf( le.GetPath() )
     cr.stack.Push( &listCast{ lt: lt, startPath: sp } )
@@ -662,7 +662,7 @@ func ( cr *CastReactor ) processListStartWithType(
     le *mgRct.ListStartEvent,
     typ mg.TypeReference,
     callTyp mg.TypeReference,
-    next mgRct.ReactorEventProcessor ) error {
+    next mgRct.EventProcessor ) error {
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference:
@@ -678,7 +678,7 @@ func ( cr *CastReactor ) processListStartWithType(
 }
 
 func ( cr *CastReactor ) processListStart( 
-    le *mgRct.ListStartEvent, next mgRct.ReactorEventProcessor ) error {
+    le *mgRct.ListStartEvent, next mgRct.EventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
     case mg.TypeReference:
@@ -692,7 +692,7 @@ func ( cr *CastReactor ) processListStart(
 }
 
 func ( cr *CastReactor ) ProcessEvent(
-    ev mgRct.ReactorEvent, next mgRct.ReactorEventProcessor ) ( err error ) {
+    ev mgRct.Event, next mgRct.EventProcessor ) ( err error ) {
 
     if cr.passthroughTracker != nil { return cr.processPassthrough( ev, next ) }
 //    cr.dumpStack( "entering ProcessEvent()" )

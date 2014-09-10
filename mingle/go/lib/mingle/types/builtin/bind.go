@@ -11,7 +11,7 @@ import (
 
 // if err is something that should be sent to caller as a value error, a value
 // error is returned; otherwise err is returned unchanged
-func asValueError( ve mgRct.ReactorEvent, err error ) error {
+func asValueError( ve mgRct.Event, err error ) error {
     switch v := err.( type ) {
     case *parser.ParseError:
         err = mg.NewValueCastError( ve.GetPath(), v.Error() )

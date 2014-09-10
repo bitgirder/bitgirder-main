@@ -39,7 +39,7 @@ func ( mc *mapStructureCheck ) startField( fld *mg.Identifier ) error {
     return nil
 }
 
-func ( sr *StructuralReactor ) descForEvent( ev ReactorEvent ) string {
+func ( sr *StructuralReactor ) descForEvent( ev Event ) string {
     switch v := ev.( type ) {
     case *ListStartEvent: return sr.sawDescFor( v.Type )
     case *MapStartEvent: return mg.TypeSymbolMap.ExternalForm()
@@ -70,24 +70,24 @@ func ( sr *StructuralReactor ) sawDescFor( val interface{} ) string {
         return fmt.Sprintf( "start of struct %s", v.ExternalForm() )
     case *mg.ListTypeReference:
         return fmt.Sprintf( "start of %s", v.ExternalForm() )
-    case ReactorEvent: return sr.descForEvent( v )
+    case Event: return sr.descForEvent( v )
     }
     panic( libErrorf( "unhandled val: %T", val ) )
 }
 
-func ( sr *StructuralReactor ) checkNotDone( ev ReactorEvent ) error {
+func ( sr *StructuralReactor ) checkNotDone( ev Event ) error {
     if ! sr.done { return nil }
     return NewReactorErrorf( ev.GetPath(), "Saw %s after value was built", 
         sr.sawDescFor( ev ) );
 }
 
-func ( sr *StructuralReactor ) failTopType( ev ReactorEvent ) error {
+func ( sr *StructuralReactor ) failTopType( ev Event ) error {
     desc := sr.descForEvent( ev )
     return NewReactorErrorf( 
         ev.GetPath(), "Expected %s but got %s", sr.topTyp, desc )
 }
 
-func ( sr *StructuralReactor ) couldStartWithEvent( ev ReactorEvent ) bool {
+func ( sr *StructuralReactor ) couldStartWithEvent( ev Event ) bool {
     topIsVal := sr.topTyp == ReactorTopTypeValue
     switch ev.( type ) {
     case *ValueEvent: return topIsVal
@@ -98,7 +98,7 @@ func ( sr *StructuralReactor ) couldStartWithEvent( ev ReactorEvent ) bool {
     return false
 }
 
-func ( sr *StructuralReactor ) checkTopType( ev ReactorEvent ) error {
+func ( sr *StructuralReactor ) checkTopType( ev Event ) error {
     if sr.couldStartWithEvent( ev ) { return nil }    
     return sr.failTopType( ev )
 }
@@ -112,7 +112,7 @@ func ( sr *StructuralReactor ) failUnexpectedMapEnd( val interface{} ) error {
 }
 
 func ( sr *StructuralReactor ) listValueTypeError( 
-    expct mg.TypeReference, ev ReactorEvent ) error {
+    expct mg.TypeReference, ev Event ) error {
 
     return NewReactorErrorf( nil, "expected list value of type %s but saw %s",
         expct, sr.sawDescFor( ev ) )
@@ -123,7 +123,7 @@ func ( sr *StructuralReactor ) listValueTypeError(
 // check the actual validity of the assignment)
 func ( sr *StructuralReactor ) recursiveCheckValueTypeForList(
     calledType, effectiveType, valType mg.TypeReference, 
-    ev ReactorEvent ) error {
+    ev Event ) error {
     
     switch typ := effectiveType.( type ) {
     case *mg.PointerTypeReference:
@@ -140,13 +140,13 @@ func ( sr *StructuralReactor ) recursiveCheckValueTypeForList(
 }
 
 func ( sr *StructuralReactor ) checkValueTypeForList(
-    lc listStructureCheck, typ mg.TypeReference, ev ReactorEvent ) error {
+    lc listStructureCheck, typ mg.TypeReference, ev Event ) error {
 
     return sr.recursiveCheckValueTypeForList( lc.typ, lc.typ, typ, ev )
 }
 
 func ( sr *StructuralReactor ) checkEventForList(
-    lc listStructureCheck, ev ReactorEvent ) error {
+    lc listStructureCheck, ev Event ) error {
 
     switch v := ev.( type ) {
     case *ValueEvent: 
@@ -162,7 +162,7 @@ func ( sr *StructuralReactor ) checkEventForList(
 }
 
 func ( sr *StructuralReactor ) execValueCheck( 
-    ev ReactorEvent, pushIfOk interface{} ) ( err error ) {
+    ev Event, pushIfOk interface{} ) ( err error ) {
 
     if sr.stack.IsEmpty() {
         err = sr.checkTopType( ev )
@@ -186,13 +186,13 @@ func ( sr *StructuralReactor ) completeValue() {
     sr.done = sr.stack.IsEmpty()
 }
 
-func ( sr *StructuralReactor ) checkValue( ev ReactorEvent ) error {
+func ( sr *StructuralReactor ) checkValue( ev Event ) error {
     if err := sr.execValueCheck( ev, nil ); err != nil { return err }
     sr.completeValue()
     return nil
 }
 
-func ( sr *StructuralReactor ) checkStructureStart( ev ReactorEvent ) error {
+func ( sr *StructuralReactor ) checkStructureStart( ev Event ) error {
     return sr.execValueCheck( ev,  newMapStructureCheck() )
 }
 
@@ -227,7 +227,7 @@ func ( sr *StructuralReactor ) checkEnd( ee *EndEvent ) error {
         "Saw end while expecting %s", sr.expectDescFor( top ) )
 }
 
-func ( sr *StructuralReactor ) ProcessEvent( ev ReactorEvent ) error {
+func ( sr *StructuralReactor ) ProcessEvent( ev Event ) error {
     if err := sr.checkNotDone( ev ); err != nil { return err }
     switch v := ev.( type ) {
     case *ValueEvent: return sr.checkValue( v )

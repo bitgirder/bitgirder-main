@@ -1400,7 +1400,7 @@ func ( rti *rtInit ) addCastDisableTests() {
         &CastReactorTest{
             Type: asType( "ns1@v1/S1" ),
             Err: newTcErr( "ns1@v1/S2", "ns2@v1/S2", mg.MakeTestIdPath( 2 ) ),
-            In: []mgRct.ReactorEvent{
+            In: []mgRct.Event{
                 mgRct.NewStructStartEvent( mkQn( "ns1@v1/S1" ) ),
                     mgRct.NewFieldStartEvent( mkId( "f1" ) ),
                         mgRct.NewStructStartEvent( mkQn( "ns2@v1/S1" ) ),
@@ -1513,8 +1513,8 @@ func ( rti *rtInit ) addDefaultPathTests() {
         return mgRct.NewFieldStartEvent( mkTestId( i ) )
     }
     iv1 := mgRct.NewValueEvent( mg.Int32( 1 ) )
-    src, expct := []mgRct.ReactorEvent{}, []mgRct.EventExpectation{}
-    apnd := func( ev mgRct.ReactorEvent, p objpath.PathNode, synth bool ) {
+    src, expct := []mgRct.Event{}, []mgRct.EventExpectation{}
+    apnd := func( ev mgRct.Event, p objpath.PathNode, synth bool ) {
         if ! synth { src = append( src, ev ) }
         expct = append( expct, mgRct.EventExpectation{ Event: ev, Path: p } )
     }

@@ -26,7 +26,7 @@ type CastReactorTest struct {
 }
 
 type EventPathTest struct {
-    Source []mgRct.ReactorEvent
+    Source []mgRct.Event
     Expect []mgRct.EventExpectation
     Type mg.TypeReference
     Map *types.DefinitionMap
