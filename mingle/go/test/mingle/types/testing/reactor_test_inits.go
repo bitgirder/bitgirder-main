@@ -28,7 +28,7 @@ func makeIdList( strs ...string ) []*mg.Identifier {
 var testValBuf1 = mg.Buffer( []byte{ byte( 0 ), byte( 1 ), byte( 2 ) } )
 var testValTm1 = parser.MustTimestamp( "2007-08-24T13:15:43.123450000-08:00" )
 
-type rtInit struct { b *mgRct.ReactorTestSetBuilder }
+type rtInit struct { b *mgRct.ReactorTestSliceBuilder }
 
 func ( rti *rtInit ) addTests( tests ...mgRct.ReactorTest ) {
     rti.b.AddTests( tests... )
@@ -1588,7 +1588,8 @@ func ( rti *rtInit ) addConstructorCastTests() {
     )
 }
 
-func ( rti *rtInit ) call() {
+func GetReactorTests() []mgRct.ReactorTest {
+    rti := &rtInit{ b: mgRct.NewReactorTestSliceBuilder() }
     rti.addBaseTypeTests()    
     rti.addMiscTcErrors()
     rti.addMiscVcErrors()
@@ -1611,9 +1612,5 @@ func ( rti *rtInit ) call() {
     rti.addDefaultPathTests()
     rti.addCastDisableTests()
     rti.addCustomFieldSetTests()
-}
-
-func init() {
-    f := func( b *mgRct.ReactorTestSetBuilder ) { ( &rtInit{ b: b } ).call() }
-    mgRct.AddTestInitializer( reactorTestNs, f )
+    return rti.b.GetTests()
 }

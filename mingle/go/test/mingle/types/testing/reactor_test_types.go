@@ -4,11 +4,8 @@ import (
     mg "mingle"
     "mingle/types"
     mgRct "mingle/reactor"
-    "mingle/parser"
     "bitgirder/objpath"
 )
-
-var reactorTestNs = parser.MustNamespace( "mingle:types:testing@v1" )
 
 const (
     ProfileCastDisable = "cast-disable"

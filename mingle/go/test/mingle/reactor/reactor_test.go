@@ -9,7 +9,7 @@ import (
 )
 
 func TestReactors( t *testing.T ) {
-    RunReactorTestsInNamespace( reactorTestNs, t )
+    RunReactorTests( GetReactorTests(), assert.NewPathAsserter( t ) )
 }
 
 func TestVisitPath( t *testing.T ) {

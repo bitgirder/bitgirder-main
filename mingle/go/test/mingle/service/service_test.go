@@ -8,7 +8,7 @@ import (
 )
 
 func TestReactors( t *testing.T ) {
-    mgRct.RunReactorTestsInNamespace( NsService, t )
+    mgRct.RunReactorTests( GetReactorTests(), assert.NewPathAsserter( t ) )
 }
 
 func TestFormatInstanceId( t *testing.T ) {

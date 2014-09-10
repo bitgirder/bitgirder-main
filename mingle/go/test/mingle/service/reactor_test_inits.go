@@ -9,7 +9,7 @@ import (
 )
 
 type reactorTestBuilder struct {
-    b *mgRct.ReactorTestSetBuilder
+    b *mgRct.ReactorTestSliceBuilder
     typ *mg.QualifiedTypeName
     rctProfile string
     errProfile string
@@ -106,7 +106,7 @@ func ( b *reactorTestBuilder ) addResponseImplErrorTests() {
     )
 }
 
-func initBaseRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
+func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     b := &reactorTestBuilder{ 
         b: tsb, 
         typ: QnameRequest, 
@@ -253,7 +253,7 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
     b.addRequestImplErrorTests()
 }
 
-func initBaseResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
+func initBaseResponseTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     b := &reactorTestBuilder{ 
         b: tsb, 
         typ: QnameResponse, 
@@ -321,12 +321,12 @@ func initBaseResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
     b.addResponseImplErrorTests()
 }
 
-func initBaseReactorTests( b *mgRct.ReactorTestSetBuilder ) {
+func initBaseReactorTests( b *mgRct.ReactorTestSliceBuilder ) {
     initBaseRequestTests( b )
     initBaseResponseTests( b )
 }
 
-func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
+func initTypedRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     b := &reactorTestBuilder{ 
         b: tsb, 
         typ: QnameRequest, 
@@ -459,7 +459,7 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSetBuilder ) {
     b.addRequestImplErrorTests()
 }
 
-func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
+func initTypedResponseTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     b := &reactorTestBuilder{
         b: tsb, 
         typ: QnameResponse, 
@@ -579,16 +579,14 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSetBuilder ) {
     b.addResponseImplErrorTests()
 }
 
-func initTypedReactorTests( b *mgRct.ReactorTestSetBuilder ) {
+func initTypedReactorTests( b *mgRct.ReactorTestSliceBuilder ) {
     initTypedRequestTests( b )
     initTypedResponseTests( b )
 }
 
-func initReactorTests( b *mgRct.ReactorTestSetBuilder ) {
+func GetReactorTests() []mgRct.ReactorTest {
+    b := mgRct.NewReactorTestSliceBuilder()
     initBaseReactorTests( b )
     initTypedReactorTests( b )
-}
-
-func init() {
-    mgRct.AddTestInitializer( mkNs( "mingle:service@v1" ), initReactorTests )
+    return b.GetTests()
 }

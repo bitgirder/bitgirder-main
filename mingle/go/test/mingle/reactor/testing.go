@@ -5,11 +5,8 @@ import (
     "mingle/parser"
     "bitgirder/assert"
     "bitgirder/objpath"
-    "testing"
 //    "log"
 )
-
-var reactorTestNs *mg.Namespace
 
 var mkQn = parser.MustQualifiedTypeName
 var mkId = parser.MustIdentifier
@@ -29,47 +26,30 @@ type ReactorTest interface {
 
 type NamedReactorTest interface { TestName() string }
 
-type ReactorTestSetBuilder struct {
+type ReactorTestSliceBuilder struct {
     tests []ReactorTest
 }
 
-func ( b *ReactorTestSetBuilder ) AddTests( t ...ReactorTest ) {
+func NewReactorTestSliceBuilder() *ReactorTestSliceBuilder {
+    return &ReactorTestSliceBuilder{ tests: make( []ReactorTest, 0, 64 ) }
+}
+
+func ( b *ReactorTestSliceBuilder ) GetTests() []ReactorTest { return b.tests }
+
+func ( b *ReactorTestSliceBuilder ) AddTests( t ...ReactorTest ) {
     b.tests = append( b.tests, t... )
 }
 
-type ReactorTestSetInitializer func( b *ReactorTestSetBuilder ) 
-
-type testInitContext struct {
-    ns *mg.Namespace
-    ti ReactorTestSetInitializer
-}
-
-var testInits []testInitContext
-
-func AddTestInitializer( ns *mg.Namespace, ti ReactorTestSetInitializer ) {
-    if testInits == nil { testInits = make( []testInitContext, 0, 4 ) }
-    testInits = append( testInits, testInitContext{ ns: ns, ti: ti } )
-}
-
-func getReactorTestsInNamespace( ns *mg.Namespace ) []ReactorTest {
-    b := &ReactorTestSetBuilder{ tests: make( []ReactorTest, 0, 1024 ) }
-    for _, ctx := range testInits { 
-        if ctx.ns.Equals( ns ) { ctx.ti( b ) }
-    }
-    return b.tests
-}
-
-func RunReactorTestsInNamespace( ns *mg.Namespace, t *testing.T ) {
-    a := assert.NewPathAsserter( t )
+func RunReactorTests( tests []ReactorTest, a *assert.PathAsserter ) {
     la := a.StartList();
-    for _, rt := range getReactorTestsInNamespace( ns ) {
+    for _, test := range tests {
         ta := la
-        if nt, ok := rt.( NamedReactorTest ); ok { 
+        if nt, ok := test.( NamedReactorTest ); ok { 
             ta = a.Descend( nt.TestName() ) 
         }
         c := &ReactorTestCall{ PathAsserter: ta }
-        c.Logf( "calling %T", rt )
-        rt.Call( c )
+        c.Logf( "calling %T", test )
+        test.Call( c )
         la = la.Next()
     }
 }

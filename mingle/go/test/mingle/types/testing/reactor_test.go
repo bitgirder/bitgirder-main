@@ -3,8 +3,9 @@ package testing
 import (
     "testing"
     mgRct "mingle/reactor"
+    "bitgirder/assert"
 )
 
 func TestReactors( t *testing.T ) {
-    mgRct.RunReactorTestsInNamespace( reactorTestNs, t )
+    mgRct.RunReactorTests( GetReactorTests(), assert.NewPathAsserter( t ) )
 }

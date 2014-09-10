@@ -7,7 +7,7 @@ import (
     "fmt"
 )
 
-func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
+func initBuildReactorValueTests( b *ReactorTestSliceBuilder ) {
     s1 := parser.MustStruct( "ns1@v1/S1",
         "val1", mg.String( "hello" ),
         "list1", mg.MustList(),
@@ -101,7 +101,7 @@ func initBuildReactorValueTests( b *ReactorTestSetBuilder ) {
 
 // these are meant to check that errors are correctly returned by the reactor,
 // and that path info supplied to binders and factories are correct
-func initBuildReactorErrorTests( b *ReactorTestSetBuilder ) {
+func initBuildReactorErrorTests( b *ReactorTestSliceBuilder ) {
     addErr := func( in mg.Value, err error ) {
         b.AddTests(
             &BuildReactorTest{
@@ -167,7 +167,7 @@ func initBuildReactorErrorTests( b *ReactorTestSetBuilder ) {
     addErr( parser.MustStruct( "ns1@v1/BadType" ), testErrForPath( nil ) )
 }
 
-func initBuildReactorImplTests( b *ReactorTestSetBuilder ) {
+func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
     p := mg.MakeTestIdPath
     add := func( in mg.Value, expct interface{} ) {
         b.AddTests(
@@ -258,7 +258,7 @@ func initBuildReactorImplTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-func initBuildReactorTests( b *ReactorTestSetBuilder ) {
+func initBuildReactorTests( b *ReactorTestSliceBuilder ) {
     initBuildReactorValueTests( b )
     initBuildReactorErrorTests( b )
     initBuildReactorImplTests( b )
@@ -267,7 +267,7 @@ func initBuildReactorTests( b *ReactorTestSetBuilder ) {
 // we only add here error tests; we assume that a value build reactor sits
 // behind a structural reactor and so let BuildReactorTest successes imply
 // correct behavior of the structural check reactor for valid inputs
-func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
+func initStructuralReactorTests( b *ReactorTestSliceBuilder ) {
     evStartStruct1 := NewStructStartEvent( mkQn( "ns1@v1/S1" ) )
     id := mg.MakeTestId
     evStartField1 := NewFieldStartEvent( id( 1 ) )
@@ -376,7 +376,7 @@ func initStructuralReactorTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-func initEventPathTests( b *ReactorTestSetBuilder ) {
+func initEventPathTests( b *ReactorTestSliceBuilder ) {
     p := mg.MakeTestIdPath
     ee := func( ev Event, p objpath.PathNode ) EventExpectation {
         return EventExpectation{ Event: ev, Path: p }
@@ -554,7 +554,7 @@ func testOrderWithIds(
     return FieldOrderReactorTestOrder{ Type: typ, Order: ord }
 }
 
-func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
+func initFieldOrderValueTests( b *ReactorTestSliceBuilder ) {
     flds := make( []Event, 5 )
     ids := make( []*mg.Identifier, len( flds ) )
     for i := 0; i < len( flds ); i++ {
@@ -689,7 +689,7 @@ func initFieldOrderValueTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
+func initFieldOrderMissingFieldTests( b *ReactorTestSliceBuilder ) {
     fldId := mg.MakeTestId
     ord := FieldOrder( 
         []FieldOrderSpecification{
@@ -752,7 +752,7 @@ func initFieldOrderMissingFieldTests( b *ReactorTestSetBuilder ) {
     addErr( []int{ 1 }, 4, 3, 0, 2 )
 }
 
-func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
+func initFieldOrderPathTests( b *ReactorTestSliceBuilder ) {
     mapStart := NewMapStartEvent()
     valListStart := NewListStartEvent( mg.TypeOpaqueList )
     i1 := mg.Int32( int32( 1 ) )
@@ -976,13 +976,13 @@ func initFieldOrderPathTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-func initFieldOrderReactorTests( b *ReactorTestSetBuilder ) {
+func initFieldOrderReactorTests( b *ReactorTestSliceBuilder ) {
     initFieldOrderValueTests( b )
     initFieldOrderMissingFieldTests( b )
     initFieldOrderPathTests( b )
 }
 
-func initDepthTrackerTests( b *ReactorTestSetBuilder ) {
+func initDepthTrackerTests( b *ReactorTestSliceBuilder ) {
     b.AddTests(
         &DepthTrackerTest{
             Source: []Event{ NewValueEvent( mg.Int32( 1 ) ) },
@@ -1038,15 +1038,12 @@ func initDepthTrackerTests( b *ReactorTestSetBuilder ) {
     )
 }
 
-func initReactorTests( b *ReactorTestSetBuilder ) {
+func GetReactorTests() []ReactorTest {
+    b := NewReactorTestSliceBuilder()
     initStructuralReactorTests( b )
     initBuildReactorTests( b )
     initEventPathTests( b )
     initFieldOrderReactorTests( b )
     initDepthTrackerTests( b )
-}
-
-func init() { 
-    reactorTestNs = parser.MustNamespace( "mingle:reactor@v1" )
-    AddTestInitializer( reactorTestNs, initReactorTests ) 
+    return b.GetTests()
 }
