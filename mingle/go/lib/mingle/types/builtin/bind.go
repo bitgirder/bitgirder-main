@@ -14,8 +14,8 @@ import (
 func asValueError( ve mgRct.Event, err error ) error {
     switch v := err.( type ) {
     case *parser.ParseError:
-        err = mg.NewValueCastError( ve.GetPath(), v.Error() )
-    case *mg.BinIoError: err = mg.NewValueCastError( ve.GetPath(), v.Error() )
+        err = mg.NewCastError( ve.GetPath(), v.Error() )
+    case *mg.BinIoError: err = mg.NewCastError( ve.GetPath(), v.Error() )
     }
     return err
 }
@@ -213,7 +213,7 @@ func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 
 func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
     negErr := func() error {
-        return mg.NewValueCastError( ve.GetPath(), "value is negative" )
+        return mg.NewCastError( ve.GetPath(), "value is negative" )
     }
     switch v := ve.Val.( type ) {
     case mg.Int32:
@@ -230,12 +230,12 @@ func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
 
 func idPathPartFailBadVal( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
     tmpl := "invalid value for identifier path part: %s"
-    err := mg.NewValueCastErrorf( ve.GetPath(), tmpl, mgRct.TypeOfEvent( ve ) )
+    err := mg.NewCastErrorf( ve.GetPath(), tmpl, mgRct.TypeOfEvent( ve ) )
     return nil, err, true
 }
 
 // note that we have ValueFunc end with idPathPartFailBadVal so that we can fail
-// with a ValueCastError instead of the default error. This is to reflect the
+// with a CastError instead of the default error. This is to reflect the
 // intent of IdentifierPart.parts being typed as Value+, but where the values
 // themselves are expected to be of a finite set of types (if we had union types
 // we would use that)
@@ -345,12 +345,12 @@ func newLocatableErrorBuilderFactory(
 func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return newLocatableErrorBuilderFactory(     
         mg.QnameCastError, 
-        func() interface{} { return new( mg.ValueCastError ) },
+        func() interface{} { return new( mg.CastError ) },
         func( fldVal, err interface{} ) {
-            err.( *mg.ValueCastError ).Message = fldVal.( string )
+            err.( *mg.CastError ).Message = fldVal.( string )
         },
         func( fldVal, err interface{} ) {
-            err.( *mg.ValueCastError ).Location = fldVal.( objpath.PathNode )
+            err.( *mg.CastError ).Location = fldVal.( objpath.PathNode )
         },
         nil,
         reg,
@@ -519,7 +519,7 @@ func visitLocatableError(
 }
 
 func VisitCastError( 
-    e *mg.ValueCastError, vc bind.VisitContext ) ( err error ) {
+    e *mg.CastError, vc bind.VisitContext ) ( err error ) {
 
     es := vc.EventSender()
     if err = es.StartStruct( mg.QnameCastError ); err != nil { return }
@@ -567,7 +567,7 @@ func visitBuiltinTypeOk(
     case *mg.Identifier: return VisitIdentifier( v, vc ), true
     case *mg.Namespace: return VisitNamespace( v, vc ), true
     case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
-    case *mg.ValueCastError: return VisitCastError( v, vc ), true
+    case *mg.CastError: return VisitCastError( v, vc ), true
     case *mg.UnrecognizedFieldError: 
         return VisitUnrecognizedFieldError( v, vc ), true
     case *mg.MissingFieldsError: return VisitMissingFieldsError( v, vc ), true

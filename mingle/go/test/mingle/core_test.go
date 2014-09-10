@@ -1167,7 +1167,7 @@ func TestTimestampStrings( t *testing.T ) {
 
 func TestCastValueErrorFormatting( t *testing.T ) {
     path := objpath.RootedAt( mkId( "f1" ) )
-    err := NewValueCastErrorf( path, "Blah %s", "X" )
+    err := NewCastErrorf( path, "Blah %s", "X" )
     assert.Equal( "f1: Blah X", err.Error() )
 }
 

@@ -5,6 +5,6 @@ import (
     "bitgirder/objpath"
 )
 
-func newNullValueCastError( path objpath.PathNode ) *mg.ValueCastError {
-    return mg.NewValueCastError( path, "Value is null" )
+func newNullCastError( path objpath.PathNode ) *mg.CastError {
+    return mg.NewCastError( path, "Value is null" )
 }

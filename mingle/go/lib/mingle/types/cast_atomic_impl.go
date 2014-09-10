@@ -16,7 +16,7 @@ func strToBool( s mg.String, path objpath.PathNode ) ( mg.Value, error ) {
     }
     errTmpl :="Invalid boolean value: %s"
     errStr := mg.QuoteValue( s )
-    return nil, mg.NewValueCastErrorf( path, errTmpl, errStr )
+    return nil, mg.NewCastErrorf( path, errTmpl, errStr )
 }
 
 func castBoolean( 
@@ -44,7 +44,7 @@ func castBuffer(
         buf, err := base64.StdEncoding.DecodeString( string( v ) )
         if err == nil { return mg.Buffer( buf ), nil }
         msg := "Invalid base64 string: %s"
-        return nil, mg.NewValueCastErrorf( path, msg, err.Error() )
+        return nil, mg.NewCastErrorf( path, msg, err.Error() )
     }
     return nil, mg.NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -83,7 +83,7 @@ func parseNumberForCast(
     if asFloat { parseTyp = mg.QnameFloat64 }
     val, err := mg.ParseNumber( string( s ), parseTyp )
     if ne, ok := err.( *mg.NumberFormatError ); ok {
-        err = mg.NewValueCastError( path, ne.Error() )
+        err = mg.NewCastError( path, ne.Error() )
     }
     if err != nil || ( ! asFloat ) { return val, err }
     f64 := float64( val.( mg.Float64 ) )
@@ -216,7 +216,7 @@ func castTimestamp(
         tm, err := parser.ParseTimestamp( string( v ) )
         if err == nil { return tm, nil }
         msg := "Invalid timestamp: %s"
-        return nil, mg.NewValueCastErrorf( path, msg, err.Error() )
+        return nil, mg.NewCastErrorf( path, msg, err.Error() )
     }
     return nil, mg.NewTypeCastErrorValue( callTyp, mgVal, path )
 }
@@ -245,7 +245,7 @@ func castAtomicUnrestricted(
 
     if _, ok := mgVal.( *mg.Null ); ok {
         if at.Equals( mg.TypeNull ) { return mgVal, nil }
-        return nil, newNullValueCastError( path )
+        return nil, newNullCastError( path )
     }
     switch nm := at.Name; {
     case nm.Equals( mg.QnameValue ): return mgVal, nil
@@ -281,7 +281,7 @@ func checkRestriction(
     path objpath.PathNode ) error {
 
     if at.Restriction.AcceptsValue( val ) { return nil }
-    return mg.NewValueCastErrorf( 
+    return mg.NewCastErrorf( 
         path, "Value %s does not satisfy restriction %s",
         mg.QuoteValue( val ), at.Restriction.ExternalForm() )
 }
@@ -306,7 +306,7 @@ func completeCastEnum(
 
     if res := ed.GetValue( id ); res != nil { return res, nil }
     tmpl := "illegal value for enum %s: %s"
-    return nil, mg.NewValueCastErrorf( path, tmpl, ed.GetName(), id )
+    return nil, mg.NewCastErrorf( path, tmpl, ed.GetName(), id )
 }
 
 func castEnumFromString( 
@@ -315,7 +315,7 @@ func castEnumFromString(
     id, err := parser.ParseIdentifier( s )
     if err != nil {
         tmpl := "invalid enum value %q: %s"
-        return nil, mg.NewValueCastErrorf( path, tmpl, s, err )
+        return nil, mg.NewCastErrorf( path, tmpl, s, err )
     }
     return completeCastEnum( id, ed, path )
 }

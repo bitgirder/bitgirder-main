@@ -52,8 +52,8 @@ package main
 //    }
 //}
 //
-//func vceAsValue( vce *mg.ValueCastError ) mg.Value {
-//    return mkStruct( "ValueCastError", valueErrorFieldPairs( vce )... )
+//func vceAsValue( vce *mg.CastError ) mg.Value {
+//    return mkStruct( "CastError", valueErrorFieldPairs( vce )... )
 //}
 //
 //func ufeAsValue( ufe *mg.UnrecognizedFieldError ) mg.Value {
@@ -193,7 +193,7 @@ package main
 //        return mg.Buffer( mg.QualifiedTypeNameAsBytes( v ) )
 //    case *mg.Namespace: return mg.Buffer( mg.NamespaceAsBytes( v ) )
 //    case objpath.PathNode: return mg.Buffer( mg.IdPathAsBytes( v ) )
-//    case *mg.ValueCastError: return vceAsValue( v )
+//    case *mg.CastError: return vceAsValue( v )
 //    case mg.ValueBuildTest: return mkStruct( "ValueBuildTest", "val", v.Val )
 //    case mg.EventExpectation: return eeAsValue( v )
 //    case []mg.EventExpectation: return sliceAsValue( v )

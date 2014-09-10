@@ -209,7 +209,7 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     )
     b.addErr(
         parser.MustStruct( QnameRequest, "namespace", "Bad" ),
-        mg.NewValueCastError( 
+        mg.NewCastError( 
             objpath.RootedAt( mkId( "namespace" ) ), 
             "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
         ),
@@ -219,7 +219,7 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
             "namespace", "ns1@v1",
             "service", "bad$id",
         ),
-        mg.NewValueCastError( 
+        mg.NewCastError( 
             objpath.RootedAt( mkId( "service" ) ), 
             "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
         ),
@@ -230,7 +230,7 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
             "service", "svc1",
             "operation", "bad$id",
         ),
-        mg.NewValueCastError( 
+        mg.NewCastError( 
             objpath.RootedAt( mkId( "operation" ) ),
             "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
         ),

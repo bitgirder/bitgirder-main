@@ -2051,7 +2051,7 @@ func ( c *Compilation ) validateConstVal(
     errLoc *parser.Location ) bool {
 
     if _, err := c.castConstVal( val, typ, dm ); err != nil {
-        if ve, ok := err.( *mg.ValueCastError ); ok {
+        if ve, ok := err.( *mg.CastError ); ok {
             c.addError( errLoc, ve.Message )
         } else { c.addError( errLoc, err.Error() ) }
         return false

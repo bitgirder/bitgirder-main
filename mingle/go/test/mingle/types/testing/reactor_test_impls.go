@@ -24,7 +24,7 @@ func ( f customFieldSetFactory ) GetFieldSet(
         )
         return fs, nil
     }
-    return nil, mg.NewValueCastError( path, "custom-field-set-test-error" )
+    return nil, mg.NewCastError( path, "custom-field-set-test-error" )
 }
 
 func ( t *CastReactorTest ) addCastReactor( 

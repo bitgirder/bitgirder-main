@@ -574,29 +574,27 @@ func FormatError( path objpath.PathNode, msg string ) string {
     return FormatIdPath( path ) + ": " + msg 
 }
 
-type ValueCastError struct {
+type CastError struct {
     Location objpath.PathNode
     Message string
 }
 
-func ( e *ValueCastError ) Error() string { 
+func ( e *CastError ) Error() string { 
     return FormatError( e.Location, e.Message )
 }
 
-func NewValueCastError( path idPath, msg string ) *ValueCastError {
-    return &ValueCastError{ Message: msg, Location: path }
+func NewCastError( path idPath, msg string ) *CastError {
+    return &CastError{ Message: msg, Location: path }
 }
 
-func NewValueCastErrorf(
-    path idPath, tmpl string, args ...interface{} ) *ValueCastError {
-
-    return NewValueCastError( path, fmt.Sprintf( tmpl, args... ) )
+func NewCastErrorf( path idPath, tmpl string, args ...interface{} ) *CastError {
+    return NewCastError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
 func NewTypeCastError( 
-    expct, act TypeReference, path objpath.PathNode ) *ValueCastError {
+    expct, act TypeReference, path objpath.PathNode ) *CastError {
 
-    return NewValueCastErrorf( 
+    return NewCastErrorf( 
         path,
         "Expected value of type %s but found %s",
         expct.ExternalForm(), act.ExternalForm(),
@@ -604,7 +602,7 @@ func NewTypeCastError(
 }
 
 func NewTypeCastErrorValue( 
-    t TypeReference, val Value, path objpath.PathNode ) *ValueCastError {
+    t TypeReference, val Value, path objpath.PathNode ) *CastError {
 
     return NewTypeCastError( t, TypeOf( val ), path )
 }

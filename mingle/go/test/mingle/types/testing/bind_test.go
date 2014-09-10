@@ -302,7 +302,7 @@ func getBindTests() []*bind.BindTest {
             "location", idPathStruct( idStruct( "f1" ), uint64( 2 ) ),
         ),
         asType( "mingle:core@v1/CastError" ),
-        mg.NewValueCastError( tp( 1, "2" ), "test-message" ),
+        mg.NewCastError( tp( 1, "2" ), "test-message" ),
     )
     addIn( 
         parser.MustStruct( "mingle:core@v1/CastError",
@@ -310,10 +310,10 @@ func getBindTests() []*bind.BindTest {
             "location", "f1[ 2 ]",
         ),
         asType( "mingle:core@v1/CastError" ),
-        mg.NewValueCastError( tp( 1, "2" ), "test-message" ),
+        mg.NewCastError( tp( 1, "2" ), "test-message" ),
     )
     addOut( 
-        mg.NewValueCastError( tp( 1, "2" ), "test-message" ),
+        mg.NewCastError( tp( 1, "2" ), "test-message" ),
         parser.MustStruct( "mingle:core@v1/CastError",
             "message", "test-message",
             "location", "f1[ 2 ]",

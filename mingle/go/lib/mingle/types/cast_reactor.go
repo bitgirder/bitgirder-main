@@ -20,7 +20,7 @@ func asMapStartEvent( ev mgRct.Event ) *mgRct.MapStartEvent {
 func notAFieldSetTypeError( 
     p objpath.PathNode, qn *mg.QualifiedTypeName ) error {
 
-    return mg.NewValueCastErrorf( p, "not a type with fields: %s", qn )
+    return mg.NewCastErrorf( p, "not a type with fields: %s", qn )
 }
 
 func fieldSetForTypeInDefMap(
@@ -35,7 +35,7 @@ func fieldSetForTypeInDefMap(
         default: return nil, notAFieldSetTypeError( path, qn )
         } 
     } 
-    return nil, mg.NewValueCastErrorf( path, "unrecognized type: %s", qn )
+    return nil, mg.NewCastErrorf( path, "unrecognized type: %s", qn )
 }
 
 type fieldTyper interface {
@@ -239,7 +239,7 @@ func ( cr *CastReactor ) castStructConstructor(
     }
     if ev, ok := v.( *mg.Enum ); ok {
         if ev.Type.Equals( sd.Name ) { 
-            err := mg.NewValueCastErrorf( 
+            err := mg.NewCastErrorf( 
                 path, "not an enum type: %s", sd.Name )
             return nil, err, true
         }
@@ -321,7 +321,7 @@ func ( cr *CastReactor ) processValueForListType(
     next mgRct.EventProcessor ) error {
 
     if _, ok := ve.Val.( *mg.Null ); ok {
-        return newNullValueCastError( ve.GetPath() )
+        return newNullCastError( ve.GetPath() )
     }
     return mg.NewTypeCastErrorValue( callTyp, ve.Val, ve.GetPath() )
 }
@@ -420,7 +420,7 @@ func ( cr *CastReactor ) fieldSetTyperFor(
         }
     }
     tmpl := "no field type info for type %s"
-    return nil, mg.NewValueCastErrorf( path, tmpl, qn )
+    return nil, mg.NewCastErrorf( path, tmpl, qn )
 }
 
 func ( cr *CastReactor ) completeStartStruct(
@@ -534,7 +534,7 @@ func ( cr *CastReactor ) processFieldStart(
 func ( cr *CastReactor ) processListEnd() error {
     lc := cr.stack.Pop().( *listCast )
     if ! ( lc.sawValues || lc.lt.AllowsEmpty ) {
-        return mg.NewValueCastError( lc.startPath, "empty list" )
+        return mg.NewCastError( lc.startPath, "empty list" )
     }
     return nil
 }
