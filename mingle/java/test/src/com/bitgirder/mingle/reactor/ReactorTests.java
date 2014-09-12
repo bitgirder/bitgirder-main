@@ -7,6 +7,7 @@ import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import static com.bitgirder.mingle.MingleTestMethods.*;
 
+import com.bitgirder.mingle.Mingle;
 import com.bitgirder.mingle.MingleNamespace;
 import com.bitgirder.mingle.MingleStruct;
 import com.bitgirder.mingle.MingleSymbolMap;
@@ -55,66 +56,21 @@ class MingleReactorTests
 
     private
     static
-    abstract
-    class TestImpl
-    extends LabeledTestCall
+    final
+    class BuildReactorTest
+    extends AbstractReactorTest
     {
-        private TestImpl( CharSequence nm ) { super( nm ); }
-        private TestImpl() { super(); }
+        private MingleValue val;
+        private Object source;
+        private String profile;
 
-        void
-        setLabel( Object... pairs )
-        {
-            setLabel( getClass().getSimpleName() + ":" + 
-                Strings.crossJoin( "=", ",", pairs ) );
-        }
+        private BuildReactorTest( CharSequence nm ) { super( nm ); }
 
-        final 
+        public
         void
-        feedReactorEvents( List< MingleReactorEvent > evs,
-                           MingleReactor rct )
+        call()
             throws Exception
         {
-            for ( MingleReactorEvent ev : evs ) rct.processEvent( ev );
-        }
-
-//        final
-//        void
-//        feedSource( Object src,
-//                    MingleReactor rct )
-//            throws Exception
-//        {
-//            if ( src instanceof MingleValue ) {
-//                MingleReactors.visitValue( (MingleValue) src, rct );
-//            } 
-//            else if ( src instanceof List ) 
-//            {
-//                List< MingleReactorEvent > evs = 
-//                    Lang.castUnchecked( src );
-//
-//                feedReactorEvents( evs, rct );
-//            } 
-//            else {
-//                state.failf( "unhandled source: %s", src );
-//            }
-//        }
-    }
-
-//    private
-//    static
-//    final
-//    class ValueBuildTest
-//    extends TestImpl
-//    {
-//        private MingleValue val;
-//
-//        private ValueBuildTest( CharSequence nm ) { super( nm ); }
-//
-//        public
-//        void
-//        call()
-//            throws Exception
-//        {
 //            MingleReactorPipeline pip = 
 //                MingleReactors.createValueBuilderPipeline();
 //
@@ -126,13 +82,15 @@ class MingleReactorTests
 //            
 //            MingleTests.assertEqual( val, bld.value() );
 //        }
-//    }
+            throw new UnsupportedOperationException( "Unimplemented" );
+        }
+    }
 
     private
     final
     static
     class StructuralErrorTest
-    extends TestImpl
+    extends AbstractReactorTest
     {
         private List< MingleReactorEvent > events;
         private MingleReactorTopType topType;
@@ -195,7 +153,7 @@ class MingleReactorTests
 //    final
 //    static
 //    class EventPathTest
-//    extends TestImpl
+//    extends AbstractReactorTest
 //    {
 //        private ObjectPath< MingleIdentifier > startPath;
 //        private Queue< EventExpectation > events;
@@ -359,7 +317,7 @@ class MingleReactorTests
 //    final
 //    static
 //    class CastReactorTest
-//    extends TestImpl
+//    extends AbstractReactorTest
 //    {
 //        private MingleValue in;
 //        private MingleValue expect;
@@ -422,7 +380,7 @@ class MingleReactorTests
 //    static
 //    abstract
 //    class FieldOrderTest
-//    extends TestImpl
+//    extends AbstractReactorTest
 //    implements MingleFieldOrderProcessor.OrderGetter
 //    {
 //        List< MingleReactorEvent > source;
@@ -668,7 +626,7 @@ class MingleReactorTests
 //    final
 //    static
 //    class RequestReactorTest
-//    extends TestImpl
+//    extends AbstractReactorTest
 //    implements MingleRequestReactor.Delegate
 //    {
 //        private Object source;
@@ -771,7 +729,7 @@ class MingleReactorTests
 //    final
 //    static
 //    class ResponseReactorTest
-//    extends TestImpl
+//    extends AbstractReactorTest
 //    implements MingleResponseReactor.Delegate
 //    {
 //        private MingleValue in;
@@ -822,16 +780,9 @@ class MingleReactorTests
     private
     static
     class TestImplReader
-    extends MingleTestGen.StructFileReader< TestImpl >
+    extends MingleReactorTestFileReader< AbstractReactorTest >
     {
-        private final Map< QualifiedTypeName, Integer > seqsByType =
-            Lang.newMap();
-
-        private
-        TestImplReader()
-        {
-            super( "reactor-tests.bin" );
-        }
+        private TestImplReader() { super( TEST_NS ); }
 
 //        private
 //        void
@@ -844,23 +795,6 @@ class MingleReactorTests
 //            }
 //        }
 
-        private
-        CharSequence
-        makeName( MingleStruct ms,
-                  Object name )
-        {
-            QualifiedTypeName qn = ms.getType();
-
-            if ( name == null ) {
-                Integer seq = seqsByType.get( qn );
-                if ( seq == null ) seq = Integer.valueOf( 0 );
-                name = seq.toString();
-                seqsByType.put( qn, seq + 1 );
-            }
-
-            return qn.getName() + "/" + name;
-        }
-
 //        private
 //        MingleValue
 //        valOrNull( MingleValue mv )
@@ -870,174 +804,27 @@ class MingleReactorTests
 //        }
 
         private
-        MingleIdentifier
-        asIdentifier( byte[] arr )
+        BuildReactorTest
+        asBuildReactorTest( MingleStruct ms )
             throws Exception
         {
-            if ( arr == null ) return null;
-            
-            return MingleBinReader.create( arr ).readIdentifier();
-        }
-
-//        private
-//        MingleNamespace
-//        asNamespace( byte[] arr )
-//            throws Exception
-//        {
-//            if ( arr == null ) return null;
-//
-//            return MingleBinReader.create( arr ).readNamespace();
-//        }
-//
-//        private
-//        List< MingleIdentifier >
-//        asIdentifierList( MingleList ml )
-//            throws Exception
-//        {
-//            if ( ml == null ) return null;
-//
-//            List< MingleIdentifier > res = Lang.newList();
-//
-//            for ( MingleValue mv : ml ) {
-//                res.add( asIdentifier( ( (MingleBuffer) mv ).array() ) );
-//            }
-//
-//            return res;
-//        }
-
-        private
-        QualifiedTypeName
-        asQname( byte[] arr )
-            throws Exception
-        {
-            if ( arr == null ) return null;
-
-            return MingleBinReader.create( arr ).readQualifiedTypeName();
-        }
-
-        private
-        MingleTypeReference
-        asTypeReference( byte[] arr )
-            throws Exception
-        {
-            if ( arr == null ) return null;
-
-            return MingleBinReader.create( arr ).readTypeReference();
-        }
-
-        private
-        ObjectPath< MingleIdentifier >
-        asIdentifierPath( byte[] arr )
-            throws Exception
-        {
-            throw new UnsupportedOperationException( "Unimplemented" );
-        }
-
-        private
-        void
-        setEventStartStruct( MingleReactorEvent ev,
-                             MingleSymbolMap map )
-            throws Exception
-        {
-            byte[] arr = mapExpect( map, "type", byte[].class );
-            ev.setStartStruct( asQname( arr ) );
-        }
-
-        private
-        void
-        setEventStartList( MingleReactorEvent ev,
-                           MingleSymbolMap map )
-            throws Exception
-        {
-            byte[] arr = mapExpect( map, "type", byte[].class );
-            ev.setStartList( (ListTypeReference) asTypeReference( arr ) );
-        }
-
-        private
-        void
-        setEventStartField( MingleReactorEvent ev,
-                            MingleSymbolMap map )
-            throws Exception
-        {
-            byte[] arr = mapExpect( map, "field", byte[].class );
-            ev.setStartField( asIdentifier( arr ) );
-        }
-
-        private
-        MingleReactorEvent
-        asReactorEvent( MingleStruct ms )
-            throws Exception
-        {
-            MingleReactorEvent res = new MingleReactorEvent();
-
-            String evName = ms.getType().getName().toString();
             MingleSymbolMap map = ms.getFields();
 
-            if ( evName.equals( "StructStartEvent" ) ) {
-                setEventStartStruct( res, map );
-            } else if ( evName.equals( "FieldStartEvent" ) ) {
-                setEventStartField( res, map );
-            } else if ( evName.equals( "MapStartEvent" ) ) {
-                res.setStartMap();
-            } else if ( evName.equals( "ListStartEvent" ) ) {
-                setEventStartList( res, map );
-            } else if ( evName.equals( "EndEvent" ) ) {
-                res.setEnd();
-            } else if ( evName.equals( "ValueEvent" ) ) {
-                res.setValue( mapExpect( map, "val", MingleValue.class ) );
-            } else {
-                state.failf( "unhandled event: %s", evName );
-            }
+            MingleValue val = mapGetValue( map, "val" );
+            MingleValue err = mapGetValue( map, "error" );
+
+            MingleValue nmVal = val == null ? err : val;
+            String nm = String.format( "%s (%s)", 
+                Mingle.inspect( nmVal ), Mingle.typeOf( nmVal ) );
+
+            BuildReactorTest res = new BuildReactorTest( makeName( ms, nm ) );
+
+            res.val = val;
+            res.source = asFeedSource( map, "source" );
+            res.profile = mapExpectString( map, "profile" );
+            setOptError( res, err );
 
             return res;
-        }
-
-        private
-        List< MingleReactorEvent >
-        asReactorEvents( MingleList ml )
-            throws Exception
-        {
-            List< MingleReactorEvent > res = Lang.newList();
-    
-            for ( MingleValue mv : ml ) {
-                res.add( asReactorEvent( (MingleStruct) mv ) );
-            }
-
-            return res;
-        }
-
-        private
-        List< MingleReactorEvent >
-        asReactorEvents( MingleSymbolMap m,
-                         String fld )
-            throws Exception
-        {
-            return asReactorEvents( mapExpect( m, fld, MingleList.class ) );
-        }
-
-//        private
-//        ValueBuildTest
-//        asValueBuildTest( MingleStruct ms )
-//        {
-//            MingleSymbolMap map = ms.getFields();
-//
-//            MingleValue val = mapExpect( map, "val", MingleValue.class );
-//
-//            String nm = String.format( "%s (%s)", 
-//                Mingle.inspect( val ), val.getClass().getName() );
-//
-//            ValueBuildTest res = new ValueBuildTest( makeName( ms, nm ) );
-//            res.val = val;
-//
-//            return res;
-//        }
-
-        private
-        MingleReactorException
-        asReactorError( MingleSymbolMap map )
-        {
-            return new MingleReactorException(
-                mapExpect( map, "message", String.class ) );
         }
 
 //        private
@@ -1124,7 +911,7 @@ class MingleReactorTests
             res.events = asReactorEvents( map, "events" );
  
             MingleStruct rctErr = mapExpect( map, "error", MingleStruct.class );
-            res.expectFailure( asReactorError( rctErr.getFields() ) );
+            res.expectFailure( asReactorException( rctErr.getFields() ) );
 
             String ttStr =
                 mapExpect( map, "topType", String.class ).toUpperCase();
@@ -1507,7 +1294,7 @@ class MingleReactorTests
 //        }
 
         private
-        TestImpl
+        AbstractReactorTest
         convertTest( MingleStruct ms )
             throws Exception
         {
@@ -1516,6 +1303,8 @@ class MingleReactorTests
 
             if ( nm.equals( "StructuralReactorErrorTest" ) ) {
                 return asStructuralErrorTest( ms );
+            } else if ( nm.equals( "BuildReactorTest" ) ) {
+                return asBuildReactorTest( ms );
 //            } else if ( nm.equals( "EventPathTest" ) ) {
 //                return asEventPathTest( ms );
 //            } else if ( nm.equals( "CastReactorTest" ) ) {
@@ -1538,16 +1327,11 @@ class MingleReactorTests
         }
 
         protected
-        TestImpl
-        convertStruct( MingleStruct ms )
+        AbstractReactorTest
+        convertReactorTest( MingleStruct ms )
             throws Exception
         {
-            TestImpl res = null;
-
-            if ( ms.getType().getNamespace().equals( TEST_NS ) ) {
-                res = convertTest( ms );
-            }
-
+            AbstractReactorTest res = convertTest( ms );
             if ( res == null ) return null;
 
 //            setErrorOverride( res );
@@ -1558,7 +1342,7 @@ class MingleReactorTests
 
     @InvocationFactory
     private
-    List< TestImpl >
+    List< AbstractReactorTest >
     testReactor()
         throws Exception
     {

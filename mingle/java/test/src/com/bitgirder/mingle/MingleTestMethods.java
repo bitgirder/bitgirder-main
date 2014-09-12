@@ -192,6 +192,42 @@ class MingleTestMethods
         inputs.notNull( id, "id" );
         return mapExpect( m, MingleIdentifier.create( id ), cls );
     }
+    
+    public
+    static
+    MingleValue
+    mapGetValue( MingleSymbolMap m,
+                 CharSequence id )
+    {
+        return mapGet( m, id, MingleValue.class );
+    }
+    
+    public
+    static
+    MingleValue
+    mapExpectValue( MingleSymbolMap m,
+                    CharSequence id )
+    {
+        return mapExpect( m, id, MingleValue.class );
+    }
+    
+    public
+    static
+    String
+    mapGetString( MingleSymbolMap m,
+                  CharSequence id )
+    {
+        return mapGet( m, id, String.class );
+    }
+    
+    public
+    static
+    String
+    mapExpectString( MingleSymbolMap m,
+                     CharSequence id )
+    {
+        return mapExpect( m, id, String.class );
+    }
 
     public
     static

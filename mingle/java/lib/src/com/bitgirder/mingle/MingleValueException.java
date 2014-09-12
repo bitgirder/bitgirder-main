@@ -16,6 +16,7 @@ extends RuntimeException
     private final String err;
     private final ObjectPath< MingleIdentifier > loc;
 
+    protected
     MingleValueException( String err,
                           ObjectPath< MingleIdentifier > loc )
     {
