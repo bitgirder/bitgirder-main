@@ -195,26 +195,30 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
         []int32{ 0, 1 },
     )
     add(
-        parser.MustStruct( "ns1@v1/S1", 
+        parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
             "f1", int32( 1 ),
             "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
-            "f3", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            "f3", parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
+                "f1", int32( 1 ),
+            ),
         ),
-        &S1{ F1: 1, F2: []int32{ 0, 1 }, F3: &S1{ F1: 1 } },
+        &TestStruct1{ F1: 1, F2: []int32{ 0, 1 }, F3: &TestStruct1{ F1: 1 } },
     )
     add(
         parser.MustSymbolMap(
             "f1", int32( 1 ),
             "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
-            "f3", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+            "f3", parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
+                "f1", int32( 1 ),
+            ),
         ),
         map[ string ]interface{}{
             "f1": int32( 1 ),
             "f2": []int32{ 0, 1 },
-            "f3": &S1{ F1: 1 },
+            "f3": &TestStruct1{ F1: 1 },
         },
     )
-    add( parser.MustStruct( "ns1@v1/S2" ), S2{} )
+    add( parser.MustStruct( "mingle:reactor@v1/TestStruct2" ), TestStruct2{} )
     addErr( mg.Int32( int32( -1 ) ), testErrForPath( nil ) )
     addErr( 
         mg.Int64( int64( 1 ) ), 
@@ -240,12 +244,15 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
         testErrForPath( p( "4" ) ),
     )
     addErr(
-        parser.MustStruct( "ns1@v1/S1", "f1", int32( -1 ) ),
+        parser.MustStruct( "mingle:reactor@v1/TestStruct1", "f1", int32( -1 ) ),
         testErrForPath( p( 1 ) ),
     )
     unrec4 := mg.NewUnrecognizedFieldError( nil, mkId( "f4" ) )
     addErr( parser.MustSymbolMap( "f4", "bad" ), unrec4 )
-    addErr( parser.MustStruct( "ns1@v1/S1", "f4", "bad" ), unrec4 )
+    addErr( 
+        parser.MustStruct( "mingle:reactor@v1/TestStruct1", "f4", "bad" ), 
+        unrec4,
+    )
     // since builderTestProfileImpl successfully handles maps, we use a
     // fail-only profile just to check that custom errors from a map start func
     // are indeed returned

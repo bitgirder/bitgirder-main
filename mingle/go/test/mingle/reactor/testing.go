@@ -204,13 +204,13 @@ func testErrForValue( v mg.Value, p objpath.PathNode ) error {
     return nil
 }
 
-type S1 struct {
+type TestStruct1 struct {
     F1 int32
     F2 []int32
-    F3 *S1
+    F3 *TestStruct1
 }
 
-type S2 struct {}
+type TestStruct2 struct {}
 
 func CheckBuiltValue( 
     expct mg.Value, br *BuildReactor, a *assert.PathAsserter ) {

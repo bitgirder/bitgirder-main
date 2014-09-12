@@ -162,16 +162,16 @@ func init() {
         func( sse *StructStartEvent ) ( FieldSetBuilder, error ) {
     
             switch {
-            case sse.Type.Equals( mkQn( "ns1@v1/S1" ) ):
+            case sse.Type.Equals( mkQn( "mingle:reactor@v1/TestStruct1" ) ):
                 res := NewFunctionsFieldSetBuilder() 
-                res.Value = new( S1 )
+                res.Value = new( TestStruct1 )
                 res.RegisterField(
                     mkId( "f1" ),
                     func( path objpath.PathNode ) ( BuilderFactory, error ) {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *S1 ).F1 = val.( int32 )
+                        res.Value.( *TestStruct1 ).F1 = val.( int32 )
                         return nil
                     },
                 )
@@ -181,7 +181,7 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *S1 ).F2 = val.( []int32 )
+                        res.Value.( *TestStruct1 ).F2 = val.( []int32 )
                         return nil
                     },
                 )
@@ -191,16 +191,16 @@ func init() {
                         return testBuilderFactory, nil
                     },
                     func( val interface{}, path objpath.PathNode ) error {
-                        res.Value.( *S1 ).F3 = val.( *S1 )
+                        res.Value.( *TestStruct1 ).F3 = val.( *TestStruct1 )
                         return nil
                     },
                 )
                 return res, nil
-            case sse.Type.Equals( mkQn( "ns1@v1/S2" ) ):
+            case sse.Type.Equals( mkQn( "mingle:reactor@v1/TestStruct2" ) ):
                 res := NewFunctionsFieldSetBuilder()
-                res.Value = new( S2 )
+                res.Value = new( TestStruct2 )
                 res.FinalValue = func() interface{} {
-                    return *( res.Value.( *S2 ) )
+                    return *( res.Value.( *TestStruct2 ) )
                 }
                 return res, nil
             }

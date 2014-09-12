@@ -191,13 +191,13 @@ func idPathAsValue( p objpath.PathNode ) mg.Value {
     return acc.l
 }
 
-func mgRctS1AsValue( s *mgRct.S1 ) mg.Value {
+func mgRctS1AsValue( s *mgRct.TestStruct1 ) mg.Value {
     pairs := []interface{}{
         "f1", s.F1,
         "f2", asValue( s.F2 ),
     }
     if s.F3 != nil { pairs = append( pairs, "f3", asValue( s.F3 ) ) }
-    return parser.MustStruct( "ns1@v1/S1", pairs... )
+    return parser.MustStruct( "mingle:reactor@v1/TestStruct1", pairs... )
 }
 
 func strMapAsValue( m map[ string ]interface{} ) mg.Value {
@@ -229,8 +229,8 @@ func asValue( val interface{} ) mg.Value {
         return sliceAsValue( "mingle:core@v1/Identifier*", v )
     case *mg.QualifiedTypeName: 
         return mg.Buffer( mg.QualifiedTypeNameAsBytes( v ) )
-    case *mgRct.S1: return mgRctS1AsValue( v )
-    case mgRct.S2: return mgRctStruct( "S2" )
+    case *mgRct.TestStruct1: return mgRctS1AsValue( v )
+    case mgRct.TestStruct2: return mgRctStruct( "S2" )
     case objpath.PathNode: return idPathAsValue( v )
     case *mgRct.TestError: return mgRctTestErrorAsValue( v ) 
     case *mgRct.BuildReactorTest: return buildReactorTestAsValue( v )
