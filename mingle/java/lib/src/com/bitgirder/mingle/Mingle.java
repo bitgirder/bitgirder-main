@@ -419,14 +419,15 @@ class Mingle
         }
     }
 
-    // canAssignType() and helpers ported from the go impl
+    // canAssignType() and helpers ported from the go impl, but drops the
+    // relaxRestrictions checks (since those are only related to go's CanAssign
+    // implementation
 
     private
     static
     boolean
     canAssignAtomicType( MingleTypeReference from,
-                         AtomicTypeReference to,
-                         boolean relaxRestrictions )
+                         AtomicTypeReference to )
     {
         if ( to.getName().equals( QNAME_VALUE ) ) return true;
         if ( ! ( from instanceof AtomicTypeReference ) ) return false;
@@ -437,45 +438,21 @@ class Mingle
         MingleValueRestriction fRx = f.getRestriction();
         MingleValueRestriction toRx = to.getRestriction();
 
-        if ( relaxRestrictions ) {
-            if ( toRx == null && fRx == null ) return true;
-            return toRx.equals( fRx );
-        }
-
-        if ( fRx == null ) return toRx == null;
-        return fRx.equals( toRx );
+        if ( toRx == null && fRx == null ) return true;
+        return toRx.equals( fRx );
     }
 
     private
     static
     boolean
     canAssignNullableType( MingleTypeReference from,
-                           NullableTypeReference to,
-                           boolean relaxRestrictions )
+                           NullableTypeReference to )
     {
         if ( from instanceof NullableTypeReference ) {
             from = ( (NullableTypeReference) from ).getValueType();
         }
 
-        return canAssignType( from, to.getValueType(), relaxRestrictions );
-    }
-
-    private
-    static
-    boolean
-    canAssignType( MingleTypeReference from,
-                   MingleTypeReference to,
-                   boolean relaxRestrictions )
-    {
-        if ( to instanceof AtomicTypeReference ) {
-            AtomicTypeReference at = (AtomicTypeReference) to;
-            return canAssignAtomicType( from, at, relaxRestrictions );
-        } else if ( to instanceof NullableTypeReference ) {
-            NullableTypeReference nt = (NullableTypeReference) to;
-            return canAssignNullableType( from, nt, relaxRestrictions );
-        } else {
-            return from.equals( to );
-        }
+        return canAssignType( from, to.getValueType() );
     }
 
     public
@@ -484,7 +461,18 @@ class Mingle
     canAssignType( MingleTypeReference from,
                    MingleTypeReference to )
     {
-        return canAssignType( from, to, true );
+        inputs.notNull( from, "from" );
+        inputs.notNull( to, "to" );
+
+        if ( to instanceof AtomicTypeReference ) {
+            AtomicTypeReference at = (AtomicTypeReference) to;
+            return canAssignAtomicType( from, at );
+        } else if ( to instanceof NullableTypeReference ) {
+            NullableTypeReference nt = (NullableTypeReference) to;
+            return canAssignNullableType( from, nt );
+        } else {
+            return from.equals( to );
+        }
     }
 
     static
