@@ -86,10 +86,15 @@ implements Comparable< MingleIdentifier >
         }
     }
 
-    public CharSequence getExternalForm() { return Strings.join( "-", parts ); }
+    public 
+    String 
+    getExternalForm() 
+    { 
+        return Strings.join( "-", parts ).toString(); 
+    }
 
     @Override 
-    public final String toString() { return getExternalForm().toString(); }
+    public final String toString() { return getExternalForm(); }
 
     // we'll optimize this down the road when needed (obvious choice would be to
     // proceed lexicographically through the parts array of each)

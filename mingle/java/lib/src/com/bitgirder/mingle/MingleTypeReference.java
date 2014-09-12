@@ -14,7 +14,7 @@ class MingleTypeReference
 
     public
     abstract
-    CharSequence
+    String
     getExternalForm();
 
     public
@@ -27,12 +27,5 @@ class MingleTypeReference
     boolean
     equals( Object o );
 
-    @Override
-    public
-    final
-    String
-    toString()
-    {
-        return getExternalForm().toString();
-    }
+    @Override public final String toString() { return getExternalForm(); }
 }

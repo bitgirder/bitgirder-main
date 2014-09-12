@@ -121,44 +121,35 @@ func ( sr *StructuralReactor ) listValueTypeError(
 // drops pointer and restriction expectations from effectiveType, checking only
 // that the structure of the assignment would make sense (downstream casts can
 // check the actual validity of the assignment)
-func ( sr *StructuralReactor ) recursiveCheckValueTypeForList(
+func ( sr *StructuralReactor ) checkValueForList(
     calledType, effectiveType, valType mg.TypeReference, 
     ev Event ) error {
     
     switch typ := effectiveType.( type ) {
     case *mg.PointerTypeReference:
-        return sr.recursiveCheckValueTypeForList( 
-            calledType, typ.Type, valType, ev )
+        return sr.checkValueForList( calledType, typ.Type, valType, ev )
     case *mg.AtomicTypeReference:
         if typ.Restriction != nil {
-            return sr.recursiveCheckValueTypeForList(
-                calledType, typ.Name.AsAtomicType(), valType, ev )
+            at := typ.Name.AsAtomicType()
+            return sr.checkValueForList( calledType, at, valType, ev )
         }
     }
     if mg.CanAssignType( valType, effectiveType ) { return nil }
     return sr.listValueTypeError( calledType, ev )
 }
 
-func ( sr *StructuralReactor ) checkValueTypeForList(
-    lc listStructureCheck, typ mg.TypeReference, ev Event ) error {
-
-    return sr.recursiveCheckValueTypeForList( lc.typ, lc.typ, typ, ev )
-}
-
 func ( sr *StructuralReactor ) checkEventForList(
     lc listStructureCheck, ev Event ) error {
 
+    var evTyp mg.TypeReference
     switch v := ev.( type ) {
-    case *ValueEvent: 
-        return sr.checkValueTypeForList( lc, mg.TypeOf( v.Val ), v )
-    case *ListStartEvent: 
-        return sr.checkValueTypeForList( lc, v.Type, v )
-    case *MapStartEvent: 
-        return sr.checkValueTypeForList( lc, mg.TypeSymbolMap, ev )
-    case *StructStartEvent: 
-        return sr.checkValueTypeForList( lc, v.Type.AsAtomicType(), ev )
+    case *ValueEvent: evTyp = mg.TypeOf( v.Val )
+    case *ListStartEvent: evTyp = v.Type
+    case *MapStartEvent: evTyp = mg.TypeSymbolMap
+    case *StructStartEvent: evTyp = v.Type.AsAtomicType()
+    default: return nil
     }
-    return nil
+    return sr.checkValueForList( lc.typ, lc.typ, evTyp, ev )
 }
 
 func ( sr *StructuralReactor ) execValueCheck( 

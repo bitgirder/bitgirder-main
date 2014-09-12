@@ -365,7 +365,7 @@ extends MingleValueAccessor
         if ( mv instanceof MingleStruct ) return (MingleStruct) mv;
 
         throw new MingleValueCastException(
-            "expected a struct but found: " + Mingle.inferredTypeOf( mv ),
+            "expected a struct but found: " + Mingle.typeOf( mv ),
             path.descend( fld )
         );
     }

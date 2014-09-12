@@ -41,16 +41,17 @@ implements TypeName
     }
 
     public
-    CharSequence
+    String
     getExternalForm()
     {
         return 
             new StringBuilder( ns.getExternalForm() ).
                 append( "/" ).
-                append( name.getExternalForm() );
+                append( name.getExternalForm() ).
+                toString();
     }
 
-    @Override public String toString() { return getExternalForm().toString(); }
+    @Override public String toString() { return getExternalForm(); }
 
     public
     static

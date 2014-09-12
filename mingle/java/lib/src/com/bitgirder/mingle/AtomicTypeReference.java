@@ -25,6 +25,8 @@ extends MingleTypeReference
 
     public MingleValueRestriction getRestriction() { return restriction; }
 
+    public AtomicTypeReference asUnrestrictedType() { return create( name ); }
+
     public int hashCode() { return name.hashCode(); }
 
     public 
@@ -48,22 +50,20 @@ extends MingleTypeReference
     }
 
     public 
-    CharSequence 
+    String
     getExternalForm() 
     { 
-        CharSequence nmStr = name.getExternalForm();
+        String nmStr = name.getExternalForm();
 
         if ( restriction == null ) return nmStr;
-        else
-        {
-            StringBuilder sb =
-                new StringBuilder().
-                    append( nmStr ).
-                    append( "~" );
             
-            restriction.appendExternalForm( sb );
-            return sb;
-        }
+        StringBuilder sb =
+            new StringBuilder().
+                append( nmStr ).
+                append( "~" );
+        
+        restriction.appendExternalForm( sb );
+        return sb.toString();
     }
 
     public

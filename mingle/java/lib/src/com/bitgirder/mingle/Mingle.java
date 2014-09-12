@@ -390,31 +390,101 @@ class Mingle
         return implInspect( new StringBuilder(), mv );
     }
 
+    public
     static
     MingleTypeReference
-    inferredTypeOf( MingleValue mv )
+    typeOf( MingleValue mv )
     {   
-        state.notNull( mv, "mv" );
+        inputs.notNull( mv, "mv" );
 
         if ( mv instanceof MingleBoolean ) return TYPE_BOOLEAN;
-        if ( mv instanceof MingleInt32 ) return TYPE_INT32;
-        if ( mv instanceof MingleInt64 ) return TYPE_INT64;
-        if ( mv instanceof MingleUint32 ) return TYPE_UINT32;
-        if ( mv instanceof MingleUint64 ) return TYPE_UINT64;
-        if ( mv instanceof MingleFloat32 ) return TYPE_FLOAT32;
-        if ( mv instanceof MingleFloat64 ) return TYPE_FLOAT64;
-        if ( mv instanceof MingleString ) return TYPE_STRING;
-        if ( mv instanceof MingleBuffer ) return TYPE_BUFFER;
-        if ( mv instanceof MingleTimestamp ) return TYPE_TIMESTAMP;
-        if ( mv instanceof MingleSymbolMap ) return TYPE_SYMBOL_MAP;
-        if ( mv instanceof MingleList ) return TYPE_OPAQUE_LIST;
-        if ( mv instanceof MingleNull ) return TYPE_NULL;
+        else if ( mv instanceof MingleInt32 ) return TYPE_INT32;
+        else if ( mv instanceof MingleInt64 ) return TYPE_INT64;
+        else if ( mv instanceof MingleUint32 ) return TYPE_UINT32;
+        else if ( mv instanceof MingleUint64 ) return TYPE_UINT64;
+        else if ( mv instanceof MingleFloat32 ) return TYPE_FLOAT32;
+        else if ( mv instanceof MingleFloat64 ) return TYPE_FLOAT64;
+        else if ( mv instanceof MingleString ) return TYPE_STRING;
+        else if ( mv instanceof MingleBuffer ) return TYPE_BUFFER;
+        else if ( mv instanceof MingleTimestamp ) return TYPE_TIMESTAMP;
+        else if ( mv instanceof MingleSymbolMap ) return TYPE_SYMBOL_MAP;
+        else if ( mv instanceof MingleList ) return TYPE_OPAQUE_LIST;
+        else if ( mv instanceof MingleNull ) return TYPE_NULL;
+        else if ( mv instanceof MingleStruct ) {
+            return ( (MingleStruct) mv ).getAtomicType();
+        } else if ( mv instanceof MingleEnum ) {
+            return ( (MingleEnum) mv ).getAtomicType();
+        } else { 
+            throw state.failf( "Unhandled value: %s", mv.getClass() ); 
+        }
+    }
 
-        if ( mv instanceof TypedMingleValue ) {
-            return ( (TypedMingleValue) mv ).getValueType();
+    // canAssignType() and helpers ported from the go impl
+
+    private
+    static
+    boolean
+    canAssignAtomicType( MingleTypeReference from,
+                         AtomicTypeReference to,
+                         boolean relaxRestrictions )
+    {
+        if ( to.getName().equals( QNAME_VALUE ) ) return true;
+        if ( ! ( from instanceof AtomicTypeReference ) ) return false;
+
+        AtomicTypeReference f = (AtomicTypeReference) from;
+        if ( ! f.getName().equals( to.getName() ) ) return false;
+
+        MingleValueRestriction fRx = f.getRestriction();
+        MingleValueRestriction toRx = to.getRestriction();
+
+        if ( relaxRestrictions ) {
+            if ( toRx == null && fRx == null ) return true;
+            return toRx.equals( fRx );
         }
 
-        throw state.createFail( "Unhandled value:", mv.getClass() );
+        if ( fRx == null ) return toRx == null;
+        return fRx.equals( toRx );
+    }
+
+    private
+    static
+    boolean
+    canAssignNullableType( MingleTypeReference from,
+                           NullableTypeReference to,
+                           boolean relaxRestrictions )
+    {
+        if ( from instanceof NullableTypeReference ) {
+            from = ( (NullableTypeReference) from ).getValueType();
+        }
+
+        return canAssignType( from, to.getValueType(), relaxRestrictions );
+    }
+
+    private
+    static
+    boolean
+    canAssignType( MingleTypeReference from,
+                   MingleTypeReference to,
+                   boolean relaxRestrictions )
+    {
+        if ( to instanceof AtomicTypeReference ) {
+            AtomicTypeReference at = (AtomicTypeReference) to;
+            return canAssignAtomicType( from, at, relaxRestrictions );
+        } else if ( to instanceof NullableTypeReference ) {
+            NullableTypeReference nt = (NullableTypeReference) to;
+            return canAssignNullableType( from, nt, relaxRestrictions );
+        } else {
+            return from.equals( to );
+        }
+    }
+
+    public
+    static
+    boolean
+    canAssignType( MingleTypeReference from,
+                   MingleTypeReference to )
+    {
+        return canAssignType( from, to, true );
     }
 
     static
@@ -435,7 +505,7 @@ class Mingle
                   MingleValue act,
                   ObjectPath< MingleIdentifier > loc )
     {
-        return failCastType( expct, inferredTypeOf( act ), loc );
+        return failCastType( expct, typeOf( act ), loc );
     }
 
     private
@@ -906,8 +976,7 @@ class Mingle
         } 
 
         String msg = String.format(
-            "can't convert to %s from %s", 
-            cv.targetName(), inferredTypeOf( mv ) );
+            "can't convert to %s from %s", cv.targetName(), typeOf( mv ) );
 
         throw new MingleValueCastException( msg, path );
     }

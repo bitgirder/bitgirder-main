@@ -33,7 +33,7 @@ class MingleValueAccessor
         if ( valCls.isInstance( val ) ) return val;
 
         String expctTyp = errorTypeNameForClass( valCls );
-        CharSequence valTyp = Mingle.inferredTypeOf( val ).getExternalForm();
+        CharSequence valTyp = Mingle.typeOf( val ).getExternalForm();
 
         throw new MingleValueCastException(
             "expected " + expctTyp + " but got " + valTyp, path );

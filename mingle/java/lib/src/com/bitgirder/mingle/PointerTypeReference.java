@@ -33,7 +33,7 @@ extends MingleTypeReference
     }
 
     public 
-    CharSequence 
+    String
     getExternalForm() 
     { 
         return "&(" + type.getExternalForm() + ")";

@@ -246,7 +246,7 @@ implements MingleValueReactorPipeline.Processor,
             NullableTypeReference nt = (NullableTypeReference) typ;
             processNullableValue( ev, nt, callTyp, next );
         } else if ( typ instanceof ListTypeReference ) {
-            failCastType( ev, callTyp, Mingle.inferredTypeOf( ev.value() ) );
+            failCastType( ev, callTyp, Mingle.typeOf( ev.value() ) );
         } else {
             state.failf( "unhandled type: %s", typ );
         }

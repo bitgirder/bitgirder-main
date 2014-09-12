@@ -8,6 +8,7 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
 
+public
 final
 class MingleTestMethods
 {
