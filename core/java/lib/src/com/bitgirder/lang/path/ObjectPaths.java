@@ -35,6 +35,16 @@ class ObjectPaths
         return p;
     }
 
+    public
+    static
+    < V >
+    ObjectPath< V >
+    parentOf( ObjectPath< V > p )
+    {
+        if ( p == null ) return null;
+        return p.getParent();
+    }
+
     private
     static
     < V >

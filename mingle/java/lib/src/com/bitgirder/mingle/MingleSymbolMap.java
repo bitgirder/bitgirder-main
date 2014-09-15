@@ -67,6 +67,7 @@ implements MingleValue
         return fields.get( inputs.notNull( fld, "fld" ) );
     }
 
+    public
     static
     abstract
     class BuilderImpl< V extends MingleValue, B extends BuilderImpl >

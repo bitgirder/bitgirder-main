@@ -78,46 +78,52 @@ class MingleReactorEvent
     }
 
     private
-    void
+    MingleReactorEvent
     resetTo( Type type )
     {
         this.type = type;
+        return this;
     }
 
     public 
-    void 
+    MingleReactorEvent
     setStartList( ListTypeReference listType ) 
     { 
         this.listType = inputs.notNull( listType, "listType" );
-        resetTo( Type.LIST_START ); 
+        return resetTo( Type.LIST_START ); 
     }
 
-    public void setStartMap() { resetTo( Type.MAP_START ); }
+    public 
+    MingleReactorEvent 
+    setStartMap() 
+    { 
+        return resetTo( Type.MAP_START ); 
+    }
 
-    public void setEnd() { resetTo( Type.END ); }
+    public MingleReactorEvent setEnd() { return resetTo( Type.END ); }
 
     public
-    void
+    MingleReactorEvent
     setStartStruct( QualifiedTypeName qn )
     {
         this.structType = inputs.notNull( qn, "qn" );
-        resetTo( Type.STRUCT_START );
+        return resetTo( Type.STRUCT_START );
     }
 
     public
-    void
+    MingleReactorEvent
     setStartField( MingleIdentifier fld )
     {
         this.fld = inputs.notNull( fld, "fld" );
-        resetTo( Type.FIELD_START );
+        return resetTo( Type.FIELD_START );
     }
 
     public
-    void
+    MingleReactorEvent
     setValue( MingleValue val )
     {
         this.val = inputs.notNull( val, "val" );
-        resetTo( Type.VALUE );
+        return resetTo( Type.VALUE );
     }
 
     public

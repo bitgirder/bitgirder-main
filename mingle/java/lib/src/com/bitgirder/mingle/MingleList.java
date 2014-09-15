@@ -80,8 +80,7 @@ implements Iterable< MingleValue >,
         return asList( type, Lang.< MingleValue >asList( vals ) );
     }
 
-    // class impl is as-if it were public, but keeping package-only for the
-    // moment.
+    public
     final
     static
     class Builder

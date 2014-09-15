@@ -5,6 +5,12 @@ import com.bitgirder.validation.State;
 
 import static com.bitgirder.log.CodeLoggers.Statics.*;
 
+import com.bitgirder.mingle.MingleValue;
+import com.bitgirder.mingle.MingleStruct;
+import com.bitgirder.mingle.MingleSymbolMap;
+import com.bitgirder.mingle.MingleList;
+import com.bitgirder.mingle.MingleIdentifier;
+
 import com.bitgirder.pipeline.PipelineInitializerContext;
 import com.bitgirder.pipeline.Pipelines;
 
@@ -70,135 +76,67 @@ class MingleReactors
         return new DebugReactor( prefix );
     }
 
-//    public
-//    static
-//    MingleReactorPipeline
-//    createValueBuilderPipeline()
-//        throws Exception
-//    {
-//        return new MingleReactorPipeline.Builder().
-//            addReactor( StructuralCheck.create() ).
-//            addReactor( MingleValueBuilder.create() ).
-//            build();
-//    }
-//
-//    private
-//    static
-//    void
-//    visitEnd( MingleReactor rct,
-//              MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        ev.setEnd();
-//        rct.processEvent( ev );
-//    }
-//
-//    private
-//    static
-//    void
-//    visitList( MingleList ml,
-//               MingleReactor rct,
-//               MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        ev.setStartList( ml.type() );
-//        rct.processEvent( ev );
-//
-//        for ( MingleValue mv : ml ) visitValue( mv, rct, ev );
-//
-//        visitEnd( rct, ev );
-//    }
-//
-//    private
-//    static
-//    void
-//    concludeVisitMap( MingleSymbolMap mp,
-//                      MingleReactor rct,
-//                      MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        for ( Map.Entry< MingleIdentifier, MingleValue > e : mp.entrySet() ) 
-//        {
-//            ev.setStartField( e.getKey() );
-//            rct.processEvent( ev );
-//
-//            visitValue( e.getValue(), rct, ev );
-//        }
-//
-//        visitEnd( rct, ev );
-//    }
-//
-//    private
-//    static
-//    void
-//    visitMap( MingleSymbolMap mp,
-//              MingleReactor rct,
-//              MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        ev.setStartMap();
-//        rct.processEvent( ev );
-//
-//        concludeVisitMap( mp, rct, ev );
-//    }
-//
-//    private
-//    static
-//    void
-//    visitStruct( MingleStruct ms,
-//                 MingleReactor rct,
-//                 MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        ev.setStartStruct( ms.getType() );
-//        rct.processEvent( ev );
-//
-//        concludeVisitMap( ms.getFields(), rct, ev );
-//    }
-//
-//    private
-//    static
-//    void
-//    visitScalar( MingleValue mv,
-//                 MingleReactor rct,
-//                 MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        ev.setValue( mv );
-//        rct.processEvent( ev );
-//    }
-//
-//    private
-//    static
-//    void
-//    visitValue( MingleValue mv,
-//                MingleReactor rct,
-//                MingleReactorEvent ev )
-//        throws Exception
-//    {
-//        if ( mv instanceof MingleList ) {
-//            visitList( (MingleList) mv, rct, ev );
-//        } else if ( mv instanceof MingleSymbolMap ) {
-//            visitMap( (MingleSymbolMap) mv, rct, ev );
-//        } else if ( mv instanceof MingleStruct ) {
-//            visitStruct( (MingleStruct) mv, rct, ev );
-//        } else {
-//            visitScalar( mv, rct, ev );
-//        }
-//    }
-//
-//    public
-//    static
-//    void
-//    visitValue( MingleValue mv,
-//                MingleReactor rct )
-//        throws Exception
-//    {
-//        inputs.notNull( mv, "mv" );
-//        inputs.notNull( rct, "rct" );
-//
-//        visitValue( mv, rct, new MingleReactorEvent() );
-//    }
+    private
+    static
+    void
+    visitList( MingleList ml,
+               EventSend es )
+        throws Exception
+    {
+        es.startList( ml.type() );
+        for ( MingleValue mv : ml ) visitValue( mv, es );
+        es.end();
+    }
+
+    private
+    static
+    void
+    visitFields( MingleSymbolMap mp,
+                 EventSend es )
+        throws Exception
+    {
+        for ( Map.Entry< MingleIdentifier, MingleValue > e : mp.entrySet() ) {
+            es.startField( e.getKey() );
+            visitValue( e.getValue(), es );
+        }
+
+        es.end();
+    }
+
+    private
+    static
+    void
+    visitValue( MingleValue mv,
+                EventSend es )
+        throws Exception
+    {
+        if ( mv instanceof MingleList ) {
+            visitList( (MingleList) mv, es );
+        } else if ( mv instanceof MingleSymbolMap ) {
+            MingleSymbolMap m = (MingleSymbolMap) mv;
+            es.startMap();
+            visitFields( m, es );
+        } else if ( mv instanceof MingleStruct ) {
+            MingleStruct ms = (MingleStruct) mv;
+            es.startStruct( ms.getType() );
+            visitFields( ms.getFields(), es );
+        } else {
+            es.value( mv );
+        }
+    }
+
+    public
+    static
+    void
+    visitValue( MingleValue mv,
+                MingleReactor rct )
+        throws Exception
+    {
+        inputs.notNull( mv, "mv" );
+        inputs.notNull( rct, "rct" );
+
+        visitValue( mv, EventSend.forReactor( rct ) );
+    }
 
     public
     static

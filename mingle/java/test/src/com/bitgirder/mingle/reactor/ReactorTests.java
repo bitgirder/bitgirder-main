@@ -5,9 +5,12 @@ import com.bitgirder.validation.State;
 
 import static com.bitgirder.log.CodeLoggers.Statics.*;
 
+import com.bitgirder.test.TestUtils;
+
 import static com.bitgirder.mingle.MingleTestMethods.*;
 
 import com.bitgirder.mingle.Mingle;
+import com.bitgirder.mingle.MingleInt32;
 import com.bitgirder.mingle.MingleNamespace;
 import com.bitgirder.mingle.MingleStruct;
 import com.bitgirder.mingle.MingleSymbolMap;
@@ -24,6 +27,7 @@ import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
 
 import com.bitgirder.lang.path.ObjectPath;
+import com.bitgirder.lang.path.ObjectPaths;
 //import com.bitgirder.lang.path.ListPath;
 //import com.bitgirder.lang.path.DictionaryPath;
 
@@ -60,29 +64,161 @@ class MingleReactorTests
     class BuildReactorTest
     extends AbstractReactorTest
     {
+        private final static MingleIdentifier ERR_FIELD = id( "bad-field" );
+
+        private final static String MSG_ERR_BAD_VAL =
+            "test-message-error-bad-value";
+        
+        private final static QualifiedTypeName ERR_QNAME =
+            qname( "ns1@v1/BadType" );
+
+        private final static MingleTypeReference ERR_TYP_NEXT_FACTORY =
+            ptrType( listType( atomic( "ns1@v1/NextBuilderNilTest" ), true ) );
+
+        private final static MingleInt32 ERR_TEST_VAL = new MingleInt32( 100 );
+
         private MingleValue val;
         private Object source;
         private String profile;
 
-        private BuildReactorTest( CharSequence nm ) { super( nm ); }
+        private BuildReactorTest() {}
+
+        private
+        static
+        TestException
+        testExceptionForPath( ObjectPath< MingleIdentifier > path )
+        {
+            return new TestException( MSG_ERR_BAD_VAL, path );
+        }
+
+        private
+        static
+        MingleValue
+        errorResultForValue( MingleValue mv,
+                             ObjectPath< MingleIdentifier > path )
+            throws Exception
+        {
+            if ( ! mv.equals( ERR_TEST_VAL ) ) return mv;
+            throw testExceptionForPath( path );
+        }
+
+        private
+        final
+        static
+        class ErrorFieldSetBuilder
+        extends AbstractFieldSetBuilder
+        {
+            @Override
+            public
+            BuildReactor.Factory
+            startField( MingleIdentifier fld,
+                        ObjectPath< MingleIdentifier > path )
+            {
+                if ( fld.equals( ERR_FIELD ) ) {
+                    throw testExceptionForPath( ObjectPaths.parentOf( path ) );
+                }
+
+                return new ErrorFactory();
+            }
+        }
+
+        private
+        final
+        static
+        class ErrorListBuilder
+        extends AbstractListBuilder
+        {
+            private final ListTypeReference lt;
+
+            private ErrorListBuilder( ListTypeReference lt ) { this.lt = lt; }
+
+            public
+            BuildReactor.Factory
+            nextFactory()
+            {
+                if ( lt.equals( ERR_TYP_NEXT_FACTORY ) ) return null;
+                return new ErrorFactory();
+            }
+
+            @Override
+            public
+            void
+            addValue( Object val,
+                      ObjectPath< MingleIdentifier > path )
+                throws Exception
+            {
+                errorResultForValue( (MingleValue) val, path );
+            }
+        }
+
+        private
+        final
+        static
+        class ErrorFactory
+        extends AbstractBuildFactory
+        {
+            @Override
+            public
+            Object
+            buildValue( MingleValue mv,
+                        ObjectPath< MingleIdentifier > path )
+                throws Exception
+            {
+                return errorResultForValue( mv, path );
+            }
+
+            @Override
+            protected
+            BuildReactor.FieldSetBuilder
+            startMap()
+            {
+                return new ErrorFieldSetBuilder();
+            }
+
+            @Override
+            public
+            BuildReactor.ListBuilder
+            startList( ListTypeReference lt,
+                       ObjectPath< MingleIdentifier > path )
+            {
+                if ( Mingle.typeNameIn( lt ).equals( ERR_QNAME ) ) {
+                    throw testExceptionForPath( path );
+                }
+
+                return new ErrorListBuilder( lt );
+            }
+        }
+
+        private Object getSource() { return val == null ? source : val; }
+
+        private
+        BuildReactor.Factory
+        buildFactory()
+        {
+            if ( profile.equals( "default" ) ) {
+                return new ValueBuildFactory();
+            } else if ( profile.equals( "error" ) ) {
+                return new ErrorFactory();
+            } else {
+                return new ValueBuildFactory();
+            }
+        }
 
         public
         void
         call()
             throws Exception
         {
-//            MingleReactorPipeline pip = 
-//                MingleReactors.createValueBuilderPipeline();
-//
-//            MingleReactors.visitValue( val, pip );
-//
-//            MingleValueBuilder bld = 
-//                Pipelines.lastElementOfType( 
-//                    pip.pipeline(), MingleValueBuilder.class );
-//            
-//            MingleTests.assertEqual( val, bld.value() );
-//        }
-            throw new UnsupportedOperationException( "Unimplemented" );
+            BuildReactor br = BuildReactor.forFactory( buildFactory() );
+
+            MingleReactorPipeline pip = new MingleReactorPipeline.Builder().
+                addReactor( MingleReactors.createDebugReactor() ).
+                addReactor( br ).
+                build();
+
+            feedSource( getSource(), pip );
+ 
+            assertEqual( val, (MingleValue) br.value() );
         }
     }
 
@@ -810,19 +946,18 @@ class MingleReactorTests
         {
             MingleSymbolMap map = ms.getFields();
 
-            MingleValue val = mapGetValue( map, "val" );
-            MingleValue err = mapGetValue( map, "error" );
-
-            MingleValue nmVal = val == null ? err : val;
-            String nm = String.format( "%s (%s)", 
-                Mingle.inspect( nmVal ), Mingle.typeOf( nmVal ) );
-
-            BuildReactorTest res = new BuildReactorTest( makeName( ms, nm ) );
-
-            res.val = val;
+            BuildReactorTest res = new BuildReactorTest();
+            res.val = mapGetValue( map, "val" );
             res.source = asFeedSource( map, "source" );
             res.profile = mapExpectString( map, "profile" );
-            setOptError( res, err );
+            setOptError( res, map, "error" );
+
+            res.setLabel(
+                "val", optInspect( res.val ),
+                "profile", res.profile,
+                "source", res.sourceToString( res.getSource() ),
+                "error", TestUtils.failureExpectationFor( res )
+            );
 
             return res;
         }
@@ -921,84 +1056,6 @@ class MingleReactorTests
             return res;
         }
 
-//        private
-//        EventExpectation
-//        asEventExpectation( MingleStruct ms )
-//            throws Exception
-//        {
-//            EventExpectation res = new EventExpectation();
-//
-//            MingleSymbolMap map = ms.getFields();
-//
-//            res.event = asReactorEvent( 
-//                mapExpect( map, "event", MingleStruct.class ) );
-//
-//            res.path = asIdentifierPath( mapGet( map, "path", byte[].class ) );
-//
-//            return res;
-//        }
-//
-//        private
-//        Queue< EventExpectation >
-//        asEventExpectationQueue( MingleList ml )
-//            throws Exception
-//        {
-//            if ( ml == null ) return null;
-//
-//            Queue< EventExpectation > res = Lang.newQueue();
-//
-//            for ( MingleValue mv : ml ) {
-//                res.add( asEventExpectation( (MingleStruct) mv ) );
-//            }
-//
-//            return res;
-//        }
-//
-//        private
-//        Object
-//        asObject( MingleStruct ms )
-//            throws Exception
-//        {
-//            String nm = ms.getType().getName().toString();
-//            MingleSymbolMap map = ms.getFields();
-//
-//            if ( nm.equals( "ReactorEventSource" ) ) {
-//                return asReactorEvents(
-//                    mapExpect( map, "events", MingleList.class ) );
-//            } else if ( nm.equals( "ValueSource" ) ) {
-//                return mapExpect( map, "value", MingleValue.class );
-//            }
-//
-//            throw state.failf( "don't know how to convert type: %s", 
-//                ms.getType() );
-//        }
-//
-//        private
-//        List< ? >
-//        asObject( MingleList ml )
-//            throws Exception
-//        {
-//            List< Object > res = Lang.newList();
-//            for ( MingleValue mv : ml ) res.add( asObject( mv ) );
-//
-//            return res;
-//        }
-//
-//        private
-//        Object
-//        asObject( MingleValue mv )
-//            throws Exception
-//        {
-//            if ( mv instanceof MingleStruct ) {
-//                return asObject( (MingleStruct) mv );
-//            } else if ( mv instanceof MingleList ) {
-//                return asObject( (MingleList) mv );
-//            } 
-//
-//            throw state.failf( "unhandled object (%s): %s", 
-//                mv.getClass(), Mingle.inspect( mv ) );
-//        }
-//
 //        private
 //        EventPathTest
 //        asEventPathTest( MingleStruct ms )

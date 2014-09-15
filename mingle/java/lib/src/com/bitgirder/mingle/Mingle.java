@@ -133,28 +133,23 @@ class Mingle
         return CORE_DECL_NAMES.get( nm );
     }
 
+    public
     static
-    TypeName
+    QualifiedTypeName
     typeNameIn( MingleTypeReference t )
     {
-        state.notNull( t, "t" );
+        inputs.notNull( t, "t" );
 
-        if ( t instanceof AtomicTypeReference )
-        {
+        if ( t instanceof AtomicTypeReference ) {
             return ( (AtomicTypeReference) t ).getName();
         }
-        else if ( t instanceof ListTypeReference )
-        {
-            return typeNameIn( 
-                ( (ListTypeReference) t ).getElementType() );
+        else if ( t instanceof ListTypeReference ) {
+            return typeNameIn( ( (ListTypeReference) t ).getElementType() );
         }
-        else if ( t instanceof NullableTypeReference )
-        {
-            return typeNameIn(
-                ( (NullableTypeReference) t ).getValueType() );
+        else if ( t instanceof NullableTypeReference ) {
+            return typeNameIn( ( (NullableTypeReference) t ).getValueType() );
         }
-        else if ( t instanceof PointerTypeReference )
-        {
+        else if ( t instanceof PointerTypeReference ) {
             return typeNameIn( ( (PointerTypeReference) t ).getType() );
         }
         else throw state.createFail( "Unhandled type reference:", t );
@@ -165,7 +160,7 @@ class Mingle
     boolean
     isIntegralType( MingleTypeReference t )
     {
-        TypeName n = typeNameIn( inputs.notNull( t, "t" ) );
+        QualifiedTypeName n = typeNameIn( inputs.notNull( t, "t" ) );
 
         return n.equals( QNAME_INT32 ) ||
                n.equals( QNAME_UINT32 ) ||
@@ -178,7 +173,7 @@ class Mingle
     boolean
     isDecimalType( MingleTypeReference t )
     {
-        TypeName n = typeNameIn( inputs.notNull( t, "t" ) );
+        QualifiedTypeName n = typeNameIn( inputs.notNull( t, "t" ) );
         
         return n.equals( QNAME_FLOAT32 ) || n.equals( QNAME_FLOAT64 );
     }

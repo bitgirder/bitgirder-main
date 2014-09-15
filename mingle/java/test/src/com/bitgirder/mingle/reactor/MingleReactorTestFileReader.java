@@ -411,6 +411,17 @@ extends MingleTestGen.StructFileReader< T >
     }
 
     protected
+    final
+    void
+    setOptError( AbstractReactorTest t,
+                 MingleSymbolMap m,
+                 String fld )
+        throws Exception
+    {
+        setOptError( t, mapGetValue( m, fld ) );
+    }
+
+    protected
     abstract
     T
     convertReactorTest( MingleStruct ms )
