@@ -271,15 +271,14 @@ class Mingle
     {
         sb.append( "{" );
 
-        Iterator< Map.Entry< MingleIdentifier, MingleValue > > it =
-            m.entrySet().iterator();
+        Iterator< MingleIdentifier > it = m.getSortedFields().iterator();
         
         while ( it.hasNext() )
         {
-            Map.Entry< MingleIdentifier, MingleValue > e = it.next();
-            sb.append( e.getKey().getExternalForm() );
+            MingleIdentifier fld = it.next();
+            sb.append( fld );
             sb.append( ":" );
-            implInspect( sb, e.getValue() );
+            implInspect( sb, m.get( fld ) );
 
             if ( it.hasNext() ) sb.append( ", " );
         }
@@ -331,35 +330,21 @@ class Mingle
         {
             sb.append( mv.toString() );
         }
-        else if ( mv instanceof MingleString )
-        {
+        else if ( mv instanceof MingleString ) {
             Lang.appendRfc4627String( sb, (MingleString) mv );
-        }
-        else if ( mv instanceof MingleTimestamp )
-        {
+        } else if ( mv instanceof MingleTimestamp ) {
             sb.append( ( (MingleTimestamp) mv ).getRfc3339String() );
-        }
-        else if ( mv instanceof MingleBuffer )
-        {
+        } else if ( mv instanceof MingleBuffer ) {
             implInspectBuffer( sb, (MingleBuffer) mv );
-        }
-        else if ( mv instanceof MingleEnum )
-        {
+        } else if ( mv instanceof MingleEnum ) {
             implInspectEnum( sb, (MingleEnum) mv );
-        }
-        else if ( mv instanceof MingleList )
-        {
+        } else if ( mv instanceof MingleList ) {
             implInspectList( sb, (MingleList) mv );
-        }
-        else if ( mv instanceof MingleSymbolMap )
-        {
+        } else if ( mv instanceof MingleSymbolMap ) {
             implInspectMap( sb, (MingleSymbolMap) mv );
-        }
-        else if ( mv instanceof MingleStruct )
-        {
+        } else if ( mv instanceof MingleStruct ) {
             implInspectStruct( sb, (MingleStruct) mv );
-        }
-        else state.fail( "Unhandled inspect type:", mv.getClass().getName() );
+        } else state.fail( "Unhandled inspect type:", mv.getClass().getName() );
         
         return sb;
     }

@@ -7,6 +7,7 @@ import com.bitgirder.lang.Lang;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
 
 public
 final
@@ -33,6 +34,20 @@ implements MingleValue
 
     public Set< MingleIdentifier > getKeySet() { return fields.keySet(); }
     public Iterable< MingleIdentifier > getFields() { return getKeySet(); }
+
+    public 
+    Iterable< MingleIdentifier >
+    getSortedFields()
+    {
+        Set< MingleIdentifier > ks = getKeySet();
+
+        MingleIdentifier[] arr = 
+            ks.toArray( new MingleIdentifier[ ks.size() ] );
+        
+        Arrays.sort( arr, null );
+
+        return Lang.asList( arr );
+    }
 
     public int hashCode() { return fields.hashCode(); }
 

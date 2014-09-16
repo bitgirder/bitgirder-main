@@ -29,12 +29,6 @@ import com.bitgirder.lang.Strings;
 
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
-//import com.bitgirder.lang.path.ListPath;
-//import com.bitgirder.lang.path.DictionaryPath;
-
-//import com.bitgirder.lang.reflect.ReflectUtils;
-//
-//import com.bitgirder.pipeline.Pipelines;
 
 import com.bitgirder.test.Test;
 import com.bitgirder.test.InvocationFactory;
@@ -43,9 +37,6 @@ import com.bitgirder.test.LabeledTestCall;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
-//import java.util.Deque;
-//
-//import java.util.regex.Pattern;
 
 @Test
 final
@@ -58,215 +49,6 @@ class MingleReactorTests
     
     private final static MingleNamespace TEST_NS =
         MingleNamespace.create( "mingle:reactor@v1" );
-
-    private
-    static
-    final
-    class BuildReactorTest
-    extends AbstractReactorTest
-    {
-        private final static MingleIdentifier ERR_FIELD = id( "bad-field" );
-
-        private final static MingleValue PLACEHOLDER_VAL =
-            new MingleString( "placeholder-val" );
-
-        private final static String MSG_ERR_BAD_VAL =
-            "test-message-error-bad-value";
-        
-        private final static QualifiedTypeName ERR_QNAME =
-            qname( "ns1@v1/BadType" );
-
-        private final static MingleTypeReference ERR_TYP_NEXT_FACTORY =
-            listType( atomic( "ns1@v1/NextBuilderNilTest" ), true );
-
-        private final static MingleInt32 ERR_TEST_VAL = new MingleInt32( 100 );
-
-        private MingleValue val;
-        private Object source;
-        private String profile;
-
-        private BuildReactorTest() {}
-
-        private
-        static
-        TestException
-        testExceptionForPath( ObjectPath< MingleIdentifier > path )
-        {
-            return new TestException( path, MSG_ERR_BAD_VAL );
-        }
-
-        private
-        static
-        MingleValue
-        errorResultForValue( MingleValue mv,
-                             ObjectPath< MingleIdentifier > path )
-            throws Exception
-        {
-            if ( ! mv.equals( ERR_TEST_VAL ) ) return mv;
-            throw testExceptionForPath( path );
-        }
-
-        private
-        final
-        static
-        class ErrorFieldSetBuilder
-        extends AbstractFieldSetBuilder
-        {
-            @Override
-            public
-            BuildReactor.Factory
-            startField( MingleIdentifier fld,
-                        ObjectPath< MingleIdentifier > path )
-            {
-                if ( fld.equals( ERR_FIELD ) ) {
-                    throw testExceptionForPath( ObjectPaths.parentOf( path ) );
-                }
-
-                return new ErrorFactory();
-            }
-
-            @Override
-            protected Object produceValue() { return PLACEHOLDER_VAL; }
-        }
-
-        private
-        final
-        static
-        class ErrorListBuilder
-        extends AbstractListBuilder
-        {
-            private final ListTypeReference lt;
-
-            private ErrorListBuilder( ListTypeReference lt ) { this.lt = lt; }
-
-            public
-            BuildReactor.Factory
-            nextFactory()
-            {
-                if ( lt.equals( ERR_TYP_NEXT_FACTORY ) ) return null;
-                return new ErrorFactory();
-            }
-
-            @Override
-            public
-            void
-            addValue( Object val,
-                      ObjectPath< MingleIdentifier > path )
-                throws Exception
-            {
-                errorResultForValue( (MingleValue) val, path );
-            }
-
-            @Override
-            protected Object produceValue() { return PLACEHOLDER_VAL; }
-        }
-
-        private
-        final
-        static
-        class ErrorFactory
-        extends AbstractBuildFactory
-        {
-            @Override
-            public
-            Object
-            buildValue( MingleValue mv,
-                        ObjectPath< MingleIdentifier > path )
-                throws Exception
-            {
-                return errorResultForValue( mv, path );
-            }
-
-            @Override
-            protected
-            BuildReactor.FieldSetBuilder
-            startMap()
-            {
-                return new ErrorFieldSetBuilder();
-            }
-
-            @Override
-            public
-            BuildReactor.FieldSetBuilder
-            startStruct( QualifiedTypeName qn,
-                         ObjectPath< MingleIdentifier > path )
-            {
-                if ( qn.equals( ERR_QNAME ) ) {
-                    throw testExceptionForPath( path );
-                }
-
-                return new ErrorFieldSetBuilder();
-            }
-
-            @Override
-            public
-            BuildReactor.ListBuilder
-            startList( ListTypeReference lt,
-                       ObjectPath< MingleIdentifier > path )
-            {
-                if ( Mingle.typeNameIn( lt ).equals( ERR_QNAME ) ) {
-                    throw testExceptionForPath( path );
-                }
-
-                return new ErrorListBuilder( lt );
-            }
-        }
-
-        private Object getSource() { return val == null ? source : val; }
-
-        private
-        BuildReactor.Factory
-        buildFactory()
-        {
-            if ( profile.equals( "default" ) ) {
-                return new ValueBuildFactory();
-            } else if ( profile.equals( "error" ) ) {
-                return new ErrorFactory();
-            } else {
-                return new ValueBuildFactory();
-            }
-        }
-
-        private
-        BuildReactor
-        buildReactor()
-        {
-            return new BuildReactor.Builder().
-                setFactory( buildFactory() ).
-                setErrorFactory(
-                    new BuildReactor.ErrorFactory() 
-                    {
-                        public
-                        Exception
-                        createException( ObjectPath< MingleIdentifier > path,
-                                         String msg )
-                        {
-                            return new TestException( path, msg );
-                        }
-                    }
-                ).
-                build();
-        }
-
-        public
-        void
-        call()
-            throws Exception
-        {
-            BuildReactor br = buildReactor();
-
-            MingleReactorPipeline pip = new MingleReactorPipeline.Builder().
-                addReactor( MingleReactors.createDebugReactor() ).
-                addReactor( br ).
-                build();
-
-            feedSource( getSource(), pip );
- 
-            if ( expectedFailureClass() == null ) {
-                assertEqual( val, (MingleValue) br.value() );
-            }
-        }
-    }
 
     private
     final
@@ -976,6 +758,16 @@ class MingleReactorTests
 //            if ( mv == null ) return MingleNull.getInstance();
 //            return mv;
 //        }
+        
+        private
+        Object
+        asBuildReactorExpectValue( MingleValue mv,
+                                   String profile )
+            throws Exception
+        {
+            if ( profile.equals( "impl" ) ) return asJavaTestObject( mv );
+            return mv;
+        }
 
         private
         BuildReactorTest
@@ -985,13 +777,19 @@ class MingleReactorTests
             MingleSymbolMap map = ms.getFields();
 
             BuildReactorTest res = new BuildReactorTest();
-            res.val = mapGetValue( map, "val" );
             res.source = asFeedSource( map, "source" );
             res.profile = mapExpectString( map, "profile" );
+
+            MingleValue mv = mapGetValue( map, "val" );
+            res.val = asBuildReactorExpectValue( mv, res.profile );
+
             setOptError( res, map, "error" );
 
+            Object valLbl = res.val instanceof MingleValue
+                ? optInspect( (MingleValue) res.val ) : res.val;
+
             res.setLabel(
-                "val", optInspect( res.val ),
+                "val", valLbl,
                 "profile", res.profile,
                 "source", res.sourceToString( res.getSource() ),
                 "error", TestUtils.failureExpectationFor( res )

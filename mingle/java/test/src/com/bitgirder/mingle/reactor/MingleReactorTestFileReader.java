@@ -7,21 +7,23 @@ import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import static com.bitgirder.mingle.MingleTestMethods.*;
 
+import com.bitgirder.mingle.ListTypeReference;
 import com.bitgirder.mingle.Mingle;
-import com.bitgirder.mingle.MingleUnrecognizedFieldException;
+import com.bitgirder.mingle.MingleBinReader;
+import com.bitgirder.mingle.MingleBuffer;
+import com.bitgirder.mingle.MingleIdentifier;
+import com.bitgirder.mingle.MingleInt32;
+import com.bitgirder.mingle.MingleList;
 import com.bitgirder.mingle.MingleNamespace;
+import com.bitgirder.mingle.MingleString;
 import com.bitgirder.mingle.MingleStruct;
 import com.bitgirder.mingle.MingleSymbolMap;
-import com.bitgirder.mingle.MingleUint64;
-import com.bitgirder.mingle.MingleBuffer;
-import com.bitgirder.mingle.QualifiedTypeName;
-import com.bitgirder.mingle.MingleIdentifier;
-import com.bitgirder.mingle.MingleTypeReference;
-import com.bitgirder.mingle.ListTypeReference;
 import com.bitgirder.mingle.MingleTestGen;
-import com.bitgirder.mingle.MingleList;
+import com.bitgirder.mingle.MingleTypeReference;
+import com.bitgirder.mingle.MingleUint64;
+import com.bitgirder.mingle.MingleUnrecognizedFieldException;
 import com.bitgirder.mingle.MingleValue;
-import com.bitgirder.mingle.MingleBinReader;
+import com.bitgirder.mingle.QualifiedTypeName;
 
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
@@ -52,6 +54,12 @@ extends MingleTestGen.StructFileReader< T >
 
     private final static QualifiedTypeName QNAME_TEST_ERROR =
         qname( "mingle:reactor@v1/TestError" );
+
+    private final static QualifiedTypeName QNAME_TEST_STRUCT1 =
+        qname( "mingle:reactor@v1/TestStruct1" );
+
+    private final static QualifiedTypeName QNAME_TEST_STRUCT2 =
+        qname( "mingle:reactor@v1/TestStruct2" );
 
     private final static QualifiedTypeName QNAME_REACTOR_ERROR =
         qname( "mingle:reactor@v1/ReactorError" );
@@ -408,6 +416,98 @@ extends MingleTestGen.StructFileReader< T >
         } else if ( ms.getType().equals( QNAME_UNRECOGNIZED_FIELD_ERROR ) ) {
             return asUnrecognizedFieldException( ms.getFields() );
         } else throw state.failf( "unhandled error: %s", ms.getType() );
+    }
+
+    private
+    Int32List
+    asInt32List( MingleList ml )
+    {
+        List< Integer > l = Lang.newList();
+
+        for ( MingleValue mv : ml ) l.add( ( (MingleInt32) mv ).intValue() );
+
+        int[] arr = new int[ l.size() ];
+        int i = 0;
+        for ( Integer o : l ) arr[ i++ ] = o.intValue();
+
+        return new Int32List( arr );
+    }
+
+    protected
+    Object
+    asJavaTestList( MingleList ml )
+    {
+        if ( ml.type().getElementType().equals( Mingle.TYPE_INT32 ) ) {
+            return asInt32List( ml );
+        } else {
+            throw state.failf( "unhandled list type: %s", ml.type() );
+        }
+    }
+
+    private
+    TestStruct1
+    asTestStruct1( MingleSymbolMap m )
+        throws Exception
+    {
+        TestStruct1 res = new TestStruct1();
+
+        res.f1 = (Integer) asJavaTestObject( mapGetValue( m, "f1" ) );
+        res.f2 = (Int32List) asJavaTestObject( mapGetValue( m, "f2" ) );
+        res.f3 = (TestStruct1) asJavaTestObject( mapGetValue( m, "f3" ) );
+
+        return res;
+    }
+
+    private
+    Object
+    asJavaTestStruct( MingleStruct ms )
+        throws Exception
+    {
+        if ( ms.getType().equals( QNAME_TEST_STRUCT1 ) ) {
+            return asTestStruct1( ms.getFields() );
+        } else if ( ms.getType().equals( QNAME_TEST_STRUCT2 ) ) {
+            return new TestStruct2();
+        } else {
+            throw state.failf( "unhandled test object: %s", ms.getType() );
+        }
+    }
+
+    private
+    Map< String, Object >
+    asJavaTestMap( MingleSymbolMap m )
+        throws Exception
+    {
+        Map< String, Object > res = Lang.newMap();
+
+        for ( Map.Entry< MingleIdentifier, MingleValue > e : m.entrySet() ) {
+            String k = e.getKey().getExternalForm();
+            Object v = asJavaTestObject( e.getValue() );
+            res.put( k, v );
+        }
+
+        return res;
+    }
+
+    protected
+    Object
+    asJavaTestObject( MingleValue mv )
+        throws Exception
+    {
+        if ( mv == null ) {
+            return null;
+        } else if ( mv instanceof MingleInt32 ) {
+            return ( (MingleInt32) mv ).intValue();
+        } else if ( mv instanceof MingleString ) {
+            return mv.toString();
+        } else if ( mv instanceof MingleList ) {
+            return asJavaTestList( (MingleList) mv );
+        } else if ( mv instanceof MingleStruct ) {
+            return asJavaTestStruct( (MingleStruct) mv );
+        } else if ( mv instanceof MingleSymbolMap ) {
+            return asJavaTestMap( (MingleSymbolMap) mv );
+        }
+
+        throw state.failf( "unhandled test object: %s", Mingle.inspect( mv ) );
     }
 
     protected

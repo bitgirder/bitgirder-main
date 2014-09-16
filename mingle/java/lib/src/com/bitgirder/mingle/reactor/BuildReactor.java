@@ -10,6 +10,7 @@ import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.mingle.Mingle;
 import com.bitgirder.mingle.MingleValue;
 import com.bitgirder.mingle.MingleIdentifier;
+import com.bitgirder.mingle.MingleUnrecognizedFieldException;
 import com.bitgirder.mingle.QualifiedTypeName;
 import com.bitgirder.mingle.ListTypeReference;
 
@@ -28,6 +29,8 @@ implements MingleReactor,
 {
     private static Inputs inputs = new Inputs();
     private static State state = new State();
+
+    public final static Object UNHANDLED_VALUE_MARKER = new Object();
 
     public
     static
@@ -102,30 +105,20 @@ implements MingleReactor,
             throws Exception;
     }
 
-    public
-    static
-    interface ErrorFactory
-    {
-        public
-        Exception
-        createException( ObjectPath< MingleIdentifier > path,
-                         String msg );
-    }        
-
-    private final static ErrorFactory DEFAULT_ERR_FACT;
+    private final static ExceptionFactory DEFAULT_EXCPT_FACT;
 
     private final Deque< Object > stack = Lang.newDeque();
 
     private boolean hasVal; // indicates whether val may be returned
     private Object val; // the built value
 
-    private final ErrorFactory errFact;
+    private final ExceptionFactory excptFact;
 
     private 
     BuildReactor( Builder b )
     {
         stack.push( inputs.notNull( b.fact, "fact" ) );
-        this.errFact = b.errFact;
+        this.excptFact = b.excptFact;
     }
 
     public
@@ -151,7 +144,7 @@ implements MingleReactor,
         String msg = String.format( "unhandled value: %s", 
             MingleReactors.typeOfEvent( ev ).getExternalForm() ); 
 
-        return errFact.createException( ev.path(), msg );
+        return excptFact.createException( ev.path(), msg );
     }
 
     private
@@ -217,6 +210,8 @@ implements MingleReactor,
     {
         Factory f = nextFactory( ev );
         Object val = f.buildValue( ev.value(), ev.path() );
+
+        if ( val == UNHANDLED_VALUE_MARKER ) throw failBuilderBadInput( ev );
         completeValue( val, ev );
     }
 
@@ -226,7 +221,15 @@ implements MingleReactor,
         throws Exception
     {
         FieldSetBuilder fsb = state.cast( FieldSetBuilder.class, stack.peek() );
-        Factory f = fsb.startField( ev.field(), ev.path() );
+
+        MingleIdentifier fld = ev.field();
+
+        Factory f = fsb.startField( fld, ev.path() );
+
+        if ( f == null ) {
+            ObjectPath< MingleIdentifier > p = ev.path().getParent();
+            throw new MingleUnrecognizedFieldException( fld, p );
+        }
 
         stack.push( ev.field() );
         stack.push( f );
@@ -249,7 +252,11 @@ implements MingleReactor,
         throws Exception
     {
         Factory f = nextFactory( ev );
-        startFieldSet( f.startStruct( ev.structType(), ev.path() ) );
+
+        FieldSetBuilder fsb = f.startStruct( ev.structType(), ev.path() );
+        if ( fsb == null ) throw failBuilderBadInput( ev );
+
+        startFieldSet( fsb );
     }
 
     private
@@ -260,6 +267,8 @@ implements MingleReactor,
         Factory f = nextFactory( ev );
 
         ListBuilder lb = f.startList( ev.listType(), ev.path() );
+        if ( lb == null ) throw failBuilderBadInput( ev );
+
         stack.push( lb );
     }
 
@@ -296,7 +305,7 @@ implements MingleReactor,
     class Builder
     {
         private Factory fact;
-        private ErrorFactory errFact = DEFAULT_ERR_FACT;
+        private ExceptionFactory excptFact = DEFAULT_EXCPT_FACT;
 
         public
         Builder
@@ -308,9 +317,9 @@ implements MingleReactor,
 
         public
         Builder
-        setErrorFactory( ErrorFactory errFact )
+        setExceptionFactory( ExceptionFactory excptFact )
         {
-            this.errFact = inputs.notNull( errFact, "errFact" );
+            this.excptFact = inputs.notNull( excptFact, "excptFact" );
             return this;
         }
 
@@ -319,7 +328,7 @@ implements MingleReactor,
 
     static
     {
-        DEFAULT_ERR_FACT = new ErrorFactory()
+        DEFAULT_EXCPT_FACT = new ExceptionFactory()
         {
             public
             Exception

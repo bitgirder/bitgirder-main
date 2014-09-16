@@ -202,9 +202,13 @@ implements MingleReactorPipeline.Processor,
                           MingleReactor next )
         throws Exception
     {
+        ObjectPath< MingleIdentifier > save = ev.path();
+
         prepareEvent( ev );
         next.processEvent( ev );
+        
         processedEvent( ev );
+        ev.setPath( save );
     }
 
     public
