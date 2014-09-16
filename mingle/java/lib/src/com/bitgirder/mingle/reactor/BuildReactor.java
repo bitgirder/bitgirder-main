@@ -7,6 +7,7 @@ import com.bitgirder.lang.Lang;
 
 import com.bitgirder.lang.path.ObjectPath;
 
+import com.bitgirder.mingle.Mingle;
 import com.bitgirder.mingle.MingleValue;
 import com.bitgirder.mingle.MingleIdentifier;
 import com.bitgirder.mingle.QualifiedTypeName;
@@ -101,12 +102,31 @@ implements MingleReactor,
             throws Exception;
     }
 
+    public
+    static
+    interface ErrorFactory
+    {
+        public
+        Exception
+        createException( ObjectPath< MingleIdentifier > path,
+                         String msg );
+    }        
+
+    private final static ErrorFactory DEFAULT_ERR_FACT;
+
     private final Deque< Object > stack = Lang.newDeque();
 
     private boolean hasVal; // indicates whether val may be returned
     private Object val; // the built value
 
-    private BuildReactor( Factory fact ) { stack.push( fact ); }
+    private final ErrorFactory errFact;
+
+    private 
+    BuildReactor( Builder b )
+    {
+        stack.push( inputs.notNull( b.fact, "fact" ) );
+        this.errFact = b.errFact;
+    }
 
     public
     void
@@ -115,13 +135,23 @@ implements MingleReactor,
         MingleReactors.ensureStructuralCheck( ctx );
         MingleReactors.ensurePathSetter( ctx );
     }
-    
+ 
     public
     Object
     value()
     {
         state.isTrue( hasVal, "no value is built" );
         return val;
+    }
+
+    private
+    Exception    
+    failBuilderBadInput( MingleReactorEvent ev )
+    {
+        String msg = String.format( "unhandled value: %s", 
+            MingleReactors.typeOfEvent( ev ).getExternalForm() ); 
+
+        return errFact.createException( ev.path(), msg );
     }
 
     private
@@ -174,8 +204,7 @@ implements MingleReactor,
         } else if ( top instanceof ListBuilder ) {
             Factory f = ( (ListBuilder) top ).nextFactory();
             if ( f != null ) return f;
-            throw new UnsupportedOperationException( "Unimplemented" );
-//        return nil, failBuilderBadInput( ev, br.ErrorFactory )
+            throw failBuilderBadInput( ev );
         } else {
             throw state.failf( "unhandled stack elt: %s", top );
         }
@@ -257,16 +286,48 @@ implements MingleReactor,
         case FIELD_START: processFieldStart( ev ); break;
         case LIST_START: processListStart( ev ); break;
         case END: processEnd( ev ); break;
-        default: throw new UnsupportedOperationException( "Unimplemented" );
+        default: state.failf( "unhandled event: %s", ev.type() );
         }
     }
 
     public
+    final
     static
-    BuildReactor
-    forFactory( Factory fact )
+    class Builder
     {
-        inputs.notNull( fact, "fact" );
-        return new BuildReactor( fact );
+        private Factory fact;
+        private ErrorFactory errFact = DEFAULT_ERR_FACT;
+
+        public
+        Builder
+        setFactory( Factory fact )
+        {
+            this.fact = inputs.notNull( fact, "fact" );
+            return this;
+        }
+
+        public
+        Builder
+        setErrorFactory( ErrorFactory errFact )
+        {
+            this.errFact = inputs.notNull( errFact, "errFact" );
+            return this;
+        }
+
+        public BuildReactor build() { return new BuildReactor( this ); }
+    }
+
+    static
+    {
+        DEFAULT_ERR_FACT = new ErrorFactory()
+        {
+            public
+            Exception
+            createException( ObjectPath< MingleIdentifier > path,
+                             String msg )
+            {
+                return new Exception( Mingle.formatError( path, msg ) );
+            }
+        };
     }
 }

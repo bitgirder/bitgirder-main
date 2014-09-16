@@ -37,12 +37,6 @@ extends RuntimeException
     String
     getMessage()
     {
-        if ( loc.isEmpty() ) return err;
-
-        StringBuilder sb = Mingle.appendIdPath( loc, new StringBuilder() );
-        sb.append( ": " );
-        sb.append( err );
-
-        return sb.toString();
+        return Mingle.formatError( loc, err );
     }
 }

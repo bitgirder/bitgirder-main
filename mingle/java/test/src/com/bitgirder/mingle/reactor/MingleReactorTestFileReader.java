@@ -378,8 +378,8 @@ extends MingleTestGen.StructFileReader< T >
         throws Exception
     {
         return new TestException(
-            mapGetString( m, "message" ),
-            asIdentifierPath( m, "location" )
+            asIdentifierPath( m, "location" ),
+            mapGetString( m, "message" )
         );
     }
 

@@ -5,11 +5,14 @@ import com.bitgirder.validation.State;
 
 import static com.bitgirder.log.CodeLoggers.Statics.*;
 
+import com.bitgirder.mingle.Mingle;
 import com.bitgirder.mingle.MingleValue;
 import com.bitgirder.mingle.MingleStruct;
 import com.bitgirder.mingle.MingleSymbolMap;
 import com.bitgirder.mingle.MingleList;
 import com.bitgirder.mingle.MingleIdentifier;
+import com.bitgirder.mingle.MingleTypeReference;
+import com.bitgirder.mingle.AtomicTypeReference;
 
 import com.bitgirder.pipeline.PipelineInitializerContext;
 import com.bitgirder.pipeline.Pipelines;
@@ -29,6 +32,22 @@ class MingleReactors
         new MingleReactor() {
             public void processEvent( MingleReactorEvent ev ) {}
         };
+
+    public
+    static
+    MingleTypeReference
+    typeOfEvent( MingleReactorEvent ev )
+    {
+        inputs.notNull( ev, "ev" );
+
+        switch ( ev.type() ) {
+        case VALUE: return Mingle.typeOf( ev.value() );
+        case LIST_START: return ev.listType();
+        case MAP_START: return Mingle.TYPE_SYMBOL_MAP;
+        case STRUCT_START: return AtomicTypeReference.create( ev.structType() );
+        default: throw state.failf( "can't get type for %T", ev.type() );
+        }
+    }
 
     public
     static

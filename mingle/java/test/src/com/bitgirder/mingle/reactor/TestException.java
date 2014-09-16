@@ -16,8 +16,8 @@ extends MingleValueException
     private static Inputs inputs = new Inputs();
     private static State state = new State();
 
-    TestException( String msg,
-                   ObjectPath< MingleIdentifier > path )
+    TestException( ObjectPath< MingleIdentifier > path,
+                   String msg )
     {
         super( msg, path );
     }

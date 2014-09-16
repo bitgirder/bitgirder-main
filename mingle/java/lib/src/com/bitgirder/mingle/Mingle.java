@@ -872,6 +872,24 @@ class Mingle
     public
     static
     String
+    formatError( ObjectPath< MingleIdentifier > path,
+                 String msg )
+    {
+        if ( path == null || path.isEmpty() ) return msg;
+
+        StringBuilder sb = appendIdPath( path, new StringBuilder() );
+
+        if ( msg != null && ( ( msg = msg.trim() ).length() > 0 ) ) {
+            sb.append( ": " );
+            sb.append( msg );
+        }
+
+        return sb.toString();
+    }
+
+    public
+    static
+    String
     asJavaEnumString( MingleIdentifier id )
     {
         inputs.notNull( id, "id" );

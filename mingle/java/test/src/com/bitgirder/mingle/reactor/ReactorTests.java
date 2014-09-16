@@ -10,6 +10,7 @@ import com.bitgirder.test.TestUtils;
 import static com.bitgirder.mingle.MingleTestMethods.*;
 
 import com.bitgirder.mingle.Mingle;
+import com.bitgirder.mingle.MingleString;
 import com.bitgirder.mingle.MingleInt32;
 import com.bitgirder.mingle.MingleNamespace;
 import com.bitgirder.mingle.MingleStruct;
@@ -66,6 +67,9 @@ class MingleReactorTests
     {
         private final static MingleIdentifier ERR_FIELD = id( "bad-field" );
 
+        private final static MingleValue PLACEHOLDER_VAL =
+            new MingleString( "placeholder-val" );
+
         private final static String MSG_ERR_BAD_VAL =
             "test-message-error-bad-value";
         
@@ -73,7 +77,7 @@ class MingleReactorTests
             qname( "ns1@v1/BadType" );
 
         private final static MingleTypeReference ERR_TYP_NEXT_FACTORY =
-            ptrType( listType( atomic( "ns1@v1/NextBuilderNilTest" ), true ) );
+            listType( atomic( "ns1@v1/NextBuilderNilTest" ), true );
 
         private final static MingleInt32 ERR_TEST_VAL = new MingleInt32( 100 );
 
@@ -88,7 +92,7 @@ class MingleReactorTests
         TestException
         testExceptionForPath( ObjectPath< MingleIdentifier > path )
         {
-            return new TestException( MSG_ERR_BAD_VAL, path );
+            return new TestException( path, MSG_ERR_BAD_VAL );
         }
 
         private
@@ -120,6 +124,9 @@ class MingleReactorTests
 
                 return new ErrorFactory();
             }
+
+            @Override
+            protected Object produceValue() { return PLACEHOLDER_VAL; }
         }
 
         private
@@ -149,6 +156,9 @@ class MingleReactorTests
             {
                 errorResultForValue( (MingleValue) val, path );
             }
+
+            @Override
+            protected Object produceValue() { return PLACEHOLDER_VAL; }
         }
 
         private
@@ -172,6 +182,19 @@ class MingleReactorTests
             BuildReactor.FieldSetBuilder
             startMap()
             {
+                return new ErrorFieldSetBuilder();
+            }
+
+            @Override
+            public
+            BuildReactor.FieldSetBuilder
+            startStruct( QualifiedTypeName qn,
+                         ObjectPath< MingleIdentifier > path )
+            {
+                if ( qn.equals( ERR_QNAME ) ) {
+                    throw testExceptionForPath( path );
+                }
+
                 return new ErrorFieldSetBuilder();
             }
 
@@ -204,12 +227,33 @@ class MingleReactorTests
             }
         }
 
+        private
+        BuildReactor
+        buildReactor()
+        {
+            return new BuildReactor.Builder().
+                setFactory( buildFactory() ).
+                setErrorFactory(
+                    new BuildReactor.ErrorFactory() 
+                    {
+                        public
+                        Exception
+                        createException( ObjectPath< MingleIdentifier > path,
+                                         String msg )
+                        {
+                            return new TestException( path, msg );
+                        }
+                    }
+                ).
+                build();
+        }
+
         public
         void
         call()
             throws Exception
         {
-            BuildReactor br = BuildReactor.forFactory( buildFactory() );
+            BuildReactor br = buildReactor();
 
             MingleReactorPipeline pip = new MingleReactorPipeline.Builder().
                 addReactor( MingleReactors.createDebugReactor() ).
@@ -218,7 +262,9 @@ class MingleReactorTests
 
             feedSource( getSource(), pip );
  
-            assertEqual( val, (MingleValue) br.value() );
+            if ( expectedFailureClass() == null ) {
+                assertEqual( val, (MingleValue) br.value() );
+            }
         }
     }
 
