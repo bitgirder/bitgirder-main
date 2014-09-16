@@ -113,6 +113,7 @@ implements MingleReactor,
     initialize( PipelineInitializerContext< Object > ctx )
     {
         MingleReactors.ensureStructuralCheck( ctx );
+        MingleReactors.ensurePathSetter( ctx );
     }
     
     public

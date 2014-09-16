@@ -41,7 +41,7 @@ import com.bitgirder.test.LabeledTestCall;
 
 import java.util.List;
 import java.util.Map;
-//import java.util.Queue;
+import java.util.Queue;
 //import java.util.Deque;
 //
 //import java.util.regex.Pattern;
@@ -249,88 +249,80 @@ class MingleReactorTests
         }
     }
 
-//    private
-//    final
-//    static
-//    class EventExpectation
-//    {
-//        private MingleReactorEvent event;
-//        private ObjectPath< MingleIdentifier > path;
-//    }
-//
-//    private
-//    final
-//    static
-//    class EventPathCheckReactor
-//    implements MingleReactor
-//    {
-//        private final Queue< EventExpectation > events;
-//
-//        private
-//        EventPathCheckReactor( Queue< EventExpectation > events )
-//        {
-//            this.events = events;
-//        }
-//
-//        public
-//        void
-//        processEvent( MingleReactorEvent ev )
-//        {
-//            state.isFalse( events.isEmpty(), "no more events expected" );
-//
-//            ObjectPath< MingleIdentifier > expct = events.remove().path;
-//            assertIdPathsEqual( expct, ev.path() );
-//        }
-//
-//        void checkComplete() { state.isTrue( events.isEmpty() ); }
-//    }
-//
-//    private
-//    final
-//    static
-//    class EventPathTest
-//    extends AbstractReactorTest
-//    {
-//        private ObjectPath< MingleIdentifier > startPath;
-//        private Queue< EventExpectation > events;
-//
-//        private EventPathTest( CharSequence name ) { super( name ); }
-//
-//        private
-//        void
-//        feedEvents( MingleReactor rct )
-//            throws Exception
-//        {
-//            while ( ! events.isEmpty() )
-//            {
-//                EventExpectation ee = events.peek();
-//                rct.processEvent( ee.event );
-//            }
-//        }
-//
-//        public
-//        void
-//        call()
-//            throws Exception
-//        {
-//            MinglePathSettingProcessor ps = startPath == null ?
-//                MinglePathSettingProcessor.create() :
-//                MinglePathSettingProcessor.create( startPath );
-//
-//            EventPathCheckReactor chk = new EventPathCheckReactor( events );
-//
-//            MingleReactorPipeline pip =
-//                new MingleReactorPipeline.Builder().
-//                    addReactor( MingleReactors.createDebugReactor() ).
-//                    addProcessor( ps ).
-//                    addReactor( chk ).
-//                    build();
-// 
-//            feedEvents( pip );
-//            chk.checkComplete();
-//        }
-//    }
-//
+    private
+    final
+    static
+    class EventPathCheckReactor
+    implements MingleReactor
+    {
+        private final Queue< EventExpectation > events;
+
+        private
+        EventPathCheckReactor( Queue< EventExpectation > events )
+        {
+            this.events = events;
+        }
+
+        public
+        void
+        processEvent( MingleReactorEvent ev )
+        {
+            state.isFalse( events.isEmpty(), "no more events expected" );
+
+            ObjectPath< MingleIdentifier > expct = events.remove().path;
+            assertIdPathsEqual( expct, ev.path() );
+        }
+
+        void checkComplete() { state.isTrue( events.isEmpty() ); }
+    }
+
+    private
+    final
+    static
+    class EventPathTest
+    extends AbstractReactorTest
+    {
+        private ObjectPath< MingleIdentifier > startPath;
+        private Queue< EventExpectation > events;
+
+        private EventPathTest( CharSequence name ) { super( name ); }
+
+        private
+        void
+        feedEvents( MingleReactor rct )
+            throws Exception
+        {
+            while ( ! events.isEmpty() ) {
+                EventExpectation ee = events.peek();
+                rct.processEvent( ee.event );
+            }
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            codef( "event expectations: %s", events );
+
+            PathSettingProcessor ps = startPath == null ?
+                PathSettingProcessor.create() :
+                PathSettingProcessor.create( startPath );
+
+            EventPathCheckReactor chk = new EventPathCheckReactor( events );
+
+            MingleReactorPipeline pip =
+                new MingleReactorPipeline.Builder().
+                    addReactor( MingleReactors.createDebugReactor() ).
+                    addProcessor( ps ).
+                    addReactor( chk ).
+                    build();
+ 
+            feedEvents( pip );
+            chk.checkComplete();
+        }
+    }
+
 //    private
 //    final
 //    static
@@ -485,7 +477,7 @@ class MingleReactorTests
 //        createPipeline()
 //        {
 //            return new MingleReactorPipeline.Builder().
-//                addProcessor( MinglePathSettingProcessor.create( path ) ).
+//                addProcessor( PathSettingProcessor.create( path ) ).
 //                addProcessor( createCastReactor() ).
 //                addReactor(
 //                    MingleReactors.createDebugReactor( "[post-cast]" ) ).
@@ -714,7 +706,7 @@ class MingleReactorTests
 //        {
 //            MingleReactorPipeline pip =
 //                new MingleReactorPipeline.Builder().
-//                    addProcessor( MinglePathSettingProcessor.create() ).
+//                    addProcessor( PathSettingProcessor.create() ).
 //                    addProcessor( createFieldOrderProcessor() ).
 //                    addReactor( this ).
 //                    build();
@@ -1056,24 +1048,21 @@ class MingleReactorTests
             return res;
         }
 
-//        private
-//        EventPathTest
-//        asEventPathTest( MingleStruct ms )
-//            throws Exception
-//        {
-//            EventPathTest res = new EventPathTest( makeName( ms, null ) );
-//
-//            MingleSymbolMap map = ms.getFields();
-//
-//            res.startPath = 
-//                asIdentifierPath( mapGet( map, "startPath", byte[].class ) );
-//
-//            res.events = asEventExpectationQueue( 
-//                mapGet( map, "events", MingleList.class ) );
-//
-//            return res;
-//        }
-//
+        private
+        EventPathTest
+        asEventPathTest( MingleStruct ms )
+            throws Exception
+        {
+            EventPathTest res = new EventPathTest( makeName( ms, null ) );
+
+            MingleSymbolMap map = ms.getFields();
+
+            res.startPath = asIdentifierPath( map, "startPath" );
+            res.events = asEventExpectationQueue( map, "events" );
+
+            return res;
+        }
+
 //        private
 //        void
 //        setCastReactorTestValues( CastReactorTest t,
@@ -1362,8 +1351,8 @@ class MingleReactorTests
                 return asStructuralErrorTest( ms );
             } else if ( nm.equals( "BuildReactorTest" ) ) {
                 return asBuildReactorTest( ms );
-//            } else if ( nm.equals( "EventPathTest" ) ) {
-//                return asEventPathTest( ms );
+            } else if ( nm.equals( "EventPathTest" ) ) {
+                return asEventPathTest( ms );
 //            } else if ( nm.equals( "CastReactorTest" ) ) {
 //                return asCastReactorTest( ms );
 //            } else if ( nm.equals( "FieldOrderReactorTest" ) ) {

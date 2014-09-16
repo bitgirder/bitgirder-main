@@ -341,6 +341,16 @@ extends MingleTestGen.StructFileReader< T >
 
         return res;
     }
+    
+    protected
+    final
+    Queue< EventExpectation >
+    asEventExpectationQueue( MingleSymbolMap m,
+                             String fld )
+        throws Exception
+    {
+        return asEventExpectationQueue( mapExpect( m, fld, MingleList.class ) );
+    }
 
     protected
     final

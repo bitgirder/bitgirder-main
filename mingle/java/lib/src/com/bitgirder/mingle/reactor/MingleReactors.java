@@ -156,26 +156,26 @@ class MingleReactors
         return res;
     }
 
-//    public
-//    static
-//    MinglePathSettingProcessor
-//    ensurePathSetter( PipelineInitializerContext< Object > ctx )
-//    {
-//        inputs.notNull( ctx, "ctx" );
-//
-//        ensureStructuralCheck( ctx );
-//
-//        MinglePathSettingProcessor res = Pipelines.lastElementOfType(
-//            ctx.pipeline(), MinglePathSettingProcessor.class );
-//
-//        if ( res == null ) {
-//            res = MinglePathSettingProcessor.create();
-//            ctx.addElement( res );
-//        }
-//
-//        return res;
-//    }
-//
+    public
+    static
+    PathSettingProcessor
+    ensurePathSetter( PipelineInitializerContext< Object > ctx )
+    {
+        inputs.notNull( ctx, "ctx" );
+
+        ensureStructuralCheck( ctx );
+
+        PathSettingProcessor res = Pipelines.lastElementOfType(
+            ctx.pipeline(), PathSettingProcessor.class );
+
+        if ( res == null ) {
+            res = PathSettingProcessor.create();
+            ctx.addElement( res );
+        }
+
+        return res;
+    }
+
 //    static
 //    abstract
 //    class DepthTracker

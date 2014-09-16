@@ -134,7 +134,7 @@ func ( proc *PathSettingProcessor ) processedEnd() {
     proc.processedValue()
 }
 
-func ( proc *PathSettingProcessor ) eventProcessed( ev Event ) {
+func ( proc *PathSettingProcessor ) processedEvent( ev Event ) {
     switch ev.( type ) {
     case *ValueEvent: proc.processedValue()
     case *EndEvent: proc.processedEnd()
@@ -146,6 +146,6 @@ func ( proc *PathSettingProcessor ) ProcessEvent(
 
     proc.prepareEvent( ev )
     if err := rep.ProcessEvent( ev ); err != nil { return err }
-    proc.eventProcessed( ev )
+    proc.processedEvent( ev )
     return nil
 }

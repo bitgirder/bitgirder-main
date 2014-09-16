@@ -3,7 +3,10 @@ package com.bitgirder.mingle.reactor;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import com.bitgirder.mingle.Mingle;
 import com.bitgirder.mingle.MingleIdentifier;
+
+import com.bitgirder.lang.Strings;
 
 import com.bitgirder.lang.path.ObjectPath;
 
@@ -19,5 +22,17 @@ class EventExpectation
     {
         this.event = event;
         this.path = path;
+    }
+
+    @Override
+    public
+    String
+    toString()
+    {
+        return Strings.inspect( this, true,
+            "event", event.inspect(),
+            "path", path == null ? null : Mingle.formatIdPath( path )
+        ).
+        toString();
     }
 }
