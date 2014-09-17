@@ -213,7 +213,7 @@ class Mingle
     // matches when nm is a qn we know about
     static
     Class< ? extends MingleValue >
-    valueClassFor( TypeName nm )
+    valueClassFor( QualifiedTypeName nm )
     {
         inputs.notNull( nm, "nm" );
 
@@ -750,7 +750,7 @@ class Mingle
                               MingleTypeReference callTyp,
                               ObjectPath< MingleIdentifier > loc )
     {
-        TypeName nm = at.getName();
+        QualifiedTypeName nm = at.getName();
 
         Class< ? extends MingleValue > valCls = valueClassFor( nm );
         if ( valCls != null && valCls.isInstance( mv ) ) return mv;
