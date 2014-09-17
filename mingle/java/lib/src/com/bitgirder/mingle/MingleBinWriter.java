@@ -30,7 +30,7 @@ class MingleBinWriter
 
     private MingleBinWriter( BinWriter w ) { this.w = w; }
 
-    private
+    public
     void
     writeTypeCode( byte tc )
         throws IOException
@@ -118,11 +118,13 @@ class MingleBinWriter
         writeDeclaredTypeName( qn.getName() );
     }
 
-    private
+    public
     void
     writeScalar( MingleValue mv )
         throws IOException
     {
+        inputs.notNull( mv, "mv" );
+
         if ( mv instanceof MingleNull ) writeTypeCode( TC_NULL );
         else if ( mv instanceof MingleBoolean ) {
             writeTypeCode( TC_BOOL );

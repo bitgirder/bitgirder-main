@@ -119,12 +119,20 @@ class MingleBinReader
     private
     static
     MingleBinaryException
-    failTc( long pos,
-            String desc,
-            byte tc )
+    failTypeCode( long pos,
+                  String desc,
+                  byte tc )
     {
         return failf( pos, "Expected %s but saw type code 0x%02x", 
             desc, tc );
+    }
+
+    public
+    MingleBinaryException
+    failLastTypeCode( String desc,
+                      byte tc )
+    {
+        return failTypeCode( cis.position() - 1, desc, tc );
     }
 
     private
@@ -144,13 +152,13 @@ class MingleBinReader
         return i;
     }
 
-    private byte nextTc() throws IOException { return rd.readByte(); }
+    public byte nextTypeCode() throws IOException { return rd.readByte(); }
 
     // assumes that tc was the most recently read byte, in terms of setting the
     // error position
     private
     byte
-    acceptTc( byte tc,
+    acceptTypeCode( byte tc,
               String desc,
               byte... accpt )
         throws IOException
@@ -160,16 +168,16 @@ class MingleBinReader
         if ( desc == null ) return (byte) -1;
 
         long errPos = cis.position() - 1L;
-        throw failTc( errPos, desc, tc );
+        throw failTypeCode( errPos, desc, tc );
     }
 
-    private
+    public
     byte
-    nextTc( String desc,
-            byte... accpt )
+    nextTypeCode( String desc,
+                  byte... accpt )
         throws IOException
     {
-        return acceptTc( nextTc(), desc, accpt );
+        return acceptTypeCode( nextTypeCode(), desc, accpt );
     }
 
     public
@@ -177,7 +185,7 @@ class MingleBinReader
     readIdentifier()
         throws IOException
     {
-        nextTc( "identifier", TC_ID );
+        nextTypeCode( "identifier", TC_ID );
 
         int sz = Lang.asOctet( rd.readByte() );
 
@@ -216,7 +224,7 @@ class MingleBinReader
     readNamespace()
         throws IOException
     {
-        nextTc( "namespace", TC_NS );
+        nextTypeCode( "namespace", TC_NS );
         return new MingleNamespace( readIdentifiers(), readIdentifier() );
     }
 
@@ -225,7 +233,7 @@ class MingleBinReader
     readDeclaredTypeName()
         throws IOException
     {
-        nextTc( "declared type name", TC_DECL_NM );
+        nextTypeCode( "declared type name", TC_DECL_NM );
 
         long off = cis.position();
 
@@ -279,12 +287,12 @@ class MingleBinReader
     implReadAtomicTypeReference( boolean tcChecked )
         throws IOException
     {
-        if ( ! tcChecked ) nextTc( "atomic type reference", TC_ATOM_TYP );
+        if ( ! tcChecked ) nextTypeCode( "atomic type reference", TC_ATOM_TYP );
 
         QualifiedTypeName nm = readQualifiedTypeName();
 
         MingleValueRestriction vr = null;
-        byte tc = nextTc( "restriction", RESTRICTION_TYPE_CODES );
+        byte tc = nextTypeCode( "restriction", RESTRICTION_TYPE_CODES );
 
         switch ( tc ) {
         case TC_REGEX_RESTRICT: vr = readRegexRestriction(); break;
@@ -307,7 +315,7 @@ class MingleBinReader
     readRangeValue( String desc )
         throws IOException
     {
-        return expectScalar( nextTc( desc, RANGE_VAL_TYPE_CODES ) );
+        return expectScalar( nextTypeCode( desc, RANGE_VAL_TYPE_CODES ) );
     }
 
     private
@@ -344,11 +352,19 @@ class MingleBinReader
 
     private
     ListTypeReference
-    implReadListTypeReference( boolean tcChecked )
+    implReadListTypeReference()
         throws IOException
     {
-        if ( ! tcChecked ) nextTc( "list type reference", TC_LIST_TYP );
         return new ListTypeReference( readTypeReference(), rd.readBoolean() );
+    }
+
+    public
+    ListTypeReference
+    readListTypeReference()
+        throws IOException
+    {
+        nextTypeCode( "list type reference", TC_LIST_TYP );
+        return implReadListTypeReference();
     }
 
     private
@@ -370,7 +386,7 @@ class MingleBinReader
         return new MingleEnum( readQualifiedTypeName(), readIdentifier() );
     }
 
-    private
+    public
     MingleValue
     expectScalar( byte tc )
         throws IOException
@@ -397,7 +413,7 @@ class MingleBinReader
     readScalar()
         throws IOException
     {
-        byte tc = nextTc( "scalar", SCALAR_TYPE_CODES );
+        byte tc = nextTypeCode( "scalar", SCALAR_TYPE_CODES );
         return expectScalar( tc );
     }
 
@@ -431,14 +447,14 @@ class MingleBinReader
     feedList( Feed f )
         throws Exception
     {
-        f.ev.setStartList( implReadListTypeReference( false ) );
+        f.ev.setStartList( readListTypeReference() );
         f.feedNext();
 
         while ( true )
         {
-            byte tc = nextTc();
+            byte tc = nextTypeCode();
 
-            if ( acceptTc( tc, null, TC_END ) == TC_END ) {
+            if ( acceptTypeCode( tc, null, TC_END ) == TC_END ) {
                 f.ev.setEnd();
                 f.feedNext();
                 return;
@@ -455,13 +471,13 @@ class MingleBinReader
     {
         while ( true )
         {
-            byte tc = nextTc( "symbol map", TC_END, TC_FIELD );
+            byte tc = nextTypeCode( "symbol map", TC_END, TC_FIELD );
             if ( tc == TC_END ) break;
 
             f.ev.setStartField( readIdentifier() );
             f.feedNext();
 
-            feedValue( f, nextTc() );
+            feedValue( f, nextTypeCode() );
         }
 
         f.ev.setEnd();
@@ -514,7 +530,7 @@ class MingleBinReader
         case TC_LIST: feedList( f ); break;
         case TC_SYM_MAP: feedSymbolMap( f ); break;
         case TC_STRUCT: feedStruct( f ); break;
-        default: throw failTc( cis.position() - 1, "mingle value", tc );
+        default: throw failTypeCode( cis.position() - 1, "mingle value", tc );
         }
     }
 
@@ -524,7 +540,7 @@ class MingleBinReader
         throws Exception
     {
         inputs.notNull( rct, "rct" );
-        feedValue( new Feed( rct ), nextTc() );
+        feedValue( new Feed( rct ), nextTypeCode() );
     }
 
     public
@@ -532,7 +548,7 @@ class MingleBinReader
     readQualifiedTypeName()
         throws IOException
     {
-        nextTc( "qname", TC_QN );
+        nextTypeCode( "qname", TC_QN );
         return new QualifiedTypeName( readNamespace(), readDeclaredTypeName() );
     }
 
@@ -541,11 +557,11 @@ class MingleBinReader
     readTypeReference()
         throws IOException
     {
-        byte tc = nextTc( "type reference", TYPE_REF_TYPE_CODES );
+        byte tc = nextTypeCode( "type reference", TYPE_REF_TYPE_CODES );
 
         switch ( tc ) {
         case TC_ATOM_TYP: return implReadAtomicTypeReference( true );
-        case TC_LIST_TYP: return implReadListTypeReference( true );
+        case TC_LIST_TYP: return implReadListTypeReference();
         case TC_NULLABLE_TYP:
             return new NullableTypeReference( readTypeReference() );
         case TC_POINTER_TYP:

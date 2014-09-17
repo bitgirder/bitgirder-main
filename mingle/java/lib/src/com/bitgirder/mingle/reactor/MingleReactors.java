@@ -194,33 +194,4 @@ class MingleReactors
 
         return res;
     }
-
-//    static
-//    abstract
-//    class DepthTracker
-//    {
-//        private int depth;
-//
-//        protected
-//        abstract
-//        void
-//        depthBecameOne();
-//
-//        public
-//        final
-//        void
-//        update( MingleReactorEvent ev )
-//        {
-//            switch ( ev.type() ) {
-//            case FIELD_START: return;
-//            case MAP_START:
-//            case STRUCT_START:
-//            case LIST_START:
-//                ++depth; break;
-//            case END: --depth; break;
-//            }
-//
-//            if ( depth == 1 ) depthBecameOne();
-//        }
-//    }
 }

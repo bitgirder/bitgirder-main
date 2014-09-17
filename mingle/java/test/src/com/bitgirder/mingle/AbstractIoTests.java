@@ -34,6 +34,8 @@ import java.io.File;
 import java.util.List;
 import java.util.Map;
 
+// Contains the bulk of the logic and expectations for io testing, leaving
+// subclasses to decide simply whether to handle the input for a specific test
 public
 abstract
 class AbstractIoTests
@@ -91,27 +93,17 @@ class AbstractIoTests
     protected boolean shouldRunTestForObject( Object expct ) { return true; }
 
     protected
-    Object
-    readValue( InputStream is,
-               Object rep )
-        throws Exception
-    {
-        MingleBinReader rd = MingleBinReader.create( is );
+    abstract
+    MingleValue
+    readMingleValue( InputStream is )
+        throws Exception;
 
-        if ( rep instanceof QualifiedTypeName ) {
-            return rd.readQualifiedTypeName();
-        } else if ( rep instanceof MingleNamespace ) {
-            return rd.readNamespace();
-        } else if ( rep instanceof MingleIdentifier ) {
-            return rd.readIdentifier();
-        } else if ( rep instanceof DeclaredTypeName ) {
-            return rd.readDeclaredTypeName();
-        } else if ( rep instanceof MingleTypeReference ) {
-            return rd.readTypeReference();
-        } else {
-            throw state.failf( "unhandled read type: %s", rep.getClass() );
-        }
-    }
+    protected
+    abstract
+    void
+    writeMingleValue( MingleValue mv,
+                      OutputStream os )
+        throws Exception;
 
     private
     abstract
@@ -120,9 +112,8 @@ class AbstractIoTests
     {
         byte[] buffer;
 
-        // lazily instantiated via getWriter()
+        // lazily instantiated via getOutput()
         private ByteArrayOutputStream bos;
-        private MingleBinWriter mgWr;
 
         private TestImpl( CharSequence lbl ) { super( lbl ); }
 
@@ -139,71 +130,30 @@ class AbstractIoTests
         {
             return new ByteArrayInputStream( this.buffer );
         }
-
-        final
-        MingleBinReader
-        createReader()
-        {
-            return MingleBinReader.create( createInputStream() );
-        }
-
-        final
-        MingleValue
-        readMingleValue( MingleBinReader rd )
-            throws Exception
-        {
-            return MingleTestMethods.readValue( rd );
-        }
-
-        final
+    
+        protected
         Object
-        readValue( MingleBinReader rd,
+        readValue( InputStream is,
                    Object rep )
             throws Exception
         {
-            if ( rep instanceof MingleValue ) return readMingleValue( rd );
-
-            if ( rep instanceof QualifiedTypeName ) {
+            MingleBinReader rd = MingleBinReader.create( is );
+    
+            if ( rep instanceof MingleValue ) {
+                return readMingleValue( is );
+            } else if ( rep instanceof QualifiedTypeName ) {
                 return rd.readQualifiedTypeName();
-            }
-
-            if ( rep instanceof MingleNamespace ) return rd.readNamespace();
-            if ( rep instanceof MingleIdentifier ) return rd.readIdentifier();
-
-            if ( rep instanceof DeclaredTypeName ) {
+            } else if ( rep instanceof MingleNamespace ) {
+                return rd.readNamespace();
+            } else if ( rep instanceof MingleIdentifier ) {
+                return rd.readIdentifier();
+            } else if ( rep instanceof DeclaredTypeName ) {
                 return rd.readDeclaredTypeName();
-            }
-
-            if ( rep instanceof MingleTypeReference ) {
+            } else if ( rep instanceof MingleTypeReference ) {
                 return rd.readTypeReference();
+            } else {
+                throw state.failf( "unhandled read type: %s", rep.getClass() );
             }
-
-            throw state.failf( "unhandled read type: %s", rep.getClass() );
-        }
-
-        final
-        Object
-        expectValue( MingleBinReader rd,
-                     Object expct )
-            throws Exception
-        {
-            Object act = readValue( rd, expct );
-            state.equal( expct.getClass(), act.getClass() );
-
-            if ( ! expct.equals( act ) ) 
-            {
-                Object expctDesc = expct;
-                Object actDesc = act;
-
-                if ( expct instanceof MingleValue ) {
-                    expctDesc = Mingle.inspect( (MingleValue) expct );
-                    actDesc = Mingle.inspect( (MingleValue) act );
-                }
-            
-                state.failf( "expected %s, got %s", expctDesc, actDesc );
-            }
-
-            return act;
         }
 
         final
@@ -212,7 +162,7 @@ class AbstractIoTests
                      Object expct )
             throws Exception
         {
-            Object act = AbstractIoTests.this.readValue( is, expct );
+            Object act = readValue( is, expct );
             state.equal( expct.getClass(), act.getClass() );
 
             if ( ! expct.equals( act ) ) 
@@ -231,17 +181,12 @@ class AbstractIoTests
             return act;
         }
 
-        final
-        MingleBinWriter
-        getWriter()
+        private
+        ByteArrayOutputStream
+        getOutput()
         {
-            if ( mgWr == null )
-            {
-                bos = new ByteArrayOutputStream();
-                mgWr = MingleBinWriter.create( bos );
-            }
-
-            return mgWr;
+            if ( bos == null ) bos = new ByteArrayOutputStream();
+            return bos;
         }
 
         final
@@ -249,14 +194,12 @@ class AbstractIoTests
         writeTestValue( Object val )
             throws Exception
         {
-            MingleBinWriter mgWr = getWriter();
+            ByteArrayOutputStream os = getOutput();
+            MingleBinWriter mgWr = MingleBinWriter.create( bos );
 
-            if ( val instanceof MingleValue ) 
-            {
-                MingleValueReactors.visitValue( 
-                    (MingleValue) val, mgWr.asReactor() );
-            } 
-            else if ( val instanceof MingleIdentifier ) {
+            if ( val instanceof MingleValue ) {
+                writeMingleValue( (MingleValue) val, os );
+            } else if ( val instanceof MingleIdentifier ) {
                 mgWr.writeIdentifier( (MingleIdentifier) val );
             } else if ( val instanceof MingleNamespace ) {
                 mgWr.writeNamespace( (MingleNamespace) val );
@@ -275,7 +218,7 @@ class AbstractIoTests
         byte[]
         writeBuffer()
         {
-            state.notNull( mgWr, "no writer set" );
+            state.notNull( bos, "no writer set" );
             return bos.toByteArray();
         }
 
@@ -367,10 +310,10 @@ class AbstractIoTests
         {
             MingleList seq = (MingleList) valueExpected();
 
-            MingleBinReader rd = createReader();
+            InputStream is = createInputStream();
 
             for ( MingleValue expct : seq ) {
-                MingleValue act = (MingleValue) expectValue( rd, expct );
+                MingleValue act = (MingleValue) expectValue( is, expct );
                 writeTestValue( act );
             }
 
@@ -402,10 +345,10 @@ class AbstractIoTests
         call()
             throws Exception
         {
-            MingleBinReader rd = createReader();
+            InputStream is = createInputStream();
 
             try {
-                MingleValue val = readMingleValue( rd );
+                MingleValue val = readMingleValue( is );
                 state.failf( "was able to read value: %s", val );
             } catch ( MingleBinaryException mbe ) { 
                 assertBinaryException( mbe ); 
@@ -488,7 +431,7 @@ class AbstractIoTests
         {
             TestImpl res = readTestImpl();
 
-            if ( res == null || res instanceof InvalidDataTest ) return res;
+            if ( res == null || res instanceof InvalidDataTest ) return null;
             return shouldRunTestForObject( res.valueExpected() ) ? res : null;
         }
     }

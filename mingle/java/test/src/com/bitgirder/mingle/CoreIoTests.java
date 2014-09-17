@@ -8,6 +8,7 @@ import com.bitgirder.validation.State;
 import com.bitgirder.test.Test;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 
 @Test
 final
@@ -17,19 +18,22 @@ extends AbstractIoTests
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    @Override
     protected
-    Object
-    readValue( InputStream is,
-               Object rep )
+    MingleValue
+    readMingleValue( InputStream is )
         throws Exception
     {
-        if ( rep instanceof MingleValue ) {
-            MingleBinReader rd = MingleBinReader.create( is );
-            return rd.readScalar();
-        }
+        return MingleBinReader.create( is ).readScalar();
+    }
 
-        return super.readValue( is, rep );
+    protected
+    void
+    writeMingleValue( MingleValue mv,
+                      OutputStream os )
+        throws Exception
+    {
+        MingleBinWriter w = MingleBinWriter.create( os );
+        w.writeScalar( mv );
     }
 
     @Override
