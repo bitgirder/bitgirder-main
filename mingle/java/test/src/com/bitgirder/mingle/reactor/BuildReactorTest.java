@@ -5,39 +5,29 @@ import com.bitgirder.validation.State;
 
 import static com.bitgirder.log.CodeLoggers.Statics.*;
 
-import com.bitgirder.test.TestUtils;
-
 import static com.bitgirder.mingle.MingleTestMethods.*;
 
 import com.bitgirder.mingle.Mingle;
 import com.bitgirder.mingle.MingleString;
 import com.bitgirder.mingle.MingleInt32;
-import com.bitgirder.mingle.MingleNamespace;
 import com.bitgirder.mingle.MingleStruct;
 import com.bitgirder.mingle.MingleSymbolMap;
 import com.bitgirder.mingle.QualifiedTypeName;
 import com.bitgirder.mingle.MingleIdentifier;
 import com.bitgirder.mingle.MingleTypeReference;
 import com.bitgirder.mingle.ListTypeReference;
-import com.bitgirder.mingle.MingleTestGen;
-import com.bitgirder.mingle.MingleList;
 import com.bitgirder.mingle.MingleValue;
-import com.bitgirder.mingle.MingleBinReader;
 
 import com.bitgirder.lang.Lang;
-import com.bitgirder.lang.Strings;
 
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
 
-import com.bitgirder.test.Test;
-import com.bitgirder.test.InvocationFactory;
-import com.bitgirder.test.LabeledTestCall;
-
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 
+// Used in ReactorTests, but pulled out here into its own source file given how
+// large the test and support code is
 final
 class BuildReactorTest
 extends AbstractReactorTest

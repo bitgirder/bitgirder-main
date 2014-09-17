@@ -53,6 +53,7 @@ class MingleReactorEvent
     {
         MingleReactorEvent res = new MingleReactorEvent();
         res.type = this.type;
+        res.listType = this.listType;
         res.fld = this.fld;
         res.structType = this.structType;
         res.val = this.val;

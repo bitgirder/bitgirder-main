@@ -56,13 +56,13 @@ type FieldOrderReactorTestOrder struct {
 
 type FieldOrderReactorTest struct {
     Source []Event
-    Expect mg.Value
     Orders []FieldOrderReactorTestOrder
+    Expect mg.Value
 }
 
 type FieldOrderMissingFieldsTest struct {
-    Orders []FieldOrderReactorTestOrder
     Source []Event
+    Orders []FieldOrderReactorTestOrder
     Expect mg.Value
     Error *mg.MissingFieldsError
 }

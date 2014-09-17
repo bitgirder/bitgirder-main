@@ -37,6 +37,7 @@ import com.bitgirder.test.LabeledTestCall;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Deque;
 
 @Test
 final
@@ -331,155 +332,157 @@ class MingleReactorTests
 //            MingleTests.assertEqual( expect, vb.value() );
 //        }
 //    }
-//
-//    private
-//    static
-//    abstract
-//    class FieldOrderTest
-//    extends AbstractReactorTest
-//    implements MingleFieldOrderProcessor.OrderGetter
-//    {
-//        List< MingleReactorEvent > source;
-//        Map< QualifiedTypeName, MingleReactorFieldOrder > orders;
-//
-//        public
-//        final
-//        MingleReactorFieldOrder
-//        fieldOrderFor( QualifiedTypeName type )
-//        {
-//            return orders.get( type );
-//        }
-//
-//        final
-//        MingleFieldOrderProcessor
-//        createFieldOrderProcessor()
-//        {
-//            return MingleFieldOrderProcessor.create( this );
-//        }
-//
-//        final
-//        void
-//        feedSource( MingleReactor rct )
-//            throws Exception
-//        {
-//            for ( MingleReactorEvent ev : source ) rct.processEvent( ev );
-//        }
-//    }
-//
-//    private
-//    final
-//    static
-//    class FieldOrderReactorTest
-//    extends FieldOrderTest
-//    implements MingleReactor
-//    {
-//        private MingleValue expect;
-//
-//        private final Deque< Object > stack = Lang.newDeque();
-//
-//        private
-//        final
-//        static
-//        class FieldTracker
-//        {
-//            private final MingleReactorFieldOrder ord;
-//
-//            private int expctIdx;
-//
-//            private 
-//            FieldTracker( MingleReactorFieldOrder ord )
-//            {
-//                this.ord = ord;
-//            }
-//
-//            private
-//            int
-//            orderIndexOfField( MingleIdentifier fld )
-//            {
-//                for ( int i = 0, e = ord.fields().size(); i < e; ++i ) {
-//                    if ( ord.fields().get( i ).field().equals( fld ) ) {
-//                        return i;
-//                    }
-//                }
-//
-//                return -1;
-//            }
-// 
-//            private
-//            void
-//            checkField( MingleIdentifier fld )
-//            {
-//                int idx = orderIndexOfField( fld );
-//
-//                if ( idx < 0 ) return;
-//
-//                if ( idx >= expctIdx ) {
-//                    expctIdx = idx;
-//                    return;
-//                }
-//
-//                state.failf( 
-//                    "Expected field %s (ord[ %d ]) but saw %s (ord[ %d ])",
-//                    ord.fields().get( expctIdx ).field(), expctIdx, fld, idx );
-//            }
-//        }
-//
-//        private
-//        void
-//        pushStruct( QualifiedTypeName type )
-//        {
-//            MingleReactorFieldOrder ord = fieldOrderFor( type );
-//
-//            if ( ord == null ) {
-//                stack.push( type );
-//                return;
-//            }
-//
-//            stack.push( new FieldTracker( ord ) );
-//        }
-//
-//        private
-//        void
-//        startField( MingleIdentifier fld )
-//        {
-//            if ( stack.peek() instanceof FieldTracker ) {
-//                ( (FieldTracker) stack.peek() ).checkField( fld );
-//            }
-//        }
-//
-//        public
-//        void
-//        processEvent( MingleReactorEvent ev )
-//        {
-//            switch ( ev.type() ) {
-//            case LIST_START: stack.push( "list" ); break;
-//            case MAP_START: stack.push( "map" ); break;
-//            case STRUCT_START: pushStruct( ev.structType() ); break;
-//            case FIELD_START: startField( ev.field() ); break;
-//            case END: stack.pop(); break;
-//            }
-//        }
-//
-//        public
-//        void
-//        call()
-//            throws Exception
-//        {
-//            MingleValueBuilder vb = MingleValueBuilder.create();
-//
-//            MingleReactorPipeline pip =
-//                new MingleReactorPipeline.Builder().
-//                    addProcessor( createFieldOrderProcessor() ).
-//                    addReactor( this ).
-//                    addReactor( vb ).
-//                    build();
-//
-//            feedSource( pip );
-//
-//            MingleTests.assertEqual( expect, vb.value() );
-//        }
-//    }
-//
+
+    private
+    static
+    abstract
+    class FieldOrderTest
+    extends AbstractReactorTest
+    implements FieldOrderProcessor.OrderGetter
+    {
+        List< MingleReactorEvent > source;
+        Map< QualifiedTypeName, FieldOrder > orders;
+
+        public
+        final
+        FieldOrder
+        fieldOrderFor( QualifiedTypeName type )
+        {
+            return orders.get( type );
+        }
+
+        final
+        FieldOrderProcessor
+        createFieldOrderProcessor()
+        {
+            return FieldOrderProcessor.create( this );
+        }
+
+        final
+        void
+        feedSource( MingleReactor rct )
+            throws Exception
+        {
+            for ( MingleReactorEvent ev : source ) rct.processEvent( ev );
+        }
+    }
+
+    private
+    final
+    static
+    class FieldOrderReactorTest
+    extends FieldOrderTest
+    implements MingleReactor
+    {
+        private MingleValue expect;
+
+        private final Deque< Object > stack = Lang.newDeque();
+
+        private
+        final
+        static
+        class FieldTracker
+        {
+            private final FieldOrder ord;
+
+            private int expctIdx;
+
+            private 
+            FieldTracker( FieldOrder ord )
+            {
+                this.ord = ord;
+            }
+
+            private
+            int
+            orderIndexOfField( MingleIdentifier fld )
+            {
+                for ( int i = 0, e = ord.fields().size(); i < e; ++i ) {
+                    if ( ord.fields().get( i ).field().equals( fld ) ) {
+                        return i;
+                    }
+                }
+
+                return -1;
+            }
+ 
+            private
+            void
+            checkField( MingleIdentifier fld )
+            {
+                int idx = orderIndexOfField( fld );
+
+                if ( idx < 0 ) return;
+
+                if ( idx >= expctIdx ) {
+                    expctIdx = idx;
+                    return;
+                }
+
+                state.failf( 
+                    "Expected field %s (ord[ %d ]) but saw %s (ord[ %d ])",
+                    ord.fields().get( expctIdx ).field(), expctIdx, fld, idx );
+            }
+        }
+
+        private
+        void
+        pushStruct( QualifiedTypeName type )
+        {
+            FieldOrder ord = fieldOrderFor( type );
+
+            if ( ord == null ) {
+                stack.push( type );
+                return;
+            }
+
+            stack.push( new FieldTracker( ord ) );
+        }
+
+        private
+        void
+        startField( MingleIdentifier fld )
+        {
+            if ( stack.peek() instanceof FieldTracker ) {
+                ( (FieldTracker) stack.peek() ).checkField( fld );
+            }
+        }
+
+        public
+        void
+        processEvent( MingleReactorEvent ev )
+        {
+            switch ( ev.type() ) {
+            case LIST_START: stack.push( "list" ); break;
+            case MAP_START: stack.push( "map" ); break;
+            case STRUCT_START: pushStruct( ev.structType() ); break;
+            case FIELD_START: startField( ev.field() ); break;
+            case END: stack.pop(); break;
+            }
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            BuildReactor br = new BuildReactor.Builder().
+                setFactory( new ValueBuildFactory() ).
+                build();
+
+            MingleReactorPipeline pip =
+                new MingleReactorPipeline.Builder().
+                    addProcessor( createFieldOrderProcessor() ).
+                    addReactor( this ).
+                    addReactor( br ).
+                    build();
+
+            feedSource( pip );
+
+            assertEqual( expect, (MingleValue) br.value() );
+        }
+    }
+
 //    private
 //    final
 //    static
@@ -513,7 +516,7 @@ class MingleReactorTests
 //    class FieldOrderPathTest
 //    extends FieldOrderTest
 //    implements MingleReactor,
-//               MingleFieldOrderProcessor.OrderGetter
+//               FieldOrderProcessor.OrderGetter
 //    {
 //        private Queue< EventExpectation > expect;
 //
@@ -972,92 +975,89 @@ class MingleReactorTests
 //
 //            return res;
 //        }
-//
-//        private
-//        MingleReactorFieldSpecification
-//        asFieldOrderSpecification( MingleSymbolMap map )
-//            throws Exception
-//        {
-//            return new MingleReactorFieldSpecification(
-//                asIdentifier( mapExpect( map, "field", byte[].class ) ),
-//                mapExpect( map, "required", Boolean.class )
-//            );
-//        }
-//
-//        private
-//        MingleReactorFieldOrder
-//        asFieldOrder( MingleList ml )
-//            throws Exception
-//        {
-//            List< MingleReactorFieldSpecification > fields =
-//                Lang.newList();
-//
-//            for ( MingleValue mv : ml )
-//            {
-//                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
-//                fields.add( asFieldOrderSpecification( map ) );
-//            }
-//
-//            return new MingleReactorFieldOrder( fields );
-//        }
-//
-//        private
-//        Map< QualifiedTypeName, MingleReactorFieldOrder >
-//        asFieldOrderMapByType( MingleList ml )
-//            throws Exception
-//        {
-//            Map< QualifiedTypeName, MingleReactorFieldOrder > res =
-//                Lang.newMap();
-//
-//            for ( MingleValue mv : ml ) 
-//            {
-//                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
-//
-//                QualifiedTypeName type = asQname(
-//                    mapExpect( map, "type", byte[].class ) );
-//
-//                MingleReactorFieldOrder ord = asFieldOrder(
-//                    mapExpect( map, "order", MingleList.class ) );
-//                
-//                Lang.putUnique( res, type, ord );
-//            }
-//
-//            return res;
-//        }
-//
-//        private
-//        MingleSymbolMap
-//        initFieldOrderTest( FieldOrderTest t,
-//                            MingleStruct ms )
-//            throws Exception
-//        {
-//            t.setLabel( makeName( ms, null ) );
-//
-//            MingleSymbolMap res = ms.getFields();
-//
-//            t.source = asReactorEvents(
-//                mapExpect( res, "source", MingleList.class ) );
-//
-//            t.orders = asFieldOrderMapByType(
-//                mapExpect( res, "orders", MingleList.class ) );
-//            
-//            return res;
-//        }
-//
-//        private
-//        FieldOrderReactorTest
-//        asFieldOrderReactorTest( MingleStruct ms )
-//            throws Exception
-//        {
-//            FieldOrderReactorTest res = new FieldOrderReactorTest();
-//
-//            MingleSymbolMap map = initFieldOrderTest( res, ms );
-//
-//            res.expect = mapExpect( map, "expect", MingleValue.class );
-//
-//            return res;
-//        }
-//
+
+        private
+        FieldOrder.FieldSpecification
+        asFieldOrderSpecification( MingleSymbolMap map )
+            throws Exception
+        {
+            return new FieldOrder.FieldSpecification(
+                asIdentifier( map, "field" ),
+                mapExpect( map, "required", Boolean.class )
+            );
+        }
+
+        private
+        FieldOrder
+        asFieldOrder( MingleList ml )
+            throws Exception
+        {
+            List< FieldOrder.FieldSpecification > fields = Lang.newList();
+
+            for ( MingleValue mv : ml ) {
+                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
+                fields.add( asFieldOrderSpecification( map ) );
+            }
+
+            return new FieldOrder( fields );
+        }
+
+        private
+        Map< QualifiedTypeName, FieldOrder >
+        asFieldOrderMapByType( MingleList ml )
+            throws Exception
+        {
+            Map< QualifiedTypeName, FieldOrder > res =
+                Lang.newMap();
+
+            for ( MingleValue mv : ml ) 
+            {
+                MingleSymbolMap map = ( (MingleStruct) mv ).getFields();
+
+                QualifiedTypeName type = asQname(
+                    mapExpect( map, "type", byte[].class ) );
+
+                FieldOrder ord = asFieldOrder(
+                    mapExpect( map, "order", MingleList.class ) );
+                
+                Lang.putUnique( res, type, ord );
+            }
+
+            return res;
+        }
+
+        private
+        MingleSymbolMap
+        initFieldOrderTest( FieldOrderTest t,
+                            MingleStruct ms )
+            throws Exception
+        {
+            t.setLabel( makeName( ms, null ) );
+
+            MingleSymbolMap res = ms.getFields();
+
+            t.source = asReactorEvents( res, "source" );
+
+            t.orders = asFieldOrderMapByType(
+                mapExpect( res, "orders", MingleList.class ) );
+            
+            return res;
+        }
+
+        private
+        FieldOrderReactorTest
+        asFieldOrderReactorTest( MingleStruct ms )
+            throws Exception
+        {
+            FieldOrderReactorTest res = new FieldOrderReactorTest();
+
+            MingleSymbolMap map = initFieldOrderTest( res, ms );
+
+            res.expect = mapExpect( map, "expect", MingleValue.class );
+
+            return res;
+        }
+
 //        private
 //        MingleMissingFieldsException
 //        asMissingFieldsError( MingleSymbolMap map )
@@ -1199,8 +1199,8 @@ class MingleReactorTests
                 return asEventPathTest( ms );
 //            } else if ( nm.equals( "CastReactorTest" ) ) {
 //                return asCastReactorTest( ms );
-//            } else if ( nm.equals( "FieldOrderReactorTest" ) ) {
-//                return asFieldOrderReactorTest( ms );
+            } else if ( nm.equals( "FieldOrderReactorTest" ) ) {
+                return asFieldOrderReactorTest( ms );
 //            } else if ( nm.equals( "FieldOrderMissingFieldsTest" ) ) {
 //                return asFieldOrderMissingFieldsTest( ms );
 //            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
