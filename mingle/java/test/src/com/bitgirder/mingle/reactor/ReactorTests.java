@@ -514,43 +514,44 @@ class MingleReactorTests
         }
     }
 
-//    private
-//    final
-//    static
-//    class FieldOrderPathTest
-//    extends FieldOrderTest
-//    implements MingleReactor,
-//               FieldOrderProcessor.OrderGetter
-//    {
-//        private Queue< EventExpectation > expect;
-//
-//        public
-//        void
-//        processEvent( MingleReactorEvent ev )
-//        {
-//            EventExpectation ee = expect.remove();
-//            ee.event.setPath( ee.path );
-//
-//            assertEventsEqual( ee.event, "ee.event", ev, "ev" );
-//        }
-//
-//        public
-//        void
-//        call()
-//            throws Exception
-//        {
-//            MingleReactorPipeline pip =
-//                new MingleReactorPipeline.Builder().
-//                    addProcessor( PathSettingProcessor.create() ).
-//                    addProcessor( createFieldOrderProcessor() ).
-//                    addReactor( this ).
-//                    build();
-//
-//            feedSource( pip );
-//            state.isTrue( expect.isEmpty() );
-//        }
-//    }
-//
+    private
+    final
+    static
+    class FieldOrderPathTest
+    extends FieldOrderTest
+    implements MingleReactor,
+               FieldOrderProcessor.OrderGetter
+    {
+        private Queue< EventExpectation > expect;
+
+        public
+        void
+        processEvent( MingleReactorEvent ev )
+        {
+            EventExpectation ee = expect.remove();
+            ee.event.setPath( ee.path );
+
+            ReactorTestMethods.
+                assertEventsEqual( ee.event, "ee.event", ev, "ev" );
+        }
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            MingleReactorPipeline pip =
+                new MingleReactorPipeline.Builder().
+                    addProcessor( PathSettingProcessor.create() ).
+                    addProcessor( createFieldOrderProcessor() ).
+                    addReactor( this ).
+                    build();
+
+            feedSource( pip );
+            state.isTrue( expect.isEmpty() );
+        }
+    }
+
 //    private
 //    final
 //    static
@@ -1090,21 +1091,20 @@ class MingleReactorTests
             return res;
         }
 
-//        private
-//        FieldOrderPathTest
-//        asFieldOrderPathTest( MingleStruct ms )
-//            throws Exception
-//        {
-//            FieldOrderPathTest res = new FieldOrderPathTest();
-//
-//            MingleSymbolMap map = initFieldOrderTest( res, ms );
-//
-//            res.expect = asEventExpectationQueue(
-//                mapExpect( map, "expect", MingleList.class ) );
-//
-//            return res;
-//        }
-//
+        private
+        FieldOrderPathTest
+        asFieldOrderPathTest( MingleStruct ms )
+            throws Exception
+        {
+            FieldOrderPathTest res = new FieldOrderPathTest();
+
+            MingleSymbolMap map = initFieldOrderTest( res, ms );
+
+            res.expect = asEventExpectationQueue( map, "expect" );
+
+            return res;
+        }
+
 //        private
 //        void
 //        setOptError( TestImpl ti,
@@ -1203,8 +1203,8 @@ class MingleReactorTests
                 return asFieldOrderReactorTest( ms );
             } else if ( nm.equals( "FieldOrderMissingFieldsTest" ) ) {
                 return asFieldOrderMissingFieldsTest( ms );
-//            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
-//                return asFieldOrderPathTest( ms );
+            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
+                return asFieldOrderPathTest( ms );
 //            } else if ( nm.equals( "RequestReactorTest" ) ) {
 //                return asRequestReactorTest( ms );
 //            } else if ( nm.equals( "ResponseReactorTest" ) ) {

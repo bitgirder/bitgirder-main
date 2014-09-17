@@ -335,7 +335,8 @@ extends MingleTestGen.StructFileReader< T >
         return new EventExpectation( event, path );
     }
 
-    private
+    protected
+    final
     Queue< EventExpectation >
     asEventExpectationQueue( MingleList ml )
         throws Exception
