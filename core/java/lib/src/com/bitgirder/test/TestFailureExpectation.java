@@ -27,6 +27,15 @@ class TestFailureExpectation
     public Class< ? extends Throwable > expectedClass() { return cls; }
     public Pattern expectedPattern() { return pat; }
 
+    @Override
+    public
+    final
+    String
+    toString()
+    {
+        return String.format( "[%s]: %s", expectedClass(), expectedPattern() );
+    }
+
     public
     static
     TestFailureExpectation

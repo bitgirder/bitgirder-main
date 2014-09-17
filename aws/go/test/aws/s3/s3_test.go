@@ -6,9 +6,7 @@ import (
     "bitgirder/iotests"
     "bitgirder/hashes"
     "bitgirder/assert"
-    mg "mingle"
-    "mingle/codec/json"
-    "mingle/codec"
+    "encoding/json"
     "path/filepath"
     "testing"
     "errors"
@@ -46,13 +44,12 @@ var markerErr error
 func init() { markerErr = errors.New( "marker-error" ) }
 
 func readCredentials( f *os.File, creds *Credentials ) {
-    r := bufio.NewReader( f )
-    cdc := json.NewJsonCodec()
-    if ms, err := codec.Decode( cdc, r ); err == nil {
-        acc := mg.NewSymbolMapAccessor( ms.Fields, nil )
-        creds.AccessKey = AccessKey( acc.MustGoStringByString( "access-key" ) )
-        creds.SecretKey = SecretKey( acc.MustGoStringByString( "secret-key" ) )
-    } else { panic( err ) }
+    defer f.Close()
+    dec := json.NewDecoder( bufio.NewReader( f ) )
+    m := make( map[ string ]interface{} )
+    if err := dec.Decode( &m ); err != nil { panic( err ) }
+    creds.AccessKey = AccessKey( m[ "accessKey" ].( string ) )
+    creds.SecretKey = SecretKey( m[ "secretKey" ].( string ) )
 }
 
 func readAwsTestProps( creds *Credentials ) {
@@ -76,7 +73,7 @@ func init() {
 
 func nextPathString() string {
     return fmt.Sprintf( "%s/%016x/%s", 
-        objPathPrefix, time.Now().Unix(), uuid.ExpectType4() )
+        objPathPrefix, time.Now().Unix(), uuid.MustType4() )
 }
 
 func nextObjectKey() ObjectKey {

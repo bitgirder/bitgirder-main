@@ -5,9 +5,10 @@ import static com.bitgirder.mingle.MingleLexer.SpecialLiteral;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
-import com.bitgirder.log.CodeLoggers;
+import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import com.bitgirder.lang.Lang;
+import com.bitgirder.lang.NumberFormatOverflowException;
 import com.bitgirder.lang.Strings;
 
 import com.bitgirder.lang.path.ObjectPath;
@@ -15,62 +16,28 @@ import com.bitgirder.lang.path.ObjectPath;
 import java.io.IOException;
 
 import java.util.List;
-import java.util.Map;
 
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
-
+public
 final
 class MingleParser
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
-
     private final static SpecialLiteral[] NS_SPEC_LITS =
         new SpecialLiteral[] {
             SpecialLiteral.COLON,
             SpecialLiteral.ASPERAND
         };
-    
-    private final static List< SpecialLiteral > TYPE_QUANTS =
-        Lang.asList(
-            SpecialLiteral.QUESTION_MARK,
-            SpecialLiteral.ASTERISK,
-            SpecialLiteral.PLUS
-        );
 
-    private final static SpecialLiteral[] RANGE_MIN_LITS =
+    private final static SpecialLiteral[] PATH_SEP_LITS =
         new SpecialLiteral[] {
-            SpecialLiteral.OPEN_PAREN, 
+            SpecialLiteral.PERIOD,
             SpecialLiteral.OPEN_BRACKET
         };
 
-    private final static SpecialLiteral[] RANGE_MAX_LITS =
-        new SpecialLiteral[] {
-            SpecialLiteral.CLOSE_PAREN,
-            SpecialLiteral.CLOSE_BRACKET
-        };
+    private final static String ERR_MSG_ID_OR_IDX = "identifier or list index";
     
-    private final static Map< TypeName, AtomicTypeReference > RANGE_TYPES =
-        Lang.newMap( TypeName.class, AtomicTypeReference.class,
-            Mingle.QNAME_INT32, Mingle.TYPE_INT32,
-            Mingle.QNAME_INT64, Mingle.TYPE_INT64,
-            Mingle.QNAME_UINT32, Mingle.TYPE_UINT32,
-            Mingle.QNAME_UINT64, Mingle.TYPE_UINT64,
-            Mingle.QNAME_FLOAT32, Mingle.TYPE_FLOAT32,
-            Mingle.QNAME_FLOAT64, Mingle.TYPE_FLOAT64,
-            Mingle.QNAME_STRING, Mingle.TYPE_STRING,
-            Mingle.QNAME_TIMESTAMP, Mingle.TYPE_TIMESTAMP
-        );
-
-    private final static MingleIdentifier BOUND_RANGE_MIN =
-        new MingleIdentifier( new String[] { "min" } );
-
-    private final static MingleIdentifier BOUND_RANGE_MAX =
-        new MingleIdentifier( new String[] { "max" } );
-
     private final MingleLexer lx;
 
     // peekPos and curPos are stored as 1-indexed, unlike the 0-indexed pos of
@@ -81,9 +48,21 @@ class MingleParser
 
     private MingleParser( MingleLexer lx ) { this.lx = lx; }
 
-    private int lxPos() { return ( (int) lx.position() ) + 1; }
+    private int lxPos() { return (int) lx.position(); }
 
     private int nextPos() { return peekTok == null ? lxPos() : peekPos; }
+
+    private
+    void
+    skipWs()
+        throws IOException
+    {
+        state.isTruef( peekTok == null, 
+            "skipWs() called but peekTok is: %s", peekTok );
+
+        lx.skipWs();
+        curPos = lxPos();
+    }
 
     private
     Object
@@ -163,12 +142,12 @@ class MingleParser
     errStringFor( Object tok )
     {
         if ( tok == null ) return "END";
-        else if ( tok instanceof MingleString ) return "STRING";
-        else if ( tok instanceof MingleLexer.Number ) return "NUMBER";
-        else if ( tok instanceof MingleIdentifier ) return "IDENTIFIER";
-        else if ( tok instanceof SpecialLiteral ) 
-        {
+        else if ( tok instanceof MingleIdentifier ) {
+            return ( (MingleIdentifier) tok ).getExternalForm().toString();
+        } else if ( tok instanceof SpecialLiteral ) {
             return ( (SpecialLiteral) tok ).inspect();
+        } else if ( tok instanceof MingleLexer.IndexToken ) {
+            return ( (MingleLexer.IndexToken) tok ).s;
         }
         
         throw state.createFailf( "Unexpected token: %s", tok );
@@ -220,10 +199,8 @@ class MingleParser
         {
             SpecialLiteral act = (SpecialLiteral) tok;
 
-            for ( SpecialLiteral spec : specs )
-            {
-                if ( spec == act ) 
-                {
+            for ( SpecialLiteral spec : specs ) {
+                if ( spec == act ) {
                     nextToken();
                     return act;
                 }
@@ -235,7 +212,8 @@ class MingleParser
 
     private
     SpecialLiteral
-    expectSpecial( SpecialLiteral... specs )
+    expectSpecial( String errDesc,
+                   SpecialLiteral... specs )
         throws MingleSyntaxException,
                IOException
     {
@@ -245,12 +223,21 @@ class MingleParser
         {
             Object failTok = peekToken();
             int failPos = peekPos;
-            String expctStr = expectStringFor( specs );
+            if ( errDesc == null ) errDesc = expectStringFor( specs );
             
-            throw failUnexpectedToken( failPos, failTok, expctStr );
+            throw failUnexpectedToken( failPos, failTok, errDesc );
         }
  
         return res;
+    }
+
+    private
+    SpecialLiteral
+    expectSpecial( SpecialLiteral... specs )
+        throws MingleSyntaxException,
+               IOException
+    {
+        return expectSpecial( null, specs );
     }
 
     private
@@ -286,14 +273,128 @@ class MingleParser
 
     private
     MingleIdentifier
+    expectIdentifier( boolean usePeek )
+        throws MingleSyntaxException,
+               IOException
+    {
+        state.isTrue( peekTok == null || usePeek, 
+            "peekTok not null and usePeek is false" );
+
+        if ( ! usePeek ) return lx.parseIdentifier( null );
+
+        String desc = "identifier";
+
+        MingleIdentifier res = peekTyped( MingleIdentifier.class, desc );
+
+        if ( res != null ) return res;
+            
+        Object tok = nextToken();
+        int tokPos = curPos;
+
+        if ( tok instanceof MingleIdentifier ) return (MingleIdentifier) tok;
+
+        throw failUnexpectedToken( tokPos, tok, desc );
+    } 
+
+    private
+    MingleIdentifier
     expectIdentifier()
         throws MingleSyntaxException,
                IOException
     {
-        MingleIdentifier res = 
-            peekTyped( MingleIdentifier.class, "identifier" );
+        return expectIdentifier( true );
+    }
 
-        if ( res == null ) res = lx.parseIdentifier( null );
+    private
+    int
+    parseListIndex( MingleLexer.IndexToken idx,
+                int idxPos )
+        throws MingleSyntaxException
+    {
+        try { return Lang.parseUint32( idx.s ); }
+        catch ( NumberFormatOverflowException ex ) 
+        {
+            throw new MingleSyntaxException( 
+                "list index out of range", idxPos );
+        }
+    }
+
+    private
+    int
+    completePathIndex()
+        throws MingleSyntaxException,
+               IOException
+    {
+        skipWs();
+        
+        int tokPos = curPos;
+        Object tok = nextToken(); // may be null in checks below
+
+        if ( tok instanceof MingleLexer.IndexToken ) {
+            int idxPos = tokPos;
+            skipWs();
+            expectSpecial( SpecialLiteral.CLOSE_BRACKET );
+            return parseListIndex( (MingleLexer.IndexToken) tok, idxPos );
+        } else if ( SpecialLiteral.MINUS.equals( tok ) ) {
+            throw fail( tokPos, "negative list index" );
+        }
+
+        throw failUnexpectedToken( tokPos, tok, "path index" );
+    }
+
+    private
+    ObjectPath< MingleIdentifier >
+    startIdPath()
+        throws MingleSyntaxException,
+               IOException
+    {
+        skipWs();
+        lx.checkUnexpectedEnd();
+
+        int tokPos = curPos;
+        Object tok = nextToken();
+
+        if ( tok instanceof MingleIdentifier ) {
+            return ObjectPath.getRoot( (MingleIdentifier) tok );
+        } else if ( tok.equals( SpecialLiteral.OPEN_BRACKET ) ) {
+            int idx = completePathIndex();
+            ObjectPath< MingleIdentifier > res = ObjectPath.getRoot();
+            return res.startImmutableList( idx );
+        }
+
+        throw failUnexpectedToken( tokPos, tok, ERR_MSG_ID_OR_IDX );
+    }
+
+    private
+    ObjectPath< MingleIdentifier >
+    extendPath( ObjectPath< MingleIdentifier > p )
+        throws MingleSyntaxException,
+               IOException
+    {
+        SpecialLiteral spec = expectSpecial( ERR_MSG_ID_OR_IDX, PATH_SEP_LITS );
+        skipWs();
+
+        switch ( spec ) {
+        case PERIOD: return p.descend( expectIdentifier() );
+        case OPEN_BRACKET: return p.startImmutableList( completePathIndex() );
+        }
+
+        throw state.fail( "unexpectedly reachable" );
+    }
+
+    private
+    ObjectPath< MingleIdentifier >
+    expectIdentifierPath()
+        throws MingleSyntaxException,
+               IOException
+    {
+        ObjectPath< MingleIdentifier > res = startIdPath();
+
+        while ( true ) {
+            skipWs();
+            if ( peekToken() == null ) break;
+            res = extendPath( res );
+        }
 
         return res;
     }
@@ -321,15 +422,14 @@ class MingleParser
         List< MingleIdentifier > parts = Lang.newList();
         MingleIdentifier ver = null;
 
-        parts.add( expectIdentifier() );
+        parts.add( expectIdentifier( false ) );
 
         while ( ver == null )
         {
-            if ( expectSpecial( NS_SPEC_LITS ) == SpecialLiteral.COLON )
-            {
-                parts.add( expectIdentifier() );
+            if ( expectSpecial( NS_SPEC_LITS ) == SpecialLiteral.COLON ) {
+                parts.add( expectIdentifier( false ) );
             }
-            else ver = expectIdentifier();
+            else ver = expectIdentifier( false );
         }
 
         return new MingleNamespace( toArray( parts ), ver );
@@ -349,27 +449,7 @@ class MingleParser
     }
 
     private
-    MingleIdentifiedName
-    expectIdentifiedName()
-        throws MingleSyntaxException,
-               IOException
-    {
-        MingleNamespace ns = expectNamespace();
-        
-        List< MingleIdentifier > names = Lang.newList();
-
-        while ( pollSpecial( SpecialLiteral.FORWARD_SLASH ) != null )
-        {
-            names.add( expectIdentifier() );
-        }
-
-        if ( names.isEmpty() ) throw fail( lxPos(), "Missing name" );
-
-        return new MingleIdentifiedName( ns, toArray( names ) );
-    }
-
-    private
-    TypeName
+    QualifiedTypeName
     expectTypeName( MingleNameResolver r )
         throws MingleSyntaxException,
                IOException
@@ -379,442 +459,18 @@ class MingleParser
         if ( tok instanceof MingleIdentifier ) return expectQname();
         else if ( tok instanceof DeclaredTypeName )
         {
+            int errPos = nextPos();
             DeclaredTypeName nm = expectDeclaredTypeName();
+            
             QualifiedTypeName qn = r.resolve( nm );
+            if ( qn != null ) return qn;
 
-            return qn == null ? nm : qn;
+            throw new MingleSyntaxException( 
+                "cannot resolve as a standard type: " + nm, errPos );
         }
 
         String expctMsg = "identifier or declared type name";
         throw failUnexpectedToken( peekPos, tok, expctMsg );
-    }
-
-    private
-    MingleSyntaxException
-    failRestrictionTarget( TypeName targ,
-                           int nmPos,
-                           String errTyp )
-    {
-        String msg = String.format(
-            "Invalid target type for %s restriction: %s", 
-            errTyp, targ.getExternalForm()
-        );
-
-        return new MingleSyntaxException( msg, nmPos );
-    }
-
-    private
-    MingleSyntaxException
-    asSyntaxException( PatternSyntaxException pse,
-                       MingleString patStr )
-    {
-        String msg = String.format(
-            "(near pattern string char %d) %s: %s", 
-            pse.getIndex(), 
-            pse.getDescription(), 
-            patStr.getExternalForm()
-        );
-
-        return new MingleSyntaxException( msg, curPos );
-    }
-
-    private
-    MingleRegexRestriction
-    expectRegexRestriction( TypeName nm,
-                            int nmPos )
-        throws MingleSyntaxException,
-               IOException
-    {
-        MingleString patStr = (MingleString) nextToken();
-
-        if ( nm.equals( Mingle.QNAME_STRING ) )
-        {
-            try
-            {
-                Pattern pat = Pattern.compile( patStr.toString() );
-                return MingleRegexRestriction.create( pat );
-            }
-            catch ( PatternSyntaxException pse )
-            {
-                throw asSyntaxException( pse, patStr );
-            }
-        }
- 
-        throw failRestrictionTarget( nm, nmPos, "regex" );
-    }
-
-    private
-    boolean
-    getRangeBound( SpecialLiteral[] toks )
-        throws MingleSyntaxException,
-               IOException
-    {
-        SpecialLiteral spec = expectSpecial( toks );
-
-        return spec == SpecialLiteral.OPEN_BRACKET || 
-               spec == SpecialLiteral.CLOSE_BRACKET;
-    }
-
-    private
-    MingleSyntaxException
-    rangeValTypeFail( String valTypDesc,
-                      MingleIdentifier bound,
-                      int errPos )
-    {
-        return failf( errPos, 
-            "Got %s as %s value for range", valTypDesc, bound );
-    }
-
-    private
-    MingleValue
-    castRangeValue( MingleValue v,
-                    AtomicTypeReference t,
-                    MingleIdentifier bound,
-                    int errPos )
-        throws MingleSyntaxException
-    {
-        ObjectPath< MingleIdentifier > p = ObjectPath.getRoot( bound );
-
-        try { return Mingle.castAtomic( v, t, t, p ); }
-        catch ( MingleValueException mve )
-        {
-            throw failf( errPos, "Invalid %s value in range restriction: %s", 
-                bound, mve.error() );
-        }
-    }
-
-    private
-    MingleValue
-    asRangeValue( AtomicTypeReference typ,
-                  MingleString s,
-                  MingleIdentifier bound,
-                  int errPos )
-        throws MingleSyntaxException
-    {
-        if ( typ.equals( Mingle.TYPE_STRING ) || 
-             typ.equals( Mingle.TYPE_TIMESTAMP ) )
-        {
-            return castRangeValue( s, typ, bound, errPos );
-        }
-
-        throw rangeValTypeFail( "string", bound, errPos );
-    }
-
-    // Can make this faster later and skip the pass through MingleString; for
-    // now just let Mingle.castValue() do the real work
-    private
-    MingleValue
-    asRangeValue( AtomicTypeReference typ,
-                  MingleLexer.Number n,
-                  MingleIdentifier bound,
-                  int errPos )
-        throws MingleSyntaxException
-    {
-        if ( Mingle.isNumberType( typ ) )
-        {
-            if ( Mingle.isIntegralType( typ ) &&
-                 ! ( n.f == null && n.e == null ) )
-            {
-                throw rangeValTypeFail( "decimal", bound, errPos );
-            }
-
-            MingleString numStr = new MingleString( n.toString() );
-            return castRangeValue( numStr, typ, bound, errPos );
-        }
-        
-        throw rangeValTypeFail( "number", bound, errPos );
-    }
-
-    private
-    boolean
-    impliesNullRangeValue( Object tok )
-    {
-        return tok == SpecialLiteral.COMMA ||
-               tok == SpecialLiteral.CLOSE_PAREN ||
-               tok == SpecialLiteral.CLOSE_BRACKET;
-    }
-
-    private
-    MingleValue
-    getRangeValue( AtomicTypeReference rngTyp,
-                   MingleIdentifier bound )
-        throws MingleSyntaxException,
-               IOException
-    {
-        Object tok = peekToken();
-
-        if ( tok instanceof MingleString ) 
-        {
-            MingleString ms = (MingleString) nextToken();
-            return asRangeValue( rngTyp, ms, bound, curPos );
-        }
-        else if ( tok instanceof MingleLexer.Number )
-        {
-            MingleLexer.Number n = (MingleLexer.Number) nextToken();
-            return asRangeValue( rngTyp, n, bound, curPos );
-        }
-        else if ( impliesNullRangeValue( tok ) ) return null; // leave peekVal
-
-        throw failUnexpectedToken( peekPos, tok, "range value" );
-    }
-
-    private
-    final
-    static
-    class RangeBuilder
-    {
-        // minPos,maxPos are positions of min or max bound token
-
-        private int minPos;
-        private boolean minClosed;
-        private MingleValue min;
-        private MingleValue max;
-        private boolean maxClosed;
-        private int maxPos;
-
-        private AtomicTypeReference rngTyp;
-
-        private
-        MingleRangeRestriction
-        build()
-        {
-            Class< ? extends MingleValue > typeTok = 
-                Mingle.expectValueClassFor( rngTyp );
-
-            return MingleRangeRestriction.createChecked(
-                minClosed, min, max, maxClosed, typeTok );
-        }
-    }
-
-    // min,max have been cast successfully already, so the unchecked cast below
-    // is okay
-    private
-    int
-    getRangeCompSignum( RangeBuilder b )
-    {
-        Comparable< MingleValue > minCmp = Lang.castUnchecked( b.min );
-
-        return minCmp.compareTo( b.max );
-    }
-
-    private
-    boolean
-    areAdjacentInts( RangeBuilder b )
-    {
-        if ( b.max instanceof MingleInt32 )
-        {
-            return ( (MingleInt32) b.max ).intValue() -
-                   ( (MingleInt32) b.min ).intValue() == 1;
-        }
-        else if ( b.max instanceof MingleUint32 )
-        {
-            return ( (MingleUint32) b.max ).intValue() -
-                   ( (MingleUint32) b.min ).intValue() == 1;
-        }
-        else if ( b.max instanceof MingleInt64 )
-        {
-            return ( (MingleInt64) b.max ).longValue() -
-                   ( (MingleInt64) b.min ).longValue() == 1L;
-        }
-        else if ( b.max instanceof MingleUint64 )
-        {
-            return ( (MingleUint64) b.max ).longValue() -
-                   ( (MingleUint64) b.min ).longValue() == 1L;
-        }
-        else return false;
-    } 
-
-    private
-    void
-    checkInifiniteRangeBounds( RangeBuilder b )
-        throws MingleSyntaxException
-    {
-        boolean errLf = b.minClosed && b.min == null;
-        boolean errRt = b.maxClosed && b.max == null;
-
-        String msg = null;
-        int errPos = 0;
-
-        if ( errLf )
-        {
-            errPos = b.minPos;
-
-            if ( errRt ) msg = "Infinite range must be open";
-            else msg = "Infinite low range must be open";
-        }
-        else if ( errRt )
-        {
-            errPos = b.maxPos;
-            msg = "Infinite high range must be open";
-        }
-
-        if ( msg != null ) throw fail( errPos, msg );
-    }
-
-    private
-    void
-    checkRangeSatisfiable( RangeBuilder b )
-        throws MingleSyntaxException
-    {
-        checkInifiniteRangeBounds( b );
-
-        if ( b.min == null || b.max == null ) return;
-        int i = getRangeCompSignum( b );
-
-        boolean sat = false;
-        if ( i == 0 ) sat = b.minClosed && b.maxClosed;
-        else if ( i > 0 ) sat = false;
-        else
-        {
-            boolean open = ! ( b.minClosed || b.maxClosed );
-            sat = ! ( open && areAdjacentInts( b ) );
-        }
-
-        if ( ! sat ) throw fail( b.minPos, "Unsatisfiable range" );
-    }
-
-    private
-    MingleRangeRestriction
-    expectRangeRestriction( TypeName nm,
-                            int nmPos )
-        throws MingleSyntaxException,
-               IOException
-    {
-        RangeBuilder b = new RangeBuilder();
-
-        b.rngTyp = RANGE_TYPES.get( nm );
-        if ( b.rngTyp == null ) 
-        {
-            throw failRestrictionTarget( nm, nmPos, "range" );
-        }
-
-        b.minClosed = getRangeBound( RANGE_MIN_LITS );
-        b.minPos = curPos;
-        b.min = getRangeValue( b.rngTyp, BOUND_RANGE_MIN );
-        expectSpecial( SpecialLiteral.COMMA );
-        b.max = getRangeValue( b.rngTyp, BOUND_RANGE_MAX );
-        b.maxClosed = getRangeBound( RANGE_MAX_LITS );
-        b.maxPos = curPos;
-
-        checkRangeSatisfiable( b );
-
-        return b.build();
-    }
-
-    private
-    MingleValueRestriction
-    expectRestriction( TypeName nm,
-                       int nmPos )
-        throws MingleSyntaxException,
-               IOException
-    {
-        Object tok = peekToken();
-
-        if ( tok instanceof MingleString )
-        {
-            return expectRegexRestriction( nm, nmPos );
-        }
-
-        if ( tok == SpecialLiteral.OPEN_PAREN ||
-             tok == SpecialLiteral.OPEN_BRACKET )
-        {
-            return expectRangeRestriction( nm, nmPos );
-        }
- 
-        throw failUnexpectedToken( peekPos, peekTok, "restriction" );
-    }
-
-    private
-    AtomicTypeReference
-    expectAtomicTypeReference( MingleNameResolver r )
-        throws MingleSyntaxException,
-               IOException
-    {
-        checkUnexpectedEnd( "type reference" );
-
-        int nmPos = nextPos();
-        TypeName nm = expectTypeName( r );
-
-        MingleValueRestriction vr = null;
-
-        if ( pollSpecial( SpecialLiteral.TILDE ) != null )
-        {
-            checkUnexpectedEnd( "type restriction" );
-            vr = expectRestriction( nm, nmPos );
-        }
-
-        return new AtomicTypeReference( nm, vr );
-    }
-
-    private
-    MingleTypeReference
-    quantifyType( AtomicTypeReference typ,
-                  List< SpecialLiteral > quants )
-    {
-        MingleTypeReference res = typ;
-
-        for ( SpecialLiteral quant : quants )
-        {
-            switch ( quant )
-            {
-                case QUESTION_MARK: 
-                    res = new NullableTypeReference( res ); break;
-
-                case PLUS: res = new ListTypeReference( res, false ); break;
-                case ASTERISK: res = new ListTypeReference( res, true ); break;
-
-                default: state.failf( "Unhandled quant: %s", quant );
-            }
-        }
-
-        return res;
-    }
-
-    private
-    SpecialLiteral
-    readTypeQuant()
-        throws MingleSyntaxException,
-               IOException
-    {
-        if ( peekTok != null )
-        {
-            Object tok = nextToken();
-
-            if ( tok instanceof SpecialLiteral )
-            {
-                if ( TYPE_QUANTS.contains( tok ) ) return (SpecialLiteral) tok;
-            }
-
-            throw failUnexpectedToken( curPos, tok, "type quantifier" );
-        }
-
-        return lx.readTypeQuant();
-    }
-
-    private
-    List< SpecialLiteral >
-    readTypeQuants()
-        throws MingleSyntaxException,
-               IOException
-    {
-        List< SpecialLiteral > res = Lang.newList();
-
-        SpecialLiteral quant;
-        while ( ( quant = readTypeQuant() ) != null ) res.add( quant );
-
-        return res;
-    }
-
-    private
-    MingleTypeReference
-    expectTypeReference( MingleNameResolver r )
-        throws MingleSyntaxException,
-               IOException
-    {
-        AtomicTypeReference atr = expectAtomicTypeReference( r );
-
-        List< SpecialLiteral > quants = readTypeQuants();
-        return quantifyType( atr, quants );
     }
 
     static
@@ -822,7 +478,11 @@ class MingleParser
     forString( CharSequence s )
     {
         inputs.notNull( s, "s" );
-        return new MingleParser( MingleLexer.forString( s ) );
+
+        MingleLexer lx = MingleLexer.forString( s );
+        lx.setPositionAdjust( 1 );
+
+        return new MingleParser( lx );
     }
 
     private
@@ -830,11 +490,10 @@ class MingleParser
     enum ParseType
     {
         IDENTIFIER( "identifier" ),
+        IDENTIFIER_PATH( "identifier path" ),
         DECLARED_TYPE_NAME( "declared type name" ),
         NAMESPACE( "namespace" ),
-        QUALIFIED_TYPE_NAME( "qualified type name" ),
-        TYPE_REFERENCE( "type reference" ),
-        IDENTIFIED_NAME( "identified name" );
+        QUALIFIED_TYPE_NAME( "qualified type name" );
 
         private final String errNm;
 
@@ -851,11 +510,12 @@ class MingleParser
     {
         switch ( typ )
         {
-            case IDENTIFIER: return p.expectIdentifier();
+            case IDENTIFIER: 
+                return (MingleIdentifier) p.lx.parseIdentifier( null );
+            case IDENTIFIER_PATH: return p.expectIdentifierPath();
             case DECLARED_TYPE_NAME: return p.expectDeclaredTypeName();
             case NAMESPACE: return p.expectNamespace();
             case QUALIFIED_TYPE_NAME: return p.expectQname();
-            case IDENTIFIED_NAME: return p.expectIdentifiedName();
             default: throw state.createFail( "Unhandled parse type:", typ );
         }
     }
@@ -964,21 +624,6 @@ class MingleParser
     }
 
     static
-    MingleIdentifiedName
-    parseIdentifiedName( CharSequence s )
-        throws MingleSyntaxException
-    {
-        return (MingleIdentifiedName) doParse( s, ParseType.IDENTIFIED_NAME );
-    }
-
-    static
-    MingleIdentifiedName
-    createIdentifiedName( CharSequence s )
-    {
-        return (MingleIdentifiedName) doCreate( s, ParseType.IDENTIFIED_NAME );
-    }
-
-    static
     QualifiedTypeName
     parseQualifiedTypeName( CharSequence s )
         throws MingleSyntaxException
@@ -994,28 +639,10 @@ class MingleParser
     }
 
     static
-    MingleTypeReference
-    parseTypeReference( CharSequence s,
-                        MingleNameResolver r )
+    ObjectPath< MingleIdentifier >
+    parseIdentifierPath( CharSequence s )
         throws MingleSyntaxException
     {
-        inputs.notNull( r, "r" );
-
-        MingleParser p = forString( s );
-
-        try { return checkNoTrailing( p.expectTypeReference( r ), p ); }
-        catch ( IOException ioe ) { throw failIOException( ioe ); }
-    }
-
-    static
-    MingleTypeReference
-    createTypeReference( CharSequence s,
-                         MingleNameResolver r )
-    {
-        try { return parseTypeReference( s, r ); }
-        catch ( MingleSyntaxException mse ) 
-        { 
-            throw failCreate( mse, "type reference" ); 
-        }
+        return Lang.castUnchecked( doParse( s, ParseType.IDENTIFIER_PATH ) );
     }
 }

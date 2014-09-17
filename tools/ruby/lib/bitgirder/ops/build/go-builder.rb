@@ -214,6 +214,7 @@ class GoModBuilder < StandardModTask
 
     public
     def get_direct_dependencies
+        code( "getting deps for #{mod} in #{proj}" )
         get_go_build_dependencies( mod )
     end
 
@@ -347,10 +348,11 @@ class GoBinBuilder < StandardProjTask
     include FileSigMixin
 
     private
-    def bin_type
+    def bin_type( raise_if_nil = true )
 
         case res = @target[ 3 ] 
-        when nil then nil
+        when nil 
+            raise "No bin type in target" if raise_if_nil
         when MOD_TEST, MOD_BIN then res
         else raise "Unrecognized bin build target: #{res}"
         end
@@ -358,7 +360,7 @@ class GoBinBuilder < StandardProjTask
 
     private
     def test_bin?
-        bin_type == MOD_TEST
+        bin_type( false ) == MOD_TEST
     end
 
     private
@@ -624,6 +626,7 @@ class GoTestDataGenerator < StandardProjTask
     def execute( chain )
         
         pd = ws_ctx.proj_def
+
         ( pd[ :test_data_generators ] || {} ).each_pair do |gen_id, gen_obj| 
             run_generator( gen_id, gen_obj, chain )
         end

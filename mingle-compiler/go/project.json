@@ -6,5 +6,6 @@
         "mingle-interpreter",
         "mingle-code" 
     ],
+    "commands": { "mingle": {} },
     "packages": [ "mingle/compiler" ]
 }

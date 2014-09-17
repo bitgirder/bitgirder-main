@@ -11,19 +11,21 @@ extends MingleTypeReference
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final TypeName name;
+    private final QualifiedTypeName name;
     private final MingleValueRestriction restriction;
 
-    AtomicTypeReference( TypeName name,
+    AtomicTypeReference( QualifiedTypeName name,
                          MingleValueRestriction restriction )
     {
         this.name = inputs.notNull( name, "name" );
         this.restriction = restriction;
     }
 
-    public TypeName getName() { return name; }
+    public QualifiedTypeName getName() { return name; }
 
     public MingleValueRestriction getRestriction() { return restriction; }
+
+    public AtomicTypeReference asUnrestrictedType() { return create( name ); }
 
     public int hashCode() { return name.hashCode(); }
 
@@ -48,28 +50,26 @@ extends MingleTypeReference
     }
 
     public 
-    CharSequence 
+    String
     getExternalForm() 
     { 
-        CharSequence nmStr = name.getExternalForm();
+        String nmStr = name.getExternalForm();
 
         if ( restriction == null ) return nmStr;
-        else
-        {
-            StringBuilder sb =
-                new StringBuilder().
-                    append( nmStr ).
-                    append( "~" );
             
-            restriction.appendExternalForm( sb );
-            return sb;
-        }
+        StringBuilder sb =
+            new StringBuilder().
+                append( nmStr ).
+                append( "~" );
+        
+        restriction.appendExternalForm( sb );
+        return sb.toString();
     }
 
     public
     static
     AtomicTypeReference
-    create( TypeName nm )
+    create( QualifiedTypeName nm )
     {
         return new AtomicTypeReference( nm, null );
     }
@@ -77,7 +77,7 @@ extends MingleTypeReference
     public
     static
     AtomicTypeReference
-    create( TypeName nm,
+    create( QualifiedTypeName nm,
             MingleValueRestriction restriction )
     {
         inputs.notNull( restriction, "restriction" );

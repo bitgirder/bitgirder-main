@@ -5,8 +5,8 @@ import (
     "fmt"
     "bitgirder/assert"
     "bitgirder/objpath"
-    "reflect"
     "bytes"
+    "time"
 //    "log"
 )
 
@@ -45,9 +45,9 @@ func assertAsBufferValues( t *testing.T ) {
 }
 
 func assertCompositeTypesAsValue( t *testing.T ) {
-    m := MustSymbolMap( "key1", "val1" )
+    m := MustSymbolMap( mkId( "key1" ), "val1" )
     assert.Equal( m, MustValue( m ) )
-    typ := qname( "ns1@v1/T1" )
+    typ := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
     s := &Struct{ Type: typ, Fields: m }
     assert.Equal( s, MustValue( s ) )
     l := MustList( 1, 2 )
@@ -67,7 +67,8 @@ func assertAsNullValues( t *testing.T ) {
 }
 
 func assertAsEnumValues( t *testing.T ) {
-    en := MustEnum( "ns1@v1/E1", "e1" )
+    qn := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "E1" ) )
+    en := &Enum{ Type: qn, Value: mkId( "e1" ) }
     assert.Equal( en, MustValue( en ) )
 }
 
@@ -77,6 +78,17 @@ func assertAsListValues( t *testing.T ) {
         MustList( String( "s1" ), String( "s2" ), Int32( 3 ) ),
         MustValue( []interface{} { "s1", String( "s2" ), int32( 3 ) } ),
     )
+}
+
+// Also gives coverage for MustList()
+func TestCreateListWithType( t *testing.T ) {
+    a := &assert.Asserter{ t }
+    t1 := &ListTypeReference{ ElementType: TypeInt32 }
+    l := MustList( t1, int32( 1 ), int32( 2 ) )
+    a.Equal( 2, l.Len() )
+    a.Equal( Int32( 1 ), l.Get( 0 ) )
+    a.Equal( Int32( 2 ), l.Get( 1 ) )
+    a.Truef( l.Type.Equals( t1 ), "bad type: %s", l.Type )
 }
 
 func TestValueTypeErrorFormatting( t *testing.T ) {
@@ -153,23 +165,13 @@ func assertMapLiteralError(
     )
 }
 
-func TestCreateSymbolMapErrorBadKey( t *testing.T ) {
+func TestCreateSymbolMapErrorBadVal( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Error in map literal pairs at index 2: Unhandled id initializer: 1",
-        func() ( interface{}, error ) {
-            return CreateSymbolMap( "goodKey", "goodVal", 1, "valForBadKey" )
-        },
-    )
-}
-
-func TestCreateSymbolMapErrorBadval( t *testing.T ) {
-    assertMapLiteralError(
-        t,
-        "Error in map literal pairs at index 1: " +
+        "error in map literal pairs at index 1: " +
             "inVal: Unhandled mingle value &{} (*mingle.notAMingleValue)",
         func() ( interface{}, error ) {
-            return CreateSymbolMap( "goodKey", &notAMingleValue{} )
+            return CreateSymbolMap( mkId( "k" ), &notAMingleValue{} )
         },
     )
 }
@@ -177,9 +179,9 @@ func TestCreateSymbolMapErrorBadval( t *testing.T ) {
 func TestCreateSymbolMapOddPairLen( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Invalid pairs len: 3",
+        "invalid pairs len: 3",
         func() ( interface{}, error ) {
-            return CreateSymbolMap( "f1", "v1", "f2" )
+            return CreateSymbolMap( mkId( "f1" ), "v1", mkId( "f2" ) )
         },
     )
 }
@@ -187,9 +189,13 @@ func TestCreateSymbolMapOddPairLen( t *testing.T ) {
 func TestCreateSymbolMapDuplicateKeyError( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Multiple entries for key: f1",
+        "duplicate entry for 'f1' starting at index 4",
         func() ( interface{}, error ) {
-            return CreateSymbolMap( "f1", "v1", "f2", 1, "f1", "v2" )
+            return CreateSymbolMap( 
+                mkId( "f1" ), "v1", 
+                mkId( "f2" ), 1, 
+                mkId( "f1" ), "v2",
+            )
         },
     )
 }
@@ -198,25 +204,9 @@ func TestExpectSymbolMapPanic( t *testing.T ) {
     assert.AssertPanic(
         func() { MustSymbolMap( 1, "bad" ) },
         func( err interface{} ) {
-            msg := "Error in map literal pairs at index 0: Unhandled id " +
-                   "initializer: 1"
+            msg := 
+                "error in map literal pairs at index 0: invalid key type: int"
             assert.Equal( msg, err.( *MapLiteralError ).Error() )
-        },
-    )
-}
-
-func TestAsTypeReference( t *testing.T ) {
-    expct := MustTypeReference( "ns1@v1/T1" )
-    f := func( typ TypeReference ) {
-        assert.Truef( expct.Equals( typ ), "%s != %s", expct, typ )
-    }
-    f( asTypeReference( expct ) )
-    f( asTypeReference( "ns1@v1/T1" ) )
-    assert.AssertPanic( 
-        func() { f( asTypeReference( 12 ) ) }, 
-        func( err interface{} ) { 
-            msg := "mingle: Unhandled type ref initializer: int"
-            assert.Equal( msg, err.( error ).Error() )
         },
     )
 }
@@ -260,17 +250,7 @@ func TestExpectListPanic( t *testing.T ) {
 func TestEmptySymbolMap( t *testing.T ) {
     m := MustSymbolMap()
     assert.Equal( 0, m.Len() )
-    assert.Equal( nil, m.GetById( MustIdentifier( "f1" ) ) )
-}
-
-// Test base coverage of GetByString, GetById handling of a value that is
-// present and one that is not; more type-specific coverage is in
-// TestSymbolMapTypedAccessors
-func TestSymbolMapGettersBase( t *testing.T ) {
-    m := MustSymbolMap( "f1", "val1" )
-    assert.Equal( 
-        String( "val1" ), m.GetById( MustIdentifier( "f1" ) ).( String ) )
-    assert.Equal( nil, m.GetById( MustIdentifier( "f2" ) ) )
+    assert.Equal( nil, m.Get( mkId( "f1" ) ) )
 }
 
 func TestEmptySymbolMapEachPair( t *testing.T ) {
@@ -280,10 +260,10 @@ func TestEmptySymbolMapEachPair( t *testing.T ) {
 }
 
 func TestNonEmptySymbolMapEachPair( t *testing.T ) {
-    m := MustSymbolMap( "k1", Int32( 1 ), "k2", Int64( 2 ) )
+    m := MustSymbolMap( mkId( "k1" ), Int32( 1 ), mkId( "k2" ), Int64( 2 ) )
     vals := []Value{ Int32( 1 ), Int64( 2 ) }
     set := func( k *Identifier, v Value, kStr string, i int ) {
-        if k.Equals( MustIdentifier( kStr ) ) {
+        if k.Equals( mkId( kStr ) ) {
             if vals[ i ] == nil { 
                 t.Fatalf( "Already saw %s", kStr )
             } else {
@@ -302,7 +282,11 @@ func TestNonEmptySymbolMapEachPair( t *testing.T ) {
 }
 
 func TestSymbolMapEachPairError( t *testing.T ) {
-    m := MustSymbolMap( "k1", "v1", "k2", "v2", "k3", "v3" )
+    m := MustSymbolMap( 
+        mkId( "k1" ), "v1", 
+        mkId( "k2" ), "v2", 
+        mkId( "k3" ), "v3",
+    )
     visits := 0
     errExpct := fmt.Errorf( "test-error" )
     vis := func( fld *Identifier, val Value ) error {
@@ -322,19 +306,19 @@ func TestSymbolMapEachPairError( t *testing.T ) {
 func TestCreateStructError( t *testing.T ) {
     assertMapLiteralError(
         t,
-        "Invalid pairs len: 1",
+        "invalid pairs len: 1",
         func() ( interface{}, error ) {
-            return CreateStruct( "ns1@v1/T1", "missingVal" )
+            return CreateStruct( ns1V1Qn( "T1" ), "missingVal" )
         },
     )
 }
 
 func TestExpectStructError( t *testing.T ) {
     assert.AssertPanic(
-        func() { MustStruct( "ns1@v1/T1", "missingVal" ) },
+        func() { MustStruct( ns1V1Qn( "T1" ), "missingVal" ) },
         func( err interface{} ) {
             assert.Equal(
-                "Invalid pairs len: 1", 
+                "invalid pairs len: 1", 
                 err.( *MapLiteralError ).Error(),
             )
         },
@@ -346,24 +330,24 @@ func TestExpectStructError( t *testing.T ) {
 func TestObjectPathFormatting( t *testing.T ) {
     str := 
         FormatIdPath(
-            objpath.RootedAt( MustIdentifier( "f1" ) ).
-                Descend( MustIdentifier( "someFld" ) ).
+            objpath.RootedAt( mkId( "f1" ) ).
+                Descend( mkId( "some", "fld1" ) ).
                 StartList().
                 Next().
                 StartList().
-                Descend( MustIdentifier( "some-fld2" ) ).
+                Descend( mkId( "some", "fld2" ) ).
                 StartList().
                 Next().
                 Next().
-                Descend( MustIdentifier( "some_fld3" ) ),
+                Descend( mkId( "some", "fld3" ) ),
         )
-    assert.Equal( "f1.some-fld[ 1 ][ 0 ].some-fld2[ 2 ].some-fld3", str )
+    assert.Equal( "f1.some-fld1[ 1 ][ 0 ].some-fld2[ 2 ].some-fld3", str )
 }
 
 func TestTypeCastFormatting( t *testing.T ) {
-    path := objpath.RootedAt( id( "f1" ) ).Descend( id( "f2" ) )
-    t1 := typeRef( "ns1@v1/T1" )
-    t2 := typeRef( "ns1@v1/T2" )
+    path := objpath.RootedAt( mkId( "f1" ) ).Descend( mkId( "f2" ) )
+    t1 := ns1V1At( "T1" )
+    t2 := ns1V1At( "T2" )
     suff := "Expected value of type ns1@v1/T1 but found ns1@v1/T2"
     err := NewTypeCastError( t1, t2, nil )
     assert.Equal( suff, err.Error() )
@@ -372,31 +356,63 @@ func TestTypeCastFormatting( t *testing.T ) {
 }
 
 func TestTypeOf( t *testing.T ) {
-    assert.Equal( TypeBoolean, TypeOf( Boolean( true ) ) )
-    assert.Equal( TypeBuffer, TypeOf( Buffer( []byte{} ) ) )
-    assert.Equal( TypeString, TypeOf( String( "" ) ) )
-    assert.Equal( TypeInt32, TypeOf( Int32( 1 ) ) )
-    assert.Equal( TypeInt64, TypeOf( Int64( 1 ) ) )
-    assert.Equal( TypeUint32, TypeOf( Uint32( 1 ) ) )
-    assert.Equal( TypeUint64, TypeOf( Uint64( 1 ) ) )
-    assert.Equal( TypeFloat32, TypeOf( Float32( 1.0 ) ) )
-    assert.Equal( TypeFloat64, TypeOf( Float64( 1.0 ) ) )
-    assert.Equal( TypeTimestamp, TypeOf( Now() ) )
-    assert.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
-    assert.Equal( typeRef( "mingle:core@v1/Value*" ), TypeOf( MustList() ) )
-    qn := qname( "ns1@v1/T1" )
+    a := &assert.Asserter{ t }
+    a.Equal( TypeBoolean, TypeOf( Boolean( true ) ) )
+    a.Equal( TypeBuffer, TypeOf( Buffer( []byte{} ) ) )
+    a.Equal( TypeString, TypeOf( String( "" ) ) )
+    a.Equal( TypeInt32, TypeOf( Int32( 1 ) ) )
+    a.Equal( TypeInt64, TypeOf( Int64( 1 ) ) )
+    a.Equal( TypeUint32, TypeOf( Uint32( 1 ) ) )
+    a.Equal( TypeUint64, TypeOf( Uint64( 1 ) ) )
+    a.Equal( TypeFloat32, TypeOf( Float32( 1.0 ) ) )
+    a.Equal( TypeFloat64, TypeOf( Float64( 1.0 ) ) )
+    a.Equal( TypeTimestamp, TypeOf( Now() ) )
+    a.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
+    a.Equal( TypeOpaqueList, TypeOf( MustList() ) )
+    qn := ns1V1Qn( "T1" )
     typ := &AtomicTypeReference{ Name: qn }
-    assert.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
-    assert.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
+    a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
+    a.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
 }
 
 func TestAtomicTypeIn( t *testing.T ) {
-    str := "ns1@v1/T1"
-    typ := MustTypeReference( str )
-    for _, ext := range []string{ "", "?", "*", "+", "**+", "*+?++", "??" } {
-        typ2 := MustTypeReference( str + ext )
-        assert.True( typ.Equals( AtomicTypeIn( typ2 ) ) )
+    at := ns1V1At( "T1" )
+    chk := func( typ TypeReference ) {
+        assert.True( at.Equals( AtomicTypeIn( typ ) ) )
+        assert.True( 
+            at.Equals( AtomicTypeIn( NewPointerTypeReference( typ ) ) ) )
     }
+    chk( at )
+    chk( &ListTypeReference{ at, true } )
+    chk( &ListTypeReference{ at, false } )
+    chk( 
+        &ListTypeReference{ 
+            ElementType: &ListTypeReference{ 
+                ElementType: &ListTypeReference{
+                    ElementType: at,
+                    AllowsEmpty: true,
+                },
+                AllowsEmpty: true,
+            },
+            AllowsEmpty: false,
+        },
+    )
+    chk( 
+        &ListTypeReference{ 
+            ElementType: &ListTypeReference{ 
+                ElementType: &NullableTypeReference{
+                    &ListTypeReference{
+                        ElementType: at,
+                        AllowsEmpty: true,
+                    },
+                },
+                AllowsEmpty: true,
+            },
+            AllowsEmpty: false,
+        },
+    )
+    chk( NewPointerTypeReference( at ) )
+    chk( &NullableTypeReference{ NewPointerTypeReference( at ) } )
 }
 
 func TestResolveInCore( t *testing.T ) {
@@ -406,7 +422,6 @@ func TestResolveInCore( t *testing.T ) {
             assert.True( qn.Equals( expct ) )
         } else { t.Fatalf( "Couldn't resolve: %s", nm ) }
     }
-    f( "Value", QnameValue )
     f( "Boolean", QnameBoolean )
     f( "Buffer", QnameBuffer )
     f( "String", QnameString )
@@ -431,9 +446,9 @@ func TestComparer( t *testing.T ) {
     }
     f( String( "a" ), String( "a" ), true )
     f( String( "a" ), String( "b" ), false )
-    for _, typ := range NumericTypes {
+    for _, qn := range NumericTypeNames {
         mkNum := func( s string ) Comparer {
-            val, err := CastValue( String( s ), typ, idPathRootVal )
+            val, err := ParseNumber( s, qn )
             if err != nil { t.Fatal( err ) }
             return val.( Comparer )
         }
@@ -470,35 +485,197 @@ func TestRestrictionAccept( t *testing.T ) {
     f( String( "aaaaa" ), vr2, false )
 }
 
-func TestQuoteValue( t *testing.T ) {
-    f := func( v Value, strs ...string ) {
-        q := QuoteValue( v )
-        for _, str := range strs { if str == q { return } }
-        t.Fatalf( "No vals in %#v matched quoted val %q", strs, q )
+func TestCanAssign( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    int32Rng := &AtomicTypeReference{
+        Name: QnameInt32,
+        Restriction: &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
     }
-    f( Boolean( true ), "true" )
-    f( Boolean( false ), "false" )
-    f( Buffer( []byte{ 0, 1, 2 } ), "buf[000102]" )
-    f( String( "s" ), `"s"` )
-    f( Int32( 1 ), "1" )
-    f( Int64( 1 ), "1" )
-    f( Uint32( 1 ), "1" )
-    f( Uint64( 1 ), "1" )
-    f( Float32( 1.1 ), "1.1" )
-    f( Float64( 1.1 ), "1.1" )
+    mkList := func( typ *ListTypeReference, vals ...interface{} ) *List {
+        res := MustList( vals... )
+        res.Type = typ
+        return res
+    }
+    for _, s := range []struct { 
+        typ TypeReference
+        val Value
+        ignoreRestriction bool
+        expctFail bool
+    } {
+        { typ: TypeNull, val: NullVal },
+        { typ: TypeInt32, val: Int32( int32( 1 ) ) },
+        { typ: TypeInt32, val: Int64( int64( 1 ) ), expctFail: true },
+        { typ: int32Rng, val: Int32( 0 ) },
+        { typ: int32Rng, val: Int32( 2 ), expctFail: true },
+        { typ: int32Rng,
+          val: Int32( 2 ),
+          ignoreRestriction: true,
+          expctFail: false,
+        },
+        { typ: TypeInt32,
+          val: mkList( &ListTypeReference{ TypeInt32, true } ),
+          expctFail: true,
+        },
+        { typ: &ListTypeReference{ TypeInt32, true }, 
+          val: mkList( &ListTypeReference{ TypeInt32, true } ),
+        },
+        { typ: &ListTypeReference{ 
+            &ListTypeReference{ TypeInt32, true }, 
+            true,
+          },
+          val: mkList( 
+            &ListTypeReference{ 
+                &ListTypeReference{ TypeInt32, true }, 
+                true,
+            },
+          ),
+        },
+        { typ: &ListTypeReference{ 
+            &ListTypeReference{ TypeInt32, true }, 
+            true,
+          },
+          val: mkList( &ListTypeReference{ TypeInt32, true } ),
+          expctFail: true,
+        },
+        { typ: &ListTypeReference{ TypeInt32, true },
+          val: mkList( 
+            &ListTypeReference{ 
+                &ListTypeReference{ TypeInt32, true }, 
+                true,
+            },
+          ),
+          expctFail: true,
+        },
+        { typ: &NullableTypeReference{ TypeString }, val: String( "s" ) },
+        { typ: &NullableTypeReference{ TypeString }, val: NullVal },
+        { typ: &NullableTypeReference{ TypeString }, val: NullVal },
+        { typ: ns1V1At( "S1" ), val: MustStruct( ns1V1Qn( "S1" ) ) },
+        { typ: ns1V1At( "S1" ), val: &Enum{ ns1V1Qn( "S1" ), mkId( "c1" ) },
+        },
+        { typ: ns1V1At( "S1" ), val: String( "s" ), expctFail: true },
+        { typ: ns1V1At( "S1" ),
+          val: MustStruct( ns1V1Qn( "S2" ) ),
+          expctFail: true,
+        },
+        { typ: ns1V1At( "S1" ),
+          val: &Enum{ ns1V1Qn( "S2" ), mkId( "c1" ) },
+          expctFail: true,
+        },
+        { typ: TypeValue, val: String( "s" ) },
+        { typ: TypeValue, val: NullVal, expctFail: true },
+        { typ: TypeValue, val: MustStruct( ns1V1Qn( "S1" ) ) },
+        { typ: TypeNullableValue, val: NullVal },
+        { typ: TypeNullableValue, val: String( "s" ) },
+    } {
+//        la.Logf( 
+//            "checking typ %s, val: %s, expctFail: %t, ignoreRestriction: %t",
+//            s.typ, QuoteValue( s.val ), s.expctFail, s.ignoreRestriction )
+        actFail := ! CanAssign( s.val, s.typ, ! s.ignoreRestriction )
+        la.Descend( "expctFail" ).Equal( s.expctFail, actFail )
+        la = la.Next()
+    }
+}
+
+func TestCanAssignType( t *testing.T ) {
+    a := assert.Asserter{ t }
+    chkBase := func( from, to TypeReference, expct bool ) {
+        act := CanAssignType( from, to )
+        a.Equalf( expct, act, "assignment from %s --> %s, expct: %t, act: %t",
+            from, to, expct, act )
+    }
+    chk := func( from, to TypeReference, expct bool ) {
+        chkBase( from, to, expct )
+        chkBase( from, TypeValue, true )
+        chkBase( from, &NullableTypeReference{ TypeValue }, true )
+    }
+    mkLt := func( typ TypeReference, bools ...bool ) TypeReference {
+        for _, allowsEmpty := range bools {
+            typ = &ListTypeReference{ typ, allowsEmpty }
+        }
+        return typ
+    }
+    ltInt32 := func( bools ...bool ) TypeReference {
+        return mkLt( TypeInt32, bools... )
+    }
+    int32Ptr := NewPointerTypeReference( TypeInt32 )
+    chk( TypeInt32, TypeInt32, true )
+    chk( TypeInt32, int32Ptr, false )
+    chk( TypeInt32, TypeInt64, false )
+    chk( int32Ptr, int32Ptr, true )
+    chk( int32Ptr, &NullableTypeReference{ int32Ptr }, true )
+    chk( 
+        &NullableTypeReference{ int32Ptr }, 
+        &NullableTypeReference{ int32Ptr }, 
+        true,
+    )
+    chk( ltInt32( true ), TypeInt32, false )
+    chk( ltInt32( true ), ltInt32( true ), true )
+    chk( ltInt32( false ), ltInt32( false ), true )
+    chk( ltInt32( false ), ltInt32( true ), false )
+    chk( ltInt32( true ), ltInt32( false ), false )
+    chk( ltInt32( true ), &NullableTypeReference{ ltInt32( true ) }, true )
+    chk( &NullableTypeReference{ ltInt32( true ) }, ltInt32( true ), false )
+    chk( TypeInt32, TypeValue, true )
+    chk( ltInt32( true ), TypeValue, true )
+    int32Rng := &AtomicTypeReference{
+        Name: QnameInt32,
+        Restriction: &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
+    }
+    int32RngPtr := NewPointerTypeReference( int32Rng )
+    chk( int32Rng, TypeInt32, true )
+    chk( TypeInt32, int32Rng, false )
+    chk( int32RngPtr, int32Ptr, false )
+    chk( int32RngPtr, int32RngPtr, true )
+    chk( int32RngPtr, &NullableTypeReference{ int32RngPtr }, true )
+    chk( 
+        &NullableTypeReference{ int32RngPtr },
+        &NullableTypeReference{ int32RngPtr },
+        true,
+    )
+    chk( &NullableTypeReference{ int32RngPtr }, int32RngPtr, false )
+    chk( TypeValue, TypeValue, true )
+    chk( ltInt32( true ), mkLt( TypeValue, true ), false )
+    chk( ltInt32( false ), mkLt( TypeValue, false ), false )
+}
+
+type quoteValueAsserter struct {
+    *assert.Asserter
+}
+
+func ( a *quoteValueAsserter ) call( v Value, strs ...string ) {
+    q := QuoteValue( v )
+    for _, str := range strs { if str == q { return } }
+    a.Fatalf( "No vals in %#v matched quoted val %q", strs, q )
+}
+
+func TestQuoteValue( t *testing.T ) {
+    a := &quoteValueAsserter{ &assert.Asserter{ t } }
+    a.call( Boolean( true ), "true" )
+    a.call( Boolean( false ), "false" )
+    a.call( Buffer( []byte{ 0, 1, 2 } ), "buf[3]" )
+    a.call( String( "s" ), `"s"` )
+    a.call( Int32( 1 ), "1" )
+    a.call( Int64( 1 ), "1" )
+    a.call( Uint32( 1 ), "1" )
+    a.call( Uint64( 1 ), "1" )
+    a.call( Float32( 1.1 ), "1.1" )
+    a.call( Float64( 1.1 ), "1.1" )
     tm := "2012-01-01T12:00:00Z"
-    f( MustTimestamp( tm ), tm )
-    en := MustEnum( "ns1@v1/E1", "v" )
-    f( en, "ns1@v1/E1.v" )
-    f( NullVal, "null" )
-    f( MustList(), "[]" )
-    f( MustList( String( "s" ), Int32( 1 ) ), `["s", 1]` )
-    f( MustSymbolMap(), "{}" )
-    f( MustSymbolMap( "k1", 1, "k2", "2" ),
+    a.call( MustTimestamp( tm ), tm )
+    en := &Enum{ ns1V1Qn( "E1" ), mkId( "v" ) }
+    a.call( en, "ns1@v1/E1.v" )
+    a.call( NullVal, "null" )
+    a.call( MustList(), "[]" )
+    a.call( MustList( String( "s" ), Int32( 1 ) ), `["s", 1]` )
+    a.call( MustSymbolMap(), "{}" )
+    a.call( MustSymbolMap( mkId( "k1" ), 1, mkId( "k2" ), "2" ),
         `{k1:1, k2:"2"}`, `{k2:"2", k1:1}` )
-    map1 := MustSymbolMap( "k", 1 )
-    expct := `ns1@v1/T1{k:1}`
-    f( &Struct{ Type: qname( "ns1@v1/T1" ), Fields: map1 }, expct )
+    fldK := mkId( "k" )
+    map1 := MustSymbolMap( fldK, 1 )
+    qn1 := ns1V1Qn( "S1" )
+    s1 := &Struct{ Type: qn1, Fields: map1 }
+    s1Str := `ns1@v1/S1{k:1}`
+    a.call( s1, s1Str )
 }
 
 func TestIsNull( t *testing.T ) {
@@ -508,153 +685,24 @@ func TestIsNull( t *testing.T ) {
 }
 
 func TestIdentifierCompare( t *testing.T ) {
-    id1 := MustIdentifier( "a" )
-    id2 := MustIdentifier( "a-b1" )
-    id3 := MustIdentifier( "b" )
-    id4 := MustIdentifier( "b-b1" )
+    id1 := mkId( "a" )
+    id2 := mkId( "a", "b1" )
+    id3 := mkId( "b" )
+    id4 := mkId( "b", "b1" )
     ids := []*Identifier{ id1, id2, id3, id4 }
     for i, e := 0, len( ids ) - 1; i < e; i++ {
         l, r := ids[ i ], ids[ i + 1 ]
         assert.True( l.Compare( r ) < 0 )
-        assert.True( l.Compare( MustIdentifier( l.ExternalForm() ) ) == 0 )
+        assert.True( l.Compare( l.dup() ) == 0 )
         assert.True( r.Compare( l ) > 0 )
     }
 }
 
 func TestMustEnum( t *testing.T ) {
     assert.Equal(
-        &Enum{ qname( "ns1@v1/E1" ), MustIdentifier( "val1" ) },
-        MustEnum( "ns1@v1/E1", "val1" ),
+        &Enum{ ns1V1Qn( "E1" ), mkId( "val1" ) },
+        &Enum{ ns1V1Qn( "E1" ), mkId( "val1" ) },
     )
-}
-
-func assertMapTypedAccessor(
-    v reflect.Value, 
-    pref, typeName string, 
-    fld interface{}, 
-    expct interface{},
-    t *testing.T ) {
-    var methName string
-    switch fld.( type ) {
-    case string: methName = pref + typeName + "ByString"
-    case *Identifier: methName = pref + typeName + "ById"
-    default: t.Fatalf( "Bad field type: %v", fld )
-    }
-    if meth := v.MethodByName( methName ); meth.Kind() == reflect.Func {
-        params := []reflect.Value{ reflect.ValueOf( fld ) }
-        out := meth.Call( params )
-        if pref == "Get" {
-            if err := out[ 1 ].Interface(); err != nil { t.Fatal( err ) }
-        }
-        assert.Equal( expct, out[ 0 ].Interface() )
-    } else { t.Fatalf( "Invalid kind for %s: %v", methName, meth.Kind() ) }
-}
-
-func assertMapTypedAccessors( 
-    m *SymbolMapAccessor, 
-    typeName, fld string, 
-    expct interface{}, 
-    t *testing.T ) {
-    v := reflect.ValueOf( m )
-    for _, pref := range []string { "Get", "Must" } {
-        assertMapTypedAccessor( v, pref, typeName, fld, expct, t )
-        assertMapTypedAccessor( 
-            v, pref, typeName, MustIdentifier( fld ), expct, t )
-    }
-}
-
-func TestSymbolMapAccessorTypes( t *testing.T ) {
-    tm1 := Now()
-    en1 := MustEnum( "ns1@v1/E1", "val" )
-    map1 := MustSymbolMap()
-    list1 := MustList()
-    struct1 := MustStruct( "ns1@v1/S1" )
-    m := MustSymbolMap(
-        "string1", "s",
-        "bool1", true,
-        "buf1", []byte{ 1 },
-        "int1", int32( 1 ),
-        "int2", int64( 1 ),
-        "int3", uint32( 1 ),
-        "int4", uint64( 1 ),
-        "dec1", float32( 1.1 ),
-        "dec2", float64( 1.1 ),
-        "time1", tm1,
-        "enum1", en1,
-        "struct1", struct1,
-        "map1", map1,
-        "list1", list1,
-    )
-    path := objpath.RootedAt( MustIdentifier( "map" ) )
-    acc := NewSymbolMapAccessor( m, path )
-    f := func( typeName, fld string, expct interface{} ) {
-        assertMapTypedAccessors( acc, typeName, fld, expct, t )
-    }
-    f( "Value", "string1", String( "s" ) )
-    f( "Boolean", "bool1", Boolean( true ) )
-    f( "GoBool", "bool1", true )
-    f( "Buffer", "buf1", Buffer( []byte{ 1 } ) )
-    f( "GoBuffer", "buf1", []byte{ 1 } )
-    f( "String", "string1", String( "s" ) )
-    f( "GoString", "string1", "s" )
-    f( "Int32", "int1", Int32( int32( 1 ) ) )
-    f( "GoInt32", "int1", int32( 1 ) )
-    f( "Int64", "int2", Int64( int64( 1 ) ) )
-    f( "GoInt64", "int2", int64( 1 ) )
-    f( "Uint32", "int3", Uint32( uint32( 1 ) ) )
-    f( "GoUint32", "int3", uint32( 1 ) )
-    f( "Uint64", "int4", Uint64( uint64( 1 ) ) )
-    f( "GoUint64", "int4", uint64( 1 ) )
-    f( "Float32", "dec1", Float32( float32( 1.1 ) ) )
-    f( "GoFloat32", "dec1", float32( 1.1 ) )
-    f( "Float64", "dec2", Float64( float64( 1.1 ) ) )
-    f( "GoFloat64", "dec2", float64( 1.1 ) )
-    f( "Timestamp", "time1", tm1 )
-    f( "Enum", "enum1", en1 )
-    f( "Struct", "struct1", struct1 )
-    f( "SymbolMap", "map1", map1 )
-    f( "List", "list1", list1 )
-}
-
-// Not re-testing all typed accessors exhaustively -- just one for a mingle/go
-// type pair that was autogenerated and one that was handcoded. We also intermix
-// coverage that paths are formed correctly when accessor is at the root and
-// when it is created with a non-nil parent path
-func TestSymbolMapAccessorExpectPanic( t *testing.T ) {
-    f := func( path objpath.PathNode, call func() ) {
-        defer func() {
-            if err := recover(); err == nil {
-                t.Fatal( "Expected error" )
-            } else if ve, ok := err.( *ValueCastError ); ok {
-                expct := ""
-                if path != nil { expct += FormatIdPath( path ) + "." }
-                expct += "f1: value is null"
-                assert.Equal( expct, ve.Error() )
-            } else { t.Fatal( err ) }
-        }()
-        call()
-    }
-    path := objpath.RootedAt( MustIdentifier( "o1" ) )
-    acc1 := NewSymbolMapAccessor( MustSymbolMap(), path )
-    acc2 := NewSymbolMapAccessor( MustSymbolMap(), nil )
-    f( nil, func() { acc2.MustGoStringByString( "f1" ) } )
-    f( path, func() { acc1.MustStringById( MustIdentifier( "f1" ) ) } )
-    f( nil, func() { acc2.MustValueByString( "f1" ) } )
-}
-
-func TestSymbolMapAccessorCastErrorPath( t *testing.T ) {
-    f := func( path objpath.PathNode, locStr string ) {
-        acc := NewSymbolMapAccessor( MustSymbolMap( "f1", "s" ), path )
-        if _, err := acc.GetStructByString( "f1" ); err == nil {
-            t.Fatal( "Expected error" )
-        } else {
-            expct := 
-                locStr + ": Expected *Struct but found mingle:core@v1/String"
-            assert.Equal( expct, err.Error() )
-        }
-    }
-    f( nil, "f1" )
-    f( objpath.RootedAt( MustIdentifier( "o1" ) ), "o1.f1" )
 }
 
 func TestIdentifierFormatRegistry( t *testing.T ) {
@@ -675,8 +723,8 @@ func TestIdentifierFormatRegistry( t *testing.T ) {
 }
 
 func TestMapImpl( t *testing.T ) {
-    id1 := MustIdentifier( "id1" )
-    id2 := MustIdentifier( "id2" )
+    id1 := mkId( "id1" )
+    id2 := mkId( "id2" )
     val1 := 1
     val2 := 2
     m := NewIdentifierMap()
@@ -711,8 +759,8 @@ func TestMapImplEachPair( t *testing.T ) {
     m.EachPair( func( id *Identifier, val interface{} ) {
         t.Fatal( "visit of empty map" )
     })
-    m.Put( MustIdentifier( "id1" ), String( "s1" ) )
-    m.Put( MustIdentifier( "id2" ), String( "s2" ) )
+    m.Put( mkId( "id1" ), String( "s1" ) )
+    m.Put( mkId( "id2" ), String( "s2" ) )
     out := &bytes.Buffer{}
     m.EachPair( func( id *Identifier, val interface{} ) {
         fmt.Fprintf( out, "%s=%s,", id, val.( String ) )
@@ -733,20 +781,9 @@ func TestMapImplEachPair( t *testing.T ) {
 
 func TestResolveIn( t *testing.T ) {
     dn1 := &DeclaredTypeName{ "T1" }
-    ns := MustNamespace( "ns1@v1" )
+    ns := mkNs( mkId( "v1" ), mkId( "ns1" ) )
     qn1 := &QualifiedTypeName{ Namespace: ns, Name: dn1 }
     assert.Equal( qn1, dn1.ResolveIn( ns ) )
-}
-
-func TestTypeNameIn( t *testing.T ) {
-    nmStr := "mingle:core@v1/Int32"
-    nm := MustQualifiedTypeName( nmStr )
-    for _, typStr := range []string {
-        nmStr, nmStr + "~[0,3]", nmStr + "?", nmStr + "*", nmStr + "*?+",
-    } {
-        typ := MustTypeReference( typStr )
-        assert.Equal( nm, TypeNameIn( typ ) )
-    }
 }
 
 func TestSortIds( t *testing.T ) {
@@ -754,7 +791,7 @@ func TestSortIds( t *testing.T ) {
         assert.Equal( expct, SortIds( in ) )
     }
     chk( []*Identifier{}, []*Identifier{} )
-    ids := []*Identifier{ id( "i1" ), id( "i2" ), id( "i3" ) }
+    ids := []*Identifier{ mkId( "i1" ), mkId( "i2" ), mkId( "i3" ) }
     for _, in := range [][]*Identifier{
         []*Identifier{ ids[ 0 ], ids[ 1 ], ids[ 2 ] },
         []*Identifier{ ids[ 2 ], ids[ 1 ], ids[ 0 ] },
@@ -769,31 +806,522 @@ func TestMissingFieldsErrorFormatting( t *testing.T ) {
         err := NewMissingFieldsError( nil, flds )
         assert.Equal( msg, err.Error() )
     }
-    chk( "missing field(s): f1", id( "f1" ) )
-    chk( "missing field(s): f1, f2", id( "f2" ), id( "f1" ) ) // check sorted
+    chk( "missing field(s): f1", mkId( "f1" ) )
+    // check sorted
+    chk( "missing field(s): f1, f2", mkId( "f2" ), mkId( "f1" ) ) 
 }
 
 func TestUnrecognizedFieldErrorFormatting( t *testing.T ) {
     assert.Equal(
         "unrecognized field: f1",
-        NewUnrecognizedFieldError( nil, id( "f1" ) ).Error(),
+        NewUnrecognizedFieldError( nil, mkId( "f1" ) ).Error(),
     )
 }
 
-//func TestServiceIdMap( t *testing.T ) {
-//    m := NewServiceIdMap()
-//    ns1 := MustNamespace( "ns1@v1" )
-//    ns2 := MustNamespace( "ns1@v2" )
-//    svc1 := id( "svc1" )
-//    svc2 := id( "svc2" )
-//    m.Put( ns1, svc1, 1 )
-//    chkGetOk := func( 
-//        expctVal interface{}, expctOk bool, ns *Namespace, svc *Identifier ) {
-//        actVal, actOk := m.GetOk( ns, svc )
-//        assert.Equal( expctOk, actOk )
-//        if actOk { assert.Equal( expctVal, actVal ) }
-//    }
-//    chkGetOk( 1, true, ns1, svc1 )
-//    chkGetOk( nil, false, ns1, svc2 )
-//    chkGetOk( nil, false, ns2, svc2 )
-//}
+func TestTypeReferenceEquals( t *testing.T ) {
+    chk0 := func( t1, t2 TypeReference, eq bool ) {
+        if t1.Equals( t2 ) {
+            if ! eq { t.Fatalf( "%s == %s", t1, t2 ) }
+        } else {
+            if eq { t.Fatalf( "%s != %s", t1, t2 ) }
+        }
+    }
+    chk := func( t1, t2 TypeReference, eq bool ) {
+        chk0( t1, t2, eq )
+        chk0( t2, t1, eq )
+    }
+    qn1, qn2 := ns1V1Qn( "T1" ), ns1V1Qn( "T2" )
+    at1 := &AtomicTypeReference{ Name: qn1 }
+    rgx := func( s string ) *RegexRestriction {
+        res, err := NewRegexRestriction( s )
+        if err != nil { panic( err ) }
+        return res
+    }
+    at1Rgx := &AtomicTypeReference{ Name: qn1, Restriction: rgx( ".*" ) }
+    rng := func( i int32 ) *RangeRestriction {
+        return &RangeRestriction{ true, Int32( i ), Int32( i + 1 ), true }
+    }
+    at1Rng := &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }
+    at2 := &AtomicTypeReference{ Name: qn2 }
+    lt1Empty := &ListTypeReference{ ElementType: at1, AllowsEmpty: true }
+    lt1NonEmpty := &ListTypeReference{ ElementType: at1, AllowsEmpty: false }
+    pt1 := NewPointerTypeReference( at1 )
+    pt2 := NewPointerTypeReference( at2 )
+    nt1 := MustNullableTypeReference( pt1 )
+    nt2 := MustNullableTypeReference( pt2 )
+    chk( at1, at1, true )
+    chk( at1, &AtomicTypeReference{ Name: qn1 }, true )
+    chk( at1, at2, false )
+    chk( at1Rgx, at1Rgx, true )
+    chk( at1Rgx, &AtomicTypeReference{ Name: qn1, Restriction: rgx( ".*" ) },
+        true )
+    chk( at1Rgx, at1, false )
+    chk( at1Rgx, &AtomicTypeReference{ Name: qn1, Restriction: rgx( "a.*" ) },
+        false )
+    chk( at1Rgx, &AtomicTypeReference{ Name: qn2, Restriction: rgx( ".*" ) },
+        false )
+    chk( at1Rgx, at1Rng, false )
+    chk( at1Rng, &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }, 
+        true )
+    chk( at1Rng, at1, false )
+    chk( at1Rng, &AtomicTypeReference{ Name: qn1, Restriction: rng( 2 ) }, 
+        false )
+    chk( at1Rng, &AtomicTypeReference{ Name: qn2, Restriction: rng( 1 ) },
+        false )
+    chk( lt1Empty, lt1Empty, true )
+    chk( lt1Empty, lt1NonEmpty, false )
+    chk( lt1Empty, 
+        &ListTypeReference{ ElementType: at2, AllowsEmpty: true }, false )
+    chk( lt1Empty, 
+        &ListTypeReference{ ElementType: lt1Empty, AllowsEmpty: true }, false )
+    chk( pt1, pt1, true )
+    chk( pt1, NewPointerTypeReference( at1 ), true )
+    chk( pt1, pt2, false )
+    chk( pt1, NewPointerTypeReference( pt1 ), false )
+    chk( pt1, NewPointerTypeReference( lt1NonEmpty ), false )
+    chk( pt1, NewPointerTypeReference( nt1 ), false )
+    chk( NewPointerTypeReference( lt1Empty ), 
+        NewPointerTypeReference( lt1Empty ), true )
+    chk( nt1, nt1, true )
+    chk( nt1, MustNullableTypeReference( pt1 ), true )
+    chk( nt1, nt2, false )
+    chk( nt1, lt1Empty, false )
+}
+
+type numberParseTest struct {
+    *assert.PathAsserter
+    in string
+    out Value
+    typ *QualifiedTypeName
+    err error
+}
+
+func ( t *numberParseTest ) call() {
+//    t.Logf( "parsing %q as %s", t.in, t.typ )
+    if act, err := ParseNumber( t.in, t.typ ); err == nil {
+        AssertEqualValues( t.out, act, t )
+    } else { t.EqualErrors( t.err, err ) }
+}
+
+func TestNumberParsers( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    tests := make( []*numberParseTest, 0, 16 )
+    tests = append( tests,
+        &numberParseTest{ 
+            in: "1", out: Int32( int32( 1 ) ), typ: QnameInt32 },
+        &numberParseTest{ 
+            in: "1", out: Uint32( uint32( 1 ) ), typ: QnameUint32 },
+        &numberParseTest{ 
+            in: "1", out: Int64( int64( 1 ) ), typ: QnameInt64 },
+        &numberParseTest{ 
+            in: "1", out: Uint64( uint64( 1 ) ), typ: QnameUint64 },
+        &numberParseTest{ 
+            in: "1.1", out: Float32( float32( 1.1 ) ), typ: QnameFloat32 },
+        &numberParseTest{ 
+            in: "1.1", out: Float64( float64( 1.1 ) ), typ: QnameFloat64 },
+    )
+    rngErr := func( val string, typ *QualifiedTypeName ) {
+        err := newNumberRangeError( val )
+        tests = append( tests, &numberParseTest{ in: val, typ: typ, err: err } )
+    }
+    rngErr( "2147483648", QnameInt32 )
+    rngErr( "-2147483649", QnameInt32 )
+    rngErr( "4294967296", QnameUint32 )
+    rngErr( "-1", QnameUint32 )
+    rngErr( "9223372036854775808", QnameInt64 )
+    rngErr( "-9223372036854775809", QnameInt64 )
+    rngErr( "18446744073709551616", QnameUint64 )
+    rngErr( "-1", QnameUint64 )
+    sxErr := func( in string, typ *QualifiedTypeName ) {
+        err := newNumberSyntaxError( in )
+        test := &numberParseTest{ in: in, typ: typ, err: err }
+        tests = append( tests, test )
+    }
+    sxErr( "1.1", QnameInt32 )
+    sxErr( "1.1", QnameUint32 )
+    sxErr( "1.1", QnameInt64 )
+    sxErr( "1.1", QnameUint64 )
+    for _, qn := range NumericTypeNames { sxErr( "badNum", qn ) }
+    for _, t := range tests {
+        t.PathAsserter = la
+        t.call()
+        la = la.Next()
+    }
+}
+
+func assertEquality( c1, c2 interface{}, eq, expctEq bool, t *testing.T ) {
+    if expctEq && ( ! eq ) { t.Fatalf( "%v != %v", c1, c2 ) }
+    if eq && ( ! expctEq ) { t.Fatalf( "%v == %v", c1, c2 ) }
+}
+
+type equalityTest struct {
+    lhs, rhs interface{}
+    expctEq bool
+}
+
+func assertEqualityTests( 
+    f func( a, b interface{} ) bool, t *testing.T, tests ...equalityTest ) {
+    for _, test := range tests {
+        eq := f( test.lhs, test.rhs )
+        assertEquality( test.lhs, test.rhs, eq, test.expctEq, t )
+    }
+}
+
+func assertIdComp( id1, id2 *Identifier, expctCmp int, t *testing.T ) {
+    if id2 != nil {
+        cmp := id1.Compare( id2 )
+        assert.Equal( expctCmp, cmp )
+    }
+    assertEquality( id1, id2, id1.Equals( id2 ), expctCmp == 0, t )
+}
+
+func TestIdentifierComparison( t *testing.T ) {
+    idA := mkId( "id", "a" )
+    idB := mkId( "id", "b" )
+    assertIdComp( idA, nil, -1, t )
+    assertIdComp( idA, idA, 0, t )
+    assertIdComp( idA, idB, -1, t )
+    assertIdComp( idB, idA, 1, t )
+}
+
+func assertIdentFormat(
+    id *Identifier, fmt IdentifierFormat, expct string, t *testing.T ) {
+    act := id.Format( fmt )
+    assert.Equal( expct, act )
+}
+
+func TestIdentifierFormatting( t *testing.T ) {
+    id := mkId( "test", "id", "a", "b", "c" )
+    assertIdentFormat( id, LcHyphenated, "test-id-a-b-c", t )
+    assertIdentFormat( id, LcUnderscore, "test_id_a_b_c", t )
+    assertIdentFormat( id, LcCamelCapped, "testIdABC", t )
+    id2 := mkId( "test" )
+    for _, idFmt := range IdentifierFormats {
+        assertIdentFormat( id2, idFmt, "test", t )
+    }
+}
+
+func TestNamespaceStringer( t *testing.T ) {
+    ns := mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) )
+    assert.Equal( "ns1:ns2@v1", ns.String() )
+}
+
+func TestNamespaceEquality( t *testing.T ) {
+    ns1A := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    ns1B := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    ns2 := mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) )
+    tests := []equalityTest{
+        equalityTest{ ns1A, ns1A, true },
+        equalityTest{ ns1A, ns1B, true },
+        equalityTest{ ns1A, ns2, false },
+        equalityTest{ ns2, ns1A, false },
+    }
+    f := func( a, b interface{} ) bool {
+        return a.( *Namespace ).Equals( b.( *Namespace ) )
+    }
+    assertEqualityTests( f, t, tests... )
+    assertEquality( ns1A, nil, ns1A.Equals( nil ), false, t )
+}
+
+func TestDeclaredTypeNameStringer( t *testing.T ) {
+    str := "TypeName"
+    dt := mkDeclNm( str )
+    assert.Equal( str, dt.ExternalForm() )
+    assert.Equal( str, dt.String() )
+}
+
+func TestDeclaredTypeNameEquality( t *testing.T ) {
+    nm1A := mkDeclNm( "T1" )
+    nm1B := mkDeclNm( "T1" )
+    nm2 := mkDeclNm( "T2" )
+    assertEqualityTests(
+        func( a, b interface{} ) bool {
+            return a.( *DeclaredTypeName ).Equals( b.( *DeclaredTypeName ) )
+        },
+        t,
+        equalityTest{ nm1A, nm1A, true },
+        equalityTest{ nm1A, nm1B, true },
+        equalityTest{ nm1B, nm1A, true },
+        equalityTest{ nm1A, nm2, false },
+        equalityTest{ nm2, nm1A, false },
+    )
+    assertEquality( nm1A, nil, nm1A.Equals( nil ), false, t )
+}
+
+// Also gives coverage of MustQualifiedTypeName()
+func TestQualifiedTypeNameStringer( t *testing.T ) {
+    qn := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
+    str := "ns1@v1/T1"
+    assert.Equal( str, qn.String() )
+    assert.Equal( str, qn.ExternalForm() )
+}
+
+func TestQualifiedTypeNameEquality( t *testing.T ) {
+    nm1A := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
+    nm1B := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
+    assertEquality( nm1A, nil, nm1A.Equals( nil ), false, t )
+    assertEqualityTests(
+        func( a, b interface{} ) bool {
+            return a.( *QualifiedTypeName ).Equals( b.( *QualifiedTypeName ) )
+        },
+        t,
+        equalityTest{ nm1A, nm1A, true },
+        equalityTest{ nm1A, nm1B, true },
+        equalityTest{ 
+            nm1A, 
+            mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T2" ) ),
+            false,
+        },
+        equalityTest{ 
+            nm1A, 
+            mkQn( mkNs( mkId( "v2" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) ),
+            false,
+        },
+        equalityTest{ 
+            nm1A, 
+            mkQn( mkNs( mkId( "v1" ), mkId( "ns2" ) ), mkDeclNm( "T1" ) ),
+            false,
+        },
+        equalityTest{ 
+            nm1A, 
+            mkQn( 
+                mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) ), 
+                mkDeclNm( "T1" ),
+            ),
+            false,
+        },
+        equalityTest{ 
+            mkQn( 
+                mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) ), 
+                mkDeclNm( "T1" ),
+            ),
+            mkQn( 
+                mkNs( mkId( "v1" ), mkId( "ns1" ), mkId( "ns2" ) ), 
+                mkDeclNm( "T1" ),
+            ),
+            true,
+        },
+    )
+}
+
+func TestTypeReferenceStringer( t *testing.T ) {
+    chk := func( extForm string, typ TypeReference ) {
+        assert.Equal( extForm, typ.String() )
+        assert.Equal( extForm, typ.ExternalForm() )
+    }
+    qn := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
+    at := &AtomicTypeReference{ Name: qn }
+    ptr := NewPointerTypeReference( at )
+    chk( "ns1@v1/T1", at )
+    chk( 
+        "ns1@v1/T1*", 
+        &ListTypeReference{ ElementType: at, AllowsEmpty: true },
+    )
+    chk( 
+        "ns1@v1/T1+",
+        &ListTypeReference{ ElementType: at, AllowsEmpty: false },
+    )
+    chk( 
+        "ns1@v1/T1*++",
+        &ListTypeReference{ 
+            ElementType: &ListTypeReference{
+                ElementType: &ListTypeReference{
+                    ElementType: at,
+                    AllowsEmpty: true,
+                },
+                AllowsEmpty: false,
+            },
+            AllowsEmpty: false,
+        },
+    )
+    chk( "&(ns1@v1/T1)", ptr )
+    chk( "&(&(ns1@v1/T1))", NewPointerTypeReference( ptr ) )
+    chk( "&(ns1@v1/T1)?", &NullableTypeReference{ ptr } )
+    chk(
+        "&(ns1@v1/T1)?**+",
+        &ListTypeReference{
+            ElementType: &ListTypeReference{
+                ElementType: &ListTypeReference{
+                    ElementType: &NullableTypeReference{ ptr },
+                    AllowsEmpty: true,
+                },
+                AllowsEmpty: true,
+            },
+            AllowsEmpty: false,
+        },
+    )
+    chk(
+        "&(&(ns1@v1/T1)*)",
+        NewPointerTypeReference(
+            &ListTypeReference{ ElementType: ptr, AllowsEmpty: true },
+        ),
+    )
+}
+
+func TestTimestampStrings( t *testing.T ) {
+    tm := time.Now()
+    mgTm := Timestamp( tm )
+    assert.Equal( tm.Format( time.RFC3339Nano ), mgTm.String() )
+    assert.Equal( tm.Format( time.RFC3339Nano ), mgTm.Rfc3339Nano() )
+}
+
+func TestCastValueErrorFormatting( t *testing.T ) {
+    path := objpath.RootedAt( mkId( "f1" ) )
+    err := NewCastErrorf( path, "Blah %s", "X" )
+    assert.Equal( "f1: Blah X", err.Error() )
+}
+
+func TestEqualValues( t *testing.T ) {
+    m1 := MustSymbolMap( mkId( "f1" ), int32( 1 ) )
+    m2 := MustSymbolMap( mkId( "f1" ), int32( 2 ) )
+    m3 := MustSymbolMap( mkId( "f1" ), int32( 1 ), mkId( "f2" ), int32( 2 ) )
+    la := assert.NewListPathAsserter( t )
+    for _, t := range []struct{ v1, v2 interface{}; eq bool } {
+        { true, true, true },
+        { true, false, false },
+        { NullVal, NullVal, true },
+        { int32( 0 ), int32( 0 ), true },
+        { int32( 0 ), int32( 1 ), false },
+        { int64( 0 ), int64( 0 ), true },
+        { int64( 0 ), int64( 1 ), false },
+        { uint32( 0 ), uint32( 0 ), true },
+        { uint32( 0 ), uint32( 1 ), false },
+        { uint64( 0 ), uint64( 0 ), true },
+        { uint64( 0 ), uint64( 1 ), false },
+        { float32( 0 ), float32( 0 ), true },
+        { float32( 0 ), float32( 1 ), false },
+        { float64( 0 ), float64( 0 ), true },
+        { float64( 0 ), float64( 1 ), false },
+        { int32( 0 ), int64( 0 ), false }, // not re-checking all mismatches
+        { []byte{}, []byte{}, true },
+        { []byte{ 0 }, []byte{ 0 }, true },
+        { []byte{ 1 }, []byte{ 0 }, false },
+        { "a", "a", true },
+        { "a", "b", false },
+        { "a", int32( 1 ), false },
+        {
+            MustTimestamp( "2014-01-01T00:00:00Z" ),
+            MustTimestamp( "2014-01-01T00:00:00Z" ),
+            true,
+        },
+        {
+            MustTimestamp( "2014-01-01T00:00:00Z" ),
+            MustTimestamp( "2014-01-02T00:00:00Z" ),
+            false,
+        },
+        { 
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            true,
+        },
+        { 
+            &Enum{ ns1V1Qn( "E2" ), mkId( "v1" ) },
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            false,
+        },
+        { 
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v1" ) },
+            &Enum{ ns1V1Qn( "E1" ), mkId( "v2" ) },
+            false,
+        },
+        { EmptySymbolMap(), EmptySymbolMap(), true },
+        { m1, EmptySymbolMap(), false },
+        { m1, m1, true },
+        { m1, m2, false },
+        { m1, m3, false },
+        { 
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            true,
+        },
+        { 
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            &Struct{ ns1V1Qn( "S2" ), m1 },
+            false,
+        },
+        { 
+            &Struct{ ns1V1Qn( "S1" ), m1 },
+            &Struct{ ns1V1Qn( "S1" ), m2 },
+            false,
+        },
+        { EmptyList(), EmptyList(), true },
+        {
+            EmptyList(),
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            false,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            true,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 2 ) },
+            },
+            false,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeInt64, true },
+                []Value{ Int64( 0 ), Int64( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            false,
+        },
+        {
+            &List{ 
+                &ListTypeReference{ TypeValue, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            &List{ 
+                &ListTypeReference{ TypeInt32, true },
+                []Value{ Int32( 0 ), Int32( 1 ) },
+            },
+            false,
+        },
+    } {
+        chk := func( v1, v2 Value ) {
+            act := EqualValues( v1, v2 )
+            la.Equalf( t.eq, act, "%s == %s: %t, expct: %t",
+                QuoteValue( v1 ), QuoteValue( v2 ), act, t.eq )
+        }
+        v1, v2 := MustValue( t.v1 ), MustValue( t.v2 )
+        chk( v1, v2 )
+        chk( v2, v1 )
+        la = la.Next()
+    }
+}
+
+func TestCreateDeclaredTypeNameError( t *testing.T ) {
+    type dnTest struct { in string; msg string }
+    la := assert.NewListPathAsserter( t )
+    for _, test := range []dnTest{
+        { in: "", msg: `invalid type name: ""` },
+        { in: "A Name", msg: `invalid type name: "A Name"` },
+        { in: "A$Bad", msg: `invalid type name: "A$Bad"` },
+        { in: " WhitespaceBad ", msg: `invalid type name: " WhitespaceBad "` },
+    } {
+        expct := newDeclaredTypeNameError( test.msg )
+        _, err := CreateDeclaredTypeName( test.in )
+        la.EqualErrors( expct, err )
+        la = la.Next()
+    }
+}

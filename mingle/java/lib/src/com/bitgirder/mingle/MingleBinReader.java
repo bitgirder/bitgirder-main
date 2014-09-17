@@ -2,11 +2,9 @@ package com.bitgirder.mingle;
 
 import static com.bitgirder.mingle.MingleBinaryConstants.*;
 
-import com.bitgirder.log.CodeLoggers;
+import static com.bitgirder.log.CodeLoggers.Statics.*;
 
 import com.bitgirder.lang.Lang;
-
-import com.bitgirder.lang.path.ObjectPath;
 
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
@@ -33,8 +31,6 @@ class MingleBinReader
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
 
-    private final static void code( Object... msg ) { CodeLoggers.code( msg ); }
-
     private final static byte[] RESTRICTION_TYPE_CODES = new byte[] {
         TC_NULL,
         TC_RANGE_RESTRICT,
@@ -59,7 +55,36 @@ class MingleBinReader
         TC_LIST
     };
 
-    private final static byte[] TC_END_ARR = new byte[] { TC_END };
+    private final static byte[] SCALAR_TYPE_CODES = new byte[] {
+        TC_NULL,
+        TC_BOOL,
+        TC_INT32,
+        TC_INT64,
+        TC_UINT32,
+        TC_UINT64,
+        TC_FLOAT32,
+        TC_FLOAT64,
+        TC_STRING,
+        TC_BUFFER,
+        TC_TIMESTAMP,
+        TC_ENUM
+    };
+
+    private final static byte[] RANGE_VAL_TYPE_CODES = new byte[] {
+        TC_NULL,
+        TC_INT32,
+        TC_INT64,
+        TC_UINT32,
+        TC_UINT64,
+        TC_FLOAT32,
+        TC_FLOAT64,
+        TC_STRING,
+        TC_TIMESTAMP
+    };
+
+    private final static byte[] TYPE_REF_TYPE_CODES = new byte[] {
+        TC_ATOM_TYP, TC_LIST_TYP, TC_NULLABLE_TYP, TC_POINTER_TYP
+    };
 
     private final CountingInputStream cis;
     private final BinReader rd;
@@ -74,14 +99,40 @@ class MingleBinReader
     private
     static
     MingleBinaryException
+    fail( long pos,
+          String msg )
+    {
+        String errMsg = String.format( "[offset %d]: %s", pos, msg );
+        return new MingleBinaryException( errMsg );
+    }
+
+    private
+    static
+    MingleBinaryException
     failf( long pos,
            String tmpl,
            Object... args )
     {
-        StringBuilder sb = new StringBuilder();
-        sb.append( "[offset " ).append( pos ).append( "]: " );
-        sb.append( String.format( tmpl, args ) );
-        return new MingleBinaryException( sb.toString() );
+        return fail( pos, String.format( tmpl, args ) );
+    }
+
+    private
+    static
+    MingleBinaryException
+    failTypeCode( long pos,
+                  String desc,
+                  byte tc )
+    {
+        return failf( pos, "Expected %s but saw type code 0x%02x", 
+            desc, tc );
+    }
+
+    public
+    MingleBinaryException
+    failLastTypeCode( String desc,
+                      byte tc )
+    {
+        return failTypeCode( cis.position() - 1, desc, tc );
     }
 
     private
@@ -101,15 +152,15 @@ class MingleBinReader
         return i;
     }
 
-    private byte nextTc() throws IOException { return rd.readByte(); }
+    public byte nextTypeCode() throws IOException { return rd.readByte(); }
 
     // assumes that tc was the most recently read byte, in terms of setting the
     // error position
     private
     byte
-    acceptTc( byte tc,
+    acceptTypeCode( byte tc,
               String desc,
-              byte[] accpt )
+              byte... accpt )
         throws IOException
     {
         for ( byte a : accpt ) if ( a == tc ) { return tc; }
@@ -117,29 +168,16 @@ class MingleBinReader
         if ( desc == null ) return (byte) -1;
 
         long errPos = cis.position() - 1L;
-        throw failf( errPos, "Expected %s but saw type code 0x%02x", desc, tc );
+        throw failTypeCode( errPos, desc, tc );
     }
 
-    private
+    public
     byte
-    nextTc( String desc,
-            byte... accpt )
+    nextTypeCode( String desc,
+                  byte... accpt )
         throws IOException
     {
-        return acceptTc( nextTc(), desc, accpt );
-    }
-
-    private
-    MingleIdentifier
-    processIdentifier()
-        throws IOException
-    {
-        int sz = Lang.asOctet( rd.readByte() );
-
-        String[] parts = new String[ sz ];
-        for ( int i = 0; i < sz; ++i ) parts[ i ] = rd.readUtf8();
-
-        return new MingleIdentifier( parts );
+        return acceptTypeCode( nextTypeCode(), desc, accpt );
     }
 
     public
@@ -147,7 +185,25 @@ class MingleBinReader
     readIdentifier()
         throws IOException
     {
-        return (MingleIdentifier) readNext( "identifier", TC_ID );
+        nextTypeCode( "identifier", TC_ID );
+
+        int sz = Lang.asOctet( rd.readByte() );
+
+        String[] parts = new String[ sz ];
+
+        for ( int i = 0; i < sz; ++i ) 
+        {
+            long pos = cis.position();
+            String part = rd.readUtf8();
+
+            if ( ! MingleIdentifier.isValidPart( part ) ) {
+                throw failf( pos, "invalid identifier part: %s", part );
+            }
+
+            parts[ i ] = part;
+        }
+
+        return new MingleIdentifier( parts );
     }
 
     private
@@ -163,20 +219,13 @@ class MingleBinReader
         return res;
     }
 
-    private
-    MingleNamespace
-    processNamespace()
-        throws IOException
-    {
-        return new MingleNamespace( readIdentifiers(), readIdentifier() );
-    }
-
     public
     MingleNamespace
     readNamespace()
         throws IOException
     {
-        return (MingleNamespace) readNext( "namespace", TC_NS );
+        nextTypeCode( "namespace", TC_NS );
+        return new MingleNamespace( readIdentifiers(), readIdentifier() );
     }
 
     public
@@ -184,23 +233,14 @@ class MingleBinReader
     readDeclaredTypeName()
         throws IOException
     {
-        return (DeclaredTypeName) readNext( "declared type name", TC_DECL_NM );
-    }
+        nextTypeCode( "declared type name", TC_DECL_NM );
 
-    private
-    DeclaredTypeName
-    processDeclaredTypeName()
-        throws IOException
-    {
-        return new DeclaredTypeName( rd.readUtf8() );
-    }
+        long off = cis.position();
 
-    private
-    QualifiedTypeName
-    processQname()
-        throws IOException
-    {
-        return new QualifiedTypeName( readNamespace(), readDeclaredTypeName() );
+        try { return DeclaredTypeName.parse( rd.readUtf8() ); }
+        catch ( MingleSyntaxException mse ) {
+            throw fail( off, mse.getMessage() );
+        }
     }
 
     private
@@ -214,6 +254,7 @@ class MingleBinReader
         private MingleValue min;
         private MingleValue max;
         private boolean maxClosed;
+        private QualifiedTypeName qn;
 
         private RangeVals( long errPos ) { this.errPos = errPos; }
 
@@ -226,14 +267,14 @@ class MingleBinReader
 
         private
         MingleRangeRestriction
-        build( TypeName tn )
+        build()
             throws MingleBinaryException
         {
-            Class< ? extends MingleValue > typeTok = Mingle.valueClassFor( tn );
+            state.notNull( qn, "qn" );
+            Class< ? extends MingleValue > typeTok = Mingle.valueClassFor( qn );
 
-            if ( typeTok == null ) 
-            {
-                throw failf( errPos, "Unrecognized range target type: %s", tn );
+            if ( typeTok == null ) {
+                throw failf( errPos, "Unrecognized range target type: %s", qn );
             }
 
             return MingleRangeRestriction.createChecked(
@@ -243,42 +284,59 @@ class MingleBinReader
 
     private
     AtomicTypeReference
-    processAtomicType()
+    implReadAtomicTypeReference( boolean tcChecked )
         throws IOException
     {
-        TypeName nm = readTypeName();
+        if ( ! tcChecked ) nextTypeCode( "atomic type reference", TC_ATOM_TYP );
+
+        QualifiedTypeName nm = readQualifiedTypeName();
 
         MingleValueRestriction vr = null;
-        byte tc = nextTc( "restriction", RESTRICTION_TYPE_CODES );
+        byte tc = nextTypeCode( "restriction", RESTRICTION_TYPE_CODES );
 
-        if ( tc != TC_NULL ) 
-        {
-            Object obj = processNext( tc );
-            if ( tc == TC_REGEX_RESTRICT ) vr = (MingleRegexRestriction) obj;
-            else vr = ( (RangeVals) obj ).build( nm );
+        switch ( tc ) {
+        case TC_REGEX_RESTRICT: vr = readRegexRestriction(); break;
+        case TC_RANGE_RESTRICT: vr = readRangeRestriction( nm ); break;
         } 
         
         return new AtomicTypeReference( nm, vr );
     }
 
+    public
+    AtomicTypeReference
+    readAtomicTypeReference()
+        throws IOException
+    {
+        return implReadAtomicTypeReference( false );
+    }
+
     private
-    RangeVals
-    processRangeRestriction()
+    MingleValue
+    readRangeValue( String desc )
+        throws IOException
+    {
+        return expectScalar( nextTypeCode( desc, RANGE_VAL_TYPE_CODES ) );
+    }
+
+    private
+    MingleRangeRestriction
+    readRangeRestriction( QualifiedTypeName nm )
         throws IOException
     {
         RangeVals res = new RangeVals( cis.position() );
 
         res.minClosed = rd.readBoolean();
-        res.min = res.convertNull( readValue( "range min" ) );
-        res.max = res.convertNull( readValue( "range max" ) );
+        res.min = res.convertNull( readRangeValue( "range min" ) );
+        res.max = res.convertNull( readRangeValue( "range max" ) );
         res.maxClosed = rd.readBoolean();
+        res.qn = nm;
 
-        return res;
+        return res.build();
     }
 
     private
     MingleRegexRestriction
-    processRegexRestriction()
+    readRegexRestriction()
         throws IOException
     {
         try
@@ -294,55 +352,24 @@ class MingleBinReader
 
     private
     ListTypeReference
-    processListType()
+    implReadListTypeReference()
         throws IOException
     {
         return new ListTypeReference( readTypeReference(), rd.readBoolean() );
     }
 
-    private
-    NullableTypeReference
-    processNullableType()
+    public
+    ListTypeReference
+    readListTypeReference()
         throws IOException
     {
-        return new NullableTypeReference( readTypeReference() );
-    }
-
-    private
-    TypeName
-    readTypeName()
-        throws IOException
-    {
-        return (TypeName) readNext( "type name", TC_QN, TC_DECL_NM );
-    }
-
-    private
-    ObjectPath< MingleIdentifier >
-    processIdPath()
-        throws IOException
-    {
-        ObjectPath< MingleIdentifier > res = ObjectPath.getRoot();
-
-        while ( true )
-        {
-            byte tc = nextTc( "id path", TC_END, TC_ID, TC_ID_PATH_LIST_NODE );
-    
-            switch ( tc )
-            {
-                case TC_END: return res;
-                case TC_ID: res = res.descend( readIdentifier() ); break;
-    
-                case TC_ID_PATH_LIST_NODE: 
-                    int idx = expectPosInt32( "id path list index" );
-                    res = res.startImmutableList( idx );
-                    break;
-            }
-        }
+        nextTypeCode( "list type reference", TC_LIST_TYP );
+        return implReadListTypeReference();
     }
 
     private
     MingleTimestamp
-    processTimestamp()
+    readTimestamp()
         throws IOException
     {
         long secs = rd.readLong();
@@ -353,125 +380,41 @@ class MingleBinReader
 
     private
     MingleEnum
-    processEnum()
+    readEnum()
         throws IOException
     {
         return new MingleEnum( readQualifiedTypeName(), readIdentifier() );
     }
 
-    private
-    MingleSymbolMap
-    processSymbolMap()
-        throws IOException
-    {
-        Map< MingleIdentifier, MingleValue > m = Lang.newMap();
-
-        while ( true )
-        {
-            byte tc = nextTc( "symbol map", TC_END, TC_FIELD );
-            if ( tc == TC_END ) return new MingleSymbolMap( m );
-            m.put( readIdentifier(), readValue() );
-        }
-    }
-
-    // read but drop size val
-    private void readSize() throws IOException { rd.readInt(); }
-
-    private
-    MingleStruct
-    processStruct()
-        throws IOException
-    {
-        readSize();
-        return new MingleStruct( readQualifiedTypeName(), processSymbolMap() );
-    }
-
-    private
-    MingleList
-    processList()
-        throws IOException
-    {
-        readSize();
-
-        List< MingleValue > l = Lang.newList();
-
-        while ( true )
-        {
-            byte tc = nextTc();
-
-            if ( acceptTc( tc, null, TC_END_ARR ) == TC_END )
-            {
-                return MingleList.createLive( l );
-            }
-
-            acceptTc( tc, "list value", VAL_TYPE_CODES );
-            l.add( (MingleValue) processNext( tc ) );
-        }
-    }
-
-    // see note at acceptTc() on assumption about tc being most recently read
-    // byte
-    private
-    Object
-    processNext( byte tc )
-        throws IOException
-    {
-        switch ( tc )
-        {
-            case TC_ID: return processIdentifier();
-            case TC_NS: return processNamespace();
-            case TC_DECL_NM: return processDeclaredTypeName();
-            case TC_QN: return processQname();
-            case TC_ATOM_TYP: return processAtomicType();
-            case TC_RANGE_RESTRICT: return processRangeRestriction();
-            case TC_REGEX_RESTRICT: return processRegexRestriction();
-            case TC_LIST_TYP: return processListType();
-            case TC_NULLABLE_TYP: return processNullableType();
-            case TC_ID_PATH: return processIdPath();
-            case TC_NULL: return MingleNull.getInstance();
-            case TC_BOOL: return MingleBoolean.valueOf( rd.readBoolean() ); 
-            case TC_INT32: return new MingleInt32( rd.readInt() );
-            case TC_UINT32: return new MingleUint32( rd.readInt() );
-            case TC_INT64: return new MingleInt64( rd.readLong() );
-            case TC_UINT64: return new MingleUint64( rd.readLong() );
-            case TC_FLOAT32: return new MingleFloat32( rd.readFloat() );
-            case TC_FLOAT64: return new MingleFloat64( rd.readDouble() );
-            case TC_BUFFER: return new MingleBuffer( rd.readByteArray() );
-            case TC_STRING: return new MingleString( rd.readUtf8() );
-            case TC_TIMESTAMP: return processTimestamp();
-            case TC_ENUM: return processEnum();
-            case TC_SYM_MAP: return processSymbolMap();
-            case TC_STRUCT: return processStruct();
-            case TC_LIST: return processList();
-            default: 
-                long errPos = cis.position() - 1L;
-                throw failf( errPos, "Unrecognized type code: 0x%02x", tc );
-        }
-    }
-
-    private
-    Object
-    readNext( String desc,
-              byte... accpt )
-        throws IOException
-    {
-        return processNext( nextTc( desc, accpt ) );
-    }
-
-    private
+    public
     MingleValue
-    readValue( String desc )
+    expectScalar( byte tc )
         throws IOException
     {
-        return (MingleValue) readNext( desc, VAL_TYPE_CODES );
+        switch ( tc ) {
+        case TC_NULL: return MingleNull.getInstance();
+        case TC_BOOL: return MingleBoolean.valueOf( rd.readBoolean() ); 
+        case TC_INT32: return new MingleInt32( rd.readInt() );
+        case TC_UINT32: return new MingleUint32( rd.readInt() );
+        case TC_INT64: return new MingleInt64( rd.readLong() );
+        case TC_UINT64: return new MingleUint64( rd.readLong() );
+        case TC_FLOAT32: return new MingleFloat32( rd.readFloat() );
+        case TC_FLOAT64: return new MingleFloat64( rd.readDouble() );
+        case TC_BUFFER: return new MingleBuffer( rd.readByteArray() );
+        case TC_STRING: return new MingleString( rd.readUtf8() );
+        case TC_TIMESTAMP: return readTimestamp();
+        case TC_ENUM: return readEnum();
+        }
+        throw state.failf( "unhandled scalar type: 0x%02x", tc );
     }
 
     public
     MingleValue
-    readValue()
+    readScalar()
         throws IOException
     {
-        return readValue( "mingle value" );
+        byte tc = nextTypeCode( "scalar", SCALAR_TYPE_CODES );
+        return expectScalar( tc );
     }
 
     public
@@ -479,7 +422,8 @@ class MingleBinReader
     readQualifiedTypeName()
         throws IOException
     {
-        return (QualifiedTypeName) readNext( "qname", TC_QN );
+        nextTypeCode( "qname", TC_QN );
+        return new QualifiedTypeName( readNamespace(), readDeclaredTypeName() );
     }
 
     public
@@ -487,30 +431,18 @@ class MingleBinReader
     readTypeReference()
         throws IOException
     {
-        byte tc = nextTc( "type reference", 
-            TC_ATOM_TYP, TC_LIST_TYP, TC_NULLABLE_TYP);
+        byte tc = nextTypeCode( "type reference", TYPE_REF_TYPE_CODES );
 
-        return (MingleTypeReference) processNext( tc );
-    }
+        switch ( tc ) {
+        case TC_ATOM_TYP: return implReadAtomicTypeReference( true );
+        case TC_LIST_TYP: return implReadListTypeReference();
+        case TC_NULLABLE_TYP:
+            return new NullableTypeReference( readTypeReference() );
+        case TC_POINTER_TYP:
+            return new PointerTypeReference( readTypeReference() );
+        }
 
-    public
-    AtomicTypeReference
-    readAtomicTypeReference()
-        throws IOException
-    {
-        byte tc = nextTc( "atomic type reference", TC_ATOM_TYP );
-        return (AtomicTypeReference) processNext( tc );
-    }
-
-    public
-    ObjectPath< MingleIdentifier >
-    readIdPath()
-        throws IOException
-    {
-        byte tc = nextTc( "identifier path", TC_ID_PATH );
-        Object res = processNext( tc );
-
-        return Lang.< ObjectPath< MingleIdentifier > >castUnchecked( res );
+        throw state.failf( "unhandled tc: 0x%02x", tc );
     }
 
     public
@@ -529,5 +461,14 @@ class MingleBinReader
     {
         inputs.notNull( buf, "buf" );
         return create( new ByteArrayInputStream( buf ) );
+    }
+
+    public
+    static
+    MingleBinReader
+    create( MingleBuffer mb )
+    {
+        inputs.notNull( mb, "mb" );
+        return create( mb.array() );
     }
 }

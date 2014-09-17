@@ -6,8 +6,12 @@ import com.bitgirder.validation.State;
 import com.bitgirder.lang.Strings;
 import com.bitgirder.lang.Lang;
 
+import com.bitgirder.lang.PatternHelper;
+
 import java.util.Arrays;
 import java.util.List;
+
+import java.util.regex.Pattern;
 
 public
 final
@@ -16,6 +20,9 @@ implements Comparable< MingleIdentifier >
 {
     private static Inputs inputs = new Inputs();
     private static State state = new State();
+
+    private final static Pattern PART_MATCHER = 
+        PatternHelper.compile( "^[a-z][a-z0-9]*$" );
 
     private final String[] parts; // in canonical, lowercase form
 
@@ -79,10 +86,15 @@ implements Comparable< MingleIdentifier >
         }
     }
 
-    public CharSequence getExternalForm() { return Strings.join( "-", parts ); }
+    public 
+    String 
+    getExternalForm() 
+    { 
+        return Strings.join( "-", parts ).toString(); 
+    }
 
     @Override 
-    public final String toString() { return getExternalForm().toString(); }
+    public final String toString() { return getExternalForm(); }
 
     // we'll optimize this down the road when needed (obvious choice would be to
     // proceed lexicographically through the parts array of each)
@@ -92,6 +104,14 @@ implements Comparable< MingleIdentifier >
     {
         if ( other == null ) throw new NullPointerException();
         else return toString().compareTo( other.toString() );
+    }
+
+    static
+    boolean
+    isValidPart( CharSequence part )
+    {
+        inputs.notNull( part, "part" );
+        return PART_MATCHER.matcher( part ).matches();
     }
 
     public

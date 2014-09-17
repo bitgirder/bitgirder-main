@@ -14,7 +14,7 @@ class MingleTypeReference
 
     public
     abstract
-    CharSequence
+    String
     getExternalForm();
 
     public
@@ -27,35 +27,5 @@ class MingleTypeReference
     boolean
     equals( Object o );
 
-    @Override
-    public
-    final
-    String
-    toString()
-    {
-        return getExternalForm().toString();
-    }
-
-    public
-    static
-    MingleTypeReference
-    create( CharSequence str )
-    {
-        inputs.notNull( str, "str" );
-
-        return 
-            MingleParser.createTypeReference( str, Mingle.CORE_NAME_RESOLVER );
-    }
-
-    public
-    static
-    MingleTypeReference
-    parse( CharSequence str )
-        throws MingleSyntaxException
-    {
-        inputs.notNull( str, "str" );
-
-        return 
-            MingleParser.parseTypeReference( str, Mingle.CORE_NAME_RESOLVER );
-    }
+    @Override public final String toString() { return getExternalForm(); }
 }

@@ -6,8 +6,7 @@ import com.bitgirder.validation.State;
 public
 final
 class MingleEnum
-implements MingleValue,
-           TypedMingleValue
+implements MingleValue
 {
     private final static Inputs inputs = new Inputs();
     private final static State state = new State();
@@ -26,8 +25,8 @@ implements MingleValue,
     public MingleIdentifier getValue() { return value; }
 
     public 
-    MingleTypeReference
-    getValueType()
+    AtomicTypeReference
+    getAtomicType()
     {
         return new AtomicTypeReference( type, null );
     }

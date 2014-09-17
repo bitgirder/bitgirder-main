@@ -12,13 +12,13 @@ import com.bitgirder.lang.Lang;
 
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
-import com.bitgirder.lang.path.PathWiseAsserter;
 
 import com.bitgirder.lang.reflect.ReflectUtils;
 
 import com.bitgirder.test.Test;
 
 import java.util.Iterator;
+import java.util.List;
 
 import java.lang.reflect.Method;
 
@@ -76,9 +76,7 @@ class MingleTests
         assertValueClassFor( Mingle.TYPE_SYMBOL_MAP, MingleSymbolMap.class );
 
         assertValueClassFor(
-            new AtomicTypeReference( new DeclaredTypeName( "Blah" ), null ),
-            null
-        );
+            new AtomicTypeReference( qname( "ns1@v1/S1" ), null ), null );
     }
 
     private
@@ -121,15 +119,23 @@ class MingleTests
 
         assertInspection( MingleNull.getInstance(), "null" );
 
-        assertInspection( MingleList.empty(), "[]" );
+        assertInspection( emptyList(), "[]" );
 
-        assertInspection( MingleList.asList( new MingleInt32( 1 ) ), "[1]" );
+        assertInspection( 
+            MingleList.asList( 
+                listType( Mingle.TYPE_INT32, true ), 
+                new MingleInt32( 1 ) 
+            ), 
+            "[1]"
+        );
 
         assertInspection( 
             MingleList.asList(
+                Mingle.TYPE_OPAQUE_LIST,
                 MingleNull.getInstance(),
                 new MingleString( "s" ),
                 MingleList.asList( 
+                    Mingle.TYPE_OPAQUE_LIST,
                     new MingleInt32( 1 ),
                     new MingleFloat32( 1.1f )
                 )
@@ -142,7 +148,11 @@ class MingleTests
         assertInspection(
             new MingleSymbolMap.Builder().
                 setInt32( "id1", 1 ).
-                set( "id2", MingleList.asList( new MingleInt32( 1 ) ) ).
+                set( 
+                    "id2", 
+                    MingleList.asList( 
+                        Mingle.TYPE_OPAQUE_LIST, new MingleInt32( 1 ) )
+                ).
                 build(),
             "{id1:1, id2:[1]}", "{id2:[1], id1:1}"
         );
@@ -209,114 +219,6 @@ class MingleTests
         assertFormat( "a.b[ 3 ].c", p = p.descend( id( "c" ) ) );
     }
 
-    private
-    static
-    void
-    assertEqualMap( MingleValue mv1,
-                    MingleValue mv2,
-                    PathWiseAsserter< MingleIdentifier > a )
-    {
-        MingleSymbolMap mp1 = a.cast( MingleSymbolMap.class, mv1 );
-        MingleSymbolMap mp2 = a.cast( MingleSymbolMap.class, mv2 );
-
-        a.equal( mp1.getKeySet(), mp2.getKeySet() );
-
-        for ( MingleIdentifier fld : mp1.getFields() )
-        {
-            assertEqual( mp1.get( fld ), mp2.get( fld ), a.descend( fld ) );
-        }
-    }
-
-    private
-    static
-    void
-    assertEqualStruct( MingleValue mv1,
-                       MingleValue mv2,
-                       PathWiseAsserter< MingleIdentifier > a )
-    {
-        MingleStruct ms1 = a.cast( MingleStruct.class, mv1 );
-        MingleStruct ms2 = a.cast( MingleStruct.class, mv2 );
-
-        a.equal( ms1.getType(), ms2.getType() );
-        assertEqualMap( ms1.getFields(), ms2.getFields(), a );
-    }
-
-    private
-    static
-    void
-    assertEqualEnum( MingleValue mv1,
-                     MingleValue mv2,
-                     PathWiseAsserter< MingleIdentifier > a )
-    {
-        MingleEnum e1 = a.cast( MingleEnum.class, mv1 );
-        MingleEnum e2 = a.cast( MingleEnum.class, mv2 );
-
-        a.equal( e1.getType(), e2.getType() );
-        a.equal( e1.getValue(), e2.getValue() );
-    }
-
-    private
-    static
-    void
-    assertEqualList( MingleValue mv1,
-                     MingleValue mv2,
-                     PathWiseAsserter< MingleIdentifier > a )
-    {
-        MingleList l1 = a.cast( MingleList.class, mv1 );
-        MingleList l2 = a.cast( MingleList.class, mv2 );
-
-        Iterator< MingleValue > it1 = l1.iterator();
-        Iterator< MingleValue > it2 = l2.iterator();
-
-        PathWiseAsserter< MingleIdentifier > la = a.startImmutableList();
-
-        while ( it1.hasNext() )
-        {
-            la.isTrue( it2.hasNext(), "list lengths differ" );
-
-            assertEqual( it1.next(), it2.next(), la );
-            la = la.next();
-        }
-
-        la.isFalse( it2.hasNext(), "list lengths differ" );
-    }
-
-    public
-    static
-    void
-    assertEqual( MingleValue mv1,
-                 MingleValue mv2,
-                 PathWiseAsserter< MingleIdentifier > a )
-    {
-        inputs.notNull( a, "a" );
-        
-        if ( ! a.sameNullity( mv1, mv2 ) ) return;
-
-        if ( mv1 instanceof MingleStruct ) assertEqualStruct( mv1, mv2, a );
-        else if ( mv1 instanceof MingleEnum ) assertEqualEnum( mv1, mv2, a );
-        else if ( mv1 instanceof MingleSymbolMap ) 
-        {
-            assertEqualMap( mv1, mv2, a );
-        }
-        else if ( mv1 instanceof MingleList ) assertEqualList( mv1, mv2, a );
-        else a.equal( mv1, mv2 );
-    }
-
-    public
-    static
-    void
-    assertEqual( MingleValue mv1,
-                 MingleValue mv2 )
-    {
-        PathWiseAsserter< MingleIdentifier > a =
-            new PathWiseAsserter< MingleIdentifier >(
-                ObjectPath.< MingleIdentifier >getRoot(),
-                Mingle.getIdPathFormatter()
-            );
-        
-        assertEqual( mv1, mv2, a );
-    }
-
     @Test
     private
     void
@@ -363,12 +265,14 @@ class MingleTests
         MingleTypeReference ref = TYPE_STRING;
         
         assertTypeNameIn( qn, ref );
-        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
-        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
-        assertTypeNameIn( qn, ref = new ListTypeReference( ref, true ) );
-        assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
-        assertTypeNameIn( qn, ref = new NullableTypeReference( ref ) );
-        assertTypeNameIn( qn, ref = new ListTypeReference( ref, false ) );
+        assertTypeNameIn( qn, ref = nullableType( ref ) );
+        assertTypeNameIn( qn, ref = nullableType( ref ) );
+        assertTypeNameIn( qn, ref = listType( ref, true ) );
+        assertTypeNameIn( qn, ref = listType( ref, false ) );
+        assertTypeNameIn( qn, ref = nullableType( ref ) );
+        assertTypeNameIn( qn, ref = listType( ref, false ) );
+        assertTypeNameIn( qn, ref = ptrType( ref ) );
+        assertTypeNameIn( qn, ref = listType( ref, true ) );
     }
 
     @Test
@@ -467,131 +371,28 @@ class MingleTests
         throws Exception
     {
         assertValueException(
-            MissingFieldsException.class,
+            MingleMissingFieldsException.class,
             path,
             String.format( "missing field(s): %s", fldList ),
             blk
         );
     }
 
-    private
-    void
-    assertAcc( MingleSymbolMapAccessor acc,
-               String meth,
-               CharSequence fld,
-               Object expctVal )
-        throws Exception
-    {
-        Method m = ReflectUtils.getDeclaredMethod(
-            acc.getClass(), meth, new Class< ? >[]{ CharSequence.class } );
-
-        Object val = ReflectUtils.invoke( m, acc, fld );
-
-        state.equal( expctVal, val );
-    }
-
-    @Test
-    private
-    void
-    testSymbolMapAccessorBasic()
-        throws Exception
-    {
-        MingleSymbolMap m = new MingleSymbolMap.Builder().
-            setString( "str1", "hello" ).
-            set( "null1", MingleNull.getInstance() ).
-            set( "struct1", 
-                new MingleStruct.Builder().setType( "ns1@v1/S1" ).build() ).
-            set( "list1", MingleList.empty() ).
-            build();
-        
-        final MingleSymbolMapAccessor acc = MingleSymbolMapAccessor.forMap( m );
-
-        MingleString str1 = new MingleString( "hello" );
-        assertAcc( acc, "getMingleString", "str1", str1 );
-        assertAcc( acc, "getMingleString", "strX", null );
-        assertAcc( acc, "getMingleString", "null1", null );
-        assertAcc( acc, "getString", "str1", "hello" );
-        assertAcc( acc, "getString", "strX", null );
-        assertAcc( acc, "getStructAccessor", "structX", null );
-        assertAcc( acc, "expectMingleString", "str1", str1 );
-        assertAcc( acc, "expectMingleValue", "str1", str1 );
-
-        state.isTrue( acc.getStructAccessor( "struct1" ) 
-            instanceof MingleStructAccessor );
-        
-        state.isTrue( acc.getListAccessor( "list1" ) 
-            instanceof MingleListAccessor );
-
-        assertMissingFieldsException( acc.getPath(), "str-x", new TestBlock() { 
-            public void run() { acc.expectMingleString( "strX" ); }
-        });
-
-        assertAcc( acc, "expectString", "str1", "hello" );
-        
-        assertMissingFieldsException( acc.getPath(), "str-x", new TestBlock() {
-            public void run() { acc.expectString( "strX" ); }
-        });
-    }
-
-    @Test
-    private
-    void
-    testMingleSymbolMapAccessorErrorPaths()
-        throws Exception
-    {
-        ObjectPath< MingleIdentifier > p1 = ObjectPath.getRoot( id( "p1" ) );
-
-        MingleSymbolMap m = new MingleSymbolMap.Builder().
-            setString( "str1", "hello" ).
-            setInt32( "int32Val1", 1 ).
-            build();
- 
-        final MingleSymbolMapAccessor acc = 
-            MingleSymbolMapAccessor.forMap( m, p1 );
-
-        assertMissingFieldsException( p1, "str-x", new TestBlock() {
-            public void run() { acc.expectString( "strX" ); }
-        });
-
-        assertValueException( 
-            MingleValueCastException.class, 
-            p1.descend( id( "int32Val1" ) ), 
-            "Expected value of type mingle:core@v1/Buffer but found " +
-                "mingle:core@v1/Int32",
-            new TestBlock() { 
-                public void run() { acc.expectMingleBuffer( "int32Val1" ); }
-            }
-        );
-    }
-
     @Test
     public
     void
-    testListAccessorBasic()
-        throws Exception
+    testMissingFieldsExceptionMessage()
     {
-        MingleListAccessor acc = MingleListAccessor.forList(
-            MingleList.asList(
-                new MingleString( "str1" ),
-                new MingleString( "str2" ),
-                new MingleInt32( 1 ),
-                new MingleInt32( 2 ),
-                new MingleInt32( 3 )
-            )
-        );
+        List< MingleIdentifier > flds = Lang.newList();
 
-        final MingleListAccessor.Traversal t = acc.traversal();
+        flds.add( id( "f2" ) );
 
-        state.equal( new MingleString( "str1" ), t.nextMingleString() );
-//        state.equal( "str2", t.nextString() );
-//        state.equal( new MingleInt32( 1 ), t.nextMingleInt32() );
-//        
-//        assertValueException(
-//            MingleValueCastException.class,
-//            ObjectPath.< MingleIdentifier >getRoot().startImmutableList( 4 ),
-//            "Expected value of type mingle:core@v1/Buffer but found " +
-//                "mingle:core@v1/Int32",
-//            new TestBlock() { public void run() { t.nextMingleBuffer(); } }
-//        );
+        state.equal( "missing field(s): f2",
+            new MingleMissingFieldsException( flds, null ).getMessage() );
+        
+        flds.add( id( "f1" ) );
+
+        state.equal( "missing field(s): f1, f2",
+            new MingleMissingFieldsException( flds, null ).getMessage() );
     }
 }

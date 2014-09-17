@@ -4,84 +4,58 @@ import (
     "testing"
     "bitgirder/assert"
     "bytes"
-    "fmt"
 )
 
-func assertBinIoInvalidData( 
-    idt *BinIoInvalidDataTest, 
-    a *assert.PathAsserter,
-) {
-    a = a.Descend( idt.Name )
-    rd := NewReader( bytes.NewBuffer( idt.Input ) )
-    if val, err := rd.ReadValue(); err == nil {
-        a.Fatalf( "Got val: %s", QuoteValue( val ) )
-    } else {
-        if ioe, ok := err.( *BinIoError ); ok {
-            a.Equal( idt.ErrMsg, ioe.Error() )
-        } else { a.Fatal( err ) }
+func writeBinIoTestValue( val interface{}, w *BinWriter ) error {
+    switch v := val.( type ) {
+    case Value: return w.WriteScalarValue( v )
+    case *Identifier: return w.WriteIdentifier( v )
+    case *Namespace: return w.WriteNamespace( v )
+    case TypeName: return w.WriteTypeName( v )
+    case TypeReference: return w.WriteTypeReference( v )
     }
+    panic( libErrorf( "Unhandled expct obj: %T", val ) )
 }
 
-func assertBinIoRoundtripWrite(
-    wr *BinWriter,
-    obj interface{}, 
-    a *assert.PathAsserter,
-) {
-    if err := WriteBinIoTestValue( obj, wr ); err != nil { a.Fatal( err ) }
-}
-
-func assertBinIoRoundtrip( rt *BinIoRoundtripTest, a *assert.PathAsserter ) {
-    a = a.Descend( rt.Name )
+func assertBinIoRoundtrip( val interface{}, a *assert.PathAsserter ) {
     bb := &bytes.Buffer{}
-    assertBinIoRoundtripWrite( NewWriter( bb ), rt.Val, a )
-    rt.AssertWriteValue( NewReader( bb ), a )
-}
-
-func assertBinIoSequenceRoundtrip( 
-    rt *BinIoSequenceRoundtripTest,
-    a *assert.PathAsserter,
-) {
-    a = a.Descend( rt.Name )
-    bb := &bytes.Buffer{}
-    wr := NewWriter( bb )
-    la := a.StartList()
-    for _, val := range rt.Seq {
-        assertBinIoRoundtripWrite( wr, val, la )
-        la = la.Next()
+    if err := writeBinIoTestValue( val, NewWriter( bb ) ); err != nil { 
+        a.Fatal( err ) 
     }
-    rt.AssertWriteValue( NewReader( bb ), a )
+    AssertBinIoRoundtripRead( NewReader( bb ), val, a )
 }
 
 func TestCoreIo( t *testing.T ) {
     a := assert.NewPathAsserter( t )
     for _, test := range CreateCoreIoTests() { 
-        ta := a.Descend( fmt.Sprintf( "%T", test ) )
-        switch v := test.( type ) {
-        case *BinIoInvalidDataTest: assertBinIoInvalidData( v, ta )
-        case *BinIoRoundtripTest: assertBinIoRoundtrip( v, ta )
-        case *BinIoSequenceRoundtripTest: assertBinIoSequenceRoundtrip( v, ta )
-        default: a.Fatalf( "unhandled test type: %T", test )
+        if rt, ok := test.( *BinIoRoundtripTest ); ok {
+            switch v := rt.Val.( type ) {
+            case *Null, Boolean, Buffer, String, *Enum, Int32, Uint32, Int64,
+                 Uint64, Float32, Float64, Timestamp, *Identifier, *Namespace,
+                 *QualifiedTypeName, TypeReference, *DeclaredTypeName:
+                assertBinIoRoundtrip( v, a.Descend( rt.Name ) )
+            case *SymbolMap, *List, *Struct: ; // okay but skip
+            default: a.Fatalf( "unhandled rt val: %T", rt.Val )
+            }
         }
     }
 }
 
 func TestAsAndFromBytes( t *testing.T ) {
     a := assert.NewPathAsserter( t )
-    qn := MustQualifiedTypeName( "ns1@v1/T1" )
+    ns := mkNs( mkId( "v1" ), mkId( "ns1" ) )
+    qn := mkQn( ns, mkDeclNm( "T1" ) )
     qn2, err := QualifiedTypeNameFromBytes( QualifiedTypeNameAsBytes( qn ) )
     if err == nil { a.True( qn.Equals( qn2 ) ) } else { a.Fatal( err ) }
-    typ := MustTypeReference( "L*" )
+    typ := &ListTypeReference{
+        AllowsEmpty: true,
+        ElementType: &AtomicTypeReference{ Name: mkQn( ns, mkDeclNm( "L" ) ) },
+    }
     typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
     if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }
-    p := idPathRootVal.Descend( id( "id1" ) )
-    p2, err := IdPathFromBytes( IdPathAsBytes( p ) )
-    if err == nil { 
-        a.Equal( FormatIdPath( p ), FormatIdPath( p2 ) ) 
-    } else { a.Fatal( err ) }
-    id := MustIdentifier( "id1" )
+    id := mkId( "id1" )
     id2, err := IdentifierFromBytes( IdentifierAsBytes( id ) )
     if err == nil { a.True( id.Equals( id2 ) ) } else { a.Fatal( err ) }
-    ns := MustNamespace( "ns1@v1" )
     ns2, err := NamespaceFromBytes( NamespaceAsBytes( ns ) )
     if err == nil { a.True( ns.Equals( ns2 ) ) } else { a.Fatal( err ) }
 }

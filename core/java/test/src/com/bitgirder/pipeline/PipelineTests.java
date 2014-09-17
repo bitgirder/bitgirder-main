@@ -69,7 +69,7 @@ class PipelineTests
 
         public
         void
-        initialize( PipelineInitializationContext< ElementType > ctx )
+        initialize( PipelineInitializerContext< ElementType > ctx )
         {
             ctx.addElement( new ElementType2( val ) );
         }
@@ -86,7 +86,7 @@ class PipelineTests
 
         public
         void
-        initialize( PipelineInitializationContext< ElementType > ctx )
+        initialize( PipelineInitializerContext< ElementType > ctx )
         {
             ctx.addElement( new ElementType3( val ) );
         }

@@ -143,13 +143,7 @@ class TestUtils
     invocationSucceeded( TestFailureExpectation tfe )
     {
         if ( tfe == null ) return null;
-        else
-        {
-            return
-                state.createFail(
-                    "Expected exception of type", 
-                    tfe.expectedClass().getName(), "to be thrown" );
-        }
+        else return state.createFailf( "Expected failure: %s", tfe );
     }
 
     private

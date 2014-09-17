@@ -26,7 +26,7 @@ type DictNode struct {
 
 type ListNode struct {
     parent PathNode
-    indx int
+    indx uint64
 }
 
 func descend( parent PathNode, elt interface{} ) PathNode {
@@ -55,8 +55,13 @@ func ( l *ListNode ) Next() *ListNode {
     return &ListNode{ l.parent, l.indx + 1 } 
 }
 
-func ( l *ListNode ) SetIndex( indx int ) *ListNode {
+func ( l *ListNode ) SetIndex( indx uint64 ) *ListNode {
     l.indx = indx
+    return l
+}
+
+func ( l *ListNode ) Increment() *ListNode {
+    l.indx++
     return l
 }
 
@@ -100,7 +105,7 @@ func ascentOrderFor( n PathNode ) []interface{} {
 
 type Visitor interface {
     Descend( elt interface{} ) error
-    List( idx int ) error
+    List( idx uint64 ) error
 }
 
 func Visit( p PathNode, v Visitor ) error {
@@ -117,6 +122,33 @@ func Visit( p PathNode, v Visitor ) error {
     return nil
 }
 
+type copyVisitor struct { p PathNode }
+
+func ( cv *copyVisitor ) Descend( elt interface{} ) error {
+    if cv.p == nil {
+        cv.p = RootedAt( elt )
+    } else {
+        cv.p = cv.p.Descend( elt )
+    }
+    return nil
+}
+
+func ( cv *copyVisitor ) List( idx uint64 ) error {
+    if cv.p == nil {
+        cv.p = RootedAtList().SetIndex( idx )
+    } else {
+        cv.p = cv.p.StartList().SetIndex( idx )
+    }
+    return nil
+}
+
+func CopyOf( p PathNode ) PathNode {
+    if p == nil { return nil }
+    cv := &copyVisitor{}
+    Visit( p, cv )
+    return cv.p
+}
+
 type formatVisitor struct {
     sawRoot bool
     f Formatter
@@ -130,10 +162,10 @@ func ( v *formatVisitor ) Descend( elt interface{} ) error {
     return nil
 }
 
-func ( v *formatVisitor ) List( idx int ) error {
+func ( v *formatVisitor ) List( idx uint64 ) error {
     v.sawRoot = true
     v.apnd( "[ " )
-    v.apnd( strconv.Itoa( idx ) )
+    v.apnd( strconv.FormatUint( idx, 10 ) )
     v.apnd( " ]" )
     return nil
 }

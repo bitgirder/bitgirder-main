@@ -14,6 +14,8 @@ import com.bitgirder.lang.path.ObjectPathFormatter;
 
 import com.bitgirder.io.Base64Exception;
 
+import java.io.IOException;
+
 import java.util.Map;
 import java.util.List;
 import java.util.Iterator;
@@ -59,6 +61,23 @@ class Mingle
     public final static MingleTypeReference TYPE_NULL;
     public final static QualifiedTypeName QNAME_VALUE;
     public final static MingleTypeReference TYPE_VALUE;
+    public final static NullableTypeReference TYPE_NULLABLE_VALUE;
+    public final static ListTypeReference TYPE_OPAQUE_LIST;
+
+    public final static QualifiedTypeName QNAME_REQUEST;
+    public final static MingleTypeReference TYPE_REQUEST;
+
+    public final static MingleIdentifier ID_NAMESPACE;
+    public final static MingleIdentifier ID_SERVICE;
+    public final static MingleIdentifier ID_OPERATION;
+    public final static MingleIdentifier ID_AUTHENTICATION;
+    public final static MingleIdentifier ID_PARAMETERS;
+
+    public final static QualifiedTypeName QNAME_RESPONSE;
+    public final static MingleTypeReference TYPE_RESPONSE;
+
+    public final static MingleIdentifier ID_RESULT;
+    public final static MingleIdentifier ID_ERROR;
 
     private final static Map< DeclaredTypeName, QualifiedTypeName > 
         CORE_DECL_NAMES;
@@ -66,8 +85,6 @@ class Mingle
     private final static 
         Map< MingleTypeReference, Class< ? extends MingleValue > > 
             VALUE_CLASSES;
-
-    public final static ListTypeReference TYPE_VALUE_LIST;
 
     private final static ObjectPathFormatter< MingleIdentifier > 
         PATH_FORMATTER = new PathFormatterImpl();
@@ -116,25 +133,24 @@ class Mingle
         return CORE_DECL_NAMES.get( nm );
     }
 
+    public
     static
-    TypeName
+    QualifiedTypeName
     typeNameIn( MingleTypeReference t )
     {
-        state.notNull( t, "t" );
+        inputs.notNull( t, "t" );
 
-        if ( t instanceof AtomicTypeReference )
-        {
+        if ( t instanceof AtomicTypeReference ) {
             return ( (AtomicTypeReference) t ).getName();
         }
-        else if ( t instanceof ListTypeReference )
-        {
-            return typeNameIn( 
-                ( (ListTypeReference) t ).getElementType() );
+        else if ( t instanceof ListTypeReference ) {
+            return typeNameIn( ( (ListTypeReference) t ).getElementType() );
         }
-        else if ( t instanceof NullableTypeReference )
-        {
-            return typeNameIn(
-                ( (NullableTypeReference) t ).getValueType() );
+        else if ( t instanceof NullableTypeReference ) {
+            return typeNameIn( ( (NullableTypeReference) t ).getValueType() );
+        }
+        else if ( t instanceof PointerTypeReference ) {
+            return typeNameIn( ( (PointerTypeReference) t ).getType() );
         }
         else throw state.createFail( "Unhandled type reference:", t );
     }
@@ -144,7 +160,7 @@ class Mingle
     boolean
     isIntegralType( MingleTypeReference t )
     {
-        TypeName n = typeNameIn( inputs.notNull( t, "t" ) );
+        QualifiedTypeName n = typeNameIn( inputs.notNull( t, "t" ) );
 
         return n.equals( QNAME_INT32 ) ||
                n.equals( QNAME_UINT32 ) ||
@@ -157,7 +173,7 @@ class Mingle
     boolean
     isDecimalType( MingleTypeReference t )
     {
-        TypeName n = typeNameIn( inputs.notNull( t, "t" ) );
+        QualifiedTypeName n = typeNameIn( inputs.notNull( t, "t" ) );
         
         return n.equals( QNAME_FLOAT32 ) || n.equals( QNAME_FLOAT64 );
     }
@@ -197,13 +213,14 @@ class Mingle
     // matches when nm is a qn we know about
     static
     Class< ? extends MingleValue >
-    valueClassFor( TypeName nm )
+    valueClassFor( QualifiedTypeName nm )
     {
         inputs.notNull( nm, "nm" );
 
         if ( nm instanceof QualifiedTypeName )
         {
-            return valueClassFor( new AtomicTypeReference( nm, null ) );
+            QualifiedTypeName qn = (QualifiedTypeName) nm;
+            return valueClassFor( new AtomicTypeReference( qn, null ) );
         }
 
         return null;
@@ -254,15 +271,14 @@ class Mingle
     {
         sb.append( "{" );
 
-        Iterator< Map.Entry< MingleIdentifier, MingleValue > > it =
-            m.entrySet().iterator();
+        Iterator< MingleIdentifier > it = m.getSortedFields().iterator();
         
         while ( it.hasNext() )
         {
-            Map.Entry< MingleIdentifier, MingleValue > e = it.next();
-            sb.append( e.getKey().getExternalForm() );
+            MingleIdentifier fld = it.next();
+            sb.append( fld );
             sb.append( ":" );
-            implInspect( sb, e.getValue() );
+            implInspect( sb, m.get( fld ) );
 
             if ( it.hasNext() ) sb.append( ", " );
         }
@@ -314,35 +330,21 @@ class Mingle
         {
             sb.append( mv.toString() );
         }
-        else if ( mv instanceof MingleString )
-        {
+        else if ( mv instanceof MingleString ) {
             Lang.appendRfc4627String( sb, (MingleString) mv );
-        }
-        else if ( mv instanceof MingleTimestamp )
-        {
+        } else if ( mv instanceof MingleTimestamp ) {
             sb.append( ( (MingleTimestamp) mv ).getRfc3339String() );
-        }
-        else if ( mv instanceof MingleBuffer )
-        {
+        } else if ( mv instanceof MingleBuffer ) {
             implInspectBuffer( sb, (MingleBuffer) mv );
-        }
-        else if ( mv instanceof MingleEnum )
-        {
+        } else if ( mv instanceof MingleEnum ) {
             implInspectEnum( sb, (MingleEnum) mv );
-        }
-        else if ( mv instanceof MingleList )
-        {
+        } else if ( mv instanceof MingleList ) {
             implInspectList( sb, (MingleList) mv );
-        }
-        else if ( mv instanceof MingleSymbolMap )
-        {
+        } else if ( mv instanceof MingleSymbolMap ) {
             implInspectMap( sb, (MingleSymbolMap) mv );
-        }
-        else if ( mv instanceof MingleStruct )
-        {
+        } else if ( mv instanceof MingleStruct ) {
             implInspectStruct( sb, (MingleStruct) mv );
-        }
-        else state.fail( "Unhandled inspect type:", mv.getClass().getName() );
+        } else state.fail( "Unhandled inspect type:", mv.getClass().getName() );
         
         return sb;
     }
@@ -368,31 +370,89 @@ class Mingle
         return implInspect( new StringBuilder(), mv );
     }
 
+    public
     static
     MingleTypeReference
-    inferredTypeOf( MingleValue mv )
+    typeOf( MingleValue mv )
     {   
-        state.notNull( mv, "mv" );
+        inputs.notNull( mv, "mv" );
 
         if ( mv instanceof MingleBoolean ) return TYPE_BOOLEAN;
-        if ( mv instanceof MingleInt32 ) return TYPE_INT32;
-        if ( mv instanceof MingleInt64 ) return TYPE_INT64;
-        if ( mv instanceof MingleUint32 ) return TYPE_UINT32;
-        if ( mv instanceof MingleUint64 ) return TYPE_UINT64;
-        if ( mv instanceof MingleFloat32 ) return TYPE_FLOAT32;
-        if ( mv instanceof MingleFloat64 ) return TYPE_FLOAT64;
-        if ( mv instanceof MingleString ) return TYPE_STRING;
-        if ( mv instanceof MingleBuffer ) return TYPE_BUFFER;
-        if ( mv instanceof MingleTimestamp ) return TYPE_TIMESTAMP;
-        if ( mv instanceof MingleSymbolMap ) return TYPE_SYMBOL_MAP;
-        if ( mv instanceof MingleList ) return TYPE_VALUE_LIST;
-        if ( mv instanceof MingleNull ) return TYPE_NULL;
+        else if ( mv instanceof MingleInt32 ) return TYPE_INT32;
+        else if ( mv instanceof MingleInt64 ) return TYPE_INT64;
+        else if ( mv instanceof MingleUint32 ) return TYPE_UINT32;
+        else if ( mv instanceof MingleUint64 ) return TYPE_UINT64;
+        else if ( mv instanceof MingleFloat32 ) return TYPE_FLOAT32;
+        else if ( mv instanceof MingleFloat64 ) return TYPE_FLOAT64;
+        else if ( mv instanceof MingleString ) return TYPE_STRING;
+        else if ( mv instanceof MingleBuffer ) return TYPE_BUFFER;
+        else if ( mv instanceof MingleTimestamp ) return TYPE_TIMESTAMP;
+        else if ( mv instanceof MingleSymbolMap ) return TYPE_SYMBOL_MAP;
+        else if ( mv instanceof MingleList ) return TYPE_OPAQUE_LIST;
+        else if ( mv instanceof MingleNull ) return TYPE_NULL;
+        else if ( mv instanceof MingleStruct ) {
+            return ( (MingleStruct) mv ).getAtomicType();
+        } else if ( mv instanceof MingleEnum ) {
+            return ( (MingleEnum) mv ).getAtomicType();
+        } else { 
+            throw state.failf( "Unhandled value: %s", mv.getClass() ); 
+        }
+    }
 
-        if ( mv instanceof TypedMingleValue ) {
-            return ( (TypedMingleValue) mv ).getValueType();
+    // canAssignType() and helpers ported from the go impl, but drops the
+    // relaxRestrictions checks (since those are only related to go's CanAssign
+    // implementation
+
+    private
+    static
+    boolean
+    canAssignAtomicType( MingleTypeReference from,
+                         AtomicTypeReference to )
+    {
+        if ( to.getName().equals( QNAME_VALUE ) ) return true;
+        if ( ! ( from instanceof AtomicTypeReference ) ) return false;
+
+        AtomicTypeReference f = (AtomicTypeReference) from;
+        if ( ! f.getName().equals( to.getName() ) ) return false;
+
+        MingleValueRestriction fRx = f.getRestriction();
+        MingleValueRestriction toRx = to.getRestriction();
+
+        if ( toRx == null && fRx == null ) return true;
+        return toRx.equals( fRx );
+    }
+
+    private
+    static
+    boolean
+    canAssignNullableType( MingleTypeReference from,
+                           NullableTypeReference to )
+    {
+        if ( from instanceof NullableTypeReference ) {
+            from = ( (NullableTypeReference) from ).getValueType();
         }
 
-        throw state.createFail( "Unhandled value:", mv.getClass() );
+        return canAssignType( from, to.getValueType() );
+    }
+
+    public
+    static
+    boolean
+    canAssignType( MingleTypeReference from,
+                   MingleTypeReference to )
+    {
+        inputs.notNull( from, "from" );
+        inputs.notNull( to, "to" );
+
+        if ( to instanceof AtomicTypeReference ) {
+            AtomicTypeReference at = (AtomicTypeReference) to;
+            return canAssignAtomicType( from, at );
+        } else if ( to instanceof NullableTypeReference ) {
+            NullableTypeReference nt = (NullableTypeReference) to;
+            return canAssignNullableType( from, nt );
+        } else {
+            return from.equals( to );
+        }
     }
 
     static
@@ -413,7 +473,7 @@ class Mingle
                   MingleValue act,
                   ObjectPath< MingleIdentifier > loc )
     {
-        return failCastType( expct, inferredTypeOf( act ), loc );
+        return failCastType( expct, typeOf( act ), loc );
     }
 
     private
@@ -690,7 +750,7 @@ class Mingle
                               MingleTypeReference callTyp,
                               ObjectPath< MingleIdentifier > loc )
     {
-        TypeName nm = at.getName();
+        QualifiedTypeName nm = at.getName();
 
         Class< ? extends MingleValue > valCls = valueClassFor( nm );
         if ( valCls != null && valCls.isInstance( mv ) ) return mv;
@@ -753,6 +813,232 @@ class Mingle
     formatIdPath( ObjectPath< MingleIdentifier > p )
     {
         return appendIdPath( p, new StringBuilder() );
+    }
+
+    private
+    final
+    static
+    class PathFormatterImpl
+    implements ObjectPathFormatter< MingleIdentifier >
+    {
+        public void formatPathStart( StringBuilder sb ) {}
+
+        public void formatSeparator( StringBuilder sb ) { sb.append( '.' ); }
+
+        public
+        void
+        formatDictionaryKey( StringBuilder sb,
+                             MingleIdentifier key )
+        {
+            sb.append( key.getExternalForm() );
+        }
+
+        public
+        void
+        formatListIndex( StringBuilder sb,
+                         int indx )
+        {
+            sb.append( "[ " ).append( indx ).append( " ]" );
+        }
+    }
+
+    // returns null if p == null; throws ClassCastException if p is not an
+    // ObjectPath, otherwise does an unchecked cast on the type parameter to get
+    // p as ObjectPath< MingleIdentifier >
+    static
+    ObjectPath< MingleIdentifier >
+    castIdPath( Object p )
+    {
+        if ( p == null ) return null;
+
+        return Lang.castUnchecked( (ObjectPath< ? >) p );
+    }
+
+    public
+    static
+    String
+    formatError( ObjectPath< MingleIdentifier > path,
+                 String msg )
+    {
+        if ( path == null || path.isEmpty() ) return msg;
+
+        StringBuilder sb = appendIdPath( path, new StringBuilder() );
+
+        if ( msg != null && ( ( msg = msg.trim() ).length() > 0 ) ) {
+            sb.append( ": " );
+            sb.append( msg );
+        }
+
+        return sb.toString();
+    }
+
+    public
+    static
+    String
+    asJavaEnumString( MingleIdentifier id )
+    {
+        inputs.notNull( id, "id" );
+
+        CharSequence fmt = id.format( MingleIdentifierFormat.LC_UNDERSCORE );
+        return fmt.toString().toUpperCase();
+    }
+
+    public
+    static
+    < E extends Enum< E > >
+    E
+    asJavaEnumValue( Class< E > cls,
+                     MingleIdentifier id )
+    {
+        inputs.notNull( cls, "cls" );
+        inputs.notNull( id, "id" );
+
+        return Enum.valueOf( cls, asJavaEnumString( id ) );
+    }
+
+    private
+    static
+    interface ConverterImpl< V >
+    {
+        public String targetName();
+
+        public V readBinary( MingleBinReader rd ) throws IOException;
+
+        public V parse( String s ) throws MingleSyntaxException;
+    }
+
+    private
+    static
+    < V >
+    V
+    objectForString( MingleString ms,
+                     ObjectPath< MingleIdentifier > path,
+                     ConverterImpl< V > cv )
+    {
+        try { return cv.parse( ms.toString() ); }
+        catch ( MingleSyntaxException mse ) 
+        {
+            String msg = String.format(
+                "could not parse %s: %s", cv.targetName(), mse.getMessage() );
+
+            throw new MingleValueCastException( msg, path );
+        }
+    }
+
+    private
+    static
+    < V >
+    V
+    objectForBuffer( MingleBuffer mb,
+                     ObjectPath< MingleIdentifier > path,
+                     ConverterImpl< V > cv )
+    {
+        try { return cv.readBinary( MingleBinReader.create( mb ) ); }
+        catch ( IOException ioe ) 
+        {
+            String msg = String.format(
+                "could not read %s: %s", cv.targetName(), ioe.getMessage() );
+
+            throw new MingleValueCastException( msg, path );
+        }
+    }
+
+    private
+    static
+    < V >
+    V
+    objectForValue( MingleValue mv,
+                    ObjectPath< MingleIdentifier > path,
+                    ConverterImpl< V > cv )
+        throws MingleValueCastException
+    {
+        inputs.notNull( mv, "mv" );
+        inputs.notNull( path, "path" );
+
+        if ( mv instanceof MingleString ) {
+            return objectForString( (MingleString) mv, path, cv );
+        } else if ( mv instanceof MingleBuffer ) {
+            return objectForBuffer( (MingleBuffer) mv, path, cv );
+        } 
+
+        String msg = String.format(
+            "can't convert to %s from %s", cv.targetName(), typeOf( mv ) );
+
+        throw new MingleValueCastException( msg, path );
+    }
+    
+    private final static ConverterImpl< MingleNamespace > NAMESPACE_CONVERTER =
+        new ConverterImpl< MingleNamespace >()
+        {
+            public String targetName() { return "namespace"; }
+
+            public
+            MingleNamespace
+            readBinary( MingleBinReader rd )
+                throws IOException
+            {
+                return rd.readNamespace();
+            }
+
+            public
+            MingleNamespace
+            parse( String s )
+                throws MingleSyntaxException
+            {
+                return MingleNamespace.parse( s );
+            }
+        };
+
+    public
+    static
+    MingleNamespace
+    namespaceForValue( MingleValue mv,
+                       ObjectPath< MingleIdentifier > path )
+        throws MingleValueCastException
+    {
+        return objectForValue( mv, path, NAMESPACE_CONVERTER );
+    }
+
+    private final static ConverterImpl< MingleIdentifier > 
+        IDENTIFIER_CONVERTER = new ConverterImpl< MingleIdentifier >()
+        {
+            public String targetName() { return "identifier"; }
+
+            public
+            MingleIdentifier
+            readBinary( MingleBinReader rd )
+                throws IOException
+            {
+                return rd.readIdentifier();
+            }
+
+            public
+            MingleIdentifier
+            parse( String s )
+                throws MingleSyntaxException
+            {
+                return MingleIdentifier.parse( s );
+            }
+        };
+
+    public
+    static
+    MingleIdentifier
+    identifierForValue( MingleValue mv,
+                        ObjectPath< MingleIdentifier > path )
+        throws MingleValueCastException
+    {
+        return objectForValue( mv, path, IDENTIFIER_CONVERTER );
+    }
+
+    public
+    static
+    ObjectPath< MingleIdentifier >
+    parseIdentifierPath( CharSequence s )
+        throws MingleSyntaxException
+    {
+        inputs.notNull( s, "s" );
+        return MingleParser.parseIdentifierPath( s );
     }
 
     // Static class init follows
@@ -848,70 +1134,24 @@ class Mingle
         TYPE_NULL = initCoreType( QNAME_NULL );
         QNAME_VALUE = initCoreQname( "Value" );
         TYPE_VALUE = initCoreType( QNAME_VALUE );
+        TYPE_NULLABLE_VALUE = NullableTypeReference.create( TYPE_VALUE );
 
-        TYPE_VALUE_LIST = new ListTypeReference( TYPE_VALUE, true );
-    }
+        TYPE_OPAQUE_LIST = 
+            ListTypeReference.create( TYPE_NULLABLE_VALUE, true );
 
-    private
-    final
-    static
-    class PathFormatterImpl
-    implements ObjectPathFormatter< MingleIdentifier >
-    {
-        public void formatPathStart( StringBuilder sb ) {}
+        QNAME_REQUEST = initCoreQname( "Request" );
+        TYPE_REQUEST = new AtomicTypeReference( QNAME_REQUEST, null );
 
-        public void formatSeparator( StringBuilder sb ) { sb.append( '.' ); }
+        ID_NAMESPACE = initId( "namespace" );
+        ID_SERVICE = initId( "service" );
+        ID_OPERATION = initId( "operation" );
+        ID_PARAMETERS = initId( "parameters" );
+        ID_AUTHENTICATION = initId( "authentication" );
 
-        public
-        void
-        formatDictionaryKey( StringBuilder sb,
-                             MingleIdentifier key )
-        {
-            sb.append( key.getExternalForm() );
-        }
+        QNAME_RESPONSE = initCoreQname( "Response" );
+        TYPE_RESPONSE = new AtomicTypeReference( QNAME_RESPONSE, null );
 
-        public
-        void
-        formatListIndex( StringBuilder sb,
-                         int indx )
-        {
-            sb.append( "[ " ).append( indx ).append( " ]" );
-        }
-    }
-
-    // returns null if p == null; throws ClassCastException if p is not an
-    // ObjectPath, otherwise does an unchecked cast on the type parameter to get
-    // p as ObjectPath< MingleIdentifier >
-    static
-    ObjectPath< MingleIdentifier >
-    castIdPath( Object p )
-    {
-        if ( p == null ) return null;
-
-        return Lang.castUnchecked( (ObjectPath< ? >) p );
-    }
-
-    public
-    static
-    String
-    asJavaEnumString( MingleIdentifier id )
-    {
-        inputs.notNull( id, "id" );
-
-        CharSequence fmt = id.format( MingleIdentifierFormat.LC_UNDERSCORE );
-        return fmt.toString().toUpperCase();
-    }
-
-    public
-    static
-    < E extends Enum< E > >
-    E
-    asJavaEnumValue( Class< E > cls,
-                     MingleIdentifier id )
-    {
-        inputs.notNull( cls, "cls" );
-        inputs.notNull( id, "id" );
-
-        return Enum.valueOf( cls, asJavaEnumString( id ) );
+        ID_RESULT = initId( "result" );
+        ID_ERROR = initId( "error" );
     }
 }

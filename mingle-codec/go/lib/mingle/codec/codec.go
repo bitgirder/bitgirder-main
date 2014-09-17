@@ -9,8 +9,8 @@ import (
 )
 
 type Codec interface {
-    EncoderTo( w io.Writer ) mg.ReactorEventProcessor
-    DecodeFrom( rd io.Reader, rep mg.ReactorEventProcessor ) error
+    EncoderTo( w io.Writer ) mg.EventProcessor
+    DecodeFrom( rd io.Reader, rep mg.EventProcessor ) error
 }
 
 func Encode( ms *mg.Struct, cdc Codec, w io.Writer ) error {

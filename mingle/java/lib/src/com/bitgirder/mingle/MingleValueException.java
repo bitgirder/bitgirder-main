@@ -16,13 +16,16 @@ extends RuntimeException
     private final String err;
     private final ObjectPath< MingleIdentifier > loc;
 
+    protected
     MingleValueException( String err,
                           ObjectPath< MingleIdentifier > loc )
     {
         super();
 
         this.err = state.notNull( err, "err" );
-        this.loc = state.notNull( loc, "loc" );
+
+        this.loc = loc == null ? 
+            ObjectPath.< MingleIdentifier >getRoot() : loc;
     }
 
     public final String error() { return err; }
@@ -34,12 +37,6 @@ extends RuntimeException
     String
     getMessage()
     {
-        if ( loc.isEmpty() ) return err;
-
-        StringBuilder sb = Mingle.appendIdPath( loc, new StringBuilder() );
-        sb.append( ": " );
-        sb.append( err );
-
-        return sb.toString();
+        return Mingle.formatError( loc, err );
     }
 }

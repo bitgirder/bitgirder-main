@@ -6,6 +6,21 @@ import (
     mg "mingle"
 )
 
+func idUnsafe( parts ...string ) *mg.Identifier {
+    return mg.NewIdentifierUnsafe( parts )
+}
+
+type DefinitionGetter interface {
+    GetDefinition( qn *mg.QualifiedTypeName ) ( Definition, bool )
+}
+
+func MustGetDefinition( 
+    qn *mg.QualifiedTypeName, dg DefinitionGetter ) Definition {
+
+    if res, ok := dg.GetDefinition( qn ); ok { return res }
+    panic( libErrorf( "no definition found for name: %s", qn ) )
+}
+
 type DefinitionMap struct {
     m *mg.QnameMap
     builtIn *mg.QnameMap
@@ -19,19 +34,9 @@ func ( dm *DefinitionMap ) setBuiltIn( qn *mg.QualifiedTypeName ) {
     dm.builtIn.Put( qn, true )
 }
 
-// package note: not safe to call before completion of package init
-func NewV1DefinitionMap() *DefinitionMap {
-    res := NewDefinitionMap()
-    res.MustAddFrom( coreTypesV1 )
-    coreTypesV1.EachDefinition( func( def Definition ) {
-        res.setBuiltIn( def.GetName() )
-    })
-    return res
-}
-
 func ( m *DefinitionMap ) Len() int { return m.m.Len() }
 
-func ( m *DefinitionMap ) GetOk( 
+func ( m *DefinitionMap ) GetDefinition( 
     qn *mg.QualifiedTypeName ) ( Definition, bool ) {
     d, ok := m.m.GetOk( qn  )
     if ok { return d.( Definition ), true }
@@ -39,13 +44,8 @@ func ( m *DefinitionMap ) GetOk(
 }
 
 func ( m *DefinitionMap ) Get( qn *mg.QualifiedTypeName ) Definition {
-    if d, ok := m.GetOk( qn ); ok { return d }
+    if d, ok := m.GetDefinition( qn ); ok { return d }
     return nil
-}
-
-func ( m *DefinitionMap ) MustGet( qn *mg.QualifiedTypeName ) Definition {
-    if res := m.Get( qn ); res != nil { return res }
-    panic( libErrorf( "no definition for type: %s", qn ) )
 }
 
 func ( m *DefinitionMap ) HasKey( qn *mg.QualifiedTypeName ) bool {
@@ -67,6 +67,10 @@ func ( m *DefinitionMap ) MustAdd( d Definition ) {
     if err := m.Add( d ); err != nil { panic( err ) }
 }
 
+func ( m *DefinitionMap ) MustAddAll( defs ...Definition ) {
+    for _, def := range defs { m.MustAdd( def ) }
+}
+
 func ( m *DefinitionMap ) MustAddFrom( m2 *DefinitionMap ) {
     m2.EachDefinition( func( d Definition ) { m.MustAdd( d ) } )
 }
@@ -77,11 +81,6 @@ func ( m *DefinitionMap ) EachDefinition( f func( d Definition ) ) {
             f( d.( Definition ) )
         },
     )
-}
-
-type Descendant interface { 
-    // Can return nil to indicate no super type
-    GetSuperType() *mg.QualifiedTypeName
 }
 
 type Definition interface {
@@ -108,6 +107,14 @@ func ( fd *FieldDefinition ) GetDefault() mg.Value {
         return nil
     }
     return fd.Default // may still be nil
+}
+
+func ( fd *FieldDefinition ) Equals( fd2 *FieldDefinition ) bool {
+    if ! fd.Name.Equals( fd2.Name ) { return false }
+    if ! fd.Type.Equals( fd2.Type ) { return false }
+    if fd.Default == nil { return fd2.Default == nil }
+    if fd2.Default == nil { return false }
+    return mg.EqualValues( fd.Default, fd2.Default )
 }
 
 type FieldSet struct {
@@ -141,10 +148,25 @@ func ( fs *FieldSet ) MustAdd( fd *FieldDefinition ) {
     } else { fs.flds.Put( nm, fd ) }
 }
 
+func ( fs *FieldSet ) MustAddAll( fs2 *FieldSet ) {
+    fs2.EachDefinition( func( fd *FieldDefinition ) { fs.MustAdd( fd ) } )
+}
+
 func ( fs *FieldSet ) EachDefinition( f func( fd *FieldDefinition ) ) {
     fs.flds.EachPair( func( id *mg.Identifier, fd interface{} ) {
         f( fd.( *FieldDefinition ) )
     })
+}
+
+func ( fs *FieldSet ) ContainsFields( fs2 *FieldSet ) bool {
+    res := true
+    fs2.EachDefinition( func( fd *FieldDefinition ) {
+        if ! res { return }
+        if fd2 := fs.Get( fd.Name ); fd2 == nil {
+            res = false
+        } else { res = fd.Equals( fd2 ) }
+    })
+    return res
 }
 
 type FieldContainer interface { GetFields() *FieldSet }
@@ -177,7 +199,6 @@ type ConstructorDefinition struct { Type mg.TypeReference }
 
 type StructDefinition struct {
     Name *mg.QualifiedTypeName
-    SuperType *mg.QualifiedTypeName
     Fields *FieldSet
     Constructors []*ConstructorDefinition
 }
@@ -193,11 +214,28 @@ func ( sd *StructDefinition ) GetName() *mg.QualifiedTypeName {
     return sd.Name
 }
 
-func ( sd *StructDefinition ) GetSuperType() *mg.QualifiedTypeName {
-    return sd.SuperType
+func ( sd *StructDefinition ) GetFields() *FieldSet { return sd.Fields }
+
+func ( sd *StructDefinition ) MustMixinSchema( schema *SchemaDefinition ) {
+    sd.Fields.MustAddAll( schema.Fields )
 }
 
-func ( sd *StructDefinition ) GetFields() *FieldSet { return sd.Fields }
+func ( sd *StructDefinition ) SatisfiesSchema( sc *SchemaDefinition ) bool {
+    return sd.Fields.ContainsFields( sc.Fields )
+}
+
+type SchemaDefinition struct {
+    Name *mg.QualifiedTypeName
+    Fields *FieldSet
+}
+
+func NewSchemaDefinition() *SchemaDefinition {
+    return &SchemaDefinition{ Fields: NewFieldSet() }
+}
+
+func ( sd *SchemaDefinition ) GetName() *mg.QualifiedTypeName { return sd.Name }
+
+func ( sd *SchemaDefinition ) GetFields() *FieldSet { return sd.Fields }
 
 type AliasedTypeDefinition struct {
     Name *mg.QualifiedTypeName
@@ -252,7 +290,6 @@ func OpDefsByName( defs []*OperationDefinition ) *mg.IdentifierMap {
 
 type ServiceDefinition struct {
     Name *mg.QualifiedTypeName
-    SuperType *mg.QualifiedTypeName
     Operations []*OperationDefinition
     Security *mg.QualifiedTypeName
 }
@@ -263,10 +300,6 @@ func NewServiceDefinition() *ServiceDefinition {
 
 func ( sd *ServiceDefinition ) GetName() *mg.QualifiedTypeName {
     return sd.Name
-}
-
-func ( sd *ServiceDefinition ) GetSuperType() *mg.QualifiedTypeName {
-    return sd.SuperType
 }
 
 func ( sd *ServiceDefinition ) findOperation( 
@@ -280,134 +313,4 @@ func ( sd *ServiceDefinition ) mustFindOperation(
     res := sd.findOperation( op )
     if ( res != nil ) { return res }
     panic( libErrorf( "service %s has no operation %s", sd.Name, op ) )
-}
-
-type ServiceDefinitionMap struct {
-    defs *DefinitionMap
-    nsMap *mg.NamespaceMap
-}
-
-func NewServiceDefinitionMap( defs *DefinitionMap ) *ServiceDefinitionMap {
-    return &ServiceDefinitionMap{ defs: defs, nsMap: mg.NewNamespaceMap() }
-}
-
-func ( m *ServiceDefinitionMap ) GetDefinitionMap() *DefinitionMap {
-    return m.defs
-}
-
-func ( m *ServiceDefinitionMap ) Put( 
-    ns *mg.Namespace, svc *mg.Identifier, qn *mg.QualifiedTypeName ) error {
-    if def, ok := m.defs.GetOk( qn ); ok {
-        if sd, ok := def.( *ServiceDefinition ); ok {
-            svcMap, ok := m.nsMap.GetOk( ns )
-            if ! ok {
-                svcMap = mg.NewIdentifierMap()
-                m.nsMap.Put( ns, svcMap )
-            }
-            svcMap.( *mg.IdentifierMap ).Put( svc, sd )
-            return nil
-        }
-        return libErrorf( "(%T).Put(): %s is not a service", m, qn )
-    }
-    return libErrorf( "(%T).Put(): no definition for name %s", qn )
-}
-
-func ( m *ServiceDefinitionMap ) MustPut(
-    ns *mg.Namespace, svc *mg.Identifier, qn *mg.QualifiedTypeName ) {
-    if err := m.Put( ns, svc, qn ); err != nil { panic( err ) }
-}
-
-func ( m *ServiceDefinitionMap ) HasNamespace( ns *mg.Namespace ) bool {
-    return m.nsMap.HasKey( ns )
-}
-
-func ( m *ServiceDefinitionMap ) GetOk( 
-    ns *mg.Namespace, svc *mg.Identifier ) ( *ServiceDefinition, bool ) {
-    if svcMap, ok := m.nsMap.GetOk( ns ); ok {
-        if sd, ok := svcMap.( *mg.IdentifierMap ).GetOk( svc ); ok {
-            return sd.( *ServiceDefinition ), true
-        }
-    }
-    return nil, false
-}
-
-func ( m *ServiceDefinitionMap ) MustGet(
-    ns *mg.Namespace, svc *mg.Identifier ) *ServiceDefinition {
-    if res, ok := m.GetOk( ns, svc ); ok { return res }
-    panic( 
-        libErrorf( "no service matches namespace '%s' and id '%s'", ns, svc ) )
-}
-
-var coreTypesV1 *DefinitionMap
-
-func CoreTypesV1() *DefinitionMap {
-    res := NewDefinitionMap()
-    res.MustAddFrom( coreTypesV1 )
-    return res
-}
-
-func asCoreV1Qn( nm string ) *mg.QualifiedTypeName {
-    return mg.MustDeclaredTypeName( nm ).ResolveIn( mg.CoreNsV1 )
-}
-
-func initCoreV1Prims() {
-    for _, primTyp := range mg.PrimitiveTypes {
-        pd := &PrimitiveDefinition{}
-        pd.Name = primTyp.Name.( *mg.QualifiedTypeName )
-        coreTypesV1.MustAdd( pd )
-    }
-}
-
-func initCoreV1StandardError() *StructDefinition {
-    ed := NewStructDefinition()
-    ed.Name = asCoreV1Qn( "StandardError" )
-    coreTypesV1.MustAdd( ed )
-    return ed
-}
-
-func newV1StandardError( 
-    nm string, ns *mg.Namespace, stdErr *StructDefinition ) *StructDefinition {
-    res := NewStructDefinition()
-    res.Name = mg.MustDeclaredTypeName( nm ).ResolveIn( ns )
-    res.SuperType = stdErr.Name
-    return res
-}
-
-func newCoreV1StandardError( 
-    nm string, stdErr *StructDefinition ) *StructDefinition {
-    return newV1StandardError( nm, mg.CoreNsV1, stdErr )
-}
-
-func initCoreV1MissingFieldsError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "MissingFieldsError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initCoreV1UnrecognizedFieldError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "UnrecognizedFieldError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initCoreV1ValueCastError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "ValueCastError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initServiceV1EndpointError( stdErr *StructDefinition ) {
-    ed := newCoreV1StandardError( "EndpointError", stdErr )
-    coreTypesV1.MustAdd( ed )
-}
-
-func initCoreV1Exceptions() {
-    stdErr := initCoreV1StandardError()
-    initCoreV1MissingFieldsError( stdErr )
-    initCoreV1UnrecognizedFieldError( stdErr )
-    initCoreV1ValueCastError( stdErr )
-    initServiceV1EndpointError( stdErr )
-}
-
-func init() {
-    coreTypesV1 = NewDefinitionMap()
-    initCoreV1Prims()
-    initCoreV1Exceptions()
 }

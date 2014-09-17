@@ -7,6 +7,7 @@ import com.bitgirder.lang.Lang;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.Arrays;
 
 public
 final
@@ -20,6 +21,7 @@ implements MingleValue
 
     private final Map< MingleIdentifier, MingleValue > fields;
 
+    private
     MingleSymbolMap( Map< MingleIdentifier, MingleValue > fields )
     {
         this.fields = fields;
@@ -32,6 +34,20 @@ implements MingleValue
 
     public Set< MingleIdentifier > getKeySet() { return fields.keySet(); }
     public Iterable< MingleIdentifier > getFields() { return getKeySet(); }
+
+    public 
+    Iterable< MingleIdentifier >
+    getSortedFields()
+    {
+        Set< MingleIdentifier > ks = getKeySet();
+
+        MingleIdentifier[] arr = 
+            ks.toArray( new MingleIdentifier[ ks.size() ] );
+        
+        Arrays.sort( arr, null );
+
+        return Lang.asList( arr );
+    }
 
     public int hashCode() { return fields.hashCode(); }
 
@@ -66,6 +82,7 @@ implements MingleValue
         return fields.get( inputs.notNull( fld, "fld" ) );
     }
 
+    public
     static
     abstract
     class BuilderImpl< V extends MingleValue, B extends BuilderImpl >
@@ -271,4 +288,13 @@ implements MingleValue
     }
 
     public static MingleSymbolMap empty() { return EMPTY; }
+
+    // fields is assumed to be non-null, unchanging, and to not contain values
+    // of type MingleNull
+    static
+    MingleSymbolMap
+    createUnsafe( Map< MingleIdentifier, MingleValue > fields )
+    {
+        return new MingleSymbolMap( fields );
+    }
 }

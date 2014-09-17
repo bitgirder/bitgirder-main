@@ -6,6 +6,8 @@ import com.bitgirder.validation.State;
 import com.bitgirder.lang.Strings;
 import com.bitgirder.lang.Lang;
 
+import com.bitgirder.lang.path.ObjectPath;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -60,7 +62,7 @@ class MingleNamespace
     }
 
     public
-    CharSequence
+    String
     format( MingleIdentifierFormat fmt )
     {
         inputs.notNull( fmt, "fmt" );
@@ -77,18 +79,18 @@ class MingleNamespace
         sb.append( '@' );
         sb.append( fmtId( ver, fmt ) );
 
-        return sb;
+        return sb.toString();
     }
 
     public
-    CharSequence
+    String
     getExternalForm()
     {
         return format( MingleIdentifierFormat.LC_CAMEL_CAPPED );
     }
 
     @Override 
-    public final String toString() { return getExternalForm().toString(); }
+    public final String toString() { return getExternalForm(); }
 
     public
     static

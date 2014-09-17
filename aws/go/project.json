@@ -3,10 +3,7 @@
     "direct-deps": [ 
         "core",
         "testing",
-        "io",
-        "mingle",
-        "mingle-codec",
-        "mingle-json"
+        "io"
     ],
     "packages": [ "aws/s3" ],
     "commands": { 

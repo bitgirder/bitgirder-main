@@ -1,5 +1,0 @@
-{
-    "$type": "bitgirder:ops:build:go@v1/GoProject",
-    "direct-deps": [ "core", "mingle", "io" ],
-    "packages": [ "mingle/io", "mingle/io/stream" ]
-}

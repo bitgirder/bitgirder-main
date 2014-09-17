@@ -48,7 +48,7 @@ extends MingleTypeReference
     }
 
     public
-    CharSequence
+    String
     getExternalForm()
     {
         return ref.getExternalForm() + ( allowsEmpty ? "*" : "+" );

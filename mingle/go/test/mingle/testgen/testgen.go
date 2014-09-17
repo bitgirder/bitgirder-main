@@ -8,6 +8,9 @@ import (
     "log"
     "io"
     mg "mingle"
+    mgIo "mingle/io"
+    mgRct "mingle/reactor"
+    parser "mingle/parser"
     bgio "bitgirder/io"
 )
 
@@ -58,10 +61,10 @@ func ( f *OutFile ) openBinWriter() ( wr *bgio.BinWriter, err error ) {
     return 
 }
 
-func ( f *OutFile ) openMgWriter() ( *mg.BinWriter, error ) {
+func ( f *OutFile ) openMgWriter() ( *mgIo.BinWriter, error ) {
     w, err := f.openIoWriter()
     if err != nil { return nil, err }
-    return mg.NewWriter( w ), nil
+    return mgIo.NewWriter( w ), nil
 }
 
 func ( f *OutFile ) WithBinWriter( call func( *bgio.BinWriter ) error ) error {
@@ -73,7 +76,7 @@ func ( f *OutFile ) WithBinWriter( call func( *bgio.BinWriter ) error ) error {
 }
 
 // Meant to be run as the workhorse of some program's main()
-func WriteOutFile( call func( w *mg.BinWriter ) error ) {
+func WriteOutFile( call func( w *mgIo.BinWriter ) error ) {
     tgf := NewOutFile()
     tgf.SetParseArg()
     flag.Parse()
@@ -90,11 +93,12 @@ type StructDataSource interface {
 }
 
 func WriteStructFile( data StructDataSource ) {
-    WriteOutFile( func( w *mg.BinWriter ) error {
+    WriteOutFile( func( w *mgIo.BinWriter ) error {
+        rct := w.AsReactor()
         for i, e := 0, data.Len(); i < e ; i++ {
             s := data.StructAt( i )
-            if err := w.WriteValue( s ); err != nil { return err }
+            if err := mgRct.VisitValue( s, rct ); err != nil { return err }
         }
-        return w.WriteValue( mg.MustStruct( typFileEnd ) )
+        return mgRct.VisitValue( parser.MustStruct( typFileEnd ), rct )
     })
 }

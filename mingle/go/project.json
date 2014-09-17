@@ -3,15 +3,15 @@
     "direct-deps": [ "testing", "core", "io" ],
     "packages": [ 
         "mingle", 
-        "mingle/parser/lexer", 
-        "mingle/parser/loc",
-        "mingle/parser/syntax",
-        "mingle/types"
-    ],
-    "test-packages": [
-        "mingle/testing",
-        "mingle/testing/testval",
-        "mingle/parser/testing"
+        "mingle/reactor",
+        "mingle/io",
+        "mingle/bind",
+        "mingle/types",
+        "mingle/types/testing",
+        "mingle/types/builtin",
+        "mingle/tck",
+        "mingle/service",
+        "mingle/parser"
     ],
     "test-commands": {
         "write-core-io-tests": {},

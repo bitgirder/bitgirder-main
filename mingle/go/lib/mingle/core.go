@@ -10,8 +10,11 @@ import (
     "bytes"
     "unicode"
     "strings"
+    "strconv"
 )
 
+// values declared and accepted by this package are always > 0; 0 may be used
+// privately as the null/unknown format
 type IdentifierFormat uint
 
 const (
@@ -49,19 +52,21 @@ func MustIdentifierFormatString( nm string ) IdentifierFormat {
 var IdentifierFormats = 
     []IdentifierFormat{ LcUnderscore, LcHyphenated, LcCamelCapped }
 
-// Marker for (Identifier|string)
-type IdentifierInitializer interface{}
+var idPartRegexp = regexp.MustCompile( "^[a-z][a-z0-9]*$" )
 
-func asIdentifier( id IdentifierInitializer ) ( *Identifier, error ) {
-    switch v := id.( type ) {
-    case string: return MustIdentifier( v ), nil
-    case *Identifier: 
-        if v == nil { panic( libErrorf( "nil identifier" ) ) }
-        return v, nil
-    }
-    return nil, fmt.Errorf( "Unhandled id initializer: %v", id )
+type IdentifierPartFormatError struct { Part string }
+
+func ( e *IdentifierPartFormatError ) Error() string {
+    return fmt.Sprintf( "invalid identifier part: %s", e.Part )
 }
 
+func getIdentifierPartError( s string ) error {
+    if res := idPartRegexp.FindStringIndex( s ); res == nil {
+        return &IdentifierPartFormatError{ s }
+    }
+    return nil
+}
+ 
 type Identifier struct {
     parts []string
 }
@@ -71,6 +76,9 @@ type Identifier struct {
 func NewIdentifierUnsafe( parts []string ) *Identifier {
     return &Identifier{ parts }
 }
+
+// returns the live parts array
+func ( id *Identifier ) GetPartsUnsafe() []string { return id.parts }
 
 func idSeparatorFor( idFmt IdentifierFormat ) (sep byte) {
     switch idFmt {
@@ -134,6 +142,12 @@ func ( id *Identifier ) Equals( id2 *Identifier ) bool {
     return id2 != nil && id.Compare( id2 ) == 0
 }
 
+func ( id *Identifier ) dup() *Identifier {
+    res := &Identifier{ parts: make( []string, len( id.parts ) ) }
+    for i, part := range id.parts { res.parts[ i ] = part }
+    return res
+}
+
 type idSort []*Identifier
 func ( s idSort ) Len() int { return len( s ) }
 func ( s idSort ) Less( i, j int ) bool { return s[ i ].Compare( s[ j ] ) < 0 }
@@ -186,11 +200,29 @@ type TypeName interface{
     typeNameImpl()
 }
 
+type DeclaredTypeNameError struct { msg string }
+
+func newDeclaredTypeNameError( msg string ) *DeclaredTypeNameError {
+    return &DeclaredTypeNameError{ msg }
+}
+
+func ( e *DeclaredTypeNameError ) Error() string { return e.msg }
+
 type DeclaredTypeName struct { nm string }
 
 func NewDeclaredTypeNameUnsafe( nm string ) *DeclaredTypeName {
     return &DeclaredTypeName{ nm }
 }
+
+var declNmRegexp = regexp.MustCompile( "^([A-Z][a-z0-9]*)+$" )
+
+func CreateDeclaredTypeName( nm string ) ( *DeclaredTypeName, error ) {
+    if res := declNmRegexp.FindStringIndex( nm ); res == nil {
+        msg := fmt.Sprintf( "invalid type name: %q", nm )
+        return nil, newDeclaredTypeNameError( msg )
+    }
+    return NewDeclaredTypeNameUnsafe( nm ), nil
+} 
 
 func ( n *DeclaredTypeName ) typeNameImpl() {}
 
@@ -260,6 +292,7 @@ type ValueRestriction interface {
     // Will panic if val is nil or is not the correct type for this instance
     AcceptsValue( val Value ) bool
 
+    // vr may be nil
     equalsRestriction( vr ValueRestriction ) bool
 }
 
@@ -279,6 +312,12 @@ func NewRegexRestriction( src string ) ( *RegexRestriction, error ) {
     exp, err := regexp.Compile( src )
     if err == nil { return &RegexRestriction{ src, exp }, nil }
     return nil, err
+}
+
+func MustRegexRestriction( src string ) *RegexRestriction {
+    res, err := NewRegexRestriction( src )
+    if err == nil { return res }
+    panic( err )
 }
 
 func ( r *RegexRestriction ) ExternalForm() string {
@@ -358,7 +397,7 @@ func ( r *RangeRestriction ) AcceptsValue( val Value ) bool {
 }
 
 type AtomicTypeReference struct {
-    Name TypeName
+    Name *QualifiedTypeName
     Restriction ValueRestriction
 }
 
@@ -412,6 +451,36 @@ type NullableTypeReference struct {
     Type TypeReference
 }
 
+// later versions may hold the offending type as a field
+type NullableTypeError struct {}
+
+func ( nte *NullableTypeError ) Error() string { return "not a nullable type" }
+
+func NewNullableTypeError( typ TypeReference ) *NullableTypeError {
+    return &NullableTypeError{}
+}
+
+func IsNullableType( typ TypeReference ) bool {
+    switch v := typ.( type ) {
+    case *ListTypeReference: return true;
+    case *NullableTypeReference: return false;
+    case *PointerTypeReference: return true;
+    case *AtomicTypeReference:
+        if ! v.Name.Namespace.Equals( CoreNsV1 ) { return false }
+        return ! ( v.Name.Equals( QnameBoolean ) || 
+                   v.Name.Equals( QnameTimestamp ) || 
+                   IsNumericTypeName( v.Name ) )
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
+func MustNullableTypeReference( typ TypeReference ) *NullableTypeReference {
+    if ! IsNullableType( typ ) {
+        panic( NewNullableTypeError( typ ) )
+    }
+    return &NullableTypeReference{ Type: typ }
+}
+
 func ( t *NullableTypeReference ) typeRefImpl() {}
 
 func ( t *NullableTypeReference ) ExternalForm() string {
@@ -428,87 +497,43 @@ func ( typ *NullableTypeReference ) Equals( ref TypeReference ) bool {
     return false
 }
 
-func TypeNameIn( typ TypeReference ) TypeName {
-    switch v := typ.( type ) {
-    case *AtomicTypeReference: return v.Name
-    case *ListTypeReference: return TypeNameIn( v.ElementType )
-    case *NullableTypeReference: return TypeNameIn( v.Type )
-    }
-    panic( fmt.Errorf( "Unhandled type reference: %T", typ ) )
+type PointerTypeReference struct { Type TypeReference }
+
+func NewPointerTypeReference( typ TypeReference ) *PointerTypeReference {
+    return &PointerTypeReference{ Type: typ }
 }
 
-// Marker for (TypeReference|string)
-type TypeReferenceInitializer interface{}
-
-func asTypeReference( typ TypeReferenceInitializer ) TypeReference {
-    switch v := typ.( type ) {
-    case string: return MustTypeReference( v )
-    case TypeReference: return v
-    case *QualifiedTypeName, *DeclaredTypeName:
-        return &AtomicTypeReference{ Name: v.( TypeName ) }
+func ( pt *PointerTypeReference ) Equals( ref TypeReference ) bool {
+    if ref == nil { return false }
+    if pt2, ok := ref.( *PointerTypeReference ); ok {
+        return pt.Type.Equals( pt2.Type )
     }
-    panic( libErrorf( "Unhandled type ref initializer: %T", typ ) )
+    return false
 }
+
+func ( pt *PointerTypeReference ) ExternalForm() string {
+    return "&(" + pt.Type.ExternalForm() + ")"
+}
+
+func ( pt *PointerTypeReference ) String() string { return pt.ExternalForm() }
+
+func ( pt *PointerTypeReference ) typeRefImpl() {}
 
 func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
     switch v := ref.( type ) {
     case *AtomicTypeReference: return v
     case *ListTypeReference: return AtomicTypeIn( v.ElementType )
     case *NullableTypeReference: return AtomicTypeIn( v.Type )
+    case *PointerTypeReference: return AtomicTypeIn( v.Type )
     }
     panic( fmt.Errorf( "No atomic type in %s (%T)", ref, ref ) )
 }
 
+func TypeNameIn( typ TypeReference ) *QualifiedTypeName {
+    return AtomicTypeIn( typ ).Name
+}
+
 type Value interface{ valImpl() }
-
-func appendQuotedList( buf *bytes.Buffer, l *List ) {
-    buf.WriteRune( '[' )
-    for i, val := range l.vals {
-        appendQuotedValue( buf, val )
-        if i < len( l.vals ) - 1 { buf.WriteString( ", " ) }
-    }
-    buf.WriteRune( ']' )
-}
-
-func appendQuotedSymbolMap( buf *bytes.Buffer, m *SymbolMap ) {
-    buf.WriteRune( '{' )
-    for i, fe := range m.fields {
-        buf.WriteString( fe.id.Format( LcCamelCapped ) )
-        buf.WriteRune( ':' )
-        appendQuotedValue( buf, fe.val )
-        if i < len( m.fields ) - 1 { buf.WriteString( ", " ) }
-    }
-    buf.WriteRune( '}' )
-}
-
-func appendQuotedStruct( buf *bytes.Buffer, ms *Struct ) {
-    buf.WriteString( ms.Type.ExternalForm() )
-    appendQuotedSymbolMap( buf, ms.Fields )
-}
-
-func appendQuotedValue( buf *bytes.Buffer, val Value ) {
-    switch v := val.( type ) {
-    case String: fmt.Fprintf( buf, "%q", string( v ) )
-    case Buffer: fmt.Fprintf( buf, "buf[%x]", []byte( v ) )
-    case Timestamp: fmt.Fprintf( buf, "%s", v.Rfc3339Nano() )
-    case *Null: buf.WriteString( "null" )
-    case Boolean, Int32, Int64, Uint32, Uint64, Float32, Float64:
-        buf.WriteString( val.( fmt.Stringer ).String() )
-    case *Enum: 
-        fmt.Fprintf( buf, "%s.%s", 
-            v.Type.ExternalForm(), v.Value.ExternalForm() )
-    case *List: appendQuotedList( buf, v )
-    case *SymbolMap: appendQuotedSymbolMap( buf, v )
-    case *Struct: appendQuotedStruct( buf, v )
-    default: fmt.Fprintf( buf, "(!%T)", val ) // seems better than a panic
-    }
-}
-
-func QuoteValue( val Value ) string { 
-    buf := &bytes.Buffer{}
-    appendQuotedValue( buf, val )
-    return buf.String()
-}
 
 type goValPath objpath.PathNode // keys are string
 
@@ -535,6 +560,51 @@ func ( e *ValueTypeError ) Error() string {
     if e.loc == nil { return e.msg }
     locStr := objpath.Format( e.loc, goValPathFormatter )
     return locStr + ": " + e.msg 
+}
+
+type ValueError interface {
+    Location() objpath.PathNode
+    Message() string 
+    error
+}
+
+// path is an idPath
+func FormatError( path objpath.PathNode, msg string ) string {
+    if path == nil { return msg }
+    return FormatIdPath( path ) + ": " + msg 
+}
+
+type CastError struct {
+    Location objpath.PathNode
+    Message string
+}
+
+func ( e *CastError ) Error() string { 
+    return FormatError( e.Location, e.Message )
+}
+
+func NewCastError( path idPath, msg string ) *CastError {
+    return &CastError{ Message: msg, Location: path }
+}
+
+func NewCastErrorf( path idPath, tmpl string, args ...interface{} ) *CastError {
+    return NewCastError( path, fmt.Sprintf( tmpl, args... ) )
+}
+
+func NewTypeCastError( 
+    expct, act TypeReference, path objpath.PathNode ) *CastError {
+
+    return NewCastErrorf( 
+        path,
+        "Expected value of type %s but found %s",
+        expct.ExternalForm(), act.ExternalForm(),
+    )
+}
+
+func NewTypeCastErrorValue( 
+    t TypeReference, val Value, path objpath.PathNode ) *CastError {
+
+    return NewTypeCastError( t, TypeOf( val ), path )
 }
 
 type Comparer interface {
@@ -573,6 +643,7 @@ func ( i Int64 ) Compare( val interface{} ) int {
 }
 
 type Int32 int32
+
 func ( i Int32 ) valImpl() {}
 func ( i Int32 ) String() string { return fmt.Sprint( int32( i ) ) }
 
@@ -654,6 +725,57 @@ func ( t Timestamp ) Compare( val interface{} ) int {
     return 0
 }
 
+func equalMaps( m1, m2 *SymbolMap ) bool {
+    if m1.Len() != m2.Len() { return false }
+    res := true
+    m1.EachPair( func( fld *Identifier, val Value ) {
+        if ! res { return }
+        if val2, ok := m2.GetOk( fld ); ok {
+            res = EqualValues( val, val2 )
+        } else { res = false }
+    })
+    return res
+}
+
+func equalStructs( s1, s2 *Struct ) bool {
+    return s1.Type.Equals( s2.Type ) && equalMaps( s1.Fields, s2.Fields )
+}
+
+func equalLists( l1, l2 *List ) bool {
+    if ! l1.Type.Equals( l2.Type ) { return false }
+    if len( l1.vals ) != len( l2.vals ) { return false }
+    for i, v1 := range l1.vals {
+        if ! EqualValues( v1, l2.vals[ i ] ) { return false }
+    }
+    return true
+}
+
+func EqualValues( v1, v2 Value ) bool {
+    switch v := v1.( type ) {
+    case *Null: if _, ok := v2.( *Null ); ok { return true }
+    case Boolean: if b, ok := v2.( Boolean ); ok { return v == b }
+    case Int32: if i, ok := v2.( Int32 ); ok { return v == i }
+    case Uint32: if i, ok := v2.( Uint32 ); ok { return v == i }
+    case Int64: if i, ok := v2.( Int64 ); ok { return v == i }
+    case Uint64: if i, ok := v2.( Uint64 ); ok { return v == i }
+    case Float32: if i, ok := v2.( Float32 ); ok { return v == i }
+    case Float64: if i, ok := v2.( Float64 ); ok { return v == i }
+    case Buffer: if b, ok := v2.( Buffer ); ok { return bytes.Equal( v, b ) }
+    case String: if s, ok := v2.( String ); ok { return v == s }
+    case Timestamp:
+        if t, ok := v2.( Timestamp ); ok { return v.Compare( t ) == 0 }
+    case *Enum: 
+        if e, ok := v2.( *Enum ); ok { 
+            return v.Type.Equals( e.Type ) && v.Value.Equals( e.Value )
+        }
+    case *SymbolMap: 
+        if m, ok := v2.( *SymbolMap ); ok { return equalMaps( v, m ) }
+    case *Struct: if s, ok := v2.( *Struct ); ok { return equalStructs( v, s ) }
+    case *List: if l, ok := v2.( *List ); ok { return equalLists( v, l ) }
+    }
+    return false
+}
+
 func asListValue( inVals []interface{}, path goValPath ) ( *List, error ) {
     vals := make( []Value, len( inVals ) )
     lp := path.StartList()
@@ -664,7 +786,7 @@ func asListValue( inVals []interface{}, path goValPath ) ( *List, error ) {
         }
         lp = lp.Next()
     }
-    return &List{ vals }, nil
+    return &List{ vals: vals, Type: TypeOpaqueList }, nil
 }
 
 func asAtomicValue( 
@@ -723,24 +845,49 @@ func MustValue( inVal interface{} ) Value {
     return val
 }
 
-type List struct {
-    vals []Value
+type List struct { 
+    Type *ListTypeReference
+    vals []Value 
 }
 
-var constEmptyList = &List{ []Value{} }
-func EmptyList() *List { return constEmptyList }
+func NewList( typ *ListTypeReference ) *List { 
+    return &List{ vals: []Value{}, Type: typ } 
+}
+
+func NewListValues( vals []Value ) *List { 
+    return &List{ vals: vals, Type: TypeOpaqueList }
+}
+
+// if we allow immutable lists later we can have this return a fixed immutable
+// empty instance
+func EmptyList() *List { return NewList( TypeOpaqueList ) }
+
+func ( l *List ) AddUnsafe( val Value ) { l.vals = append( l.vals, val ) }
 
 func ( l *List ) valImpl() {}
 
+// returned slice is live at least as long as the next call to l.Add()
 func ( l *List ) Values() []Value { return l.vals }
+
+func ( l *List ) Get( idx int ) Value { return l.vals[ idx ] }
+
+func ( l *List ) Set( v Value, idx int ) { l.vals[ idx ] = v }
 
 func ( l *List ) Len() int { return len( l.vals ) }
 
-func NewList( vals []Value ) *List { return &List{ vals } }
-
 func CreateList( vals ...interface{} ) ( *List, error ) {
-    sz := len( vals )
-    res := &List{ vals: make( []Value, sz ) }
+    res := &List{ Type: TypeOpaqueList }
+    if len( vals ) > 0 {
+        if typ, ok := vals[ 0 ].( TypeReference ); ok {
+            if lt, ok := typ.( *ListTypeReference ); ok {
+                res.Type = lt
+                vals = vals[ 1 : ]
+            } else {
+                return nil, fmt.Errorf( "first arg not a list type: %s", typ )
+            }
+        }
+    }
+    res.vals = make( []Value, len( vals ) )
     for i, val := range vals {
         var err error
         if res.vals[ i ], err = AsValue( val ); err != nil { return nil, err }
@@ -754,112 +901,99 @@ func MustList( vals ...interface{} ) *List {
     return res
 }
 
-type fieldEntry struct {
-    id *Identifier
-    val Value
-}
-
 type SymbolMap struct {
-    fields []fieldEntry
+    m *IdentifierMap
 }
 
-func EmptySymbolMap() *SymbolMap { return MustSymbolMap() }
+func NewSymbolMap() *SymbolMap { return &SymbolMap{ NewIdentifierMap() } }
 
-func ( m SymbolMap ) valImpl() {}
+// Later if we decide to make read-only variants of *SymbolMap we could return a
+// single instance here
+func EmptySymbolMap() *SymbolMap { return NewSymbolMap() }
 
-func ( m *SymbolMap ) Len() int { return len( m.fields ) }
+func ( m *SymbolMap ) valImpl() {}
+
+func ( m *SymbolMap ) Len() int { return m.m.Len() }
 
 func ( m *SymbolMap ) EachPairError ( 
-    v func( *Identifier, Value ) error ) error {
-    for _, e := range m.fields { 
-        if err := v( e.id, e.val ); err != nil { return err }
-    }
-    return nil
-}
+    f func( *Identifier, Value ) error ) error {
 
-func ( m *SymbolMap ) EachPair( v func( *Identifier, Value ) ) {
-    m.EachPairError( func( fld *Identifier, val Value ) error {
-        v( fld, val )
-        return nil
+    return m.m.EachPairError( func( fld *Identifier, val interface{} ) error {
+        return f( fld, val.( Value ) )
     })
 }
 
-// For small maps it may be faster to scan linearly; we can sample and measure
-// this down the line when optimizing that becomes necessary
-func ( m *SymbolMap ) GetById( fld *Identifier ) Value {
-    f := func( i int ) bool { return m.fields[ i ].id.Compare( fld ) >= 0 }
-    indx := sort.Search( len( m.fields ), f )
-    if indx < len( m.fields ) && m.fields[ indx ].id.Equals( fld ) {
-        return m.fields[ indx ].val
-    }
+func ( m *SymbolMap ) EachPair( f func( *Identifier, Value ) ) {
+    m.m.EachPair( func( fld *Identifier, v interface{} ) {
+        f( fld, v.( Value ) )
+    })
+}
+
+func ( m *SymbolMap ) GetKeys() []*Identifier { return m.m.GetKeys() }
+
+func ( m *SymbolMap ) GetOk( fld *Identifier ) ( Value, bool ) {
+    if val, ok := m.m.GetOk( fld ); ok { return val.( Value ), true }
+    return nil, false
+}
+
+func ( m *SymbolMap ) Get( fld *Identifier ) Value {
+    if val, ok := m.GetOk( fld ); ok { return val }
     return nil
 }
 
-type MapLiteralError struct {
-    msg string
+func ( m *SymbolMap ) HasKey( fld *Identifier ) bool {
+    return m.m.HasKey( fld )
 }
+
+func ( m *SymbolMap ) Put( fld *Identifier, val Value ) { m.m.Put( fld, val ) }
+
+type MapLiteralError struct { msg string }
 
 func ( e *MapLiteralError ) Error() string { return e.msg } 
 
-func mapLiteralError( fmtStr string, args ...interface{} ) *MapLiteralError {
+func mapLiteralErrorf( fmtStr string, args ...interface{} ) *MapLiteralError {
     return &MapLiteralError{ fmt.Sprintf( fmtStr, args... ) }
 }
 
 func makePairError( err error, indx int ) error {
-    return mapLiteralError( "Error in map literal pairs at index %d: %s",
+    return mapLiteralErrorf( "error in map literal pairs at index %d: %s",
         indx, err )
 }
 
-func fieldEntryFromPair(
-    pairs []interface{}, indx int ) ( *fieldEntry, error ) {
-    var key *Identifier
-    var val Value
-    var err error
-    keyIndx, valIndx := indx, indx + 1
-    if key, err = asIdentifier( pairs[ keyIndx ] ); err != nil { 
-        return nil, makePairError( err, keyIndx )
+func createSymbolMapEntry( 
+    pairs []interface{}, idx int ) ( fld *Identifier, val Value, err error ) {
+
+    fldIdx, valIdx := idx, idx + 1
+    fldIdVal, ok := pairs[ fldIdx ], false
+    if fld, ok = fldIdVal.( *Identifier ); ! ok {
+        err = makePairError(
+            fmt.Errorf( "invalid key type: %T", fldIdVal ), idx )
+        return
     }
-    if val, err = AsValue( pairs[ valIndx ] ); err != nil { 
-        return nil, makePairError( err, valIndx )
+    if val, err = AsValue( pairs[ valIdx ] ); err != nil { 
+        err = makePairError( err, valIdx )
+        return
     }
-    return &fieldEntry{ id: key, val: val }, nil
-}
-
-type fieldSorter []fieldEntry
-
-func ( fs fieldSorter ) Len() int { return len( fs ) }
-
-func ( fs fieldSorter ) Less( i, j int ) bool {
-    return fs[ i ].id.Compare( fs[ j ].id ) < 0
-}
-
-func ( fs fieldSorter ) Swap( i, j int ) { fs[ i ], fs[ j ] = fs[ j ], fs[ i ] }
-
-func makeSymbolMap( flds []fieldEntry ) ( *SymbolMap, error ) {
-    sort.Sort( fieldSorter( flds ) )
-    var curId *Identifier
-    for _, e := range flds {
-        if curId == nil || curId.Compare( e.id ) < 0 {
-            curId = e.id 
-        } else {
-            return nil, mapLiteralError( "Multiple entries for key: %s", curId )
-        }
-    }
-    return &SymbolMap{ flds }, nil
+    return
 }
 
 func CreateSymbolMap( pairs ...interface{} ) ( m *SymbolMap, err error ) {
     if pLen := len( pairs ); pLen % 2 == 1 { 
-        return nil, mapLiteralError( "Invalid pairs len: %d", pLen )
+        err = mapLiteralErrorf( "invalid pairs len: %d", pLen )
     } else { 
-        flds := make( []fieldEntry, 0, pLen / 2 )
+        m = NewSymbolMap()
+        var fld *Identifier
+        var val Value
         for i := 0; i < pLen; i += 2 {
-            var e *fieldEntry
-            if e, err = fieldEntryFromPair( pairs, i ); err == nil {
-                flds = append( flds, *e )
-            } else { return }
+            fld, val, err = createSymbolMapEntry( pairs, i )
+            if err != nil { return }
+            if m.HasKey( fld ) {
+                tmpl := "duplicate entry for '%s' starting at index %d"
+                err = mapLiteralErrorf( tmpl, fld, i )
+                return
+            }
+            m.Put( fld, val )
         }
-        m, err = makeSymbolMap( flds )
     }
     return
 }
@@ -870,43 +1004,6 @@ func MustSymbolMap( pairs ...interface{} ) *SymbolMap {
     return res
 }
 
-type SymbolMapAccessor struct {
-    m *SymbolMap
-    path objpath.PathNode
-}
-
-func NewSymbolMapAccessor( 
-    m *SymbolMap, path objpath.PathNode ) *SymbolMapAccessor {
-    return &SymbolMapAccessor{ m, path }
-}
-
-func ( acc *SymbolMapAccessor ) descend( fld *Identifier ) objpath.PathNode {
-    if acc.path == nil { return objpath.RootedAt( fld ) }
-    return acc.path.Descend( fld )
-}
-
-func ( acc *SymbolMapAccessor ) GetValueById( id *Identifier ) ( Value, error ) {
-    val, err := acc.m.GetById( id ), error( nil )
-    if val == nil { 
-        err = NewValueCastError( acc.descend( id ), "value is null" )
-    }
-    return val, err
-}
-
-func ( acc *SymbolMapAccessor ) GetValueByString( id string ) ( Value, error ) {
-    return acc.GetValueById( MustIdentifier( id ) )
-}
-
-func ( acc *SymbolMapAccessor ) MustValueById( id *Identifier ) Value {
-    val, err := acc.GetValueById( id )
-    if err != nil { panic( err ) }
-    return val
-}
-
-func ( acc *SymbolMapAccessor ) MustValueByString( id string ) Value {
-    return acc.MustValueById( MustIdentifier( id ) )
-}
-
 type Enum struct {
     Type *QualifiedTypeName
     Value *Identifier
@@ -914,85 +1011,41 @@ type Enum struct {
 
 func ( e *Enum ) valImpl() {}
 
-func MustEnum( typ, val string ) *Enum {
-    return &Enum{ MustQualifiedTypeName( typ ), MustIdentifier( val ) }
-}
-
+// In the go code we deal with *Struct, but even though these are go pointers,
+// they correspond to struct values in the mingle runtime. 
 type Struct struct {
     Type *QualifiedTypeName
     Fields *SymbolMap
 }
 
+func NewStruct( typ *QualifiedTypeName ) *Struct {
+    return &Struct{ Type: typ, Fields: NewSymbolMap() }
+}
+
 func ( s *Struct ) valImpl() {}
 
 func CreateStruct(
-    typ interface{}, pairs ...interface{} ) ( *Struct, error ) {
-    res := new( Struct )
-    switch v := typ.( type ) {
-    case *QualifiedTypeName: res.Type = v
-    case string: 
-        if qn, err := ParseQualifiedTypeName( v ); err == nil {
-            res.Type = qn
-        } else { return nil, err }
-    default: return nil, libErrorf( "Not a qname: %s", typ )
-    }
+    typ *QualifiedTypeName, pairs ...interface{} ) ( *Struct, error ) {
+
+    res := &Struct{ Type: typ }
     if flds, err := CreateSymbolMap( pairs... ); err == nil {
         res.Fields = flds
     } else { return nil, err }
     return res, nil
 }
 
-func MustStruct( 
-    typ TypeReferenceInitializer, pairs ...interface{} ) *Struct {
+func MustStruct( typ *QualifiedTypeName, pairs ...interface{} ) *Struct {
     res, err := CreateStruct( typ, pairs... )
     if err != nil { panic( err ) }
     return res
 }
 
-type IdentifiedName struct {
-    Namespace *Namespace
-    Names []*Identifier
-}
-
-func ( nm *IdentifiedName ) ExternalForm() string {
-    buf := make( []byte, 0, 32 )
-    buf = nm.Namespace.formatToBuf( buf, LcHyphenated )
-    for _, id := range nm.Names {
-        buf = append( buf, byte( '/' ) )
-        buf = id.formatToBuf( buf, LcHyphenated )
-    }
-    return string( buf )
-}
-
-func ( nm *IdentifiedName ) String() string { return nm.ExternalForm() }
-
-func ( nm *IdentifiedName ) Equals( nm2 *IdentifiedName ) bool {
-    if nm2 == nil { return false }
-    if nm.Namespace.Equals( nm2.Namespace ) {
-        f := func( i int ) bool {
-            return nm.Names[ i ].Equals( nm2.Names[ i ] )
-        }
-        return equalSlices( len( nm.Names ), len( nm2.Names ), f )
-    }
-    return false
-}
-
-// Useful in place of passing actual path objects in instances when the path may
-// be expensive to generate and is only useful in certain situations (as when
-// generating error messages or conditional debugging)
-type PathGetter interface { GetPath() objpath.PathNode }
-type PathAppender interface { AppendPath( objpath.PathNode ) objpath.PathNode }
-
-type ImmediatePathGetter struct { Path objpath.PathNode }
-func ( i ImmediatePathGetter ) GetPath() objpath.PathNode { return i.Path }
-
 type idPath objpath.PathNode // elts are *Identifier
 
 var idPathRootVal idPath
-func init() { idPathRootVal = objpath.RootedAt( MustIdentifier( "val" ) ) }
-
-type rootPathGetter int
-func ( rpg rootPathGetter ) GetPath() objpath.PathNode { return idPathRootVal }
+func init() { 
+    idPathRootVal = objpath.RootedAt( NewIdentifierUnsafe( []string{ "val" } ) )
+}
 
 var idPathFormatter objpath.Formatter
 
@@ -1008,8 +1061,6 @@ func FormatIdPath( p objpath.PathNode ) string {
 }
 
 var (
-    QnameValue *QualifiedTypeName
-    TypeValue *AtomicTypeReference
     QnameBoolean *QualifiedTypeName
     TypeBoolean *AtomicTypeReference
     QnameBuffer *QualifiedTypeName
@@ -1034,49 +1085,48 @@ var (
     TypeSymbolMap *AtomicTypeReference
     QnameNull *QualifiedTypeName
     TypeNull *AtomicTypeReference
-    QnameServiceRequest *QualifiedTypeName
-    TypeServiceRequest *AtomicTypeReference
-    QnameServiceResponse *QualifiedTypeName
-    TypeServiceResponse *AtomicTypeReference
-    TypeOpaqueList *ListTypeReference
+    QnameValue *QualifiedTypeName
+    TypeValue *AtomicTypeReference
     TypeNullableValue *NullableTypeReference
-    IdNamespace *Identifier
-    IdService *Identifier
-    IdOperation *Identifier
-    IdParameters *Identifier
-    IdAuthentication *Identifier
-    svcReqFieldOrder FieldOrder // initialized in same scope as Ids above
-    IdResult *Identifier
-    IdError *Identifier
-    QnameTypeReference *QualifiedTypeName
-    TypeTypeReference *AtomicTypeReference
-    IdBuffer *Identifier
+    TypeOpaqueList *ListTypeReference
+    QnameIdentifier *QualifiedTypeName
+    TypeIdentifier *AtomicTypeReference
+    QnameIdentifierPart *QualifiedTypeName
+    TypeIdentifierPart *AtomicTypeReference
+    QnameNamespace *QualifiedTypeName
+    TypeNamespace *AtomicTypeReference
     QnameIdentifierPath *QualifiedTypeName
     TypeIdentifierPath *AtomicTypeReference
+    QnameStandardError *QualifiedTypeName
+    TypeStandardError *AtomicTypeReference
+    QnameCastError *QualifiedTypeName
+    TypeCastError *AtomicTypeReference
+    QnameUnrecognizedFieldError *QualifiedTypeName
+    TypeUnrecognizedFieldError *AtomicTypeReference
+    QnameMissingFieldsError *QualifiedTypeName
+    TypeMissingFieldsError *AtomicTypeReference
 )
 
 var coreQnameResolver map[ string ]*QualifiedTypeName
 var PrimitiveTypes []*AtomicTypeReference
-var NumericTypes []*AtomicTypeReference
+var NumericTypeNames []*QualifiedTypeName
 
 var CoreNsV1 *Namespace
 
 func init() {
-    id := func( strs... string ) *Identifier { return &Identifier{ strs } }
+    id := func( s string ) *Identifier {
+        return NewIdentifierUnsafe( []string{ s } )
+    }
     CoreNsV1 = &Namespace{
         Parts: []*Identifier{ id( "mingle" ), id( "core" ) },
         Version: id( "v1" ),
     }
-    makeQn := func( s string ) *QualifiedTypeName {
-        return &QualifiedTypeName{ CoreNsV1, &DeclaredTypeName{ s } }
-    }
     coreQnameResolver = make( map[ string ]*QualifiedTypeName )
     f1 := func( s string ) ( *QualifiedTypeName, *AtomicTypeReference ) {
-        qn := makeQn( s )
+        qn := &QualifiedTypeName{ CoreNsV1, &DeclaredTypeName{ s } }
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
         return qn, &AtomicTypeReference{ Name: qn }
     }
-    QnameValue, TypeValue = f1( "Value" )
     QnameBoolean, TypeBoolean = f1( "Boolean" )
     QnameBuffer, TypeBuffer = f1( "Buffer" )
     QnameString, TypeString = f1( "String" )
@@ -1087,10 +1137,10 @@ func init() {
     QnameFloat32, TypeFloat32 = f1( "Float32" )
     QnameFloat64, TypeFloat64 = f1( "Float64" )
     QnameTimestamp, TypeTimestamp = f1( "Timestamp" )
+    QnameValue, TypeValue = f1( "Value" )
     QnameSymbolMap, TypeSymbolMap = f1( "SymbolMap" )
     QnameNull, TypeNull = f1( "Null" )
     PrimitiveTypes = []*AtomicTypeReference{
-        TypeValue,
         TypeNull,
         TypeString,
         TypeFloat64,
@@ -1104,37 +1154,25 @@ func init() {
         TypeBuffer,
         TypeSymbolMap,
     }
-    TypeOpaqueList = &ListTypeReference{ TypeValue, true }
     TypeNullableValue = &NullableTypeReference{ TypeValue }
-    NumericTypes = []*AtomicTypeReference{
-        TypeInt32,
-        TypeInt64,
-        TypeUint32,
-        TypeUint64,
-        TypeFloat32,
-        TypeFloat64,
+    TypeOpaqueList = &ListTypeReference{ TypeNullableValue, true }
+    NumericTypeNames = []*QualifiedTypeName{
+        QnameInt32,
+        QnameInt64,
+        QnameUint32,
+        QnameUint64,
+        QnameFloat32,
+        QnameFloat64,
     }
-    QnameServiceRequest, TypeServiceRequest = f1( "Request" )
-    QnameServiceResponse, TypeServiceResponse = f1( "Response" )
-    IdNamespace = id( "namespace" )
-    IdService = id( "service" )
-    IdOperation = id( "operation" )
-    IdParameters = id( "parameters" )
-    IdAuthentication = id( "authentication" )
-    svcReqFieldOrder = FieldOrder(
-        []FieldOrderSpecification{
-            { IdNamespace, true },
-            { IdService, true },
-            { IdOperation, true },
-            { IdAuthentication, false },
-            { IdParameters, false },
-        },
-    )
-    IdResult = id( "result" )
-    IdError =id( "error" )
-    QnameTypeReference, TypeTypeReference = f1( "TypeReference" )
-    IdBuffer = id( "buffer" )
+    QnameIdentifier, TypeIdentifier = f1( "Identifier" )
+    QnameIdentifierPart, TypeIdentifierPart = f1( "IdentifierPart" )
+    QnameNamespace, TypeNamespace = f1( "Namespace" )
     QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
+    QnameStandardError, TypeStandardError = f1( "StandardError" )
+    QnameCastError, TypeCastError = f1( "CastError" )
+    QnameUnrecognizedFieldError, TypeUnrecognizedFieldError = 
+        f1( "UnrecognizedFieldError" )
+    QnameMissingFieldsError, TypeMissingFieldsError = f1( "MissingFieldsError" )
 }
 
 func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {
@@ -1142,16 +1180,16 @@ func ResolveInCore( nm *DeclaredTypeName ) ( *QualifiedTypeName, bool ) {
     return qn, ok
 }
 
-func IsNumericType( typ TypeReference ) bool {
-    for _, num := range NumericTypes { if num.Equals( typ ) { return true } }
-    return false
+func IsIntegerTypeName( qn *QualifiedTypeName ) bool {
+    return qn.Equals( QnameInt32 ) || 
+           qn.Equals( QnameInt64 ) ||
+           qn.Equals( QnameUint32 ) ||
+           qn.Equals( QnameUint64 )
 }
 
-func IsIntegerType( typ TypeReference ) bool {
-    return typ.Equals( TypeInt32 ) || 
-           typ.Equals( TypeInt64 ) ||
-           typ.Equals( TypeUint32 ) ||
-           typ.Equals( TypeUint64 )
+func IsNumericTypeName( qn *QualifiedTypeName ) bool {
+    for _, nm := range NumericTypeNames { if nm.Equals( qn ) { return true } }
+    return false
 }
 
 func TypeOf( mgVal Value ) TypeReference {
@@ -1169,308 +1207,226 @@ func TypeOf( mgVal Value ) TypeReference {
     case *Enum: return v.Type.AsAtomicType()
     case *SymbolMap: return TypeSymbolMap
     case *Struct: return v.Type.AsAtomicType()
-    case *List: return TypeOpaqueList
+    case *List: return v.Type
     case *Null: return TypeNull
     }
-    panic( fmt.Errorf( "Unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
+    panic( libErrorf( "unhandled arg to typeOf (%T): %v", mgVal, mgVal ) )
 }
 
-type ValueError interface {
-    Location() objpath.PathNode
-    Message() string 
-    error
+func canAssignAtomic( 
+    val Value, at *AtomicTypeReference, useRestriction bool ) bool {
+
+    if at.Name.Equals( QnameNull ) { return true }
+    if _, ok := val.( *Null ); ok { return false }
+    if at.Name.Equals( QnameValue ) { return true }
+    switch vt := TypeOf( val ).( type ) {
+    case *AtomicTypeReference:
+        if ! vt.Name.Equals( at.Name ) { return false }
+        if at.Restriction == nil || ( ! useRestriction ) { return true }
+        return at.Restriction.AcceptsValue( val )
+    }
+    return false
 }
 
-type ValueErrorImpl struct {
-    Path idPath
+func CanAssign( val Value, typ TypeReference, useRestriction bool ) bool {
+    switch t := typ.( type ) {
+    case *AtomicTypeReference: return canAssignAtomic( val, t, useRestriction )
+    case *PointerTypeReference: return false
+    case *NullableTypeReference:
+        if _, ok := val.( *Null ); ok { return true }
+        return CanAssign( val, t.Type, useRestriction )
+    case *ListTypeReference:
+        if l, ok := val.( *List ); ok { return t.Equals( l.Type ) }
+    default: panic( libErrorf( "unhandled type for assign: %T", typ ) )
+    }
+    return false
 }
 
-func ( e ValueErrorImpl ) Location() objpath.PathNode { 
-    if e.Path == nil { return nil }
-    return e.Path.( objpath.PathNode )
+func canAssignAtomicType( 
+    from TypeReference, to *AtomicTypeReference, relaxRestrictions bool ) bool {
+    if to.Name.Equals( QnameValue ) { return true }
+    f, ok := from.( *AtomicTypeReference );
+    if ! ok { return false }
+    if ! f.Name.Equals( to.Name ) { return false }
+    if relaxRestrictions {
+        if to.Restriction == nil { return true }
+        // f.Restriction could still be nil, so we make it the operand
+        return to.Restriction.equalsRestriction( f.Restriction )
+    }
+    if f.Restriction == nil { return to.Restriction == nil }
+    return f.Restriction.equalsRestriction( to.Restriction )
 }
 
-func ( e ValueErrorImpl ) MakeError( msg string ) string {
-    if e.Path == nil { return msg }
-    return fmt.Sprintf( "%s: %s", FormatIdPath( e.Path ), msg )
+func canAssignNullableType( 
+    from TypeReference, 
+    to *NullableTypeReference, 
+    relaxRestrictions bool ) bool {
+
+    if f, ok := from.( *NullableTypeReference ); ok { from = f.Type }
+    return canAssignType( from, to.Type, relaxRestrictions )
+}
+
+func canAssignPointerType( from TypeReference, to *PointerTypeReference ) bool {
+    return from.Equals( to )
+}
+
+// A simple rigid check. Because lists are mutable, both element types and
+// emptiability must match, other changes would be allowed in one side of the
+// assignment that could not be allowed by the other
+func canAssignListType( from TypeReference, to *ListTypeReference ) bool {
+    return from.Equals( to )
+}
+
+func canAssignType( from, to TypeReference, relaxRestrictions bool ) bool {
+    switch t := to.( type ) {
+    case *AtomicTypeReference: 
+        return canAssignAtomicType( from, t, relaxRestrictions )
+    case *NullableTypeReference: 
+        return canAssignNullableType( from, t, relaxRestrictions )
+    case *PointerTypeReference: return canAssignPointerType( from, t )
+    case *ListTypeReference: return canAssignListType( from, t )
+    default: panic( libErrorf( "unhandled type: %T", to ) )
+    }
+    return false
+}
+
+func CanAssignType( from, to TypeReference ) bool {
+    return canAssignType( from, to, true )
+}
+
+type NumberFormatError struct { msg string }
+
+func ( e *NumberFormatError ) Error() string { return e.msg }
+
+func newNumberRangeError( in string ) *NumberFormatError {
+    msg := fmt.Sprintf( "value out of range: %s", in )
+    return &NumberFormatError{ msg: msg }
+}
+
+func newNumberSyntaxError( in string ) *NumberFormatError {
+    return &NumberFormatError{ msg: fmt.Sprintf( "invalid number: %s", in ) }
+}
+
+func parseIntNumberInitial(
+    s string,
+    bitSize int,
+    numType *QualifiedTypeName ) ( sInt int64, uInt uint64, err error ) {
+
+    if numType.Equals( QnameUint32 ) || numType.Equals( QnameUint64 ) {
+        if len( s ) > 0 && s[ 0 ] == '-' {
+            err = newNumberRangeError( s )
+        } else {
+            uInt, err = strconv.ParseUint( s, 10, bitSize )
+            sInt = int64( uInt ) // do this even if err != nil
+        }
+    } else {
+        sInt, err = strconv.ParseInt( s, 10, bitSize )
+        uInt = uint64( sInt )
+    }
+    return
+}
+
+func parseIntNumber( 
+    s string, bitSize int, numTyp *QualifiedTypeName ) ( Value, error ) {
+
+    sInt, uInt, parseErr := parseIntNumberInitial( s, bitSize, numTyp )
+    if parseErr != nil { return nil, parseErr }
+    switch {
+    case numTyp.Equals( QnameInt32 ): return Int32( sInt ), nil
+    case numTyp.Equals( QnameUint32 ): return Uint32( uInt ), nil
+    case numTyp.Equals( QnameInt64 ): return Int64( sInt ), nil
+    case numTyp.Equals( QnameUint64 ): return Uint64( uInt ), nil
+    }
+    panic( libErrorf( "unhandled num type: %s", numTyp ) )
+}
+
+func parseFloatNumber(
+    s string, bitSize int, numTyp *QualifiedTypeName ) ( Value, error ) {
+
+    f, err := strconv.ParseFloat( string( s ), bitSize )
+    if err != nil { return nil, err }
+    switch {
+    case numTyp.Equals( QnameFloat32 ): return Float32( f ), nil
+    case numTyp.Equals( QnameFloat64 ): return Float64( f ), nil
+    }
+    panic( libErrorf( "unhandled num type: %s", numTyp ) )
+}
+
+func asParseNumberError( s string, err error ) error {
+    ne, ok := err.( *strconv.NumError )
+    if ! ok { return err }
+    switch {
+    case ne.Err == strconv.ErrRange: err = newNumberRangeError( s )
+    case ne.Err == strconv.ErrSyntax: err = newNumberSyntaxError( s )
+    }
+    return err
+}
+
+func ParseNumber( s string, qn *QualifiedTypeName ) ( val Value, err error ) {
+    switch {
+    case qn.Equals( QnameInt32 ): val, err = parseIntNumber( s, 32, qn )
+    case qn.Equals( QnameUint32 ): val, err = parseIntNumber( s, 32, qn )
+    case qn.Equals( QnameInt64 ): val, err = parseIntNumber( s, 64, qn )
+    case qn.Equals( QnameUint64 ): val, err = parseIntNumber( s, 64, qn )
+    case qn.Equals( QnameFloat32 ): val, err = parseFloatNumber( s, 32, qn )
+    case qn.Equals( QnameFloat64 ): val, err = parseFloatNumber( s, 64, qn )
+    default: panic( libErrorf( "unhandled number type: %s", qn ) )
+    }
+    if err != nil { err = asParseNumberError( s, err ) }
+    return
 }
 
 type MissingFieldsError struct {
-    impl ValueErrorImpl
+    Message string
+    Location objpath.PathNode
     flds []*Identifier // stored sorted
+}
+
+func ( e *MissingFieldsError ) SetFields( flds []*Identifier ) {
+
+    e.flds = make( []*Identifier, len( flds ) )
+    copy( e.flds, flds )
+    SortIds( e.flds )
 }
 
 func NewMissingFieldsError( 
     path objpath.PathNode, flds []*Identifier ) *MissingFieldsError {
-    flds2 := make( []*Identifier, len( flds ) )
-    for i, e := 0, len( flds ); i < e; i++ { flds2[ i ] = flds[ i ] }
-    SortIds( flds2 )
-    return &MissingFieldsError{ impl: ValueErrorImpl{ path }, flds: flds2 }
+
+    res := &MissingFieldsError{ Location: path }
+    res.SetFields( flds )
+    return res
 }
 
-func ( e *MissingFieldsError ) Message() string {
-    strs := make( []string, len( e.flds ) )
-    for i, fld := range e.flds { strs[ i ] = fld.ExternalForm() }
-    fldsStr := strings.Join( strs, ", " )
-    return fmt.Sprintf( "missing field(s): %s", fldsStr )
+func idSliceToString( flds []*Identifier ) string {
+    strs := make( []string, len( flds ) )
+    for i, fld := range flds { strs[ i ] = fld.ExternalForm() }
+    return strings.Join( strs, ", " )
 }
 
 func ( e *MissingFieldsError ) Error() string {
-    return e.impl.MakeError( e.Message() )
-}
-
-func ( e *MissingFieldsError ) Location() objpath.PathNode { 
-    return e.impl.Location() 
+    msg := e.Message
+    if msg == "" { 
+        msg = fmt.Sprintf( "missing field(s): %s", idSliceToString( e.flds ) )
+    }
+    return FormatError( e.Location, msg )
 }
 
 func ( e *MissingFieldsError ) Fields() []*Identifier { return e.flds }
 
 type UnrecognizedFieldError struct {
-    impl ValueErrorImpl
-    fld *Identifier
+    Message string
+    Location objpath.PathNode
+    Field *Identifier
 }
 
 func NewUnrecognizedFieldError( 
     p objpath.PathNode, fld *Identifier ) *UnrecognizedFieldError {
-    return &UnrecognizedFieldError{ impl: ValueErrorImpl{ p }, fld: fld }
-}
 
-func ( e *UnrecognizedFieldError ) Message() string {
-    return fmt.Sprintf( "unrecognized field: %s", e.fld )
+    return &UnrecognizedFieldError{ Location: p, Field: fld }
 }
 
 func ( e *UnrecognizedFieldError ) Error() string {
-    return e.impl.MakeError( e.Message() )
+    msg := e.Message
+    if msg == "" { msg = fmt.Sprintf( "unrecognized field: %s", e.Field ) }
+    return FormatError( e.Location, msg )
 }
-
-func ( e *UnrecognizedFieldError ) Location() objpath.PathNode {
-    return e.impl.Location()
-}
-
-type extFormer interface { ExternalForm() string }
-
-type EndpointError struct {
-    impl ValueErrorImpl
-    desc string
-    ef extFormer
-}
-
-func ( ee *EndpointError ) Error() string {
-    msg := fmt.Sprintf( "no such %s: %s", ee.desc, ee.ef.ExternalForm() )
-    return ee.impl.MakeError( msg )
-}
-
-func ( ee *EndpointError ) Location() objpath.PathNode {
-    return ee.impl.Location()
-}
-
-func newEndpointError( desc string, ef extFormer, p idPath ) *EndpointError {
-    return &EndpointError{ desc: desc, ef: ef, impl: ValueErrorImpl{ p } }
-}
-
-func NewEndpointErrorNamespace( 
-    ns *Namespace, p objpath.PathNode ) *EndpointError {
-    return newEndpointError( "namespace", ns, p )
-}
-
-func NewEndpointErrorService(
-    svc *Identifier, p objpath.PathNode ) *EndpointError {
-    return newEndpointError( "service", svc, p )
-}
-
-func NewEndpointErrorOperation(
-    op *Identifier, p objpath.PathNode ) *EndpointError {
-    return newEndpointError( "operation", op, p )
-}
-
-type mapImplKey interface { ExternalForm() string }
-
-type mapImplEntry struct { 
-    key mapImplKey
-    val interface{} 
-}
-
-type mapImpl struct {
-    m map[ string ]mapImplEntry
-}
-
-func newMapImpl() *mapImpl { 
-    return &mapImpl{ make( map[ string ]mapImplEntry ) }
-}
-
-func ( m *mapImpl ) Len() int { return len( m.m ) }
-
-func ( m *mapImpl ) implGetOk( k mapImplKey ) ( interface{}, bool ) {
-    res, ok := m.m[ k.ExternalForm() ]
-    if ok { return res.val, ok }
-    return nil, false
-}
-
-func ( m *mapImpl ) implGet( k mapImplKey ) interface{} {
-    if val, ok := m.implGetOk( k ); ok { return val }
-    return nil
-}
-
-func ( m *mapImpl ) implHasKey( k mapImplKey ) bool {
-    return m.implGet( k ) != nil
-}
-
-func ( m *mapImpl ) implPut( k mapImplKey, v interface{} ) {
-    m.m[ k.ExternalForm() ] = mapImplEntry{ k, v }
-}
-
-func ( m *mapImpl ) implPutSafe( k mapImplKey, v interface{} ) error {
-    kStr := k.ExternalForm()
-    if _, ok := m.m[ kStr ]; ok {
-        tmpl := "mingle: map already contains an entry for key: %s"
-        return fmt.Errorf( tmpl, kStr )
-    } 
-    m.implPut( k, v )
-    return nil
-}
-
-func ( m *mapImpl ) implDelete( k mapImplKey ) {
-    delete( m.m, k.ExternalForm() )
-}
-
-func ( m *mapImpl ) implEachPairError(
-    f func( k mapImplKey, val interface{} ) error ) error {
-    for _, entry := range m.m { 
-        if err := f( entry.key, entry.val ); err != nil { return err }
-    }
-    return nil
-}
-
-func ( m *mapImpl ) implEachPair( f func( k mapImplKey, val interface{} ) ) {
-    m.implEachPairError( func( k mapImplKey, val interface{} ) error {
-        f( k, val )
-        return nil
-    })
-}
-
-type IdentifierMap struct { *mapImpl }
-
-func NewIdentifierMap() *IdentifierMap { return &IdentifierMap{ newMapImpl() } }
-
-func ( m *IdentifierMap ) GetOk( id *Identifier ) ( interface{}, bool ) {
-    return m.implGetOk( id )
-}
-
-func ( m *IdentifierMap ) Get( id *Identifier ) interface{} {
-    return m.implGet( id )
-}
-
-func ( m *IdentifierMap ) HasKey( id *Identifier ) bool {
-    return m.implHasKey( id )
-}
-
-func ( m *IdentifierMap ) Delete( id *Identifier ) { m.implDelete( id ) }
-
-func ( m *IdentifierMap ) Put( id *Identifier, val interface{} ) {
-    m.implPut( id, val )
-}
-
-func ( m *IdentifierMap ) PutSafe( id *Identifier, val interface{} ) error {
-    return m.implPutSafe( id, val )
-}
-
-func ( m *IdentifierMap ) EachPairError( 
-    f func( id *Identifier, val interface{} ) error ) error {
-    return m.implEachPairError(
-        func( k mapImplKey, val interface{} ) error {
-            return f( k.( *Identifier ), val )
-        },
-    )
-}
-
-func ( m *IdentifierMap ) EachPair( 
-    f func( id *Identifier, val interface{} ) ) {
-    m.implEachPair(
-        func( k mapImplKey, val interface{} ) { f( k.( *Identifier ), val ) } )
-}
-
-type QnameMap struct { *mapImpl }
-
-func NewQnameMap() *QnameMap { return &QnameMap{ newMapImpl() } }
-
-func ( m *QnameMap ) GetOk( qn *QualifiedTypeName ) ( interface{}, bool ) {
-    return m.implGetOk( qn )
-}
-
-func ( m *QnameMap ) Get( qn *QualifiedTypeName ) interface{} {
-    return m.implGet( qn )
-}
-
-func ( m *QnameMap ) HasKey( qn *QualifiedTypeName ) bool {
-    return m.implHasKey( qn )
-}
-
-func ( m *QnameMap ) Put( qn *QualifiedTypeName, val interface{} ) {
-    m.implPut( qn, val )
-}
-
-func ( m *QnameMap ) PutSafe( qn *QualifiedTypeName, val interface{} ) error {
-    return m.implPutSafe( qn, val )
-}
-
-func ( m *QnameMap ) Delete( qn *QualifiedTypeName ) { m.implDelete( qn ) }
-
-func ( m *QnameMap ) EachPair( 
-    f func( qn *QualifiedTypeName, val interface{} ) ) {
-    m.implEachPair( 
-        func( k mapImplKey, v interface{} ) {
-            f( k.( *QualifiedTypeName ), v )
-        },
-    )
-}
-
-type NamespaceMap struct { *mapImpl }
-
-func NewNamespaceMap() *NamespaceMap { return &NamespaceMap{ newMapImpl() } }
-
-func ( m *NamespaceMap ) GetOk( ns *Namespace ) ( interface{}, bool ) {
-    return m.implGetOk( ns )
-}
-
-func ( m *NamespaceMap ) Get( ns *Namespace ) interface{} {
-    return m.implGet( ns )
-}
-
-func ( m *NamespaceMap ) HasKey( ns *Namespace ) bool {
-    return m.implHasKey( ns )
-}
-
-func ( m *NamespaceMap ) Put( ns *Namespace, val interface{} ) {
-    m.implPut( ns, val )
-}
-
-func ( m *NamespaceMap ) PutSafe( ns *Namespace, val interface{} ) error {
-    return m.implPutSafe( ns, val )
-}
-
-func ( m *NamespaceMap ) Delete( ns *Namespace ) { m.implDelete( ns ) }
-
-//type svcIdMapKey struct {
-//    ns *Namespace
-//    svc *Identifier
-//}
-//
-//func ( k svcIdMapKey ) ExternalForm() string {
-//    return k.ns.ExternalForm() + "/" + k.svc.ExternalForm()
-//}
-//
-//type ServiceIdMap struct {
-//    *mapImpl
-//}
-//
-//func NewServiceIdMap() *ServiceIdMap { return &ServiceIdMap{ newMapImpl() } }
-//
-//func ( m *ServiceIdMap ) Put( 
-//    ns *Namespace, svc *Identifier, val interface{} ) {
-//    m.implPut( svcIdMapKey{ ns, svc }, val )
-//}
-//
-//func ( m *ServiceIdMap ) GetOk( 
-//    ns *Namespace, svc *Identifier ) ( interface{}, bool ) {
-//    return m.implGetOk( svcIdMapKey{ ns, svc } )
-//}

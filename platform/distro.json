@@ -50,13 +50,7 @@
             "aws",
             "io",
             "mingle",
-            "mingle-codec",
-            "mingle-json",
-            "mingle-bincodec",
-            "mingle-io",
             "mingle-parser-tree",
-            "mingle-code",
-            "mingle-interpreter",
             "mingle-compiler"
         ]
     }

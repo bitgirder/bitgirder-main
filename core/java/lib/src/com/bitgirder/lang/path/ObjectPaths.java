@@ -35,6 +35,16 @@ class ObjectPaths
         return p;
     }
 
+    public
+    static
+    < V >
+    ObjectPath< V >
+    parentOf( ObjectPath< V > p )
+    {
+        if ( p == null ) return null;
+        return p.getParent();
+    }
+
     private
     static
     < V >
@@ -154,36 +164,70 @@ class ObjectPaths
     static
     < V >
     ObjectPath< V >
-    applyImmutablePath( ObjectPath< V > targ,
-                        ObjectPath< V > elt )
+    applyPathCopy( ObjectPath< V > targ,
+                   ObjectPath< V > elt,
+                   boolean mutable )
     {
         if ( elt instanceof DictionaryPath ) {
             DictionaryPath< V > dp = Lang.castUnchecked( elt );
             return targ.descend( dp.getKey() );
         } else if ( elt instanceof ListPath ) {
             ListPath< V > lp = Lang.castUnchecked( elt );
-            return targ.startImmutableList( lp.getIndex() );
+            int i = lp.getIndex();
+            if ( mutable ) return targ.startMutableList( i );
+            return targ.startImmutableList( i );
         } else {
             throw state.createFailf( "unhandled path type: %s", elt );
         }
     }
 
-    // currently makes a copy; more efficient versions may opt to only make
-    // copies as needed
-    public
+    private
     static
     < V >
     ObjectPath< V >
-    asImmutablePath( ObjectPath< V > p )
+    asCopy( ObjectPath< V > p,
+            boolean mutable )
     {
         inputs.notNull( p, "p" );
 
         ObjectPath< V > res = ObjectPath.getRoot();
 
         for ( Iterator< ObjectPath< V > > it = p.getDescent(); it.hasNext(); ) {
-            res = applyImmutablePath( res, it.next() );
+            res = applyPathCopy( res, it.next(), mutable );
         }
 
         return res;
+    }
+
+    public
+    static
+    < V >
+    ObjectPath< V >
+    asMutableCopy( ObjectPath< V > p )
+    {
+        return asCopy( p, true );
+    }
+            
+    // currently makes a copy; more efficient versions may opt to only make
+    // copies as needed
+    public
+    static
+    < V >
+    ObjectPath< V >
+    asImmutableCopy( ObjectPath< V > p )
+    {
+        return asCopy( p, false );
+    }
+
+    public
+    static
+    < V >
+    ObjectPath< V >
+    descend( ObjectPath< V > p,
+             V elt )
+    {
+        inputs.notNull( elt, "elt" );
+
+        return p == null ? ObjectPath.getRoot( elt ) : p.descend( elt );
     }
 }

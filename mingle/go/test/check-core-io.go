@@ -5,14 +5,17 @@ import (
     "os"
     "fmt"
     "errors"
-    bgio "bitgirder/io"
+    bgIo "bitgirder/io"
     mg "mingle"
+    mgIo "mingle/io"
     "bytes"
+    "sort"
+    "strings"
     "bitgirder/assert"
 )
 
-var rd *bgio.BinReader
-var wr *bgio.BinWriter
+var rd *bgIo.BinReader
+var wr *bgIo.BinWriter
 
 var tests map[ string ]interface{}
 
@@ -27,6 +30,13 @@ const (
     rcFailed = responseCode( int8( 1 ) )
 )
 
+func dumpTestNames() {
+    nms := make( []string, 0, len( tests ) )
+    for nm, _ := range tests { nms = append( nms, nm ) }
+    sort.Strings( nms )
+    log.Printf( "known test names: %s", strings.Join( nms, ", " ) )
+}
+
 type checkInstance struct {
 
     name string
@@ -40,29 +50,31 @@ func ( ci *checkInstance ) Fatal( args ...interface{} ) {
     panic( ci.err )
 }
 
-func ( ci *checkInstance ) assertWriteValue( wva writeValueAsserter ) {
+func ( ci *checkInstance ) callWriteValueAssert( test interface{} ) {
     defer func() {
         if err := recover(); err != nil && err != ci.err { panic( err ) }
     }()
     a := assert.NewPathAsserter( ci )
-    wva.AssertWriteValue( mg.NewReader( bytes.NewBuffer( ci.buffer ) ), a )
+    rd := mgIo.NewReader( bytes.NewBuffer( ci.buffer ) )
+    switch v := test.( type ) {
+    case *mg.BinIoRoundtripTest: mgIo.AssertRoundtripRead( v, rd, a )
+    case *mg.BinIoSequenceRoundtripTest: 
+        mgIo.AssertSequenceRoundtripRead( v, rd, a )
+    default: ci.err = fmt.Errorf( "unhandled test type: %T", test )
+    }
 }
 
 func ( ci *checkInstance ) getResponse() error {
     if test, ok := tests[ ci.name ]; ok {
-        if wva, ok := test.( writeValueAsserter ); ok {
-            ci.assertWriteValue( wva )
-            return ci.err
-        }
-        return fmt.Errorf( 
-            "don't know how to check values for test: %s", ci.name )
+        ci.callWriteValueAssert( test )
+        return ci.err
     }    
     return fmt.Errorf( "unrecognized test: %s", ci.name )
 }
 
 func initIo() func() {
-    rd = bgio.NewLeReader( os.Stdin )
-    wr = bgio.NewLeWriter( os.Stdout )
+    rd = bgIo.NewLeReader( os.Stdin )
+    wr = bgIo.NewLeWriter( os.Stdout )
     return func() {
         log.Printf( "closing streams" )
         defer rd.Close()
@@ -101,6 +113,7 @@ func main() {
     log.Printf( "core io checker starting" )
     defer ( initIo() )()
     tests = mg.CoreIoTestsByName()
+//    dumpTestNames()
     runCheckLoop()
     log.Printf( "checker exiting" )
 }

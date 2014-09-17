@@ -18,7 +18,7 @@ func init() {
 }
 
 func TestType4Basic( t *testing.T ) {
-    id := ExpectType4()
+    id := MustType4()
     if ! uuidPat.MatchString( id ) {
         t.Fatalf( "%s does not match uuid pattern %s", id, uuidPat )
     }
@@ -29,7 +29,7 @@ func TestType4Basic( t *testing.T ) {
 // generate correctly formatted but static or repeating values (for instance,
 // 00000000-0000-0000-0000-000000000000)
 func TestType4Sanity( t *testing.T ) {
-    id1 := ExpectType4()
-    id2 := ExpectType4()
+    id1 := MustType4()
+    id2 := MustType4()
     if id1 == id2 { t.Fatalf( "id1 and id2 are both %s", id1 ) }
 }

@@ -4,15 +4,18 @@ import (
     "reflect"
     "fmt"
     "sort"
+    "mingle/parser"
 //    "log"
     "bitgirder/assert"
     mg "mingle"
 )
 
 var (
-    mkQn = mg.MustQualifiedTypeName
-    mkId = mg.MustIdentifier
-    mkTyp = mg.MustTypeReference
+    mkQn = parser.MustQualifiedTypeName
+    mkId = parser.MustIdentifier
+    mkNs = parser.MustNamespace
+    mkTyp = parser.MustTypeReference
+    asType = parser.AsTypeReference
 )
 
 func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
@@ -23,11 +26,10 @@ func idSetFor( m *mg.IdentifierMap ) []*mg.Identifier {
     return res
 }
 
-func MakeFieldDef( nm, typ string, defl interface{} ) *FieldDefinition {
-    res := &FieldDefinition{
-        Name: mg.MustIdentifier( nm ),
-        Type: mg.MustTypeReference( typ ),
-    }
+func MakeFieldDef( 
+    nm string, typ interface{}, defl interface{} ) *FieldDefinition {
+
+    res := &FieldDefinition{ Name: mkId( nm ), Type: asType( typ ) }
     if defl != nil { 
         if val, err := mg.AsValue( defl ); err == nil {
             res.Default = val
@@ -36,31 +38,37 @@ func MakeFieldDef( nm, typ string, defl interface{} ) *FieldDefinition {
     return res
 }
 
-func MakeStructDef( 
-    qn, sprTyp string, flds []*FieldDefinition ) *StructDefinition {
-    if flds == nil { flds = []*FieldDefinition{} }
-    res := NewStructDefinition()
-    res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
-    for _, fld := range flds { res.Fields.MustAdd( fld ) }
+func buildFieldSet( fs *FieldSet, flds []*FieldDefinition ) {
+    for _, fld := range flds { fs.MustAdd( fld ) }
+}
+
+func MakeFieldSet( flds ...*FieldDefinition ) *FieldSet {
+    res := NewFieldSet()
+    buildFieldSet( res, flds )
     return res
 }
 
-func MakeStructDef2(
-    qn, sprTyp string,
-    flds []*FieldDefinition,
-    cons []*ConstructorDefinition ) *StructDefinition {
-    res := MakeStructDef( qn, sprTyp, flds )
-    res.Constructors = append( res.Constructors, cons... )
+func MakeStructDef( qn string, flds []*FieldDefinition ) *StructDefinition {
+    if flds == nil { flds = []*FieldDefinition{} }
+    res := NewStructDefinition()
+    res.Name = parser.MustQualifiedTypeName( qn )
+    buildFieldSet( res.Fields, flds )
+    return res
+}
+
+func MakeSchemaDef( qn string, flds []*FieldDefinition ) *SchemaDefinition {
+    res := NewSchemaDefinition()
+    res.Name = mkQn( qn )
+    buildFieldSet( res.Fields, flds )
     return res
 }
 
 func MakeEnumDef( qn string, vals ...string ) *EnumDefinition {
     res := &EnumDefinition{
-        Name: mg.MustQualifiedTypeName( qn ),
+        Name: parser.MustQualifiedTypeName( qn ),
         Values: make( []*mg.Identifier, len( vals ) ),
     }
-    for i, val := range vals { res.Values[ i ] = mg.MustIdentifier( val ) }
+    for i, val := range vals { res.Values[ i ] = parser.MustIdentifier( val ) }
     return res
 }
 
@@ -70,9 +78,9 @@ func MakeCallSig(
     throws []string ) *CallSignature {
     res := NewCallSignature()
     for _, fld := range flds { res.Fields.MustAdd( fld ) }
-    res.Return = mg.MustTypeReference( retType )
+    res.Return = mkTyp( retType )
     for _, typ := range throws { 
-        res.Throws = append( res.Throws, mg.MustTypeReference( typ ) )
+        res.Throws = append( res.Throws, mkTyp( typ ) )
     }
     return res
 }
@@ -82,13 +90,11 @@ func MakeOpDef( nm string, sig *CallSignature ) *OperationDefinition {
 }
 
 func MakeServiceDef(
-    qn, sprTyp, secQn string,
-    opDefs ...*OperationDefinition ) *ServiceDefinition {
+    qn, secQn string, opDefs ...*OperationDefinition ) *ServiceDefinition {
     res := NewServiceDefinition()
-    res.Name = mg.MustQualifiedTypeName( qn )
-    if sprTyp != "" { res.SuperType = mg.MustQualifiedTypeName( sprTyp ) }
+    res.Name = parser.MustQualifiedTypeName( qn )
     res.Operations = append( res.Operations, opDefs... )
-    if secQn != "" { res.Security = mg.MustQualifiedTypeName( secQn ) }
+    if secQn != "" { res.Security = parser.MustQualifiedTypeName( secQn ) }
     return res
 }
 
@@ -99,10 +105,6 @@ func mustAddDefs( dm *DefinitionMap, defs []Definition ) *DefinitionMap {
 
 func MakeDefMap( defs ...Definition ) *DefinitionMap {
     return mustAddDefs( NewDefinitionMap(), defs )
-}
-
-func MakeV1DefMap( defs ...Definition ) *DefinitionMap {
-    return mustAddDefs( NewV1DefinitionMap(), defs )
 }
 
 type DefAsserter struct {
@@ -131,6 +133,10 @@ func ( a *DefAsserter ) equalType( v1, v2 interface{} ) interface{} {
     return v2
 }
 
+func ( a *DefAsserter ) equalTypeRef( t1, t2 mg.TypeReference ) {
+    a.Truef( t1.Equals( t2 ), "%s != %s", t1, t2 )
+}
+
 func ( a *DefAsserter ) assertPrimDef( 
     p1 *PrimitiveDefinition, d2 Definition ) {
     _ = a.equalType( p1, d2 ).( *PrimitiveDefinition )
@@ -138,8 +144,10 @@ func ( a *DefAsserter ) assertPrimDef(
 
 func ( a *DefAsserter ) assertAliasDef( 
     a1 *AliasedTypeDefinition, d2 Definition ) {
+
     a2 := a.equalType( a1, d2 ).( *AliasedTypeDefinition )
-    a.Equal( a1, a2 )
+    a.Descend( "Name" ).Equal( a1.Name, a2.Name )
+    a.Descend( "AliasedType" ).Equal( a1.AliasedType, a2.AliasedType )
 }
 
 func asCompStr( ids []*mg.Identifier ) string {
@@ -157,8 +165,8 @@ func ( a *DefAsserter ) assertIdSets( ids1, ids2 []*mg.Identifier ) {
 
 func ( a *DefAsserter ) assertFieldDef( fd1, fd2 *FieldDefinition ) {
     a.descend( "(Name)" ).Equal( fd1.Name, fd2.Name )
-    a.descend( "(Type)" ).True( fd1.Type.Equals( fd2.Type ) )
-    mg.EqualValues( fd1.Default, fd2.Default, a.descend( "(Default)" ) )
+    a.descend( "(Type)" ).equalTypeRef( fd1.Type, fd2.Type )
+    mg.AssertEqualValues( fd1.Default, fd2.Default, a.descend( "(Default)" ) )
 }
 
 // First check that both have same field sets, then check field by field
@@ -184,10 +192,14 @@ func ( a *DefAsserter ) assertConstructors(
 func ( a *DefAsserter ) assertStructDef(
     s1 *StructDefinition, d2 Definition ) {
     s2 := a.equalType( s1, d2 ).( *StructDefinition )
-    a.descend( "(SuperType)" ).Equal( s1.SuperType, s2.SuperType )
     a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
     a.descend( "(Constructors)" ).
         assertConstructors( s1.Constructors, s2.Constructors )
+}
+
+func ( a *DefAsserter ) assertSchemaDef( s1 *SchemaDefinition, d2 Definition ) {
+    s2 := a.equalType( s1, d2 ).( *SchemaDefinition )
+    a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
 }
 
 func ( a *DefAsserter ) assertEnumDef( 
@@ -233,18 +245,20 @@ func ( a *DefAsserter ) assertOpDefs(
 
 func ( a *DefAsserter ) assertServiceDef(
     s1 *ServiceDefinition, v2 interface{} ) {
+
     s2 := a.equalType( s1, v2 ).( *ServiceDefinition )
-    a.descend( "(SuperType)" ).Equal( s1.SuperType, s2.SuperType )
     a.descend( "(Operations)" ).assertOpDefs( s1.Operations, s2.Operations )
     a.descend( "(Security)" ).Equal( s1.Security, s2.Security )
 }
 
 func ( a *DefAsserter ) AssertDef( d1, d2 Definition ) {
     a.descend( "(Name)" ).Equal( d1.GetName(), d2.GetName() )
+    a = a.descend( d1.GetName() )
     switch v := d1.( type ) {
     case *PrimitiveDefinition: a.assertPrimDef( v, d2 )
     case *AliasedTypeDefinition: a.assertAliasDef( v, d2 )
     case *StructDefinition: a.assertStructDef( v, d2 )
+    case *SchemaDefinition: a.assertSchemaDef( v, d2 )
     case *EnumDefinition: a.assertEnumDef( v, d2 )
     case *PrototypeDefinition: a.assertProtoDef( v, d2 )
     case *ServiceDefinition: a.assertServiceDef( v, d2 )

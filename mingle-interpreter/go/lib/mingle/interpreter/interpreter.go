@@ -27,14 +27,13 @@ func ( ctx *context ) failEvalf( tmpl string, argv ...interface{} ) error {
 }
 
 func evalListVal( lv *code.ListValue, ctx *context ) ( *mg.List, error ) {
-    vals := make( []mg.Value, len( lv.Values ) )
-    var err error
-    for i, e := 0, len( vals ); i < e; i++ {
-        if vals[ i ], err = evaluate( lv.Values[ i ], ctx ); err != nil {
-            return nil, err
-        }
+    res := mg.NewList( mg.TypeOpaqueList )
+    for _, eltVal := range lv.Values {
+        if evRes, err := evaluate( eltVal, ctx ); err == nil {
+            res.AddUnsafe( evRes )
+        } else { return nil, err }
     }
-    return mg.NewList( vals ), nil
+    return res, nil
 }
 
 func evalIdRef( 

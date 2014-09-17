@@ -3,9 +3,17 @@ package com.bitgirder.mingle;
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
+import static com.bitgirder.log.CodeLoggers.Statics.*;
+
+import com.bitgirder.lang.Lang;
+
 import com.bitgirder.lang.path.ObjectPath;
 import com.bitgirder.lang.path.ObjectPaths;
+import com.bitgirder.lang.path.PathWiseAsserter;
 
+import java.util.Iterator;
+
+public
 final
 class MingleTestMethods
 {
@@ -44,7 +52,7 @@ class MingleTestMethods
     public
     static
     AtomicTypeReference
-    atomic( TypeName name )
+    atomic( QualifiedTypeName name )
     {
         inputs.notNull( name, "name" );
         return new AtomicTypeReference( name, null );
@@ -53,7 +61,16 @@ class MingleTestMethods
     public
     static
     AtomicTypeReference
-    atomic( TypeName name,
+    atomic( CharSequence name )
+    {
+        inputs.notNull( name, "name" );
+        return atomic( qname( name ) );
+    }
+
+    public
+    static
+    AtomicTypeReference
+    atomic( QualifiedTypeName name,
             MingleValueRestriction restriction )
     {
         inputs.notNull( name, "name" );
@@ -83,6 +100,15 @@ class MingleTestMethods
 
     public
     static
+    PointerTypeReference
+    ptrType( MingleTypeReference typ )
+    {
+        inputs.notNull( typ, "typ" );
+        return new PointerTypeReference( typ );
+    }
+
+    public
+    static
     ObjectPath< MingleIdentifier >
     idPathRoot( MingleIdentifier id )
     {
@@ -97,6 +123,22 @@ class MingleTestMethods
     {
         inputs.notNull( id, "id" );
         return idPathRoot( MingleIdentifier.create( id ) );
+    }
+
+    public
+    static
+    MingleList
+    emptyList( ListTypeReference typ )
+    {
+        return MingleList.createLive( typ, Lang.< MingleValue >emptyList() );
+    }
+
+    public
+    static
+    MingleList
+    emptyList()
+    {
+        return emptyList( Mingle.TYPE_OPAQUE_LIST );
     }
 
     public
@@ -164,6 +206,42 @@ class MingleTestMethods
         inputs.notNull( id, "id" );
         return mapExpect( m, MingleIdentifier.create( id ), cls );
     }
+    
+    public
+    static
+    MingleValue
+    mapGetValue( MingleSymbolMap m,
+                 CharSequence id )
+    {
+        return mapGet( m, id, MingleValue.class );
+    }
+    
+    public
+    static
+    MingleValue
+    mapExpectValue( MingleSymbolMap m,
+                    CharSequence id )
+    {
+        return mapExpect( m, id, MingleValue.class );
+    }
+    
+    public
+    static
+    String
+    mapGetString( MingleSymbolMap m,
+                  CharSequence id )
+    {
+        return mapGet( m, id, String.class );
+    }
+    
+    public
+    static
+    String
+    mapExpectString( MingleSymbolMap m,
+                     CharSequence id )
+    {
+        return mapExpect( m, id, String.class );
+    }
 
     public
     static
@@ -191,54 +269,137 @@ class MingleTestMethods
         assertIdPathsEqual( expct, "expct", act, "act" );
     }
 
-    // ev1.type known to equal ev2.type
     private
     static
     void
-    assertEventDataEqual( MingleValueReactorEvent ev1,
-                          String ev1Name,
-                          MingleValueReactorEvent ev2,
-                          String ev2Name )
+    assertEqualMap( MingleValue mv1,
+                    MingleValue mv2,
+                    PathWiseAsserter< MingleIdentifier > a )
     {
-        Object o1 = null;
-        Object o2 = null;
-        String desc = null;
+        MingleSymbolMap mp1 = a.cast( MingleSymbolMap.class, mv1 );
+        MingleSymbolMap mp2 = a.cast( MingleSymbolMap.class, mv2 );
 
-        switch ( ev1.type() ) {
-        case VALUE: o1 = ev1.value(); o2 = ev2.value(); desc = "value"; break;
-        case START_FIELD:
-            o1 = ev1.field(); o2 = ev2.field(); desc = "field"; break;
-        case START_STRUCT:
-            o1 = ev1.structType(); o2 = ev2.structType(); desc = "structType";
-            break;
-        default: return;
+        a.equal( mp1.getKeySet(), mp2.getKeySet() );
+
+        for ( MingleIdentifier fld : mp1.getFields() )
+        {
+            assertEqual( mp1.get( fld ), mp2.get( fld ), a.descend( fld ) );
+        }
+    }
+
+    private
+    static
+    void
+    assertEqualStruct( MingleValue mv1,
+                       MingleValue mv2,
+                       PathWiseAsserter< MingleIdentifier > a )
+    {
+        MingleStruct ms1 = a.cast( MingleStruct.class, mv1 );
+        MingleStruct ms2 = a.cast( MingleStruct.class, mv2 );
+
+        a.equal( ms1.getType(), ms2.getType() );
+        assertEqualMap( ms1.getFields(), ms2.getFields(), a );
+    }
+
+    private
+    static
+    void
+    assertEqualEnum( MingleValue mv1,
+                     MingleValue mv2,
+                     PathWiseAsserter< MingleIdentifier > a )
+    {
+        MingleEnum e1 = a.cast( MingleEnum.class, mv1 );
+        MingleEnum e2 = a.cast( MingleEnum.class, mv2 );
+
+        a.equal( e1.getType(), e2.getType() );
+        a.equal( e1.getValue(), e2.getValue() );
+    }
+
+    private
+    static
+    void
+    assertEqualList( MingleValue mv1,
+                     MingleValue mv2,
+                     PathWiseAsserter< MingleIdentifier > a )
+    {
+        MingleList l1 = a.cast( MingleList.class, mv1 );
+        MingleList l2 = a.cast( MingleList.class, mv2 );
+
+        Iterator< MingleValue > it1 = l1.iterator();
+        Iterator< MingleValue > it2 = l2.iterator();
+
+        PathWiseAsserter< MingleIdentifier > la = a.startImmutableList();
+
+        while ( it1.hasNext() )
+        {
+            la.isTrue( it2.hasNext(), "list lengths differ" );
+
+            assertEqual( it1.next(), it2.next(), la );
+            la = la.next();
         }
 
-        state.equalf( o1, o2, "%s.%s != %s.%s (%s != %s)",
-            ev1Name, desc, ev2Name, desc, o1, o2 );
+        la.isFalse( it2.hasNext(), "list lengths differ" );
+    }
+
+    private
+    static
+    void
+    assertEqualNull( MingleValue mv1,
+                     MingleValue mv2,
+                     PathWiseAsserter< MingleIdentifier > a )
+    {
+        if ( mv1 == null ) mv1 = MingleNull.getInstance();
+        if ( mv2 == null ) mv2 = MingleNull.getInstance();
+        a.equal( mv1, mv2 );
     }
 
     public
     static
     void
-    assertEventsEqual( MingleValueReactorEvent ev1,
-                       String ev1Name,
-                       MingleValueReactorEvent ev2,
-                       String ev2Name )
+    assertEqual( MingleValue mv1,
+                 MingleValue mv2,
+                 PathWiseAsserter< MingleIdentifier > a )
     {
-        if ( state.sameNullity( ev1, ev2 ) ) 
-        {
-            state.equalf( ev1.type(), ev2.type(), 
-                "%s.type != %s.type (%s != %s)", ev1Name, ev2Name, ev1.type(),
-                ev2.type() );
-        }
+        inputs.notNull( a, "a" );
+        codef( "checking mv1 %s, mv2 %s at %s", mv1, mv2, a.formatPath() );
+        
+        if ( ! a.sameNullity( mv1, mv2 ) ) return;
 
-        assertEventDataEqual( ev1, ev1Name, ev2, ev2Name );
-
-        if ( state.sameNullity( ev1.path(), ev2.path() ) ) 
-        {
-            assertIdPathsEqual( ev1.path(), ev1Name + ".path()", ev2.path(), 
-                ev2Name + ".path()" );
+        if ( mv1 instanceof MingleStruct ) {
+            assertEqualStruct( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleEnum ) {
+            assertEqualEnum( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleSymbolMap ) {
+            assertEqualMap( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleList ) {
+            assertEqualList( mv1, mv2, a );
+        } else if ( mv1 instanceof MingleNull || mv2 instanceof MingleNull ) {
+            assertEqualNull( mv1, mv2, a );
+        } else {
+            a.equal( mv1, mv2 );
         }
+    }
+
+    public
+    static
+    void
+    assertEqual( MingleValue mv1,
+                 MingleValue mv2 )
+    {
+        PathWiseAsserter< MingleIdentifier > a =
+            new PathWiseAsserter< MingleIdentifier >(
+                ObjectPath.< MingleIdentifier >getRoot(),
+                Mingle.getIdPathFormatter()
+            );
+        
+        assertEqual( mv1, mv2, a );
+    }
+
+    public
+    static
+    CharSequence
+    optInspect( MingleValue mv )
+    {
+        return Mingle.inspect( mv == null ? MingleNull.getInstance(): mv );
     }
 }

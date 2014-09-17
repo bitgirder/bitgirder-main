@@ -3,114 +3,178 @@ package main
 import (
     "fmt"
     "mingle/testgen"
-    pt "mingle/parser/testing"
+    "mingle/parser"
     mg "mingle"
+    "bytes"
+    "bitgirder/objpath"
 )
 
-func ptTyp( nm string ) *mg.QualifiedTypeName {
-    str := fmt.Sprintf( "%s/%s", "mingle:parser:testing@v1", nm ) 
-    return mg.MustQualifiedTypeName( str )
+var ( 
+    mustStruct = parser.MustStruct
+    mkId = parser.MustIdentifier
+    mkNs = parser.MustNamespace
+    mkQn = parser.MustQualifiedTypeName
+    asType = parser.AsTypeReference
+)
+
+func ptTyp( val interface{} ) *mg.QualifiedTypeName {
+    switch v := val.( type ) {
+    case *mg.QualifiedTypeName: return v
+    case string: return mkQn( "mingle:parser@v1/" + v )
+    }
+    panic( fmt.Errorf( "unhandled input to ptTyp: %T", val ) )
 }
 
-func idListAsValue( ids []pt.Identifier ) *mg.List {
+func idListAsValue( ids []mg.Identifier ) *mg.List {
     vals := make( []mg.Value, len( ids ) )
     for i, val := range ids { vals[ i ] = asValue( val ) }
-    return mg.NewList( vals )
+    return mg.NewListValues( vals )
 }
 
-func numAsStruct( num *pt.NumericToken ) *mg.Struct {
+func numAsStruct( num *parser.NumericToken ) *mg.Struct {
     str := func( s string ) mg.Value {
         if s == "" { return mg.NullVal }
         return mg.String( s )
     }
-    return mg.MustStruct( ptTyp( "NumericToken" ),
-        "negative", num.Negative,
+    return mustStruct( ptTyp( "NumericToken" ),
         "int", str( num.Int ),
         "frac", str( num.Frac ),
         "exp", str( num.Exp ),
-        "exp-char", num.ExpChar,
+        "exp-rune", num.ExpRune,
     )
 }
 
-func idAsStruct( id pt.Identifier ) *mg.Struct {
-    vals := make( []mg.Value, len( id ) )
-    for i, part := range id { vals[ i ] = mg.String( part ) }
-    return mg.MustStruct( ptTyp( "Identifier" ), "parts", mg.NewList( vals ) )
+func asBytes( val interface{} ) []byte {
+    bb := &bytes.Buffer{}
+    w := mg.NewWriter( bb )
+    var err error
+    switch v := val.( type ) {
+    case *mg.Identifier: err = w.WriteIdentifier( v )
+    case *mg.Namespace: err = w.WriteNamespace( v )
+    case *mg.QualifiedTypeName: err = w.WriteQualifiedTypeName( v )
+    case *mg.DeclaredTypeName: err = w.WriteDeclaredTypeName( v )
+    case mg.TypeReference: err = w.WriteTypeReference( v )
+    default: panic( fmt.Errorf( "unhandled type: %T", val ) )
+    }
+    if err == nil { return bb.Bytes() }
+    panic( err )
 }
 
-func nsAsStruct( ns *pt.Namespace ) *mg.Struct {
-    parts := make( []mg.Value, len( ns.Parts ) )
-    for i, part := range ns.Parts { parts[ i ] = asValue( part ) }
-    return mg.MustStruct( ptTyp( "Namespace" ),
-        "parts", mg.NewList( parts ),
-        "version", asValue( ns.Version ),
-    )
+func makeBufferStruct( typ interface{}, val interface{} ) *mg.Struct {
+    return mustStruct( ptTyp( typ ), "buffer", asBytes( val ) )
 }
 
-func qnAsStruct( qn *pt.QualifiedTypeName ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "QualifiedTypeName" ),
-        "namespace", asValue( qn.Namespace ),
-        "name", asValue( qn.Name ),
-    )
+func idAsStruct( id *mg.Identifier ) *mg.Struct {
+    return makeBufferStruct( mg.QnameIdentifier, id )
 }
 
-func idNmAsStruct( nm *pt.IdentifiedName ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "IdentifiedName" ),
-        "namespace", asValue( nm.Namespace ),
-        "names", idListAsValue( nm.Names ),
-    )
+func nsAsStruct( ns *mg.Namespace ) *mg.Struct {
+    return makeBufferStruct( mg.QnameNamespace, ns )
 }
 
-func asRangeValue( v interface{} ) mg.Value {
-    if tm, ok := v.( pt.Timestamp ); ok { v = mg.MustTimestamp( string( tm ) ) }
-    return mg.MustValue( v )
+func declNmAsStruct( dn *mg.DeclaredTypeName ) *mg.Struct {
+    return makeBufferStruct( mkQn( "mingle:core@v1/DeclaredTypeName" ), dn )
 }
 
-func rngAsStruct( rr *pt.RangeRestriction ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "RangeRestriction" ),
-        "min-closed", rr.MinClosed,
-        "min", asRangeValue( rr.Min ),
-        "max", asRangeValue( rr.Max ),
-        "max-closed", rr.MaxClosed,
-    )
+func qnAsStruct( qn *mg.QualifiedTypeName ) *mg.Struct {
+    return makeBufferStruct( mkQn( "mingle:core@v1/QualifiedTypeName" ), qn )
 }
 
-func regxAsStruct( regx pt.RegexRestriction ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "RegexRestriction" ), 
-        "pattern", string( regx ),
-    )
-}
-
-func atomicAsStruct( at *pt.AtomicTypeReference ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "AtomicTypeReference" ),
-        "name", asValue( at.Name ),
-        "restriction", asValue( at.Restriction ),
-    )
-}
-
-func ltAsStruct( lt *pt.ListTypeReference ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "ListTypeReference" ),
-        "element-type", asValue( lt.ElementType ),
-        "allows-empty", lt.AllowsEmpty,
-    )
-}
-
-func ntAsStruct( nt *pt.NullableTypeReference ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "NullableTypeReference" ),
-        "type", asValue( nt.Type ),
-    )
-}
-
-func parseErrAsStruct( pe *pt.ParseErrorExpect ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "ParseErrorExpect" ),
+func parseErrAsStruct( pe *parser.ParseErrorExpect ) *mg.Struct {
+    return mustStruct( ptTyp( "ParseErrorExpect" ),
         "col", pe.Col,
         "message", pe.Message,
     )
 }
 
-func restrictErrAsStruct( re pt.RestrictionErrorExpect ) *mg.Struct {
-    return mg.MustStruct( ptTyp( "RestrictionErrorExpect" ),
+func restrictErrAsStruct( re parser.RestrictionErrorExpect ) *mg.Struct {
+    return mustStruct( ptTyp( "RestrictionErrorExpect" ),
         "message", string( re ),
+    )
+}
+
+type idPathVisitor struct { l *mg.List }
+
+func ( v idPathVisitor ) Descend( elt interface{} ) error {
+    v.l.AddUnsafe( mg.Buffer( asBytes( elt.( *mg.Identifier ) ) ) )
+    return nil
+}
+
+func ( v idPathVisitor ) List( idx uint64 ) error {
+    v.l.AddUnsafe( mg.Uint64( idx ) )
+    return nil
+}
+
+func idPathAsStruct( path objpath.PathNode ) *mg.Struct {
+    v := idPathVisitor{ mg.NewList( mg.TypeOpaqueList ) }
+    if err := objpath.Visit( path, v ); err != nil { panic( err ) }
+    return mustStruct( mg.QnameIdentifierPath, "path", v.l )
+}
+
+func atomicTypeExpressionAsStruct( e *parser.AtomicTypeExpression ) *mg.Struct {
+    return mustStruct( ptTyp( "AtomicTypeExpression" ),
+        "name", asValue( e.Name ),
+        "loc", asValue( e.NameLoc ),
+        "restriction", asValue( e.Restriction ),
+    )
+}
+
+func ptrTypeExpressionAsStruct( e *parser.PointerTypeExpression ) *mg.Struct {
+    return mustStruct( ptTyp( "PointerTypeExpression" ),
+        "expression", asValue( e.Expression ),
+        "loc", asValue( e.Loc ),
+    )
+}
+
+func nullableTypeExpressionAsStruct( 
+    e *parser.NullableTypeExpression ) *mg.Struct {
+
+    return mustStruct( ptTyp( "NullableTypeExpression" ),
+        "expression", asValue( e.Expression ),
+        "loc", asValue( e.Loc ),
+    )
+}
+
+func listTypeExpressionAsStruct( e *parser.ListTypeExpression ) *mg.Struct {
+    return mustStruct( ptTyp( "ListTypeExpression" ),
+        "expression", asValue( e.Expression ),
+        "loc", asValue( e.Loc ),
+        "allows-empty", e.AllowsEmpty,
+    )
+}
+
+func ctRefAsStruct( ctr *parser.CompletableTypeReference ) *mg.Struct {
+    return mustStruct( ptTyp( "CompletableTypeReference" ),
+        "expression", asValue( ctr.Expression ),
+    )
+}
+
+func locAsStruct( lc *parser.Location ) *mg.Struct {
+    return mustStruct( ptTyp( "Location" ),
+        "line", lc.Line,
+        "col", lc.Col,
+        "source", lc.Source,
+    )
+}
+
+func rangeRestrictionSyntaxAsStruct( 
+    rr *parser.RangeRestrictionSyntax ) *mg.Struct {
+
+    return mustStruct( ptTyp( "RangeRestrictionSyntax" ),
+        "loc", asValue( rr.Loc ),
+        "left-closed", rr.LeftClosed,
+        "left", asValue( rr.Left ),
+        "right", asValue( rr.Right ),
+        "right-closed", rr.RightClosed,
+    )
+}
+
+func regexRestrictionSyntaxAsStruct( 
+    rr *parser.RegexRestrictionSyntax ) *mg.Struct {
+    
+    return mustStruct( ptTyp( "RegexRestrictionSyntax" ),
+        "pat", rr.Pat,
+        "loc", asValue( rr.Loc ),
     )
 }
 
@@ -118,35 +182,38 @@ func asValue( val interface{} ) mg.Value {
     if val == nil { return nil }
     switch v := val.( type ) {
     case nil: return nil
-    case pt.StringToken: 
-        return mg.MustStruct( ptTyp( "StringToken" ), "string", string( v ) )
-    case *pt.NumericToken: return numAsStruct( v )
-    case pt.Identifier: return idAsStruct( v )
-    case *pt.Namespace: return nsAsStruct( v )
-    case pt.DeclaredTypeName:
-        return mg.MustStruct( ptTyp( "DeclaredTypeName" ), "name", string( v ) )
-    case *pt.QualifiedTypeName: return qnAsStruct( v )
-    case *pt.IdentifiedName: return idNmAsStruct( v )
-    case *pt.AtomicTypeReference: return atomicAsStruct( v )
-    case *pt.RangeRestriction: return rngAsStruct( v )
-    case pt.RegexRestriction: return regxAsStruct( v )
-    case pt.Timestamp:
-        return mg.MustStruct( ptTyp( "Timestamp" ), "time", string( v ) )
-    case *pt.ListTypeReference: return ltAsStruct( v )
-    case *pt.NullableTypeReference: return ntAsStruct( v )
-    case *pt.ParseErrorExpect: return parseErrAsStruct( v )
-    case pt.RestrictionErrorExpect: return restrictErrAsStruct( v )
+    case parser.StringToken: 
+        return mustStruct( ptTyp( "StringToken" ), "string", string( v ) )
+    case *parser.NumericToken: return numAsStruct( v )
+    case *mg.Identifier: return idAsStruct( v )
+    case *mg.Namespace: return nsAsStruct( v )
+    case *mg.DeclaredTypeName: return declNmAsStruct( v )
+    case *mg.QualifiedTypeName: return qnAsStruct( v )
+    case *parser.ParseErrorExpect: return parseErrAsStruct( v )
+    case parser.RestrictionErrorExpect: return restrictErrAsStruct( v )
+    case *parser.CompletableTypeReference: return ctRefAsStruct( v )
+    case *parser.AtomicTypeExpression: return atomicTypeExpressionAsStruct( v )
+    case *parser.RegexRestrictionSyntax:
+        return regexRestrictionSyntaxAsStruct( v )
+    case *parser.RangeRestrictionSyntax:
+        return rangeRestrictionSyntaxAsStruct( v )
+    case *parser.ListTypeExpression: return listTypeExpressionAsStruct( v )
+    case *parser.PointerTypeExpression: return ptrTypeExpressionAsStruct( v )
+    case *parser.NullableTypeExpression:
+        return nullableTypeExpressionAsStruct( v )
+    case *parser.Location: return locAsStruct( v )
+    case objpath.PathNode: return idPathAsStruct( v )
     }
     panic( fmt.Errorf( "unhandled value: %T", val ) )
 }
 
-type testData []*pt.CoreParseTest
+type testData []*parser.CoreParseTest
 
 func ( td testData ) Len() int { return len( td ) }
 
 func ( td testData ) StructAt( i int ) *mg.Struct { 
     t := td[ i ]
-    return mg.MustStruct( ptTyp( "CoreParseTest" ),
+    return mustStruct( ptTyp( "CoreParseTest" ),
         "test-type", string( t.TestType ),
         "in", t.In,
         "external-form", t.ExternalForm,
@@ -155,4 +222,4 @@ func ( td testData ) StructAt( i int ) *mg.Struct {
     )
 }
 
-func main() { testgen.WriteStructFile( testData( pt.CoreParseTests ) ) }
+func main() { testgen.WriteStructFile( testData( parser.CoreParseTests ) ) }
