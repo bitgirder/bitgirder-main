@@ -430,6 +430,21 @@ extends AbstractReactorTest
         }
     }
 
+    private
+    final
+    static
+    class ImplFailOnlyFactory
+    extends AbstractBuildFactory
+    {
+        @Override
+        public
+        BuildReactor.FieldSetBuilder
+        startMap( ObjectPath< MingleIdentifier > path )
+        {
+            throw testExceptionForPath( path );
+        }
+    }
+
     Object getSource() { return source == null ? (MingleValue) val : source; }
 
     private
@@ -442,8 +457,10 @@ extends AbstractReactorTest
             return new ErrorProfileFactory();
         } else if ( profile.equals( "impl" ) ) {
             return new ImplFactory();
+        } else if ( profile.equals( "impl-fail-only" ) ) {
+            return new ImplFailOnlyFactory();
         } else {
-            return new ValueBuildFactory();
+            throw state.failf( "unhandled profile: %s", profile );
         }
     }
 
