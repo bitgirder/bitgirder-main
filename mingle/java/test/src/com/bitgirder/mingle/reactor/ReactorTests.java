@@ -483,33 +483,37 @@ class MingleReactorTests
         }
     }
 
-//    private
-//    final
-//    static
-//    class FieldOrderMissingFieldsTest
-//    extends FieldOrderTest
-//    {
-//        private MingleValue expect;
-//
-//        public
-//        void
-//        call()
-//            throws Exception
-//        {
-//            MingleValueBuilder vb = MingleValueBuilder.create();
-//
-//            MingleReactorPipeline pip = 
-//                new MingleReactorPipeline.Builder().
-//                    addProcessor( createFieldOrderProcessor() ).
-//                    addReactor( vb ).
-//                    build();
-//
-//            feedSource( pip );        
-//
-//            if ( expect != null ) MingleTests.assertEqual( expect, vb.value() );
-//        }
-//    }
-//
+    private
+    final
+    static
+    class FieldOrderMissingFieldsTest
+    extends FieldOrderTest
+    {
+        private MingleValue expect;
+
+        public
+        void
+        call()
+            throws Exception
+        {
+            BuildReactor br = new BuildReactor.Builder().
+                setFactory( new ValueBuildFactory() ).
+                build();
+
+            MingleReactorPipeline pip = 
+                new MingleReactorPipeline.Builder().
+                    addProcessor( createFieldOrderProcessor() ).
+                    addReactor( br ).
+                    build();
+
+            feedSource( pip );        
+
+            if ( expect != null ) {
+                assertEqual( expect, (MingleValue) br.value() );
+            }
+        }
+    }
+
 //    private
 //    final
 //    static
@@ -1069,27 +1073,23 @@ class MingleReactorTests
 //                asIdentifierPath( mapGet( map, "location", byte[].class ) )
 //            );
 //        }
-//
-//        private
-//        FieldOrderMissingFieldsTest
-//        asFieldOrderMissingFieldsTest( MingleStruct ms )
-//            throws Exception
-//        {
-//            FieldOrderMissingFieldsTest res = new FieldOrderMissingFieldsTest();
-//
-//            MingleSymbolMap map = initFieldOrderTest( res, ms );
-//
-//            res.expect = mapGet( map, "expect", MingleValue.class );
-//
-//            MingleStruct err = mapGet( map, "error", MingleStruct.class );
-//
-//            if ( err != null ) {
-//                res.expectFailure( asMissingFieldsError( err.getFields() ) );
-//            }
-//
-//            return res;
-//        }
-//
+
+        private
+        FieldOrderMissingFieldsTest
+        asFieldOrderMissingFieldsTest( MingleStruct ms )
+            throws Exception
+        {
+            FieldOrderMissingFieldsTest res = new FieldOrderMissingFieldsTest();
+
+            MingleSymbolMap map = initFieldOrderTest( res, ms );
+
+            res.expect = mapGetValue( map, "expect" );
+
+            setOptError( res, map, "error" );
+
+            return res;
+        }
+
 //        private
 //        FieldOrderPathTest
 //        asFieldOrderPathTest( MingleStruct ms )
@@ -1201,8 +1201,8 @@ class MingleReactorTests
 //                return asCastReactorTest( ms );
             } else if ( nm.equals( "FieldOrderReactorTest" ) ) {
                 return asFieldOrderReactorTest( ms );
-//            } else if ( nm.equals( "FieldOrderMissingFieldsTest" ) ) {
-//                return asFieldOrderMissingFieldsTest( ms );
+            } else if ( nm.equals( "FieldOrderMissingFieldsTest" ) ) {
+                return asFieldOrderMissingFieldsTest( ms );
 //            } else if ( nm.equals( "FieldOrderPathTest" ) ) {
 //                return asFieldOrderPathTest( ms );
 //            } else if ( nm.equals( "RequestReactorTest" ) ) {

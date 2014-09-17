@@ -22,6 +22,7 @@ import com.bitgirder.mingle.MingleTestGen;
 import com.bitgirder.mingle.MingleTypeReference;
 import com.bitgirder.mingle.MingleUint64;
 import com.bitgirder.mingle.MingleUnrecognizedFieldException;
+import com.bitgirder.mingle.MingleMissingFieldsException;
 import com.bitgirder.mingle.MingleValue;
 import com.bitgirder.mingle.QualifiedTypeName;
 
@@ -133,21 +134,21 @@ extends MingleTestGen.StructFileReader< T >
         return MingleBinReader.create( arr ).readNamespace();
     }
 
-//        private
-//        List< MingleIdentifier >
-//        asIdentifierList( MingleList ml )
-//            throws Exception
-//        {
-//            if ( ml == null ) return null;
-//
-//            List< MingleIdentifier > res = Lang.newList();
-//
-//            for ( MingleValue mv : ml ) {
-//                res.add( asIdentifier( ( (MingleBuffer) mv ).array() ) );
-//            }
-//
-//            return res;
-//        }
+    private
+    List< MingleIdentifier >
+    asIdentifierList( MingleList ml )
+        throws Exception
+    {
+        if ( ml == null ) return null;
+
+        List< MingleIdentifier > res = Lang.newList();
+
+        for ( MingleValue mv : ml ) {
+            res.add( asIdentifier( ( (MingleBuffer) mv ).array() ) );
+        }
+
+        return res;
+    }
 
     protected
     final
@@ -402,6 +403,17 @@ extends MingleTestGen.StructFileReader< T >
         );
     }
 
+    private
+    MingleMissingFieldsException
+    asMissingFieldsException( MingleSymbolMap m )
+        throws Exception
+    {
+        return new MingleMissingFieldsException(
+            asIdentifierList( mapExpect( m, "fields", MingleList.class ) ),
+            asIdentifierPath( m, "location" )
+        );
+    }
+
     // subclasses can override, calling super.asError() as their default return
     // val 
     protected
@@ -415,6 +427,8 @@ extends MingleTestGen.StructFileReader< T >
             return asReactorException( ms.getFields() );
         } else if ( ms.getType().equals( QNAME_UNRECOGNIZED_FIELD_ERROR ) ) {
             return asUnrecognizedFieldException( ms.getFields() );
+        } else if ( ms.getType().equals( QNAME_MISSING_FIELDS_ERROR ) ) {
+            return asMissingFieldsException( ms.getFields() );
         } else throw state.failf( "unhandled error: %s", ms.getType() );
     }
 
