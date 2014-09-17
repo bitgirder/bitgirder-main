@@ -55,6 +55,21 @@ class MingleBinReader
         TC_LIST
     };
 
+    private final static byte[] SCALAR_TYPE_CODES = new byte[] {
+        TC_NULL,
+        TC_BOOL,
+        TC_INT32,
+        TC_INT64,
+        TC_UINT32,
+        TC_UINT64,
+        TC_FLOAT32,
+        TC_FLOAT64,
+        TC_STRING,
+        TC_BUFFER,
+        TC_TIMESTAMP,
+        TC_ENUM
+    };
+
     private final static byte[] RANGE_VAL_TYPE_CODES = new byte[] {
         TC_NULL,
         TC_INT32,
@@ -375,6 +390,15 @@ class MingleBinReader
         case TC_ENUM: return readEnum();
         }
         throw state.failf( "unhandled scalar type: 0x%02x", tc );
+    }
+
+    public
+    MingleValue
+    readScalar()
+        throws IOException
+    {
+        byte tc = nextTc( "scalar", SCALAR_TYPE_CODES );
+        return expectScalar( tc );
     }
 
     private
