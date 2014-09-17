@@ -214,6 +214,7 @@ class GoModBuilder < StandardModTask
 
     public
     def get_direct_dependencies
+        code( "getting deps for #{mod} in #{proj}" )
         get_go_build_dependencies( mod )
     end
 

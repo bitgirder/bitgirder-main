@@ -229,11 +229,9 @@ class UnitTestEngineTests
         IllegalStateException ise = 
             state.cast( 
                 IllegalStateException.class, acc.expectOne( TestPhase.TEST ) );
-        
+ 
         state.equalString(
-            "Expected exception of type " +
-            "com.bitgirder.testing.UnitTestEngineTests$MarkerException " +
-            "to be thrown",
+            "Expected failure: [class com.bitgirder.testing.UnitTestEngineTests$MarkerException]: .*",
             ise.getMessage()
         );
     }
