@@ -1,7 +1,15 @@
-package com.bitgirder.mingle;
+package com.bitgirder.mingle.testgen;
 
 import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
+
+import com.bitgirder.mingle.QualifiedTypeName;
+import com.bitgirder.mingle.MingleStruct;
+
+import com.bitgirder.mingle.reactor.BuildReactor;
+import com.bitgirder.mingle.reactor.ValueBuildFactory;
+
+import com.bitgirder.mingle.io.MingleIo;
 
 import com.bitgirder.lang.Lang;
 
@@ -43,15 +51,20 @@ class MingleTestGen
 
         private
         List< T >
-        readStructs( MingleBinReader r )
+        readStructs( InputStream is )
             throws Exception
         {
             List< T > res = Lang.newList( 128 );
 
             while ( true )
             {
-                MingleStruct ms = (MingleStruct) 
-                    MingleTestMethods.readValue( r );
+                BuildReactor br = new BuildReactor.Builder().
+                    setFactory( new ValueBuildFactory() ).
+                    build();
+
+                MingleIo.feedValue( is, br );
+
+                MingleStruct ms = (MingleStruct) br.value();
 
                 if ( ms.getType().equals( TYPE_END ) ) break;
                 
@@ -69,11 +82,7 @@ class MingleTestGen
             throws Exception
         {
             InputStream is = TestData.openDataFile( fname );
-            try
-            {
-                MingleBinReader mbr = MingleBinReader.create( is );
-                return readStructs( mbr );
-            }
+            try { return readStructs( is ); }
             finally { is.close(); }
         }
     }

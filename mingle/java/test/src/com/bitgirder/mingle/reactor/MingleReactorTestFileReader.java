@@ -18,13 +18,14 @@ import com.bitgirder.mingle.MingleNamespace;
 import com.bitgirder.mingle.MingleString;
 import com.bitgirder.mingle.MingleStruct;
 import com.bitgirder.mingle.MingleSymbolMap;
-import com.bitgirder.mingle.MingleTestGen;
 import com.bitgirder.mingle.MingleTypeReference;
 import com.bitgirder.mingle.MingleUint64;
 import com.bitgirder.mingle.MingleUnrecognizedFieldException;
 import com.bitgirder.mingle.MingleMissingFieldsException;
 import com.bitgirder.mingle.MingleValue;
 import com.bitgirder.mingle.QualifiedTypeName;
+
+import com.bitgirder.mingle.testgen.MingleTestGen;
 
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;

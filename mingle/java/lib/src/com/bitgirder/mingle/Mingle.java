@@ -1031,6 +1031,16 @@ class Mingle
         return objectForValue( mv, path, IDENTIFIER_CONVERTER );
     }
 
+    public
+    static
+    ObjectPath< MingleIdentifier >
+    parseIdentifierPath( CharSequence s )
+        throws MingleSyntaxException
+    {
+        inputs.notNull( s, "s" );
+        return MingleParser.parseIdentifierPath( s );
+    }
+
     // Static class init follows
 
     private

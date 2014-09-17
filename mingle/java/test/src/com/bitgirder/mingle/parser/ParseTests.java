@@ -1,4 +1,4 @@
-package com.bitgirder.mingle;
+package com.bitgirder.mingle.parser;
 
 import static com.bitgirder.mingle.MingleTestMethods.*;
 
@@ -6,6 +6,22 @@ import com.bitgirder.validation.Inputs;
 import com.bitgirder.validation.State;
 
 import static com.bitgirder.log.CodeLoggers.Statics.*;
+
+import com.bitgirder.mingle.Mingle;
+import com.bitgirder.mingle.MingleBinReader;
+import com.bitgirder.mingle.MingleValue;
+import com.bitgirder.mingle.MingleIdentifier;
+import com.bitgirder.mingle.MingleNamespace;
+import com.bitgirder.mingle.QualifiedTypeName;
+import com.bitgirder.mingle.DeclaredTypeName;
+import com.bitgirder.mingle.MingleStruct;
+import com.bitgirder.mingle.MingleSymbolMap;
+import com.bitgirder.mingle.MingleBuffer;
+import com.bitgirder.mingle.MingleUint64;
+import com.bitgirder.mingle.MingleList;
+import com.bitgirder.mingle.MingleSyntaxException;
+
+import com.bitgirder.mingle.testgen.MingleTestGen;
 
 import com.bitgirder.lang.Lang;
 import com.bitgirder.lang.Strings;
@@ -24,6 +40,9 @@ import java.util.Set;
 import java.util.Arrays;
 import java.util.Map;
 
+// The actual parser implementation is in com.bitgirder.mingle, but the test
+// code makes use of MingleTestGen, so we have the tests here in their own
+// package
 @Test
 final
 class ParseTests
@@ -234,7 +253,7 @@ class ParseTests
             case DECLARED_TYPE_NAME: return DeclaredTypeName.parse( in );
             case NAMESPACE: return MingleNamespace.parse( in );
             case QUALIFIED_TYPE_NAME: return QualifiedTypeName.parse( in );
-            case IDENTIFIER_PATH: return MingleParser.parseIdentifierPath( in );
+            case IDENTIFIER_PATH: return Mingle.parseIdentifierPath( in );
             }
             throw state.failf( "Unhandled test type: %s", tt );
         }

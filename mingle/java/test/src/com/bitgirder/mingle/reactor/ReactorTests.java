@@ -20,7 +20,6 @@ import com.bitgirder.mingle.QualifiedTypeName;
 import com.bitgirder.mingle.MingleIdentifier;
 import com.bitgirder.mingle.MingleTypeReference;
 import com.bitgirder.mingle.ListTypeReference;
-import com.bitgirder.mingle.MingleTestGen;
 import com.bitgirder.mingle.MingleList;
 import com.bitgirder.mingle.MingleValue;
 import com.bitgirder.mingle.MingleBinReader;
