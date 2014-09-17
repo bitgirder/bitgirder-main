@@ -320,19 +320,6 @@ class MingleTestMethods
         }
     }
 
-    static
-    MingleValue
-    readValue( MingleBinReader rd )
-        throws Exception
-    {
-        inputs.notNull( rd, "rd" );
-
-        MingleValueBuilder b = MingleValueBuilder.create();
-        rd.feedValue( b );
-
-        return b.value();
-    }
-
     private
     static
     void

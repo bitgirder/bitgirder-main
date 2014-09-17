@@ -263,59 +263,6 @@ class MingleBinWriter
         }
     }
 
-    private
-    final
-    class ReactorImpl
-    implements MingleValueReactor
-    {
-        private void writeEnd() throws IOException { writeTypeCode( TC_END ); }
-
-        private
-        void
-        writeListStart( ListTypeReference lt )
-            throws IOException
-        {
-            writeTypeCode( TC_LIST );
-            writeTypeReference( lt );
-        }
-        
-        private
-        void
-        writeFieldStart( MingleIdentifier fld )
-            throws IOException
-        {
-            writeTypeCode( TC_FIELD );
-            writeIdentifier( fld );
-        }
-
-        private
-        void
-        writeStructStart( QualifiedTypeName qn )
-            throws IOException
-        {
-            writeTypeCode( TC_STRUCT );
-            writeQualifiedTypeName( qn );
-        }
-
-        public
-        void
-        processEvent( MingleValueReactorEvent ev )
-            throws Exception
-        {
-            switch ( ev.type() ) {
-            case VALUE: writeScalar( ev.value() ); return;
-            case LIST_START: writeListStart( ev.listType() ); return;
-            case MAP_START: writeTypeCode( TC_SYM_MAP ); return;
-            case STRUCT_START: writeStructStart( ev.structType() ); return;
-            case FIELD_START: writeFieldStart( ev.field() ); return;
-            case END: writeEnd(); return;
-            default: state.failf( "unhandled type: %s", ev.type() );
-            }
-        }
-    }
-
-    public MingleValueReactor asReactor() { return new ReactorImpl(); }
-
     public
     static
     MingleBinWriter
