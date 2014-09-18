@@ -13,6 +13,7 @@ var asType = parser.AsTypeReference
 
 type BindTestCallInterface interface {
     CreateReactors( t *BindTest ) []interface{}
+    BoundValues() *mg.IdentifierMap
 }
 
 type bindTestCall struct {
@@ -22,11 +23,16 @@ type bindTestCall struct {
     reg *Registry
 }
 
+func ( t *bindTestCall ) boundVal() interface{} {
+    if val, ok := t.iface.BoundValues().GetOk( t.t.BoundId ); ok { return val }
+    return nil
+}
+
 func ( t *bindTestCall ) debug() {
     qtVal := "(no Mingle value)"
     if mv := t.t.Mingle; mv != nil { qtVal = mg.QuoteValue( mv ) }
-    t.Logf( "test.Mingle: %s, test.Bound: %s, test.Error: %s, test.Direction: %d, test.Domain: %s",
-        qtVal, t.t.Bound, t.t.Error, t.t.Direction, t.t.Domain,
+    t.Logf( "test.Mingle: %s, test.BoundId: %s, test.Error: %s, test.Direction: %d, test.Domain: %s",
+        qtVal, t.t.BoundId, t.t.Error, t.t.Direction, t.t.Domain,
     )
 }
 
@@ -44,7 +50,7 @@ func ( t *bindTestCall ) bindBindTest() {
     pip := mgRct.InitReactorPipeline( rcts... )
     if err := mgRct.VisitValue( t.t.Mingle, pip ); err == nil {
         t.EqualErrors( t.t.Error, err ) // fine if both nil
-        t.Equal( t.t.Bound, br.GetValue() )
+        t.Equal( t.boundVal(), br.GetValue() )
     } else {
         t.EqualErrors( t.t.Error, err )
     }
@@ -56,7 +62,7 @@ func ( t *bindTestCall ) visitBindTest() bool {
     bc := NewBindContext( t.reg )
     if o := t.t.SerialOptions; o != nil { bc.SerialOptions = o }
     vc := VisitContext{ BindContext: bc, Destination: pip }
-    if err := VisitValue( t.t.Bound, vc ); err != nil {
+    if err := VisitValue( t.boundVal(), vc ); err != nil {
         t.EqualErrors( t.t.Error, err )
         return false
     }
@@ -68,7 +74,7 @@ func ( t *bindTestCall ) visitBindTest() bool {
 func ( t *bindTestCall ) call() {
 //    t.debug()
     t.reg = MustRegistryForDomain( t.t.Domain )
-    if t.t.Bound != nil && t.t.Direction.Includes( BindTestDirectionOut ) {
+    if t.t.BoundId != nil && t.t.Direction.Includes( BindTestDirectionOut ) {
         if ok := t.visitBindTest(); ! ok { return }
     }
     if t.t.Direction.Includes( BindTestDirectionIn ) { t.bindBindTest() }

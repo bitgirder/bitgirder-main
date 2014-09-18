@@ -105,7 +105,7 @@ func NewFunctionsBuilderFactory() *mgRct.FunctionsBuilderFactory {
 func visitPrimValueOk( val interface{}, vc VisitContext ) ( error, bool ) {
     switch v := val.( type ) {
     case bool, []byte, string, int32, int64, uint32, uint64, float32, float64,
-         time.Time: 
+         time.Time, nil: 
         return visitPrimValueOk( mg.MustValue( v ), vc )
     case mg.Value: 
         return mgRct.VisitValuePath( v, vc.Destination, vc.Path ), true

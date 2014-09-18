@@ -11,6 +11,43 @@ import (
     "mingle/bind"
 )
 
+func getBoundTestValues() *mg.IdentifierMap {
+    res := mg.NewIdentifierMap()
+    res.Put( mkId( "identifier-id1" ), mkId( "id1" ) )
+    res.Put( mkId( "identifier-id1-id2" ), mkId( "id1-id2" ) )
+    res.Put( mkId( "namespace-ns1-v1" ), mkNs( "ns1@v1" ) )
+    res.Put( mkId( "namespace-ns1-ns2-v1" ), mkNs( "ns1:ns2@v1" ) )
+    tp := mg.MakeTestIdPath
+    res.Put( mkId( "identifier-path-f1-f2-i1-f3" ), tp( 1, 2, "1", 3 ) )
+    res.Put( 
+        mkId( "identifier-path-f1-f2-i1-i2-i3-i4-f3" ),
+        tp( 1, 2, "1", "2", "3", "4", 3 ),
+    )
+    res.Put( mkId( "identifier-path-f1-i2" ), tp( 1, "2" ) )
+    res.Put( mkId( "identifier-path-f1-f2-i3-f4" ), tp( 1, 2, "3", 4 ) )
+    res.Put( mkId( "identifier-path-f1-i2-f3" ), tp( 1, "2", 3 ) )
+    res.Put( 
+        mkId( "cast-error-loc-f1-i2" ),
+        mg.NewCastError( tp( 1, "2" ), "test-message" ),
+    )
+    res.Put(
+        mkId( "unrecognized-field-error-loc-f1-i2" ),
+        &mg.UnrecognizedFieldError{
+            Location: tp( 1, "2" ),
+            Message: "test-message",
+            Field: mkId( "bad-field" ),
+        },
+    )
+    mfeInst1 := &mg.MissingFieldsError{
+        Message: "test-message",
+        Location: tp( 1, "2" ),
+    }
+    mfeInst1.SetFields(
+        []*mg.Identifier{ mkId( "f1" ), mkId( "f2" ), mkId( "f3" ) } )
+    res.Put( mkId( "missing-fields-error-f1-f2-f3-loc-f1-i2" ), mfeInst1 )
+    return res
+}
+
 func getBindTests() []*bind.BindTest {
     res := []*bind.BindTest{}
     idBytes := func( s string ) []byte {
@@ -32,34 +69,36 @@ func getBindTests() []*bind.BindTest {
         t.Domain = bind.DomainDefault
         res = append( res, t )
     }
-    addRtOpts := func( in, typ, expct interface{}, opts *bind.SerialOptions ) {
+    addRtOpts := func( 
+        in, typ interface{}, id string, opts *bind.SerialOptions ) {
+
         addTest(
             &bind.BindTest{
                 Mingle: mg.MustValue( in ),
                 Type: asType( typ ),
-                Bound: expct,
+                BoundId: mkId( id ),
                 SerialOptions: opts,
             },
         )
     }
-    addRt := func( in, typ, expct interface{} ) {
-        addRtOpts( in, typ, expct, nil )
+    addRt := func( in, typ interface{}, id string ) {
+        addRtOpts( in, typ, id, nil )
     }
-    addIn := func( in, typ, expct interface{} ) {
+    addIn := func( in, typ interface{}, id string ) {
         addTest(
             &bind.BindTest{
                 Mingle: mg.MustValue( in ),
                 Type: asType( typ ),
-                Bound: expct,
+                BoundId: mkId( id ),
                 Direction: bind.BindTestDirectionIn,
             },
         )
     }
-    addOut := func( bound, expct interface{}, opts *bind.SerialOptions ) {
+    addOut := func( id string, expct interface{}, opts *bind.SerialOptions ) {
         addTest(
             &bind.BindTest{
                 Mingle: mg.MustValue( expct ),
-                Bound: bound,
+                BoundId: mkId( id ),
                 Direction: bind.BindTestDirectionOut,
                 SerialOptions: opts,
             },
@@ -78,24 +117,24 @@ func getBindTests() []*bind.BindTest {
     addVcErr := func( in, typ interface{}, path objpath.PathNode, msg string ) {
         addInErr( in, typ, newVcErr( path, msg ) )
     }
-    addRt( idStruct( "id1" ), mg.TypeIdentifier, mkId( "id1" ) )
-    addRt( idStruct( "id1", "id2" ), mg.TypeIdentifier, mkId( "id1-id2" ) )
+    addRt( idStruct( "id1" ), mg.TypeIdentifier, "identifier-id1" )
+    addRt( idStruct( "id1", "id2" ), mg.TypeIdentifier, "identifier-id1-id2" )
     binOpts := bind.NewSerialOptions()
     binOpts.Format = bind.SerialFormatBinary
     txtOpts := bind.NewSerialOptions()
     txtOpts.Format = bind.SerialFormatText
-    addIn( idBytes( "id1" ), mg.TypeIdentifier, mkId( "id1" ) )
-    addOut( mkId( "id1" ), idBytes( "id1" ), binOpts )
-    addIn( mkId( "id1" ).ExternalForm(), mg.TypeIdentifier, mkId( "id1" ) )
+    addIn( idBytes( "id1" ), mg.TypeIdentifier, "identifier-id1" )
+    addOut( "identifier-id1", idBytes( "id1" ), binOpts )
+    addIn( mkId( "id1" ).ExternalForm(), mg.TypeIdentifier, "identifier-id1" )
     addIdOutString := func( expct string, fmt mg.IdentifierFormat ) {
         opts := bind.NewSerialOptions()
         opts.Format = bind.SerialFormatText
         opts.Identifiers = fmt
-        addOut( mkId( expct ), expct, opts )
+        addOut( "identifier-id1-id2", expct, opts )
     }
-    addIdOutString( "test-id", mg.LcHyphenated )
-    addIdOutString( "test_id", mg.LcUnderscore )
-    addIdOutString( "testId", mg.LcCamelCapped )
+    addIdOutString( "id1-id2", mg.LcHyphenated )
+    addIdOutString( "id1_id2", mg.LcUnderscore )
+    addIdOutString( "id1Id2", mg.LcCamelCapped )
     addVcErr(
         "id$Bad", 
         mg.TypeIdentifier, 
@@ -120,7 +159,7 @@ func getBindTests() []*bind.BindTest {
             "parts", mg.MustList( idStruct( "ns1" ) ),
         ),
         mg.TypeNamespace,
-        mkNs( "ns1@v1" ),
+        "namespace-ns1-v1",
     )
     addRt(
         parser.MustStruct( mg.QnameNamespace,
@@ -128,7 +167,7 @@ func getBindTests() []*bind.BindTest {
             "parts", mg.MustList( idStruct( "ns1" ), idStruct( "ns2" ) ),
         ),
         mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
+        "namespace-ns1-ns2-v1",
     )
     addIn(
         parser.MustStruct( mg.QnameNamespace,
@@ -136,7 +175,7 @@ func getBindTests() []*bind.BindTest {
             "parts", mg.MustList( "ns1", "ns2" ),
         ),
         mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
+        "namespace-ns1-ns2-v1",
     )
     addIn(
         parser.MustStruct( mg.QnameNamespace,
@@ -144,7 +183,7 @@ func getBindTests() []*bind.BindTest {
             "parts", mg.MustList( idBytes( "ns1" ), idBytes( "ns2" ) ),
         ),
         mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
+        "namespace-ns1-ns2-v1",
     )
     addIn(
         parser.MustStruct( mg.QnameNamespace,
@@ -152,12 +191,12 @@ func getBindTests() []*bind.BindTest {
             "parts", mg.MustList( "ns1", idBytes( "ns2" ) ),
         ),
         mg.TypeNamespace,
-        mkNs( "ns1:ns2@v1" ),
+        "namespace-ns1-ns2-v1",
     )
-    addIn( "ns1@v1", mg.TypeNamespace, mkNs( "ns1@v1" ) )
-    addIn( nsBytes( "ns1@v1" ), mg.TypeNamespace, mkNs( "ns1@v1" ) )
-    addOut( mkNs( "ns1@v1" ), "ns1@v1", txtOpts )
-    addOut( mkNs( "ns1@v1" ), nsBytes( "ns1@v1" ), binOpts )
+    addIn( "ns1@v1", mg.TypeNamespace, "namespace-ns1-v1" )
+    addIn( nsBytes( "ns1@v1" ), mg.TypeNamespace, "namespace-ns1-v1" )
+    addOut( "namespace-ns1-v1", "ns1@v1", txtOpts )
+    addOut( "namespace-ns1-v1", nsBytes( "ns1@v1" ), binOpts )
     addVcErr(
         parser.MustStruct( mg.QnameNamespace,
             "version", "bad$ver",
@@ -197,7 +236,6 @@ func getBindTests() []*bind.BindTest {
         nil,
         "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
     )
-    tp := mg.MakeTestIdPath
     idPathStruct := func( parts ...interface{} ) *mg.Struct {
         return parser.MustStruct( mg.QnameIdentifierPath,
             "parts", mg.MustList( parts... ),
@@ -211,7 +249,7 @@ func getBindTests() []*bind.BindTest {
             idStruct( "f3" ),
         ),
         mg.TypeIdentifierPath,
-        tp( 1, 2, "1", 3 ),
+        "identifier-path-f1-f2-i1-f3",
     )
     addIn(
         idPathStruct(
@@ -224,21 +262,17 @@ func getBindTests() []*bind.BindTest {
             idBytes( "f3" ),
         ),
         mg.TypeIdentifierPath,
-        tp( 1, 2, "1", "2", "3", "4", 3 ),
+        "identifier-path-f1-f2-i1-i2-i3-i4-f3",
     )
-    addIn(
-        "f1[ 2 ]",
-        mg.TypeIdentifierPath,
-        tp( 1, "2" ),
-    )
+    addIn( "f1[ 2 ]", mg.TypeIdentifierPath, "identifier-path-f1-i2" )
     addIn(
         "f1.f2[ 3 ].f4",
         mg.TypeIdentifierPath,
-        tp( 1, 2, "3", 4 ),
+        "identifier-path-f1-f2-i3-f4",
     )
-    addOut( tp( 1, "2", 3 ), "f1[ 2 ].f3", txtOpts )
+    addOut( "identifier-path-f1-i2-f3", "f1[ 2 ].f3", txtOpts )
     addOut( 
-        tp( 1, "2", 3 ), 
+        "identifier-path-f1-i2-f3",
         idPathStruct( idBytes( "f1" ), uint64( 2 ), idBytes( "f3" ) ),
         binOpts,
     )
@@ -302,7 +336,7 @@ func getBindTests() []*bind.BindTest {
             "location", idPathStruct( idStruct( "f1" ), uint64( 2 ) ),
         ),
         asType( "mingle:core@v1/CastError" ),
-        mg.NewCastError( tp( 1, "2" ), "test-message" ),
+        "cast-error-loc-f1-i2",
     )
     addIn( 
         parser.MustStruct( "mingle:core@v1/CastError",
@@ -310,10 +344,10 @@ func getBindTests() []*bind.BindTest {
             "location", "f1[ 2 ]",
         ),
         asType( "mingle:core@v1/CastError" ),
-        mg.NewCastError( tp( 1, "2" ), "test-message" ),
+        "cast-error-loc-f1-i2",
     )
     addOut( 
-        mg.NewCastError( tp( 1, "2" ), "test-message" ),
+        "cast-error-loc-f1-i2",
         parser.MustStruct( "mingle:core@v1/CastError",
             "message", "test-message",
             "location", "f1[ 2 ]",
@@ -327,18 +361,10 @@ func getBindTests() []*bind.BindTest {
             "field", idStruct( "bad", "field" ),
         ),
         asType( "mingle:core@v1/UnrecognizedFieldError" ),
-        &mg.UnrecognizedFieldError{
-            Location: tp( 1, "2" ),
-            Message: "test-message",
-            Field: mkId( "bad-field" ),
-        },
+        "unrecognized-field-error-loc-f1-i2",
     )
     addOut(
-        &mg.UnrecognizedFieldError{
-            Location: tp( 1, "2" ),
-            Message: "test-message",
-            Field: mkId( "bad-field" ),
-        },
+        "unrecognized-field-error-loc-f1-i2",
         parser.MustStruct( "mingle:core@v1/UnrecognizedFieldError",
             "message", "test-message",
             "location", "f1[ 2 ]",
@@ -346,12 +372,6 @@ func getBindTests() []*bind.BindTest {
         ),
         txtOpts,
     )
-    mfeInst1 := &mg.MissingFieldsError{
-        Message: "test-message",
-        Location: tp( 1, "2" ),
-    }
-    mfeInst1.SetFields(
-        []*mg.Identifier{ mkId( "f1" ), mkId( "f2" ), mkId( "f3" ) } )
     addRt(
         parser.MustStruct( "mingle:core@v1/MissingFieldsError",
             "message", "test-message",
@@ -364,7 +384,7 @@ func getBindTests() []*bind.BindTest {
             ),
         ),
         asType( "mingle:core@v1/MissingFieldsError" ),
-        mfeInst1,
+        "missing-fields-error-f1-f2-f3-loc-f1-i2",
     )
     addIn(
         parser.MustStruct( "mingle:core@v1/MissingFieldsError",
@@ -379,7 +399,7 @@ func getBindTests() []*bind.BindTest {
             ),
         ),
         asType( "mingle:core@v1/MissingFieldsError" ),
-        mfeInst1,
+        "missing-fields-error-f1-f2-f3-loc-f1-i2",
     )
     addIn(
         parser.MustStruct( "mingle:core@v1/MissingFieldsError",
@@ -390,10 +410,10 @@ func getBindTests() []*bind.BindTest {
             ),
         ),
         asType( "mingle:core@v1/MissingFieldsError" ),
-        mfeInst1,
+        "missing-fields-error-f1-f2-f3-loc-f1-i2",
     )
     addOut(
-        mfeInst1,
+        "missing-fields-error-f1-f2-f3-loc-f1-i2",
         parser.MustStruct( "mingle:core@v1/MissingFieldsError",
             "message", "test-message",
             "location", "f1[ 2 ]",
@@ -402,7 +422,7 @@ func getBindTests() []*bind.BindTest {
         txtOpts,
     )
     addOut(
-        mfeInst1,
+        "missing-fields-error-f1-f2-f3-loc-f1-i2",
         parser.MustStruct( "mingle:core@v1/MissingFieldsError",
             "message", "test-message",
             "location", idPathStruct( idBytes( "f1" ), uint64( 2 ) ),
@@ -415,7 +435,13 @@ func getBindTests() []*bind.BindTest {
     return res
 }
 
-type bindTestCallInterface int
+type bindTestCallInterface struct {
+    boundVals *mg.IdentifierMap
+}
+
+func ( i bindTestCallInterface ) BoundValues() *mg.IdentifierMap {
+    return i.boundVals
+}
 
 func ( i bindTestCallInterface ) CreateReactors( 
     t *bind.BindTest ) []interface{} {
@@ -427,6 +453,6 @@ func ( i bindTestCallInterface ) CreateReactors(
 }
 
 func TestBind( t *testing.T ) {
-    iface := bindTestCallInterface( 1 )
+    iface := bindTestCallInterface{ getBoundTestValues() }
     bind.AssertBindTests( getBindTests(), iface, assert.NewPathAsserter( t ) )
 }

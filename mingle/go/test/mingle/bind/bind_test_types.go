@@ -20,7 +20,7 @@ func ( d BindTestDirection ) Includes( d2 BindTestDirection ) bool {
 
 type BindTest struct {
     Mingle mg.Value
-    Bound interface{}
+    BoundId *mg.Identifier
     Direction BindTestDirection
     Type mg.TypeReference
     Domain *mg.Identifier

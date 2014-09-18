@@ -66,31 +66,17 @@ func ensureTestBuilderFactories() {
     addPrimBindings( reg )
     reg.MustAddValue(
         mkQn( "ns1@v1/S1" ),
-        func() mgRct.BuilderFactory {
-            res := mgRct.NewFunctionsBuilderFactory()
-            res.StructFunc = 
-                func( _ *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, 
-                                                    error ) {
-
-                    res := mgRct.NewFunctionsFieldSetBuilder()
-                    res.Value = new( S1 )
-                    res.RegisterField(
-                        mkId( "f1" ),
-                        func( path objpath.PathNode ) ( mgRct.BuilderFactory, 
-                                                        error ) {
-                            res, ok := reg.m.GetOk( mg.QnameInt32 )
-                            if ok { return res.( mgRct.BuilderFactory ), nil }
-                            return nil, nil
-                        },
-                        func( val interface{}, path objpath.PathNode ) error {
-                            res.Value.( *S1 ).f1 = val.( int32 )
-                            return nil
-                        },
-                    )
-                    return res, nil
-                }
-            return res
-        }(),
+        CheckedStructFactory( 
+            reg, 
+            func() interface{} { return &S1{} },
+            &CheckedFieldSetter{ 
+                Field: mkId( "f1" ), 
+                Type: mg.TypeInt32, 
+                Assign: func( acc, val interface{} ) { 
+                    acc.( *S1 ).f1 = val.( int32 ) 
+                },
+            },
+        ),
     )
     reg.MustAddValue(
         mkQn( "ns1@v1/E1" ),
@@ -110,37 +96,61 @@ func ensureTestBuilderFactories() {
     reg.AddVisitValueOkFunc( visitOkTestFunc )
 }
 
+var (
+    tm1 = mg.MustTimestamp( "2013-10-19T02:47:00-08:00" )
+)
+
+func getDefaultValBindTestValues() *mg.IdentifierMap {
+    res := mg.NewIdentifierMap()
+    res.Put( mkId( "null-val" ), nil )
+    res.Put( mkId( "true-val" ), true )
+    res.Put( mkId( "buffer-val1" ), []byte{ 0 } )
+    res.Put( mkId( "string-val1" ), "s" )
+    res.Put( mkId( "int32-val1" ), int32( 1 ) )
+    res.Put( mkId( "int64-val1" ), int64( 1 ) )
+    res.Put( mkId( "uint32-val1" ), uint32( 1 ) )
+    res.Put( mkId( "uint64-val1" ), uint64( 1 ) )
+    res.Put( mkId( "float32-val1" ), float32( 1.0 ) )
+    res.Put( mkId( "float64-val1" ), float64( 1.0 ) )
+    res.Put( mkId( "time-val1" ), time.Time( tm1 ) )
+    res.Put( mkId( "s1-val1" ), &S1{ f1: 1 } )
+    res.Put( mkId( "e1-val1" ), E1V1 )
+    res.Put( mkId( "custom-visitable-val1" ), customVisitable( 1 ) )
+    res.Put( mkId( "unregistered-type-val1" ), unregisteredType( 1 ) )
+    res.Put( mkId( "fail-on-visit-type-val1" ), failOnVisitType( 1 ) )
+    return res
+}
+
 func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
     p := mg.MakeTestIdPath
     addTest := func( t *BindTest ) {
         t.Domain = domainPackageBindTest
         tests = append( tests, t )
     }
-    addOk := func( in mg.Value, expct interface{} ) {
-        addTest( &BindTest{ Mingle: in, Bound: expct } )
+    addOk := func( in mg.Value, id string ) {
+        addTest( &BindTest{ Mingle: in, BoundId: mkId( id ) } )
     }
-    addOk( mg.NullVal, nil )
-    addOk( mg.Boolean( true ), true )
-    addOk( mg.Buffer( []byte{ 0 } ), []byte{ 0 } )
-    addOk( mg.String( "s" ), "s" )
-    addOk( mg.Int32( 1 ), int32( 1 ) )
-    addOk( mg.Int64( 1 ), int64( 1 ) )
-    addOk( mg.Uint32( 1 ), uint32( 1 ) )
-    addOk( mg.Uint64( 1 ), uint64( 1 ) )
-    addOk( mg.Float32( 1.0 ), float32( 1.0 ) )
-    addOk( mg.Float64( 1.0 ), float64( 1.0 ) )
-    tm1 := mg.MustTimestamp( "2013-10-19T02:47:00-08:00" )
-    addOk( tm1, time.Time( tm1 ) )
+    addOk( mg.NullVal, "null-val" )
+    addOk( mg.Boolean( true ), "true-val" )
+    addOk( mg.Buffer( []byte{ 0 } ), "buffer-val1" )
+    addOk( mg.String( "s" ), "string-val1" )
+    addOk( mg.Int32( 1 ), "int32-val1" )
+    addOk( mg.Int64( 1 ), "int64-val1" )
+    addOk( mg.Uint32( 1 ), "uint32-val1" )
+    addOk( mg.Uint64( 1 ), "uint64-val1" )
+    addOk( mg.Float32( 1.0 ), "float32-val1" )
+    addOk( mg.Float64( 1.0 ), "float64-val1" )
+    addOk( tm1, "time-val1" )
     s1V1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
     e1V1 := parser.MustEnum( "ns1@v1/E1", "v1" )
-    addOk( s1V1, &S1{ f1: 1 } )
-    addOk( e1V1, E1V1 )
+    addOk( s1V1, "s1-val1" )
+    addOk( e1V1, "e1-val1" )
     addTest(
         &BindTest{
             Mingle: parser.MustStruct( "ns1@v1/CustomVisitable", 
                 "f1", int32( 1 ),
             ),
-            Bound: customVisitable( 1 ),
+            BoundId: mkId( "custom-visitable-val1" ),
             Direction: BindTestDirectionOut,
         },
     )
@@ -199,23 +209,21 @@ func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
         nil,
         "unhandled value: ns1@v1/Bad*",
     )
-    addVisitErr := func( 
-        bound interface{}, path objpath.PathNode, msg string ) {
-
+    addVisitErr := func( boundId string, path objpath.PathNode, msg string ) {
         addTest(
             &BindTest{
-                Bound: bound,
+                BoundId: mkId( boundId ),
                 Direction: BindTestDirectionOut,
                 Error: NewVisitError( path, msg ),
             },
         )
     }
     addVisitErr( 
-        unregisteredType( 1 ), 
+        "unregistered-type-val1",
         nil,
         "unknown type for visit: bind.unregisteredType",
     )
-    addVisitErr( failOnVisitType( 1 ), nil, "test-failure" )
+    addVisitErr( "fail-on-visit-type-val1", nil, "test-failure" )
     return tests
 }
 
@@ -223,7 +231,13 @@ func getBindTests() []*BindTest {
     return getDefaultValBindTests( []*BindTest{} )
 }
 
-type defaultBindTestCallInterface int
+type defaultBindTestCallInterface struct {
+    boundVals *mg.IdentifierMap
+}
+
+func ( c defaultBindTestCallInterface ) BoundValues() *mg.IdentifierMap {
+    return c.boundVals
+}
 
 func ( c defaultBindTestCallInterface ) CreateReactors( 
     _ *BindTest ) []interface{} {
@@ -233,7 +247,7 @@ func ( c defaultBindTestCallInterface ) CreateReactors(
 
 func TestBind( t *testing.T ) {
     ensureTestBuilderFactories()
-    iface := defaultBindTestCallInterface( 1 )
+    iface := defaultBindTestCallInterface{ getDefaultValBindTestValues() }
     AssertBindTests( getBindTests(), iface, assert.NewPathAsserter( t ) )
 }
 

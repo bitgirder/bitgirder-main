@@ -19,12 +19,14 @@ func NewBuildValueOkFunctionSequence(
     }
 }
 
+type StructStartFunc func( sse *StructStartEvent ) ( FieldSetBuilder, error )
+
 type FunctionsBuilderFactory struct {
     ErrorFactory BuilderErrorFactory
     ValueFunc BuildValueOkFunction
     ListFunc func( lse *ListStartEvent ) ( ListBuilder, error )
     MapFunc func( mse *MapStartEvent ) ( FieldSetBuilder, error )
-    StructFunc func( sse *StructStartEvent ) ( FieldSetBuilder, error )
+    StructFunc StructStartFunc
 }
 
 func NewFunctionsBuilderFactory() *FunctionsBuilderFactory {

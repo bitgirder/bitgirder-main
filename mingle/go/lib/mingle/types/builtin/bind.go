@@ -69,6 +69,15 @@ func registerBoundField0(
     )
 }
 
+func builderFactFuncForType( 
+    typ mg.TypeReference, reg *bind.Registry ) func() mgRct.BuilderFactory {
+
+    return func() mgRct.BuilderFactory {
+        if bf, ok := reg.BuilderFactoryForType( typ ); ok { return bf }
+        return nil
+    }
+}
+
 func createIdSliceBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
     setListFunc(
@@ -80,30 +89,6 @@ func createIdSliceBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         builderFactFuncForType( mg.TypeIdentifier, reg ),
     )
     return res
-}
-
-func registerIdSliceField(
-    fsb *mgRct.FunctionsFieldSetBuilder,
-    fld *mg.Identifier,
-    reg *bind.Registry,
-    set func( val interface{}, path objpath.PathNode ) error ) {
-    
-    fsb.RegisterField(
-        fld,
-        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            return createIdSliceBuilderFactory( reg ), nil
-        },
-        set,
-    )
-}
-
-func builderFactFuncForType( 
-    typ mg.TypeReference, reg *bind.Registry ) func() mgRct.BuilderFactory {
-
-    return func() mgRct.BuilderFactory {
-        if bf, ok := reg.BuilderFactoryForType( typ ); ok { return bf }
-        return nil
-    }
 }
 
 func idPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
@@ -161,28 +146,24 @@ func newIdBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 }
 
 func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
-    res := bind.NewFunctionsFieldSetBuilder()
-    res.Value = new( mg.Namespace )
-    res.RegisterField(
-        idUnsafe( "version" ),
-        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            if bf, ok := reg.BuilderFactoryForType( mg.TypeIdentifier ); ok {
-                return bf, nil
-            }
-            return nil, nil
+    return bind.CheckedFunctionsFieldSetBuilder(
+        reg,
+        &mg.Namespace{},
+        &bind.CheckedFieldSetter{
+            Field: identifierVersion,
+            Type: mg.TypeIdentifier,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.Namespace ).Version = val.( *mg.Identifier )
+            },
         },
-        func( val interface{}, path objpath.PathNode ) error {
-            res.Value.( *mg.Namespace ).Version = val.( *mg.Identifier )
-            return nil
-        },
-    )
-    registerIdSliceField( res, idUnsafe( "parts" ), reg, 
-        func( val interface{}, path objpath.PathNode ) error {
-            res.Value.( *mg.Namespace ).Parts = val.( []*mg.Identifier )
-            return nil
+        &bind.CheckedFieldSetter{
+            Field: identifierParts,
+            StartField: createIdSliceBuilderFactory,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.Namespace ).Parts = val.( []*mg.Identifier )
+            },
         },
     )
-    return res
 }
 
 func nsFromBytes( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
@@ -320,92 +301,81 @@ func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
-func newLocatableErrorBuilderFactory( 
-    qn *mg.QualifiedTypeName, 
-    instFact func() interface{},
-    msgSet, locSet func( fldVal, err interface{} ),
-    addFlds func( fsb *mgRct.FunctionsFieldSetBuilder ),
-    reg *bind.Registry ) *mgRct.FunctionsBuilderFactory {
+func createLocatableErrorSetters( 
+    msg, loc bind.CheckedFieldSetValFunction ) []*bind.CheckedFieldSetter {
 
-    res := bind.NewFunctionsBuilderFactory()
-    setStructFunc( res, reg, func( reg *bind.Registry ) mgRct.FieldSetBuilder {
-        errBldr := bind.NewFunctionsFieldSetBuilder()
-        errBldr.Value = instFact()
-        registerBoundField0( 
-            errBldr, idUnsafe( "message" ), mg.TypeString, msgSet, reg )
-        registerBoundField0(
-            errBldr, idUnsafe( "location" ), mg.TypeIdentifierPath, locSet, 
-            reg )
-        if addFlds != nil { addFlds( errBldr ) }
-        return errBldr
-    })
-    return res
+    return []*bind.CheckedFieldSetter{
+        &bind.CheckedFieldSetter{
+            Field: identifierMessage,
+            Type: mg.TypeString,
+            Assign: msg,
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierLocation,
+            Type: mg.TypeIdentifierPath,
+            Assign: loc,
+        },
+    }
 }
 
 func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
-    return newLocatableErrorBuilderFactory(     
-        mg.QnameCastError, 
-        func() interface{} { return new( mg.CastError ) },
-        func( fldVal, err interface{} ) {
-            err.( *mg.CastError ).Message = fldVal.( string )
-        },
-        func( fldVal, err interface{} ) {
-            err.( *mg.CastError ).Location = fldVal.( objpath.PathNode )
-        },
-        nil,
+    return bind.CheckedStructFactory(
         reg,
+        func() interface{} { return new( mg.CastError ) },
+        createLocatableErrorSetters(
+            func( obj, val interface{} ) {
+                obj.( *mg.CastError ).Message = val.( string )
+            },
+            func( obj, val interface{} ) {
+                obj.( *mg.CastError ).Location = val.( objpath.PathNode )
+            },
+        )...,
     )
 }
 
 func newUnrecognizedFieldErrorBuilderFactory( 
     reg *bind.Registry ) mgRct.BuilderFactory {
 
-    return newLocatableErrorBuilderFactory(
-        mg.QnameUnrecognizedFieldError,
-        func() interface{} { return new( mg.UnrecognizedFieldError ) },
-        func( fldVal, err interface{} ) {
-            err.( *mg.UnrecognizedFieldError ).Message = fldVal.( string )
+    fact := func() interface{} { return new( mg.UnrecognizedFieldError ) }
+    flds := createLocatableErrorSetters(
+        func( obj, val interface{} ) {
+            obj.( *mg.UnrecognizedFieldError ).Message = val.( string )
         },
-        func( fldVal, err interface{} ) {
-            err.( *mg.UnrecognizedFieldError ).Location = 
-                fldVal.( objpath.PathNode )
+        func( obj, val interface{} ) {
+            obj.( *mg.UnrecognizedFieldError ).Location = 
+                val.( objpath.PathNode )
         },
-        func( fsb *mgRct.FunctionsFieldSetBuilder ) {
-            set := func( val, err interface{} ) {
-                err.( *mg.UnrecognizedFieldError ).Field = 
-                    val.( *mg.Identifier )
-            }
-            registerBoundField0( 
-                fsb, idUnsafe( "field" ), mg.TypeIdentifier, set, reg )
-        },
-        reg,
     )
+    flds = append( flds, &bind.CheckedFieldSetter{
+        Field: identifierField,
+        Type: mg.TypeIdentifier,
+        Assign: func( obj, val interface{} ) {
+            obj.( *mg.UnrecognizedFieldError ).Field = val.( *mg.Identifier )
+        },
+    })
+    return bind.CheckedStructFactory( reg, fact, flds... )
 }
 
 func newMissingFieldsErrorBuilderFactory( 
     reg *bind.Registry ) mgRct.BuilderFactory {
 
-    return newLocatableErrorBuilderFactory(
-        mg.QnameMissingFieldsError,
-        func() interface{} { return new( mg.MissingFieldsError ) },
-        func( fldVal, err interface{} ) {
-            err.( *mg.MissingFieldsError ).Message = fldVal.( string )
+    fact := func() interface{} { return new( mg.MissingFieldsError ) }
+    flds := createLocatableErrorSetters(
+        func( obj, val interface{} ) {
+            obj.( *mg.MissingFieldsError ).Message = val.( string )
         },
-        func( fldVal, err interface{} ) {
-            err.( *mg.MissingFieldsError ).Location = 
-                fldVal.( objpath.PathNode )
+        func( obj, val interface{} ) {
+            obj.( *mg.MissingFieldsError ).Location = val.( objpath.PathNode )
         },
-        func( fsb *mgRct.FunctionsFieldSetBuilder ) {
-            registerIdSliceField( fsb, idUnsafe( "fields" ), reg,
-                func( val interface{}, _ objpath.PathNode ) error {
-                    flds := val.( []*mg.Identifier )
-                    fsb.Value.( *mg.MissingFieldsError ).SetFields( flds )
-                    return nil
-                },
-            )
-        },
-        reg,
     )
+    flds = append( flds, &bind.CheckedFieldSetter{
+        Field: identifierFields,
+        StartField: createIdSliceBuilderFactory,
+        Assign: func( obj, val interface{} ) {
+            obj.( *mg.MissingFieldsError ).SetFields( val.( []*mg.Identifier ) )
+        },
+    })
+    return bind.CheckedStructFactory( reg, fact, flds... )
 }
 
 func visitIdentifierAsStruct( id *mg.Identifier, es mgRct.EventSender ) error {
