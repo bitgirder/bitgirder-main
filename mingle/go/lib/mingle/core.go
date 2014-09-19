@@ -1095,10 +1095,12 @@ var (
     TypeIdentifier *AtomicTypeReference
     QnameIdentifierPart *QualifiedTypeName
     TypeIdentifierPart *AtomicTypeReference
-    QnameNamespace *QualifiedTypeName
-    TypeNamespace *AtomicTypeReference
     QnameDeclaredTypeName *QualifiedTypeName
     TypeDeclaredTypeName *AtomicTypeReference
+    QnameNamespace *QualifiedTypeName
+    TypeNamespace *AtomicTypeReference
+    QnameQualifiedTypeName *QualifiedTypeName
+    TypeQualifiedTypeName *AtomicTypeReference
     QnameIdentifierPath *QualifiedTypeName
     TypeIdentifierPath *AtomicTypeReference
     QnameStandardError *QualifiedTypeName
@@ -1172,6 +1174,7 @@ func init() {
     QnameIdentifierPart, TypeIdentifierPart = f1( "IdentifierPart" )
     QnameDeclaredTypeName, TypeDeclaredTypeName = f1( "DeclaredTypeName" )
     QnameNamespace, TypeNamespace = f1( "Namespace" )
+    QnameQualifiedTypeName, TypeQualifiedTypeName = f1( "QualifiedTypeName" )
     QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
     QnameStandardError, TypeStandardError = f1( "StandardError" )
     QnameCastError, TypeCastError = f1( "CastError" )

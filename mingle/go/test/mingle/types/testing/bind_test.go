@@ -21,6 +21,10 @@ func getBoundTestValues() *mg.IdentifierMap {
     )
     res.Put( mkId( "namespace-ns1-v1" ), mkNs( "ns1@v1" ) )
     res.Put( mkId( "namespace-ns1-ns2-v1" ), mkNs( "ns1:ns2@v1" ) )
+    res.Put(
+        mkId( "qualified-type-name-ns1-v1-name1" ),
+        mkQn( "ns1@v1/Name1" ),
+    )
     tp := mg.MakeTestIdPath
     res.Put( mkId( "identifier-path-f1-f2-i1-f3" ), tp( 1, 2, "1", 3 ) )
     res.Put( 
@@ -441,14 +445,14 @@ func getBindTests() []*bind.BindTest {
         ),
         binOpts,
     )
-//    addRt( 
-//        parser.MustStruct( mg.QnameQualifiedTypeName,
-//            "namespace", ns1V1,
-//            "name", declNm1,
-//        ),
-//        mg.TypeNamespace,
-//        "qualified-type-name-ns1-v1-name1",
-//    )
+    addRt( 
+        parser.MustStruct( mg.QnameQualifiedTypeName,
+            "namespace", ns1V1,
+            "name", declNm1,
+        ),
+        mg.TypeQualifiedTypeName,
+        "qualified-type-name-ns1-v1-name1",
+    )
     return res
 }
 

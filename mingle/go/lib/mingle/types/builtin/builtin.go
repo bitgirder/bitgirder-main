@@ -12,6 +12,7 @@ var identifierMessage *mg.Identifier
 var identifierField *mg.Identifier
 var identifierFields *mg.Identifier
 var identifierName *mg.Identifier
+var identifierNamespace *mg.Identifier
 var typeIdentifierPartsList *mg.ListTypeReference
 var typeIdentifierPointer *mg.PointerTypeReference
 var typeIdentifierPointerList *mg.ListTypeReference
@@ -31,6 +32,7 @@ func initNames() {
     identifierField = idUnsafe( "field" )
     identifierFields = idUnsafe( "fields" )
     identifierName = idUnsafe( "name" )
+    identifierNamespace = idUnsafe( "namespace" )
     typeIdentifierPartsList = &mg.ListTypeReference{
         ElementType: &mg.AtomicTypeReference{
             Name: mg.QnameString,
@@ -172,6 +174,24 @@ func initNamespaceType() {
     MustAddBuiltinType( sd )
 }
 
+func initQnameType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameQualifiedTypeName
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierNamespace,
+            Type: mg.NewPointerTypeReference( mg.TypeNamespace ),
+        },
+    )
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierName,
+            Type: mg.NewPointerTypeReference( mg.TypeDeclaredTypeName ),
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
 func initIdentifierPathType() {
     sd := types.NewStructDefinition()
     sd.Name = mg.QnameIdentifierPath
@@ -218,6 +238,7 @@ func initLangV1Types() {
     initIdentifierType()
     initDeclaredTypeNameType()
     initNamespaceType()
+    initQnameType()
     initIdentifierPathType()
     MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameCastError ) )
     initUnrecognizedFieldError()

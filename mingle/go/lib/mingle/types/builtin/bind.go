@@ -150,6 +150,28 @@ func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func newQnBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &mg.QualifiedTypeName{} },
+        &bind.CheckedFieldSetter{
+            Field: identifierNamespace,
+            Type: mg.TypeNamespace,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.QualifiedTypeName ).Namespace = val.( *mg.Namespace )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeDeclaredTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.QualifiedTypeName ).Name = 
+                    val.( *mg.DeclaredTypeName )
+            },
+        },
+    )
+}
+
 func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
     negErr := func() error {
         return mg.NewCastError( ve.GetPath(), "value is negative" )
@@ -382,6 +404,18 @@ func VisitNamespace( ns *mg.Namespace, vc bind.VisitContext ) error {
     return visitNamespaceAsStruct( ns, vc )
 }
 
+func VisitQualifiedTypeName( 
+    qn *mg.QualifiedTypeName, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameQualifiedTypeName, func() error {
+        if err := bind.VisitFieldValue( vc, identifierNamespace, qn.Namespace );
+           err != nil {
+            return err
+        }
+        return bind.VisitFieldValue( vc, identifierName, qn.Name )
+    })
+}
+
 type idPathPartsEventSendVisitor struct {
     vc bind.VisitContext
 }
@@ -460,6 +494,7 @@ func visitBuiltinTypeOk(
     case *mg.Identifier: return VisitIdentifier( v, vc ), true
     case *mg.Namespace: return VisitNamespace( v, vc ), true
     case *mg.DeclaredTypeName: return VisitDeclaredTypeName( v, vc ), true
+    case *mg.QualifiedTypeName: return VisitQualifiedTypeName( v, vc ), true
     case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
     case *mg.CastError: return VisitCastError( v, vc ), true
     case *mg.UnrecognizedFieldError: 
@@ -474,6 +509,7 @@ func initBind() {
     reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameDeclaredTypeName, newDeclNmBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameQualifiedTypeName, newQnBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameCastError, newCastErrorBuilderFactory( reg ) )
     reg.MustAddValue( 
