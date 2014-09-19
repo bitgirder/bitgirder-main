@@ -78,15 +78,17 @@ func CheckedFunctionsFieldSetBuilder(
     val interface{},
     setters ...*CheckedFieldSetter ) mgRct.FieldSetBuilder {
 
-    res := mgRct.NewFunctionsFieldSetBuilder()
+    res := NewFunctionsFieldSetBuilder()
     res.Value = val
     for _, s := range setters { AddCheckedField( res, reg, s ) }
     return res
 }
 
+type InstanceFactoryFunc func() interface{}
+
 func checkedStructFunc( 
     reg *Registry, 
-    fact func() interface{}, 
+    fact InstanceFactoryFunc,
     setters []*CheckedFieldSetter ) mgRct.StructStartFunc {
 
     return func( _ *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
@@ -96,11 +98,71 @@ func checkedStructFunc(
 
 func CheckedStructFactory( 
     reg *Registry, 
-    fact func() interface{},
+    fact InstanceFactoryFunc,
     setters ...*CheckedFieldSetter ) mgRct.BuilderFactory {
 
     validateSetters( setters )
-    res := mgRct.NewFunctionsBuilderFactory()
+    res := NewFunctionsBuilderFactory()
     res.StructFunc = checkedStructFunc( reg, fact, setters )
     return res
+}
+
+type ListElementFactoryFunc func( reg *Registry ) mgRct.BuilderFactory
+
+func ListElementFactoryFuncForType( 
+    typ mg.TypeReference ) ListElementFactoryFunc {
+
+    return func( reg *Registry ) mgRct.BuilderFactory {
+        if res, ok := reg.BuilderFactoryForType( typ ); ok { return res }
+        return nil
+    }
+}
+
+type ListElementAddFunc func( l, val interface{} ) interface{}
+
+func CheckedListBuilder(
+    reg *Registry,
+    listFact InstanceFactoryFunc,
+    nextFact ListElementFactoryFunc,
+    addElt ListElementAddFunc ) mgRct.ListBuilder {
+
+    res := NewFunctionsListBuilder()
+    res.Value = listFact()
+    res.NextFunc = func() mgRct.BuilderFactory { return nextFact( reg ) }
+    res.AddFunc = func( val interface{}, path objpath.PathNode ) error {
+        res.Value = addElt( res.Value, val )
+        return nil
+    }
+    return res
+}
+
+func CheckedListFactory(
+    reg *Registry,
+    listFact InstanceFactoryFunc,
+    nextFact ListElementFactoryFunc,
+    addElt ListElementAddFunc ) mgRct.BuilderFactory {
+
+    res := NewFunctionsBuilderFactory()
+    res.ListFunc = func( 
+        _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
+
+        return CheckedListBuilder( reg, listFact, nextFact, addElt ), nil
+    }
+    return res
+}
+
+func CheckedListFieldStarter(
+    listFact InstanceFactoryFunc,
+    nextFact ListElementFactoryFunc,
+    addElt ListElementAddFunc ) CheckedFieldStartFunction {
+
+    return func( reg *Registry ) mgRct.BuilderFactory {
+        res := NewFunctionsBuilderFactory()
+        res.ListFunc = func( 
+            _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
+    
+            return CheckedListBuilder( reg, listFact, nextFact, addElt ), nil
+        }
+        return res
+    }
 }

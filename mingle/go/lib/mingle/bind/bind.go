@@ -44,6 +44,68 @@ func ( vc VisitContext ) EventSender() mgRct.EventSender {
     return mgRct.EventSenderForReactor( vc.Destination )
 }
 
+type VisitBodyFunc func() error
+
+func VisitStruct( 
+    vc VisitContext, typ *mg.QualifiedTypeName, f VisitBodyFunc ) error {
+
+    es := vc.EventSender()
+    if err := es.StartStruct( typ ); err != nil { return err }
+    if err := f(); err != nil { return err }
+    if err := es.End(); err != nil { return err }
+    return nil
+}
+
+func VisitFieldFunc(
+    vc VisitContext, fld *mg.Identifier, f func() error ) error {
+
+    if err := vc.EventSender().StartField( fld ); err != nil { return err }
+    return f()
+}
+
+func VisitFieldValue( 
+    vc VisitContext, fld *mg.Identifier, val interface{} ) error {
+
+    return VisitFieldFunc( vc, fld, func() error {
+        return VisitValue( val, vc )
+    })
+}
+
+func VisitList( vc VisitContext,
+                lt *mg.ListTypeReference,
+                body VisitBodyFunc ) error {
+
+    es := vc.EventSender()
+    if err := es.StartList( lt ); err != nil { return err }
+    if err := body(); err != nil { return err }
+    return es.End()
+}
+
+func VisitListFunc(
+    vc VisitContext, 
+    lt *mg.ListTypeReference, 
+    listLen int, 
+    f func( i int ) error ) error {
+
+    return VisitList( vc, lt, func() error {
+        for i := 0; i < listLen; i++ {
+            if err := f( i ); err != nil { return err }
+        }
+        return nil
+    })
+}
+
+func VisitListValue(
+    vc VisitContext,
+    lt *mg.ListTypeReference,
+    listLen int,
+    f func( i int ) interface{} ) error {
+
+    return VisitListFunc( vc, lt, listLen, func( i int ) error {
+        return VisitValue( f( i ), vc )
+    })
+}
+
 type VisitValueOkFunc func( val interface{}, vc VisitContext ) ( error, bool )
 
 type Registry struct {

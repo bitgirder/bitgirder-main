@@ -18,10 +18,22 @@ func visitF1Struct( nm string, f1 int32, vc VisitContext ) error {
 
 type S1 struct {
     f1 int32
+    f2 []int32
 }
 
 func ( s *S1 ) VisitValue( vc VisitContext ) error {
-    return visitF1Struct( "ns1@v1/S1", s.f1, vc )
+    qn := mkQn( "mingle:bind@v1/S1" )
+    f := func() error { 
+        if err := VisitFieldValue( vc, mkId( "f1" ), s.f1 ); err != nil { 
+            return err
+        }
+        return VisitFieldFunc( vc, mkId( "f2" ), func() error {
+            lt := asType( "Int32*" ).( *mg.ListTypeReference )
+            elt := func( i int ) interface{} { return s.f2[ i ] }
+            return VisitListValue( vc, lt, len( s.f2 ), elt )
+        })
+    }
+    return VisitStruct( vc, qn, f )
 }
 
 type E1 string 
@@ -32,7 +44,7 @@ const (
 )
 
 func ( e E1 ) VisitValue( vc VisitContext ) error {
-    me := parser.MustEnum( "ns1@v1/E1", string( e ) )
+    me := parser.MustEnum( "mingle:bind@v1/E1", string( e ) )
     ve := mgRct.NewValueEvent( me )
     return vc.Destination.ProcessEvent( ve )
 }
@@ -41,12 +53,30 @@ type unregisteredType int
 
 type failOnVisitType int
 
-type customVisitable int32
+type customVisitable struct {
+    f1 int32
+    f2 []int32
+}
+
+func visitCustomVisitable( cv customVisitable, vc VisitContext ) error {
+    qn := mkQn( "mingle:bind@v1/CustomVisitable" )
+    return VisitStruct( vc, qn, func() error {
+        err := VisitFieldFunc( vc, mkId( "f1" ), func() error {
+            return vc.EventSender().Value( mg.Int32( int32( cv.f1 ) ) )
+        })
+        if err != nil { return err }
+        lt := asType( "Int32*" ).( *mg.ListTypeReference )
+        return VisitFieldFunc( vc, mkId( "f2" ), func() error {
+            return VisitListFunc( vc, lt, len( cv.f2 ), func( i int ) error {
+                return vc.EventSender().Value( mg.Int32( cv.f2[ i ] ) )
+            })
+        })
+    })
+}
 
 func visitOkTestFunc( val interface{}, vc VisitContext ) ( error, bool ) {
     switch v := val.( type ) {
-    case customVisitable: 
-        return visitF1Struct( "ns1@v1/CustomVisitable", int32( v ), vc ), true
+    case customVisitable: return visitCustomVisitable( v, vc ), true
     case failOnVisitType: return NewVisitError( vc.Path, "test-failure" ), true
     }
     return nil, false
@@ -65,7 +95,7 @@ func ensureTestBuilderFactories() {
     regsByDomain.Put( domainPackageBindTest, reg )
     addPrimBindings( reg )
     reg.MustAddValue(
-        mkQn( "ns1@v1/S1" ),
+        mkQn( "mingle:bind@v1/S1" ),
         CheckedStructFactory( 
             reg, 
             func() interface{} { return &S1{} },
@@ -76,10 +106,23 @@ func ensureTestBuilderFactories() {
                     acc.( *S1 ).f1 = val.( int32 ) 
                 },
             },
+            &CheckedFieldSetter{
+                Field: mkId( "f2" ),
+                StartField: CheckedListFieldStarter(
+                    func() interface{} { return make( []int32, 0, 4 ) },
+                    ListElementFactoryFuncForType( mg.TypeInt32 ),
+                    func( l, val interface{} ) interface{} {
+                        return append( l.( []int32 ), val.( int32 ) )
+                    },
+                ),
+                Assign: func( acc, val interface{} ) {
+                    acc.( *S1 ).f2 = val.( []int32 )
+                },
+            },
         ),
     )
     reg.MustAddValue(
-        mkQn( "ns1@v1/E1" ),
+        mkQn( "mingle:bind@v1/E1" ),
         func() mgRct.BuilderFactory {
             res := mgRct.NewFunctionsBuilderFactory()
             res.ValueFunc = func( 
@@ -113,9 +156,12 @@ func getDefaultValBindTestValues() *mg.IdentifierMap {
     res.Put( mkId( "float32-val1" ), float32( 1.0 ) )
     res.Put( mkId( "float64-val1" ), float64( 1.0 ) )
     res.Put( mkId( "time-val1" ), time.Time( tm1 ) )
-    res.Put( mkId( "s1-val1" ), &S1{ f1: 1 } )
+    res.Put( mkId( "s1-val1" ), &S1{ f1: 1, f2: []int32{ 0, 1, 2 } } )
     res.Put( mkId( "e1-val1" ), E1V1 )
-    res.Put( mkId( "custom-visitable-val1" ), customVisitable( 1 ) )
+    res.Put( 
+        mkId( "custom-visitable-val1" ), 
+        customVisitable{ f1: 1, f2: []int32{ 0, 1, 2 } },
+    )
     res.Put( mkId( "unregistered-type-val1" ), unregisteredType( 1 ) )
     res.Put( mkId( "fail-on-visit-type-val1" ), failOnVisitType( 1 ) )
     return res
@@ -141,14 +187,22 @@ func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
     addOk( mg.Float32( 1.0 ), "float32-val1" )
     addOk( mg.Float64( 1.0 ), "float64-val1" )
     addOk( tm1, "time-val1" )
-    s1V1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
-    e1V1 := parser.MustEnum( "ns1@v1/E1", "v1" )
+    s1V1 := parser.MustStruct( "mingle:bind@v1/S1", 
+        "f1", int32( 1 ),
+        "f2", mg.MustList( asType( "Int32*" ), 
+            int32( 0 ), int32( 1 ), int32( 2 ),
+        ),
+    )
+    e1V1 := parser.MustEnum( "mingle:bind@v1/E1", "v1" )
     addOk( s1V1, "s1-val1" )
     addOk( e1V1, "e1-val1" )
     addTest(
         &BindTest{
-            Mingle: parser.MustStruct( "ns1@v1/CustomVisitable", 
+            Mingle: parser.MustStruct( "mingle:bind@v1/CustomVisitable", 
                 "f1", int32( 1 ),
+                "f2", mg.MustList( asType( "Int32*" ), 
+                    int32( 0 ), int32( 1 ), int32( 2 ),
+                ),
             ),
             BoundId: mkId( "custom-visitable-val1" ),
             Direction: BindTestDirectionOut,
@@ -164,50 +218,52 @@ func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
         )
     }
     addInErr(
-        parser.MustStruct( "ns1@v1/Bad" ),
+        parser.MustStruct( "mingle:bind@v1/Bad" ),
         nil,
-        "unhandled value: ns1@v1/Bad",
+        "unhandled value: mingle:bind@v1/Bad",
     )
     addInErr(
-        parser.MustEnum( "ns1@v1/Bad", "e1" ),
+        parser.MustEnum( "mingle:bind@v1/Bad", "e1" ),
         nil,
-        "unhandled value: ns1@v1/Bad",
+        "unhandled value: mingle:bind@v1/Bad",
     )
     addInErr(
-        parser.MustStruct( "ns1@v1/S1", "f1", int64( 1 ) ),
+        parser.MustStruct( "mingle:bind@v1/S1", "f1", int64( 1 ) ),
         p( 1 ),
         "unhandled value: mingle:core@v1/Int64",
     )
     addInErr(
-        parser.MustStruct( "ns1@v1/S1",
-            "f1", parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) ),
+        parser.MustStruct( "mingle:bind@v1/S1",
+            "f1", parser.MustStruct( "mingle:bind@v1/S1", "f1", int32( 1 ) ),
         ),
         p( 1 ),
-        "unhandled value: ns1@v1/S1",
+        "unhandled value: mingle:bind@v1/S1",
     )
     addInErr(
-        parser.MustStruct( "ns1@v1/S1",
-            "f1", parser.MustEnum( "ns1@v1/E1", "v1" ),
+        parser.MustStruct( "mingle:bind@v1/S1",
+            "f1", parser.MustEnum( "mingle:bind@v1/E1", "v1" ),
         ),
         p( 1 ),
-        "unhandled value: ns1@v1/E1",
+        "unhandled value: mingle:bind@v1/E1",
     )
     addInErr(
-        parser.MustStruct( "ns1@v1/S1", 
-            "f1", mg.MustList( asType( "ns1@v1/S1*" ), "ns1@v1/S1*" ),
+        parser.MustStruct( "mingle:bind@v1/S1", 
+            "f1", mg.MustList( asType( "mingle:bind@v1/S1*" ), 
+                parser.MustStruct( "mingle:bind@v1/S1" ),
+            ),
         ),
         p( 1 ),
-        "unhandled value: ns1@v1/S1*",
+        "unhandled value: mingle:bind@v1/S1*",
     )
     addInErr(
-        parser.MustStruct( "ns1@v1/S1", "f1", mg.EmptySymbolMap() ),
+        parser.MustStruct( "mingle:bind@v1/S1", "f1", mg.EmptySymbolMap() ),
         p( 1 ),
         "unhandled value: mingle:core@v1/SymbolMap",
     )
     addInErr(
-        mg.MustList( asType( "ns1@v1/Bad*" ) ),
+        mg.MustList( asType( "mingle:bind@v1/Bad*" ) ),
         nil,
-        "unhandled value: ns1@v1/Bad*",
+        "unhandled value: mingle:bind@v1/Bad*",
     )
     addVisitErr := func( boundId string, path objpath.PathNode, msg string ) {
         addTest(
