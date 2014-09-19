@@ -11,7 +11,7 @@ var identifierLocation *mg.Identifier
 var identifierMessage *mg.Identifier
 var identifierField *mg.Identifier
 var identifierFields *mg.Identifier
-var typeIdentifierPart *mg.AtomicTypeReference
+var identifierName *mg.Identifier
 var typeIdentifierPartsList *mg.ListTypeReference
 var typeIdentifierPointer *mg.PointerTypeReference
 var typeIdentifierPointerList *mg.ListTypeReference
@@ -30,12 +30,14 @@ func initNames() {
     identifierMessage = idUnsafe( "message" )
     identifierField = idUnsafe( "field" )
     identifierFields = idUnsafe( "fields" )
-    typeIdentifierPart = &mg.AtomicTypeReference{
-        Name: mg.QnameString,
-        Restriction: mg.MustRegexRestriction( "^[a-z][a-z0-9]*$" ),
-    }
+    identifierName = idUnsafe( "name" )
     typeIdentifierPartsList = &mg.ListTypeReference{
-        ElementType: typeIdentifierPart,
+        ElementType: &mg.AtomicTypeReference{
+            Name: mg.QnameString,
+            Restriction: mg.MustRegexRestriction( 
+                mg.IdentifierPartRegexp.String(),
+            ),
+        },
         AllowsEmpty: false,
     }
     typeIdentifierPointer = mg.NewPointerTypeReference( mg.TypeIdentifier )
@@ -131,6 +133,23 @@ func initIdentifierType() {
     MustAddBuiltinType( sd )
 }
 
+func initDeclaredTypeNameType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameDeclaredTypeName
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierName,
+            Type: &mg.AtomicTypeReference{
+                Name: mg.QnameString,
+                Restriction: mg.MustRegexRestriction(
+                    mg.DeclaredTypeNameRegexp.String(),
+                ),
+            },
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
 func initNamespaceType() {
     sd := types.NewStructDefinition()
     sd.Name = mg.QnameNamespace
@@ -197,6 +216,7 @@ func initMissingFieldsError() {
 
 func initLangV1Types() {
     initIdentifierType()
+    initDeclaredTypeNameType()
     initNamespaceType()
     initIdentifierPathType()
     MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameCastError ) )

@@ -15,6 +15,10 @@ func getBoundTestValues() *mg.IdentifierMap {
     res := mg.NewIdentifierMap()
     res.Put( mkId( "identifier-id1" ), mkId( "id1" ) )
     res.Put( mkId( "identifier-id1-id2" ), mkId( "id1-id2" ) )
+    res.Put( 
+        mkId( "declared-type-name-name1" ), 
+        parser.MustDeclaredTypeName( "Name1" ),
+    )
     res.Put( mkId( "namespace-ns1-v1" ), mkNs( "ns1@v1" ) )
     res.Put( mkId( "namespace-ns1-ns2-v1" ), mkNs( "ns1:ns2@v1" ) )
     tp := mg.MakeTestIdPath
@@ -153,14 +157,19 @@ func getBindTests() []*bind.BindTest {
         p( "parts" ).StartList().SetIndex( 1 ),
         "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
     )
-    addRt(
-        parser.MustStruct( mg.QnameNamespace,
-            "version", idStruct( "v1" ),
-            "parts", mg.MustList( idStruct( "ns1" ) ),
-        ),
-        mg.TypeNamespace,
-        "namespace-ns1-v1",
+    declNm1 := parser.MustStruct( mg.QnameDeclaredTypeName, "name", "Name1" )
+    addRt( declNm1, mg.TypeDeclaredTypeName, "declared-type-name-name1" )
+    addVcErr(
+        parser.MustStruct( mg.QnameDeclaredTypeName, "name", "Bad$Name" ),
+        mg.TypeDeclaredTypeName,
+        objpath.RootedAt( mkId( "name" ) ),
+        "Value \"Bad$Name\" does not satisfy restriction \"^([A-Z][a-z0-9]*)+$\"",
     )
+    ns1V1 := parser.MustStruct( mg.QnameNamespace,
+        "version", idStruct( "v1" ),
+        "parts", mg.MustList( idStruct( "ns1" ) ),
+    )
+    addRt( ns1V1, mg.TypeNamespace, "namespace-ns1-v1" )
     addRt(
         parser.MustStruct( mg.QnameNamespace,
             "version", idStruct( "v1" ),
@@ -432,6 +441,14 @@ func getBindTests() []*bind.BindTest {
         ),
         binOpts,
     )
+//    addRt( 
+//        parser.MustStruct( mg.QnameQualifiedTypeName,
+//            "namespace", ns1V1,
+//            "name", declNm1,
+//        ),
+//        mg.TypeNamespace,
+//        "qualified-type-name-ns1-v1-name1",
+//    )
     return res
 }
 

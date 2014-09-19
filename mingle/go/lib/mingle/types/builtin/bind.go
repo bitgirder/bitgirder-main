@@ -89,6 +89,20 @@ func newIdBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func newDeclNmBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &mg.DeclaredTypeName{} },
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeString,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.DeclaredTypeName ).SetNameUnsafe( val.( string ) )
+            },
+        },
+    )
+}
+
 func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     return bind.CheckedFunctionsFieldSetBuilder(
         reg,
@@ -350,6 +364,14 @@ func visitNamespaceAsStruct( ns *mg.Namespace, vc bind.VisitContext ) error {
     })
 }
 
+func VisitDeclaredTypeName( 
+    nm *mg.DeclaredTypeName, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameDeclaredTypeName, func() error {
+        return bind.VisitFieldValue( vc, identifierName, nm.ExternalForm() )
+    })
+}
+
 func VisitNamespace( ns *mg.Namespace, vc bind.VisitContext ) error {
     switch opts := vc.BindContext.SerialOptions; opts.Format {
     case bind.SerialFormatText:
@@ -437,6 +459,7 @@ func visitBuiltinTypeOk(
     switch v := val.( type ) {
     case *mg.Identifier: return VisitIdentifier( v, vc ), true
     case *mg.Namespace: return VisitNamespace( v, vc ), true
+    case *mg.DeclaredTypeName: return VisitDeclaredTypeName( v, vc ), true
     case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
     case *mg.CastError: return VisitCastError( v, vc ), true
     case *mg.UnrecognizedFieldError: 
@@ -449,6 +472,7 @@ func visitBuiltinTypeOk(
 func initBind() {
     reg := bind.RegistryForDomain( bind.DomainDefault )
     reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameDeclaredTypeName, newDeclNmBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameCastError, newCastErrorBuilderFactory( reg ) )

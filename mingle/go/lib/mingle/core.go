@@ -52,7 +52,7 @@ func MustIdentifierFormatString( nm string ) IdentifierFormat {
 var IdentifierFormats = 
     []IdentifierFormat{ LcUnderscore, LcHyphenated, LcCamelCapped }
 
-var idPartRegexp = regexp.MustCompile( "^[a-z][a-z0-9]*$" )
+var IdentifierPartRegexp = regexp.MustCompile( "^[a-z][a-z0-9]*$" )
 
 type IdentifierPartFormatError struct { Part string }
 
@@ -61,7 +61,7 @@ func ( e *IdentifierPartFormatError ) Error() string {
 }
 
 func getIdentifierPartError( s string ) error {
-    if res := idPartRegexp.FindStringIndex( s ); res == nil {
+    if res := IdentifierPartRegexp.FindStringIndex( s ); res == nil {
         return &IdentifierPartFormatError{ s }
     }
     return nil
@@ -214,10 +214,12 @@ func NewDeclaredTypeNameUnsafe( nm string ) *DeclaredTypeName {
     return &DeclaredTypeName{ nm }
 }
 
-var declNmRegexp = regexp.MustCompile( "^([A-Z][a-z0-9]*)+$" )
+func ( dtn *DeclaredTypeName ) SetNameUnsafe( nm string ) { dtn.nm = nm }
+
+var DeclaredTypeNameRegexp = regexp.MustCompile( "^([A-Z][a-z0-9]*)+$" )
 
 func CreateDeclaredTypeName( nm string ) ( *DeclaredTypeName, error ) {
-    if res := declNmRegexp.FindStringIndex( nm ); res == nil {
+    if res := DeclaredTypeNameRegexp.FindStringIndex( nm ); res == nil {
         msg := fmt.Sprintf( "invalid type name: %q", nm )
         return nil, newDeclaredTypeNameError( msg )
     }
@@ -1095,6 +1097,8 @@ var (
     TypeIdentifierPart *AtomicTypeReference
     QnameNamespace *QualifiedTypeName
     TypeNamespace *AtomicTypeReference
+    QnameDeclaredTypeName *QualifiedTypeName
+    TypeDeclaredTypeName *AtomicTypeReference
     QnameIdentifierPath *QualifiedTypeName
     TypeIdentifierPath *AtomicTypeReference
     QnameStandardError *QualifiedTypeName
@@ -1166,6 +1170,7 @@ func init() {
     }
     QnameIdentifier, TypeIdentifier = f1( "Identifier" )
     QnameIdentifierPart, TypeIdentifierPart = f1( "IdentifierPart" )
+    QnameDeclaredTypeName, TypeDeclaredTypeName = f1( "DeclaredTypeName" )
     QnameNamespace, TypeNamespace = f1( "Namespace" )
     QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
     QnameStandardError, TypeStandardError = f1( "StandardError" )
