@@ -32,84 +32,28 @@ func setStructFunc(
     }
 }
 
-func setListFunc(
-    b *mgRct.FunctionsBuilderFactory, 
-    valFact func() interface{},
-    addVal func( val, acc interface{} ) interface{},
-    nextFunc func() mgRct.BuilderFactory ) {
+var idSliceBuilderFactory = bind.CheckedListFieldStarter(
+    func() interface{} { return make( []*mg.Identifier, 0, 2 ) },
+    bind.ListElementFactoryFuncForType( mg.TypeIdentifier ),
+    func( l, val interface{} ) interface{} {
+        return append( l.( []*mg.Identifier ), val.( *mg.Identifier ) )
+    },
+)
 
-    b.ListFunc = func( _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
-        lb := bind.NewFunctionsListBuilder()
-        lb.Value = valFact()
-        lb.AddFunc = func( val interface{}, path objpath.PathNode ) error {
-            lb.Value = addVal( val, lb.Value )
-            return nil
-        }
-        lb.NextFunc = nextFunc
-        return lb, nil
-    }
-}
-
-func registerBoundField0( 
-    fsb *mgRct.FunctionsFieldSetBuilder,
-    fld *mg.Identifier,
-    typ mg.TypeReference,
-    set func( fldVal, val interface{} ),
-    reg *bind.Registry ) {
-
-    fsb.RegisterField(
-        fld,
-        func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            return reg.MustBuilderFactoryForType( typ ), nil
-        },
-        func( val interface{}, path objpath.PathNode ) error {
-            set( val, fsb.Value )
-            return nil
-        },
-    )
-}
-
-func builderFactFuncForType( 
-    typ mg.TypeReference, reg *bind.Registry ) func() mgRct.BuilderFactory {
-
-    return func() mgRct.BuilderFactory {
-        if bf, ok := reg.BuilderFactoryForType( typ ); ok { return bf }
-        return nil
-    }
-}
-
-func createIdSliceBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
-    res := bind.NewFunctionsBuilderFactory()
-    setListFunc(
-        res,
-        func() interface{} { return make( []*mg.Identifier, 0, 2 ) },
-        func( val, acc interface{} ) interface{} {
-            return append( acc.( []*mg.Identifier ), val.( *mg.Identifier ) )
-        },
-        builderFactFuncForType( mg.TypeIdentifier, reg ),
-    )
-    return res
-}
-
-func idPartsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
-    res := bind.NewFunctionsBuilderFactory()
-    setListFunc(
-        res,
-        func() interface{} { return make( []string, 0, 2 ) },
-        func( val, acc interface{} ) interface{} {
-            return append( acc.( []string ), val.( string ) )
-        },
-        builderFactFuncForType( mg.TypeString, reg ),
-    )
-    return res
-}
+var stringSliceBuilderFactory = bind.CheckedListFieldStarter(
+    func() interface{} { return make( []string, 0, 2 ) },
+    bind.ListElementFactoryFuncForType( mg.TypeString ),
+    func( l, val interface{} ) interface{} {
+        return append( l.( []string ), val.( string ) )
+    },
+)
 
 func idBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     idBuilder := bind.NewFunctionsFieldSetBuilder()
     idBuilder.RegisterField( 
         identifierParts,
         func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-            return idPartsBuilderFactory( reg ), nil
+            return stringSliceBuilderFactory( reg ), nil
         },
         func( val interface{}, path objpath.PathNode ) error {
             idBuilder.Value = mg.NewIdentifierUnsafe( val.( []string ) )
@@ -158,7 +102,7 @@ func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
         },
         &bind.CheckedFieldSetter{
             Field: identifierParts,
-            StartField: createIdSliceBuilderFactory,
+            StartField: idSliceBuilderFactory,
             Assign: func( obj, val interface{} ) {
                 obj.( *mg.Namespace ).Parts = val.( []*mg.Identifier )
             },
@@ -237,35 +181,20 @@ func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
-func idPathPartsBuilder( reg *bind.Registry ) mgRct.BuilderFactory {
-    res := bind.NewFunctionsBuilderFactory()
-    setListFunc( 
-        res,
-        func() interface{} { return make( []interface{}, 0, 4 ) },
-        func( val, acc interface{} ) interface{} {
-            return append( acc.( []interface{} ), val )
-        },
-        func() mgRct.BuilderFactory { return idPathPartBuilderFactory( reg ) },
-    )
-    return res
-}
+var idPathPartsStarter = bind.CheckedListFieldStarter(
+    func() interface{} { return make( []interface{}, 0, 4 ) },
+    idPathPartBuilderFactory,
+    func( l, val interface{} ) interface{} {
+        return append( l.( []interface{} ), val )
+    },
+)
 
 func buildIdPath( parts []interface{} ) objpath.PathNode {
     var res objpath.PathNode
     for _, part := range parts {
         switch v := part.( type ) {
-        case uint64:
-            if res == nil { 
-                res = objpath.RootedAtList().SetIndex( v )
-            } else {
-                res = res.StartList().SetIndex( v )
-            }
-        case *mg.Identifier:
-            if res == nil {
-                res = objpath.RootedAt( v )
-            } else {
-                res = res.Descend( v )
-            }
+        case uint64: res = objpath.StartList( res ).SetIndex( v )
+        case *mg.Identifier: res = objpath.Descend( res, v )
         default: panic( libErrorf( "unhandled id path part: %T", part ) )
         }
     }
@@ -288,7 +217,7 @@ func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         res.RegisterField(
             idUnsafe( "parts" ),
             func( path objpath.PathNode ) ( mgRct.BuilderFactory, error ) {
-                return idPathPartsBuilder( reg ), nil
+                return idPathPartsStarter( reg ), nil
             },
             func( val interface{}, path objpath.PathNode ) error {
                 res.Value = buildIdPath( val.( []interface{} ) )
@@ -370,7 +299,7 @@ func newMissingFieldsErrorBuilderFactory(
     )
     flds = append( flds, &bind.CheckedFieldSetter{
         Field: identifierFields,
-        StartField: createIdSliceBuilderFactory,
+        StartField: idSliceBuilderFactory,
         Assign: func( obj, val interface{} ) {
             obj.( *mg.MissingFieldsError ).SetFields( val.( []*mg.Identifier ) )
         },

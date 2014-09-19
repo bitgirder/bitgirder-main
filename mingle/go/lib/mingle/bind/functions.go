@@ -86,11 +86,12 @@ func CheckedFunctionsFieldSetBuilder(
 
 type InstanceFactoryFunc func() interface{}
 
-func checkedStructFunc( 
+func CheckedStructFunc( 
     reg *Registry, 
     fact InstanceFactoryFunc,
     setters []*CheckedFieldSetter ) mgRct.StructStartFunc {
 
+    validateSetters( setters )
     return func( _ *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
         return CheckedFunctionsFieldSetBuilder( reg, fact(), setters... ), nil
     }
@@ -101,9 +102,8 @@ func CheckedStructFactory(
     fact InstanceFactoryFunc,
     setters ...*CheckedFieldSetter ) mgRct.BuilderFactory {
 
-    validateSetters( setters )
     res := NewFunctionsBuilderFactory()
-    res.StructFunc = checkedStructFunc( reg, fact, setters )
+    res.StructFunc = CheckedStructFunc( reg, fact, setters )
     return res
 }
 
