@@ -485,6 +485,131 @@ func TestRestrictionAccept( t *testing.T ) {
     f( String( "aaaaa" ), vr3, false )
 }
 
+type AtomicRestrictionErrorTest struct {
+    Name *QualifiedTypeName
+    Restriction interface{}
+    Error error
+}
+
+func GetAtomicRestrictionErrorTests() []*AtomicRestrictionErrorTest {
+    rng := NewRangeRestriction
+    regx := MustRegexRestriction
+    return []*AtomicRestrictionErrorTest{
+        { Name: ns1V1Qn( "S1" ) },
+        { Name: ns1V1Qn( "S1" ), Restriction: regx( "a" ) },
+        {
+            Name: QnameString,
+            Restriction: rng( true, Int32( 0 ), String( "1" ), false ),
+        },
+        {
+            Name: QnameString,
+            Restriction: rng( true, String( "0" ), Int32( 1 ), false ),
+        },
+        {
+            Name: QnameTimestamp,
+            Restriction: rng( false, nil, Int32( 1 ), false ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( true, String( "a" ), Int32( 2 ), false ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( false, Int32( 1 ), String( "20" ), false ),
+        },
+        { Name: QnameInt32, Restriction: regx( "a" ) },
+        {
+            Name: QnameBuffer,
+            Restriction: rng( true, Int32( 0 ), Int32( 1 ), true ),
+        },
+        {
+            Name: QnameTimestamp,
+            Restriction: rng(
+                true,
+                MustTimestamp( "2012-01-02T12:00:00Z" ), 
+                MustTimestamp( "2012-01-01T12:00:00Z" ),
+                true,
+            ),
+        },
+        { Name: QnameTimestamp, Restriction: regx( "2001-0x-22" ) },
+        { Name: QnameString, Restriction: "ab[a-z" },
+        {
+            Name: QnameInt32,
+            Restriction: rng( true, Int32( 0 ), Int32( -1 ), true ),
+        },
+        {
+            Name: QnameUint32,
+            Restriction: rng( false, Uint32( 0 ), Uint32( 0 ), false ),
+        },
+        {
+            Name: QnameInt64,
+            Restriction: rng( true, Int64( 0 ), Int64( 0 ), false ),
+        },
+        {
+            Name: QnameUint64,
+            Restriction: rng( false, Uint64( 0 ), Uint64( 0 ), true ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( false, Int32( 0 ), Int32( 1 ), false ),
+        },
+        {
+            Name: QnameString,
+            Restriction: rng( false, String( "a" ), String( "a" ), false ),
+        },
+        {
+            Name: QnameString,
+            Restriction: rng( false, String( "b" ), String( "a" ), false ),
+        },
+        {
+            Name: QnameTimestamp,
+            Restriction: rng(
+                false,
+                MustTimestamp( "2012-01-01T12:00:00Z" ), 
+                MustTimestamp( "2012-01-01T12:00:00Z" ),
+                false,
+            ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( true, Float32( 1.0 ), Int32( 2 ), true ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( true, Int32( 1 ), Float32( 2.0 ), true ),
+        },
+        {
+            Name: QnameFloat32,
+            Restriction: rng( false, Float32( 1.0 ), Float32( 1.0 ), false ),
+        },
+        {
+            Name: QnameFloat64,
+            Restriction: rng( false, Float64( 0.0 ), Float64( -1.0 ), false ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( false, String( "1" ), Int32( 3 ), true ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: rng( true, Int32( 0 ), String( "2" ), false ),
+        },
+    }
+}
+
+func testAtomicRestrictionError( 
+    t *AtomicRestrictionErrorTest, a *assert.PathAsserter ) {
+
+    a.Fatalf( "expected error: %s", t.Error )
+}
+
+func TestAtomicRestrictionError( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    for _, test := range GetAtomicRestrictionErrorTests() {
+        testAtomicRestrictionError( test, la )
+    }
+}  
+
 func TestCanAssign( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
     int32Rng := NewAtomicTypeReference(
