@@ -1101,6 +1101,18 @@ var (
     TypeNamespace *AtomicTypeReference
     QnameQualifiedTypeName *QualifiedTypeName
     TypeQualifiedTypeName *AtomicTypeReference
+    QnameAtomicTypeReference *QualifiedTypeName
+    TypeAtomicTypeReference *AtomicTypeReference
+    QnameRangeRestriction *QualifiedTypeName
+    TypeRangeRestriction *AtomicTypeReference
+    QnameRegexRestriction *QualifiedTypeName
+    TypeRegexRestriction *AtomicTypeReference
+    QnameListTypeReference *QualifiedTypeName
+    TypeListTypeReference *AtomicTypeReference
+    QnameNullableTypeReference *QualifiedTypeName
+    TypeNullableTypeReference *AtomicTypeReference
+    QnamePointerTypeReference *QualifiedTypeName
+    TypePointerTypeReference *AtomicTypeReference
     QnameIdentifierPath *QualifiedTypeName
     TypeIdentifierPath *AtomicTypeReference
     QnameStandardError *QualifiedTypeName
@@ -1175,6 +1187,15 @@ func init() {
     QnameDeclaredTypeName, TypeDeclaredTypeName = f1( "DeclaredTypeName" )
     QnameNamespace, TypeNamespace = f1( "Namespace" )
     QnameQualifiedTypeName, TypeQualifiedTypeName = f1( "QualifiedTypeName" )
+    QnameAtomicTypeReference, TypeAtomicTypeReference = 
+        f1( "AtomicTypeReference" )
+    QnameRangeRestriction, TypeRangeRestriction = f1( "RangeRestriction" )
+    QnameRegexRestriction, TypeRegexRestriction = f1( "RegexRestriction" )
+    QnameListTypeReference, TypeListTypeReference = f1( "ListTypeReference" )
+    QnameNullableTypeReference, TypeNullableTypeReference = 
+        f1( "NullableTypeReference" )
+    QnamePointerTypeReference, TypePointerTypeReference = 
+        f1( "PointerTypeReference" )
     QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
     QnameStandardError, TypeStandardError = f1( "StandardError" )
     QnameCastError, TypeCastError = f1( "CastError" )
