@@ -133,7 +133,7 @@ func ( reg *Registry ) BuilderFactoryForType(
     typ mg.TypeReference ) ( mgRct.BuilderFactory, bool ) {
 
     if at, ok := typ.( *mg.AtomicTypeReference ); ok {
-        return reg.BuilderFactoryForName( at.Name )
+        return reg.BuilderFactoryForName( at.Name() )
     }
     return nil, false
 }
@@ -305,7 +305,7 @@ func MustRegistryForDomain( domain *mg.Identifier ) *Registry {
 func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
     res := NewFunctionsBuilderFactory()
     res.ValueFunc = func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
-        qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name
+        qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name()
         if bf, ok := reg.m.GetOk( qn ); ok {
             res, err := bf.( mgRct.BuilderFactory ).BuildValue( ve )
             return res, err, true

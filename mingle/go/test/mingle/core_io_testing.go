@@ -127,9 +127,7 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
     mkV1Typ := func( nm string, rx ValueRestriction ) *AtomicTypeReference {
         ns := mkNs( mkId( "v1" ), mkId( "mingle" ), mkId( "core" ) )
         qn := mkQn( ns, mkDeclNm( nm ) )
-        at := &AtomicTypeReference{ Name: qn }
-        if rx != nil { at.Restriction = rx }
-        return at
+        return NewAtomicTypeReference( qn, rx )
     }
     set( mkV1Typ( "String", MustRegexRestriction( "a" ) ) )
     set( 

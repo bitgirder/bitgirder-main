@@ -188,10 +188,10 @@ func ( tc *unsafeTypeCompleter ) resolveName(
     return nm.( *mg.DeclaredTypeName ).ResolveIn( mg.CoreNsV1 )
 }
 
-func ( tc *unsafeTypeCompleter ) setStringRestriction(
-    at *mg.AtomicTypeReference, rx *RegexRestrictionSyntax ) {
+func ( tc *unsafeTypeCompleter ) getStringRestriction(
+    rx *RegexRestrictionSyntax ) mg.ValueRestriction {
 
-    at.Restriction = mg.MustRegexRestriction( rx.Pat )
+    return mg.MustRegexRestriction( rx.Pat )
 }
 
 func ( tc *unsafeTypeCompleter ) setRangeValue(
@@ -215,28 +215,27 @@ func ( tc *unsafeTypeCompleter ) setRangeValue(
     }
 }
 
-func ( tc *unsafeTypeCompleter ) setRangeRestriction(
-    at *mg.AtomicTypeReference, rx *RangeRestrictionSyntax ) {
+func ( tc *unsafeTypeCompleter ) getRangeRestriction(
+    qn *mg.QualifiedTypeName, rx *RangeRestrictionSyntax ) mg.ValueRestriction {
 
     rng := &mg.RangeRestriction{}
     rng.MinClosed = rx.LeftClosed
-    if l := rx.Left; l != nil { tc.setRangeValue( &( rng.Min ), at.Name, l ) }
-    if r := rx.Right; r != nil { tc.setRangeValue( &( rng.Max ), at.Name, r ) }
+    if l := rx.Left; l != nil { tc.setRangeValue( &( rng.Min ), qn, l ) }
+    if r := rx.Right; r != nil { tc.setRangeValue( &( rng.Max ), qn, r ) }
     rng.MaxClosed = rx.RightClosed
 
-    at.Restriction = rng
+    return rng
 }
 
-func ( tc *unsafeTypeCompleter ) setRestriction(
-    at *mg.AtomicTypeReference, rx RestrictionSyntax ) {
+func ( tc *unsafeTypeCompleter ) getRestriction(
+    qn *mg.QualifiedTypeName, rx RestrictionSyntax ) mg.ValueRestriction {
 
-    if at.Name.Equals( mg.QnameString ) {
+    if qn.Equals( mg.QnameString ) {
         if regx, ok := rx.( *RegexRestrictionSyntax ); ok {
-            tc.setStringRestriction( at, regx )
-            return
+            return tc.getStringRestriction( regx )
         }
     }
-    tc.setRangeRestriction( at, rx.( *RangeRestrictionSyntax ) )
+    return tc.getRangeRestriction( qn, rx.( *RangeRestrictionSyntax ) )
 }
 
 func ( tc *unsafeTypeCompleter ) CompleteBaseType(
@@ -244,9 +243,13 @@ func ( tc *unsafeTypeCompleter ) CompleteBaseType(
     rx RestrictionSyntax, 
     errLoc *Location ) ( mg.TypeReference, bool, error ) {
 
-    at := &mg.AtomicTypeReference{ Name: tc.resolveName( nm ) }
-    if rx != nil { tc.setRestriction( at, rx ) }
-    return at, true, nil
+    qn := tc.resolveName( nm )
+    var vr mg.ValueRestriction
+    if rx != nil { vr = tc.getRestriction( qn, rx ) }
+    return mg.NewAtomicTypeReference( qn, vr ), true, nil
+//    at := mg.NewAtomicTypeReference( tc.resolveName( nm ), nil )
+//    if rx != nil { tc.setRestriction( at, rx ) }
+//    return at, true, nil
 }
 
 func MustTypeReference( s string ) mg.TypeReference {

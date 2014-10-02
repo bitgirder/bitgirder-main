@@ -34,12 +34,10 @@ func initNames() {
     identifierName = idUnsafe( "name" )
     identifierNamespace = idUnsafe( "namespace" )
     typeIdentifierPartsList = &mg.ListTypeReference{
-        ElementType: &mg.AtomicTypeReference{
-            Name: mg.QnameString,
-            Restriction: mg.MustRegexRestriction( 
-                mg.IdentifierPartRegexp.String(),
-            ),
-        },
+        ElementType: mg.NewAtomicTypeReference(
+            mg.QnameString,
+            mg.MustRegexRestriction( mg.IdentifierPartRegexp.String() ),
+        ),
         AllowsEmpty: false,
     }
     typeIdentifierPointer = mg.NewPointerTypeReference( mg.TypeIdentifier )
@@ -112,7 +110,7 @@ func initStandardError() {
 func initCoreV1Types() {
     for _, primTyp := range mg.PrimitiveTypes {
         pd := &types.PrimitiveDefinition{}
-        pd.Name = primTyp.Name
+        pd.Name = primTyp.Name()
         MustAddBuiltinType( pd )
     }
     MustAddBuiltinType( &types.PrimitiveDefinition{ Name: mg.QnameValue } )
@@ -141,12 +139,10 @@ func initDeclaredTypeNameType() {
     sd.Fields.Add(
         &types.FieldDefinition{
             Name: identifierName,
-            Type: &mg.AtomicTypeReference{
-                Name: mg.QnameString,
-                Restriction: mg.MustRegexRestriction(
-                    mg.DeclaredTypeNameRegexp.String(),
-                ),
-            },
+            Type: mg.NewAtomicTypeReference(
+                mg.QnameString,
+                mg.MustRegexRestriction( mg.DeclaredTypeNameRegexp.String() ),
+            ),
         },
     )
     MustAddBuiltinType( sd )

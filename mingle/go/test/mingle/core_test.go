@@ -370,7 +370,7 @@ func TestTypeOf( t *testing.T ) {
     a.Equal( TypeSymbolMap, TypeOf( MustSymbolMap() ) )
     a.Equal( TypeOpaqueList, TypeOf( MustList() ) )
     qn := ns1V1Qn( "T1" )
-    typ := &AtomicTypeReference{ Name: qn }
+    typ := NewAtomicTypeReference( qn, nil )
     a.Equal( typ, TypeOf( &Enum{ Type: qn } ) )
     a.Equal( typ, TypeOf( &Struct{ Type: qn } ) )
 }
@@ -487,10 +487,10 @@ func TestRestrictionAccept( t *testing.T ) {
 
 func TestCanAssign( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
-    int32Rng := &AtomicTypeReference{
-        Name: QnameInt32,
-        Restriction: &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
-    }
+    int32Rng := NewAtomicTypeReference(
+        QnameInt32,
+        &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
+    )
     mkList := func( typ *ListTypeReference, vals ...interface{} ) *List {
         res := MustList( vals... )
         res.Type = typ
@@ -617,10 +617,10 @@ func TestCanAssignType( t *testing.T ) {
     chk( &NullableTypeReference{ ltInt32( true ) }, ltInt32( true ), false )
     chk( TypeInt32, TypeValue, true )
     chk( ltInt32( true ), TypeValue, true )
-    int32Rng := &AtomicTypeReference{
-        Name: QnameInt32,
-        Restriction: &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
-    }
+    int32Rng := NewAtomicTypeReference(
+        QnameInt32,
+        &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
+    )
     int32RngPtr := NewPointerTypeReference( int32Rng )
     chk( int32Rng, TypeInt32, true )
     chk( TypeInt32, int32Rng, false )
@@ -831,18 +831,18 @@ func TestTypeReferenceEquals( t *testing.T ) {
         chk0( t2, t1, eq )
     }
     qn1, qn2 := ns1V1Qn( "T1" ), ns1V1Qn( "T2" )
-    at1 := &AtomicTypeReference{ Name: qn1 }
+    at1 := NewAtomicTypeReference( qn1, nil )
     rgx := func( s string ) *RegexRestriction {
         res, err := NewRegexRestriction( s )
         if err != nil { panic( err ) }
         return res
     }
-    at1Rgx := &AtomicTypeReference{ Name: qn1, Restriction: rgx( ".*" ) }
+    at1Rgx := NewAtomicTypeReference( qn1, rgx( ".*" ) )
     rng := func( i int32 ) *RangeRestriction {
         return &RangeRestriction{ true, Int32( i ), Int32( i + 1 ), true }
     }
-    at1Rng := &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }
-    at2 := &AtomicTypeReference{ Name: qn2 }
+    at1Rng := NewAtomicTypeReference( qn1, rng( 1 ) )
+    at2 := NewAtomicTypeReference( qn2, nil )
     lt1Empty := &ListTypeReference{ ElementType: at1, AllowsEmpty: true }
     lt1NonEmpty := &ListTypeReference{ ElementType: at1, AllowsEmpty: false }
     pt1 := NewPointerTypeReference( at1 )
@@ -850,24 +850,18 @@ func TestTypeReferenceEquals( t *testing.T ) {
     nt1 := MustNullableTypeReference( pt1 )
     nt2 := MustNullableTypeReference( pt2 )
     chk( at1, at1, true )
-    chk( at1, &AtomicTypeReference{ Name: qn1 }, true )
+    chk( at1, NewAtomicTypeReference( qn1, nil ), true )
     chk( at1, at2, false )
     chk( at1Rgx, at1Rgx, true )
-    chk( at1Rgx, &AtomicTypeReference{ Name: qn1, Restriction: rgx( ".*" ) },
-        true )
+    chk( at1Rgx, NewAtomicTypeReference( qn1, rgx( ".*" ) ), true )
     chk( at1Rgx, at1, false )
-    chk( at1Rgx, &AtomicTypeReference{ Name: qn1, Restriction: rgx( "a.*" ) },
-        false )
-    chk( at1Rgx, &AtomicTypeReference{ Name: qn2, Restriction: rgx( ".*" ) },
-        false )
+    chk( at1Rgx, NewAtomicTypeReference( qn1, rgx( "a.*" ) ), false )
+    chk( at1Rgx, NewAtomicTypeReference( qn2, rgx( ".*" ) ), false )
     chk( at1Rgx, at1Rng, false )
-    chk( at1Rng, &AtomicTypeReference{ Name: qn1, Restriction: rng( 1 ) }, 
-        true )
+    chk( at1Rng, NewAtomicTypeReference( qn1, rng( 1 ) ), true )
     chk( at1Rng, at1, false )
-    chk( at1Rng, &AtomicTypeReference{ Name: qn1, Restriction: rng( 2 ) }, 
-        false )
-    chk( at1Rng, &AtomicTypeReference{ Name: qn2, Restriction: rng( 1 ) },
-        false )
+    chk( at1Rng, NewAtomicTypeReference( qn1, rng( 2 ) ), false )
+    chk( at1Rng, NewAtomicTypeReference( qn2, rng( 1 ) ), false )
     chk( lt1Empty, lt1Empty, true )
     chk( lt1Empty, lt1NonEmpty, false )
     chk( lt1Empty, 
@@ -1110,7 +1104,7 @@ func TestTypeReferenceStringer( t *testing.T ) {
         assert.Equal( extForm, typ.ExternalForm() )
     }
     qn := mkQn( mkNs( mkId( "v1" ), mkId( "ns1" ) ), mkDeclNm( "T1" ) )
-    at := &AtomicTypeReference{ Name: qn }
+    at := NewAtomicTypeReference( qn, nil )
     ptr := NewPointerTypeReference( at )
     chk( "ns1@v1/T1", at )
     chk( 

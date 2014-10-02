@@ -115,7 +115,7 @@ func atomicTypeExpressionAsStruct( e *parser.AtomicTypeExpression ) *mg.Struct {
     return mustStruct( ptTyp( "AtomicTypeExpression" ),
         "name", asValue( e.Name ),
         "loc", asValue( e.NameLoc ),
-        "restriction", asValue( e.Restriction ),
+        "restriction", asValue( e.Restriction() ),
     )
 }
 

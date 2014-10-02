@@ -31,7 +31,7 @@ func ns1V1Qn( nm string ) *QualifiedTypeName {
 }
 
 func ns1V1At( nm string ) *AtomicTypeReference {
-    return &AtomicTypeReference{ Name: ns1V1Qn( nm ) }
+    return NewAtomicTypeReference( ns1V1Qn( nm ), nil )
 }
 
 func checkEqualTimestamps( 

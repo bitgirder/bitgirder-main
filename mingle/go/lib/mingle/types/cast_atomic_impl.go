@@ -247,7 +247,7 @@ func castAtomicUnrestricted(
         if at.Equals( mg.TypeNull ) { return mgVal, nil }
         return nil, newNullCastError( path )
     }
-    switch nm := at.Name; {
+    switch nm := at.Name(); {
     case nm.Equals( mg.QnameValue ): return mgVal, nil
     case nm.Equals( mg.QnameBoolean ): 
         return castBoolean( mgVal, at, callTyp, path )
@@ -280,10 +280,10 @@ func checkRestriction(
     at *mg.AtomicTypeReference, 
     path objpath.PathNode ) error {
 
-    if at.Restriction.AcceptsValue( val ) { return nil }
+    if at.Restriction().AcceptsValue( val ) { return nil }
     return mg.NewCastErrorf( 
         path, "Value %s does not satisfy restriction %s",
-        mg.QuoteValue( val ), at.Restriction.ExternalForm() )
+        mg.QuoteValue( val ), at.Restriction().ExternalForm() )
 }
 
 func castAtomicWithCallType(
@@ -293,7 +293,7 @@ func castAtomicWithCallType(
     path objpath.PathNode ) ( val mg.Value, err error ) {
 
     val, err = castAtomicUnrestricted( mgVal, at, callTyp, path )
-    if err == nil && at.Restriction != nil { 
+    if err == nil && at.Restriction() != nil { 
         err = checkRestriction( val, at, path ) 
     }
     return

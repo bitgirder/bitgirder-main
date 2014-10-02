@@ -54,8 +54,8 @@ func isAtomic( typ mg.TypeReference ) bool {
 func asUnrestrictedType( typ mg.TypeReference ) *mg.AtomicTypeReference {
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference:
-        if v.Restriction == nil { return v }
-        return &mg.AtomicTypeReference{ Name: v.Name }
+        if v.Restriction() == nil { return v }
+        return mg.NewAtomicTypeReference( v.Name(), nil )
     case *mg.ListTypeReference: return asUnrestrictedType( v.ElementType )
     case *mg.NullableTypeReference: return asUnrestrictedType( v.Type )
     }
@@ -302,7 +302,7 @@ func ( bs *buildScope ) qnameForMixin(
     if def := bs.c.typeDefForQn( qn ); def != nil {
         if ad, ok := def.( *types.AliasedTypeDefinition ); ok {
             if at, ok := ad.AliasedType.( *mg.AtomicTypeReference ); ok {
-                if at.Restriction == nil { qn = at.Name }
+                if at.Restriction() == nil { qn = at.Name() }
             }
         }
     }
@@ -527,11 +527,10 @@ func ( bs *buildScope ) getAtomicTypeReference(
     rx parser.RestrictionSyntax,
     tr *typeResolution ) *mg.AtomicTypeReference {
 
-    res := &mg.AtomicTypeReference{ Name: qn }
-    if rx == nil { return res }
-    res.Restriction = bs.resolveRestriction( qn, rx, tr.errLoc )
-    if res.Restriction == nil { return nil }
-    return res
+    if rx == nil { return mg.NewAtomicTypeReference( qn, nil ) }
+    vr := bs.resolveRestriction( qn, rx, tr.errLoc )
+    if vr == nil { return nil }
+    return mg.NewAtomicTypeReference( qn, vr )
 }
 
 func ( bs *buildScope ) unalias( 
@@ -1153,7 +1152,7 @@ func ( c *typeSelectionCheck ) addType(
 
 func erasedTypeKeyForType( typ mg.TypeReference ) string {
     switch v := typ.( type ) {
-    case *mg.AtomicTypeReference: return v.Name.ExternalForm()
+    case *mg.AtomicTypeReference: return v.Name().ExternalForm()
     case *mg.NullableTypeReference: return erasedTypeKeyForType( v.Type )
     case *mg.PointerTypeReference: return erasedTypeKeyForType( v.Type )
     case *mg.ListTypeReference: 
@@ -1472,7 +1471,7 @@ func ( c *Compilation ) checkThrownType(
 
     switch v := chkTyp.( type ) {
     case *mg.AtomicTypeReference: 
-        def := c.typeDefForQn( v.Name )
+        def := c.typeDefForQn( v.Name() )
         if _, ok := def.( *types.StructDefinition ); ok { return true }
         c.addErrorf( typLoc, "invalid thrown type: %s", callTyp )
         return false
@@ -1660,7 +1659,7 @@ func ( c nsUnitCycleCheck ) addSchemaMixin( m schemaMixin ) {
 func ( c nsUnitCycleCheck ) updateWithDefDepType( 
     typ mg.TypeReference, def types.Definition ) {
 
-    c.updateWithDefDepNs( mg.AtomicTypeIn( typ ).Name.Namespace, def )
+    c.updateWithDefDepNs( mg.AtomicTypeIn( typ ).Name().Namespace, def )
 }
 
 func ( c nsUnitCycleCheck ) addFieldsFromDef( 

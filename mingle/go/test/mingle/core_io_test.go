@@ -49,7 +49,7 @@ func TestAsAndFromBytes( t *testing.T ) {
     if err == nil { a.True( qn.Equals( qn2 ) ) } else { a.Fatal( err ) }
     typ := &ListTypeReference{
         AllowsEmpty: true,
-        ElementType: &AtomicTypeReference{ Name: mkQn( ns, mkDeclNm( "L" ) ) },
+        ElementType: NewAtomicTypeReference( mkQn( ns, mkDeclNm( "L" ) ), nil ),
     }
     typ2, err := TypeReferenceFromBytes( TypeReferenceAsBytes( typ ) ) 
     if err == nil { a.True( typ.Equals( typ2 ) ) } else { a.Fatal( err ) }

@@ -206,8 +206,8 @@ func ( w *BinWriter ) WriteAtomicTypeReference(
     at *AtomicTypeReference ) ( err error ) {
 
     if err = w.WriteTypeCode( IoTypeCodeAtomTyp ); err != nil { return }
-    if err = w.WriteTypeName( at.Name ); err != nil { return }
-    switch r := at.Restriction.( type ) {
+    if err = w.WriteTypeName( at.Name() ); err != nil { return }
+    switch r := at.Restriction().( type ) {
     case nil: return w.WriteNull()
     case *RegexRestriction: return w.writeRegexRestriction( r )
     case *RangeRestriction: return w.writeRangeRestriction( r )
@@ -526,9 +526,11 @@ func ( r *BinReader ) readRestriction() ( vr ValueRestriction, err error ) {
 func ( r *BinReader ) ReadAtomicTypeReference() ( at *AtomicTypeReference,
                                                   err error ) {
     if _, err = r.ExpectTypeCode( IoTypeCodeAtomTyp ); err != nil { return }
-    at = &AtomicTypeReference{}
-    if at.Name, err = r.ReadQualifiedTypeName(); err != nil { return }
-    if at.Restriction, err = r.readRestriction(); err != nil { return }
+    var nm *QualifiedTypeName
+    var rx ValueRestriction
+    if nm, err = r.ReadQualifiedTypeName(); err != nil { return }
+    if rx, err = r.readRestriction(); err != nil { return }
+    at = NewAtomicTypeReference( nm, rx )
     return
 }
 

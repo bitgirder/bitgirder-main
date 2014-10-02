@@ -252,7 +252,7 @@ func ( cr *CastReactor ) castAtomic(
     at *mg.AtomicTypeReference,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
 
-    if def, ok := cr.dm.GetDefinition( at.Name ); ok {
+    if def, ok := cr.dm.GetDefinition( at.Name() ); ok {
         switch td := def.( type ) {
         case *EnumDefinition:
             res, err := castEnum( v, td, path )
@@ -451,9 +451,9 @@ func ( cr *CastReactor ) inferStructForMap(
     at *mg.AtomicTypeReference,
     next mgRct.EventProcessor ) ( error, bool ) {
 
-    if ! cr.inferStructForQname( at.Name ) { return nil, false }
+    if ! cr.inferStructForQname( at.Name() ) { return nil, false }
 
-    ev := mgRct.NewStructStartEvent( at.Name )
+    ev := mgRct.NewStructStartEvent( at.Name() )
     ev.SetPath( me.GetPath() )
 
     return cr.completeStartStruct( ev, next ), true
@@ -587,12 +587,12 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
         return cr.processMapStartWithAtomicType( me, at, callTyp, next )
     }
 
-    if at.Name.Equals( ss.Type ) || at.Equals( mg.TypeValue ) ||
-       cr.allowStructStartForType( ss, at.Name ) {
+    if at.Name().Equals( ss.Type ) || at.Equals( mg.TypeValue ) ||
+       cr.allowStructStartForType( ss, at.Name() ) {
         return cr.completeStartStruct( ss, next )
     }
 
-    failTyp := &mg.AtomicTypeReference{ Name: ss.Type }
+    failTyp := mg.NewAtomicTypeReference( ss.Type, nil )
     return mg.NewTypeCastError( callTyp, failTyp, ss.GetPath() )
 }
 
@@ -638,7 +638,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
         return cr.processListStartWithType( 
             le, mg.TypeOpaqueList, callTyp, next )
     }
-    if sd := cr.getStructDef( at.Name ); sd != nil {
+    if sd := cr.getStructDef( at.Name() ); sd != nil {
         if typ := cr.constructorTypeForType( le.Type, sd ); typ != nil {
             lt := typ.( *mg.ListTypeReference )
             return cr.processListStartWithListType( le, lt, callTyp, next )

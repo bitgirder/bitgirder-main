@@ -276,7 +276,7 @@ func ( qn *QualifiedTypeName ) Equals( n2 TypeName ) bool {
 }
 
 func ( qn *QualifiedTypeName ) AsAtomicType() *AtomicTypeReference {
-    return &AtomicTypeReference{ Name: qn }
+    return NewAtomicTypeReference( qn, nil )
 }
 
 // (atomic|list|nullable)
@@ -399,16 +399,28 @@ func ( r *RangeRestriction ) AcceptsValue( val Value ) bool {
 }
 
 type AtomicTypeReference struct {
-    Name *QualifiedTypeName
-    Restriction ValueRestriction
+    name *QualifiedTypeName
+    restriction ValueRestriction
+}
+
+func NewAtomicTypeReference( 
+    nm *QualifiedTypeName, vr ValueRestriction ) *AtomicTypeReference {
+
+    return &AtomicTypeReference{ name: nm, restriction: vr }
+}
+
+func ( t *AtomicTypeReference ) Name() *QualifiedTypeName { return t.name }
+
+func ( t *AtomicTypeReference ) Restriction() ValueRestriction {
+    return t.restriction
 }
 
 func ( t *AtomicTypeReference ) typeRefImpl() {}
 
 func ( t *AtomicTypeReference ) ExternalForm() string {
-    nm := t.Name.ExternalForm()
-    if t.Restriction == nil { return nm }
-    return fmt.Sprintf( "%s~%s", nm, t.Restriction.ExternalForm() )
+    nm := t.name.ExternalForm()
+    if t.restriction == nil { return nm }
+    return fmt.Sprintf( "%s~%s", nm, t.restriction.ExternalForm() )
 }
 
 func ( t *AtomicTypeReference ) String() string { return t.ExternalForm() }
@@ -417,9 +429,9 @@ func ( t *AtomicTypeReference ) Equals( t2 TypeReference ) bool {
     if t2 == nil { return false }
     if t == t2 { return true }
     if at2, ok := t2.( *AtomicTypeReference ); ok {
-        if t.Name.Equals( at2.Name ) {
-            if t.Restriction == nil { return at2.Restriction == nil }
-            return t.Restriction.equalsRestriction( at2.Restriction )
+        if t.name.Equals( at2.name ) {
+            if t.restriction == nil { return at2.restriction == nil }
+            return t.restriction.equalsRestriction( at2.restriction )
         }
     }
     return false
@@ -468,10 +480,10 @@ func IsNullableType( typ TypeReference ) bool {
     case *NullableTypeReference: return false;
     case *PointerTypeReference: return true;
     case *AtomicTypeReference:
-        if ! v.Name.Namespace.Equals( CoreNsV1 ) { return false }
-        return ! ( v.Name.Equals( QnameBoolean ) || 
-                   v.Name.Equals( QnameTimestamp ) || 
-                   IsNumericTypeName( v.Name ) )
+        if ! v.Name().Namespace.Equals( CoreNsV1 ) { return false }
+        return ! ( v.Name().Equals( QnameBoolean ) || 
+                   v.Name().Equals( QnameTimestamp ) || 
+                   IsNumericTypeName( v.Name() ) )
     }
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
@@ -532,7 +544,7 @@ func AtomicTypeIn( ref TypeReference ) *AtomicTypeReference {
 }
 
 func TypeNameIn( typ TypeReference ) *QualifiedTypeName {
-    return AtomicTypeIn( typ ).Name
+    return AtomicTypeIn( typ ).Name()
 }
 
 type Value interface{ valImpl() }
@@ -1143,7 +1155,7 @@ func init() {
     f1 := func( s string ) ( *QualifiedTypeName, *AtomicTypeReference ) {
         qn := &QualifiedTypeName{ CoreNsV1, &DeclaredTypeName{ s } }
         coreQnameResolver[ qn.Name.ExternalForm() ] = qn
-        return qn, &AtomicTypeReference{ Name: qn }
+        return qn, qn.AsAtomicType()
     }
     QnameBoolean, TypeBoolean = f1( "Boolean" )
     QnameBuffer, TypeBuffer = f1( "Buffer" )
@@ -1245,14 +1257,14 @@ func TypeOf( mgVal Value ) TypeReference {
 func canAssignAtomic( 
     val Value, at *AtomicTypeReference, useRestriction bool ) bool {
 
-    if at.Name.Equals( QnameNull ) { return true }
+    if at.Name().Equals( QnameNull ) { return true }
     if _, ok := val.( *Null ); ok { return false }
-    if at.Name.Equals( QnameValue ) { return true }
+    if at.Name().Equals( QnameValue ) { return true }
     switch vt := TypeOf( val ).( type ) {
     case *AtomicTypeReference:
-        if ! vt.Name.Equals( at.Name ) { return false }
-        if at.Restriction == nil || ( ! useRestriction ) { return true }
-        return at.Restriction.AcceptsValue( val )
+        if ! vt.Name().Equals( at.Name() ) { return false }
+        if at.Restriction() == nil || ( ! useRestriction ) { return true }
+        return at.Restriction().AcceptsValue( val )
     }
     return false
 }
@@ -1273,17 +1285,17 @@ func CanAssign( val Value, typ TypeReference, useRestriction bool ) bool {
 
 func canAssignAtomicType( 
     from TypeReference, to *AtomicTypeReference, relaxRestrictions bool ) bool {
-    if to.Name.Equals( QnameValue ) { return true }
+    if to.Name().Equals( QnameValue ) { return true }
     f, ok := from.( *AtomicTypeReference );
     if ! ok { return false }
-    if ! f.Name.Equals( to.Name ) { return false }
+    if ! f.Name().Equals( to.Name() ) { return false }
     if relaxRestrictions {
-        if to.Restriction == nil { return true }
-        // f.Restriction could still be nil, so we make it the operand
-        return to.Restriction.equalsRestriction( f.Restriction )
+        if to.Restriction() == nil { return true }
+        // f.Restriction() could still be nil, so we make it the operand
+        return to.Restriction().equalsRestriction( f.Restriction() )
     }
-    if f.Restriction == nil { return to.Restriction == nil }
-    return f.Restriction.equalsRestriction( to.Restriction )
+    if f.Restriction() == nil { return to.Restriction() == nil }
+    return f.Restriction().equalsRestriction( to.Restriction() )
 }
 
 func canAssignNullableType( 

@@ -381,10 +381,11 @@ func ( tc *typeCompleterImpl ) qnameForName(
     return nm.( *mg.QualifiedTypeName )
 }
 
-func ( tc *typeCompleterImpl ) addRestriction(
-    at *mg.AtomicTypeReference, rx RestrictionSyntax ) error {
+func ( tc *typeCompleterImpl ) getRestriction(
+    qn *mg.QualifiedTypeName,
+    rx RestrictionSyntax ) ( mg.ValueRestriction, error ) {
 
-    if rx == nil { return nil }
+    if rx == nil { return nil, nil }
     mkInt := func( rx RestrictionSyntax ) mg.Int32 {
         n := rx.( *NumRestrictionSyntax ).Num 
         res, err := mg.ParseNumber( n.String(), mg.QnameInt32 )
@@ -392,10 +393,7 @@ func ( tc *typeCompleterImpl ) addRestriction(
         panic( err )
     }
     switch v := rx.( type ) {
-    case *RegexRestrictionSyntax:
-        var err error
-        at.Restriction, err = mg.NewRegexRestriction( v.Pat )
-        if err != nil { return err }
+    case *RegexRestrictionSyntax: return mg.NewRegexRestriction( v.Pat )
     case *RangeRestrictionSyntax:
         rr := &mg.RangeRestriction{
             MinClosed: v.LeftClosed, 
@@ -403,10 +401,9 @@ func ( tc *typeCompleterImpl ) addRestriction(
         }
         if v.Left != nil { rr.Min = mkInt( v.Left ) }
         if v.Right != nil { rr.Max = mkInt( v.Right ) }
-        at.Restriction = rr
-    default: panic( libErrorf( "unhandled restriction: %T", rx ) )
+        return rr, nil
     }
-    return nil
+    panic( libErrorf( "unhandled restriction: %T", rx ) )
 }
 
 func ( tc *typeCompleterImpl ) CompleteBaseType( 
@@ -416,9 +413,13 @@ func ( tc *typeCompleterImpl ) CompleteBaseType(
 
     if tc.notOk { return nil, false, tc.err }
     if tc.err != nil { return nil, true, tc.err }
-    at := &mg.AtomicTypeReference{ Name: tc.qnameForName( nm ) }
-    if err := tc.addRestriction( at, rx ); err != nil { return nil, false, err }
-    return at, true, nil
+    qn := tc.qnameForName( nm )
+    vr, err := tc.getRestriction( qn, rx )
+    if err != nil { return nil, false, err }
+    return mg.NewAtomicTypeReference( qn, vr ), true, nil
+//    at := mg.NewAtomicTypeReference( tc.qnameForName( nm ), nil )
+//    if err := tc.addRestriction( at, rx ); err != nil { return nil, false, err }
+//    return at, true, nil
 }
 
 func TestCompleteType( t *testing.T ) {
@@ -427,22 +428,22 @@ func TestCompleteType( t *testing.T ) {
         { in: "mingle:core@v1/String", expct: mg.TypeString },
         {
             in: `mingle:core@v1/String~"a"`,
-            expct: &mg.AtomicTypeReference{
-                Name: mg.QnameString,
-                Restriction: mg.MustRegexRestriction( "a" ),
-            },
+            expct: mg.NewAtomicTypeReference(
+                mg.QnameString,
+                mg.MustRegexRestriction( "a" ),
+            ),
         },
         { 
             in: `mingle:core@v1/Int32~[0,2)`,
-            expct: &mg.AtomicTypeReference{
-                Name: mg.QnameInt32,
-                Restriction: &mg.RangeRestriction{
+            expct: mg.NewAtomicTypeReference(
+                mg.QnameInt32,
+                &mg.RangeRestriction{
                     MinClosed: true,
                     Min: mg.Int32( int32( 0 ) ),
                     Max: mg.Int32( int32( 2 ) ),
                     MaxClosed: false,
                 },
-            },
+            ),
         },
         { in: "Int32", expct: mg.TypeInt32 },
         {

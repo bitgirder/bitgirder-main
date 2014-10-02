@@ -129,8 +129,8 @@ func ( sr *StructuralReactor ) checkValueForList(
     case *mg.PointerTypeReference:
         return sr.checkValueForList( calledType, typ.Type, valType, ev )
     case *mg.AtomicTypeReference:
-        if typ.Restriction != nil {
-            at := typ.Name.AsAtomicType()
+        if typ.Restriction() != nil {
+            at := typ.Name().AsAtomicType()
             return sr.checkValueForList( calledType, at, valType, ev )
         }
     }
