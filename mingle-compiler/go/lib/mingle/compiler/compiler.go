@@ -369,6 +369,13 @@ func init() {
     }
 }
 
+type rangeBuilder struct {
+    minClosed bool
+    min mg.Value
+    max mg.Value
+    maxClosed bool
+}
+
 func ( bs *buildScope ) setRangeNumValue(
     valPtr *mg.Value,
     rx *parser.NumRestrictionSyntax,
@@ -453,15 +460,15 @@ func areAdjacentInts( min, max mg.Value ) bool {
 }
 
 func ( bs *buildScope ) checkRangeBounds( 
-    rr *mg.RangeRestriction, errLoc *parser.Location ) int {
+    rb *rangeBuilder, errLoc *parser.Location ) int {
 
     failed := false
-    switch i := rr.Min.( mg.Comparer ).Compare( rr.Max ); {
-    case i == 0: failed = ! ( rr.MinClosed && rr.MaxClosed )
+    switch i := rb.min.( mg.Comparer ).Compare( rb.max ); {
+    case i == 0: failed = ! ( rb.minClosed && rb.maxClosed )
     case i > 0: failed = true
     case i < 0: 
-        open := ! ( rr.MinClosed || rr.MaxClosed )
-        failed = open && areAdjacentInts( rr.Min, rr.Max )
+        open := ! ( rb.minClosed || rb.maxClosed )
+        failed = open && areAdjacentInts( rb.min, rb.max )
     }
     if failed { 
         bs.c.addError( errLoc, "Unsatisfiable range" )
@@ -471,20 +478,20 @@ func ( bs *buildScope ) checkRangeBounds(
 }
 
 func ( bs *buildScope ) setRangeValues(
-    rr *mg.RangeRestriction, 
+    rb *rangeBuilder, 
     rx *parser.RangeRestrictionSyntax, 
     qn *mg.QualifiedTypeName,
     errLoc *parser.Location ) bool {
 
     fails := 0
     if rx.Left != nil {
-        fails += bs.setRangeValue( &( rr.Min ), rx.Left, qn, errLoc, "min" )
+        fails += bs.setRangeValue( &( rb.min ), rx.Left, qn, errLoc, "min" )
     }
     if rx.Right != nil {
-        fails += bs.setRangeValue( &( rr.Max ), rx.Right, qn, errLoc, "max" ) 
+        fails += bs.setRangeValue( &( rb.max ), rx.Right, qn, errLoc, "max" ) 
     }
-    if ! ( rr.Min == nil || rr.Max == nil ) { 
-        fails += bs.checkRangeBounds( rr, rx.Loc ) 
+    if ! ( rb.min == nil || rb.max == nil ) { 
+        fails += bs.checkRangeBounds( rb, rx.Loc ) 
     }
     return fails == 0
 }
@@ -494,13 +501,13 @@ func ( bs *buildScope ) resolveRangeRestriction(
     rx *parser.RangeRestrictionSyntax,
     errLoc *parser.Location ) mg.ValueRestriction {
 
-    rr := &mg.RangeRestriction{ 
-        MinClosed: rx.LeftClosed, 
-        MaxClosed: rx.RightClosed,
-    }
+    rb := &rangeBuilder{ minClosed: rx.LeftClosed, maxClosed: rx.RightClosed }
     for _, rvTypNm := range rangeValTypeNames {
         if qn.Equals( rvTypNm ) {
-            if bs.setRangeValues( rr, rx, rvTypNm, errLoc ) { return rr }
+            if bs.setRangeValues( rb, rx, rvTypNm, errLoc ) { 
+                return mg.NewRangeRestriction( 
+                    rb.minClosed, rb.min, rb.max, rb.maxClosed )
+            }
             return nil
         }
     }

@@ -196,10 +196,10 @@ func ( w *BinWriter ) writeRangeValue( val Value ) error {
 func ( w *BinWriter ) writeRangeRestriction( 
     rr *RangeRestriction ) ( err error ) {
     if err = w.WriteTypeCode( IoTypeCodeRangeRestrict ); err != nil { return }
-    if err = w.writeBool( rr.MinClosed ); err != nil { return }
-    if err = w.writeRangeValue( rr.Min ); err != nil { return }
-    if err = w.writeRangeValue( rr.Max ); err != nil { return }
-    return w.writeBool( rr.MaxClosed )
+    if err = w.writeBool( rr.MinClosed() ); err != nil { return }
+    if err = w.writeRangeValue( rr.Min() ); err != nil { return }
+    if err = w.writeRangeValue( rr.Max() ); err != nil { return }
+    return w.writeBool( rr.MaxClosed() )
 }
 
 func ( w *BinWriter ) WriteAtomicTypeReference( 
@@ -503,12 +503,14 @@ func ( r *BinReader ) readRangeVal() ( Value, error ) {
 // Note: type code is already read
 func ( r *BinReader ) readRangeRestriction() ( rr *RangeRestriction,
                                                err error ) {
-    rr = &RangeRestriction{}
-    if rr.MinClosed, err = r.readBool(); err != nil { return }
-    if rr.Min, err = r.readRangeVal(); err != nil { return }
-    if rr.Max, err = r.readRangeVal(); err != nil { return }
-    if rr.MaxClosed, err = r.readBool(); err != nil { return }
-    return
+
+    var minClosed, maxClosed bool
+    var min, max Value
+    if minClosed, err = r.readBool(); err != nil { return }
+    if min, err = r.readRangeVal(); err != nil { return }
+    if max, err = r.readRangeVal(); err != nil { return }
+    if maxClosed, err = r.readBool(); err != nil { return }
+    return NewRangeRestriction( minClosed, min, max, maxClosed ), nil
 }
 
 func ( r *BinReader ) readRestriction() ( vr ValueRestriction, err error ) {

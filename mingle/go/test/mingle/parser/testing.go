@@ -218,13 +218,10 @@ func ( tc *unsafeTypeCompleter ) setRangeValue(
 func ( tc *unsafeTypeCompleter ) getRangeRestriction(
     qn *mg.QualifiedTypeName, rx *RangeRestrictionSyntax ) mg.ValueRestriction {
 
-    rng := &mg.RangeRestriction{}
-    rng.MinClosed = rx.LeftClosed
-    if l := rx.Left; l != nil { tc.setRangeValue( &( rng.Min ), qn, l ) }
-    if r := rx.Right; r != nil { tc.setRangeValue( &( rng.Max ), qn, r ) }
-    rng.MaxClosed = rx.RightClosed
-
-    return rng
+    var min, max mg.Value
+    if l := rx.Left; l != nil { tc.setRangeValue( &( min ), qn, l ) }
+    if r := rx.Right; r != nil { tc.setRangeValue( &( max ), qn, r ) }
+    return mg.NewRangeRestriction( rx.LeftClosed, min, max, rx.RightClosed )
 }
 
 func ( tc *unsafeTypeCompleter ) getRestriction(

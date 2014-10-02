@@ -470,26 +470,26 @@ func TestRestrictionAccept( t *testing.T ) {
     f := func( v Value, vr ValueRestriction, expct bool ) {
         assert.Equal( expct, vr.AcceptsValue( v ) )
     }
-    vr1 := &RangeRestriction{ true, Int32( 0 ), Int32( 10 ), true }
+    vr1 := NewRangeRestriction( true, Int32( 0 ), Int32( 10 ), true )
     f( Int32( 0 ), vr1, true )
     f( Int32( 10 ), vr1, true )
     f( Int32( 5 ), vr1, true )
-    vr1.MinClosed, vr1.MaxClosed = false, false
-    f( Int32( 0 ), vr1, false )
-    f( Int32( 10 ), vr1, false )
-    f( Int32( -1 ), vr1, false )
-    f( Int32( 11 ), vr1, false )
-    vr2, err := NewRegexRestriction( "^a{1,4}$" )
+    vr2 := NewRangeRestriction( false, Int32( 0 ), Int32( 10 ), false )
+    f( Int32( 0 ), vr2, false )
+    f( Int32( 10 ), vr2, false )
+    f( Int32( -1 ), vr2, false )
+    f( Int32( 11 ), vr2, false )
+    vr3, err := NewRegexRestriction( "^a{1,4}$" )
     if err != nil { t.Fatal( err ) }
-    f( String( "aa" ), vr2, true )
-    f( String( "aaaaa" ), vr2, false )
+    f( String( "aa" ), vr3, true )
+    f( String( "aaaaa" ), vr3, false )
 }
 
 func TestCanAssign( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
     int32Rng := NewAtomicTypeReference(
         QnameInt32,
-        &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
+        NewRangeRestriction( true, Int32( 0 ), Int32( 1 ), true ),
     )
     mkList := func( typ *ListTypeReference, vals ...interface{} ) *List {
         res := MustList( vals... )
@@ -619,7 +619,7 @@ func TestCanAssignType( t *testing.T ) {
     chk( ltInt32( true ), TypeValue, true )
     int32Rng := NewAtomicTypeReference(
         QnameInt32,
-        &RangeRestriction{ true, Int32( 0 ), Int32( 1 ), true },
+        NewRangeRestriction( true, Int32( 0 ), Int32( 1 ), true ),
     )
     int32RngPtr := NewPointerTypeReference( int32Rng )
     chk( int32Rng, TypeInt32, true )
@@ -839,7 +839,7 @@ func TestTypeReferenceEquals( t *testing.T ) {
     }
     at1Rgx := NewAtomicTypeReference( qn1, rgx( ".*" ) )
     rng := func( i int32 ) *RangeRestriction {
-        return &RangeRestriction{ true, Int32( i ), Int32( i + 1 ), true }
+        return NewRangeRestriction( true, Int32( i ), Int32( i + 1 ), true )
     }
     at1Rng := NewAtomicTypeReference( qn1, rng( 1 ) )
     at2 := NewAtomicTypeReference( qn2, nil )

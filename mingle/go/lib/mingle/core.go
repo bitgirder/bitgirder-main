@@ -342,11 +342,22 @@ func ( r *RegexRestriction ) AcceptsValue( val Value ) bool {
 }
 
 type RangeRestriction struct {
-    MinClosed bool
-    Min Value 
-    Max Value
-    MaxClosed bool
+    minClosed bool
+    min Value 
+    max Value
+    maxClosed bool
 }
+
+func NewRangeRestriction( 
+    minC bool, minV Value, maxV Value, maxC bool ) *RangeRestriction {
+
+    return &RangeRestriction{ minC, minV, maxV, maxC }
+}
+
+func ( rr *RangeRestriction ) MinClosed() bool { return rr.minClosed }
+func ( rr *RangeRestriction ) Min() Value { return rr.min }
+func ( rr *RangeRestriction ) Max() Value { return rr.max }
+func ( rr *RangeRestriction ) MaxClosed() bool { return rr.maxClosed }
 
 func quoteRangeValue( val Value ) string {
     switch v := val.( type ) {
@@ -360,11 +371,11 @@ func quoteRangeValue( val Value ) string {
 
 func ( r *RangeRestriction ) ExternalForm() string {
     buf := bytes.Buffer{}
-    if r.MinClosed { buf.WriteRune( '[' ) } else { buf.WriteRune( '(' ) }
-    if r.Min != nil { buf.WriteString( quoteRangeValue( r.Min ) ) }
+    if r.MinClosed() { buf.WriteRune( '[' ) } else { buf.WriteRune( '(' ) }
+    if r.Min() != nil { buf.WriteString( quoteRangeValue( r.Min() ) ) }
     buf.WriteRune( ',' )
-    if r.Max != nil { buf.WriteString( quoteRangeValue( r.Max ) ) }
-    if r.MaxClosed { buf.WriteRune( ']' ) } else { buf.WriteRune( ')' ) }
+    if r.Max() != nil { buf.WriteString( quoteRangeValue( r.Max() ) ) }
+    if r.MaxClosed() { buf.WriteRune( ']' ) } else { buf.WriteRune( ')' ) }
     return buf.String()
 }
 
@@ -373,25 +384,25 @@ func ( r *RangeRestriction ) equalsRestriction( vr ValueRestriction ) bool {
     if r == vr { return true }
     if r2, ok := vr.( *RangeRestriction ); ok {
         // do cheap tests first
-        return r.MinClosed == r2.MinClosed &&
-               r.MaxClosed == r2.MaxClosed &&
-               equalComparers( r.Min, r2.Min ) &&
-               equalComparers( r.Max, r2.Max )
+        return r.MinClosed() == r2.MinClosed() &&
+               r.MaxClosed() == r2.MaxClosed() &&
+               equalComparers( r.Min(), r2.Min() ) &&
+               equalComparers( r.Max(), r2.Max() )
     }
     return false
 }
 
 func ( r *RangeRestriction ) AcceptsValue( val Value ) bool {
     if val == nil { panic( errNilVal ) }
-    if r.Min != nil {
-        switch i := r.Min.( Comparer ).Compare( val ); {
-        case i == 0: if ! r.MinClosed { return false }
+    if r.Min() != nil {
+        switch i := r.Min().( Comparer ).Compare( val ); {
+        case i == 0: if ! r.MinClosed() { return false }
         case i > 0: return false
         }
     }
-    if r.Max != nil {
-        switch i := r.Max.( Comparer ).Compare( val ); {
-        case i == 0: if ! r.MaxClosed { return false }
+    if r.Max() != nil {
+        switch i := r.Max().( Comparer ).Compare( val ); {
+        case i == 0: if ! r.MaxClosed() { return false }
         case i < 0: return false
         }
     }

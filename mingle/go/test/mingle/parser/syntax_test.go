@@ -395,12 +395,10 @@ func ( tc *typeCompleterImpl ) getRestriction(
     switch v := rx.( type ) {
     case *RegexRestrictionSyntax: return mg.NewRegexRestriction( v.Pat )
     case *RangeRestrictionSyntax:
-        rr := &mg.RangeRestriction{
-            MinClosed: v.LeftClosed, 
-            MaxClosed: v.RightClosed,
-        }
-        if v.Left != nil { rr.Min = mkInt( v.Left ) }
-        if v.Right != nil { rr.Max = mkInt( v.Right ) }
+        var min, max mg.Value
+        if v.Left != nil { min = mkInt( v.Left ) }
+        if v.Right != nil { max = mkInt( v.Right ) }
+        rr := mg.NewRangeRestriction( v.LeftClosed, min, max, v.RightClosed )
         return rr, nil
     }
     panic( libErrorf( "unhandled restriction: %T", rx ) )
@@ -437,12 +435,12 @@ func TestCompleteType( t *testing.T ) {
             in: `mingle:core@v1/Int32~[0,2)`,
             expct: mg.NewAtomicTypeReference(
                 mg.QnameInt32,
-                &mg.RangeRestriction{
-                    MinClosed: true,
-                    Min: mg.Int32( int32( 0 ) ),
-                    Max: mg.Int32( int32( 2 ) ),
-                    MaxClosed: false,
-                },
+                mg.NewRangeRestriction(
+                    true,
+                    mg.Int32( int32( 0 ) ),
+                    mg.Int32( int32( 2 ) ),
+                    false,
+                ),
             ),
         },
         { in: "Int32", expct: mg.TypeInt32 },

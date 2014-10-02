@@ -130,63 +130,61 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
         return NewAtomicTypeReference( qn, rx )
     }
     set( mkV1Typ( "String", MustRegexRestriction( "a" ) ) )
+    mkRng := NewRangeRestriction
     set( 
-        mkV1Typ( 
-            "String", 
-            &RangeRestriction{ true, String( "a" ), String( "b" ), true },
-        ),
+        mkV1Typ( "String", mkRng( true, String( "a" ), String( "b" ), true ) ),
     )
     set( 
         mkV1Typ( 
             "Timestamp",
-            &RangeRestriction{
+            mkRng(
                 true,
                 MustTimestamp( "2012-01-01T00:00:00Z" ),
                 MustTimestamp( "2012-02-01T00:00:00Z" ),
                 true,
-            },
+            ),
         ),
     )
     set( 
         mkV1Typ(
             "Int32",
-            &RangeRestriction{ false, Int32( 0 ), Int32( 10 ), false },
+            mkRng( false, Int32( 0 ), Int32( 10 ), false ),
         ),
     )
     set(
         mkV1Typ(
             "Int64",
-            &RangeRestriction{ true, Int64( 0 ), Int64( 10 ), true },
+            mkRng( true, Int64( 0 ), Int64( 10 ), true ),
         ),
     )
     set( 
         mkV1Typ(
             "Uint32",
-            &RangeRestriction{ false, Uint32( 0 ), Uint32( 10 ), false },
+            mkRng( false, Uint32( 0 ), Uint32( 10 ), false ),
         ),
     )
     set( 
         mkV1Typ( 
             "Uint64",
-            &RangeRestriction{ true, Uint64( 0 ), Uint64( 0 ), true },
+            mkRng( true, Uint64( 0 ), Uint64( 0 ), true ),
         ),
     )
     set(
         mkV1Typ(
             "Float32",
-            &RangeRestriction{ false, Float32( 0.0 ), Float32( 1.0 ), true },
+            mkRng( false, Float32( 0.0 ), Float32( 1.0 ), true ),
         ),
     )
     set( 
         mkV1Typ(
             "Float64",
-            &RangeRestriction{ true, Float64( 0.0 ), Float64( 1.0 ), false },
+            mkRng( true, Float64( 0.0 ), Float64( 1.0 ), false ),
         ),
     )
     set( 
         mkV1Typ(
             "Float64",
-            &RangeRestriction{ MinClosed: false, MaxClosed: false },
+            mkRng( false, nil, nil, false ),
         ),
     )
     typNs1V1T1 := mkQn( ns1V1, mkDeclNm( "T1" ) ).AsAtomicType()
