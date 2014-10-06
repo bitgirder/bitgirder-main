@@ -393,7 +393,7 @@ func ( tc *typeCompleterImpl ) getRestriction(
         panic( err )
     }
     switch v := rx.( type ) {
-    case *RegexRestrictionSyntax: return mg.NewRegexRestriction( v.Pat )
+    case *RegexRestrictionSyntax: return mg.CreateRegexRestriction( v.Pat )
     case *RangeRestrictionSyntax:
         var min, max mg.Value
         if v.Left != nil { min = mkInt( v.Left ) }

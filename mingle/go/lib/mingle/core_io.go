@@ -481,7 +481,7 @@ func ( r *BinReader ) readRegexRestriction() ( rr *RegexRestriction,
                                                err error ) {
     var src string
     if src, err = r.ReadUtf8(); err != nil { return }
-    return NewRegexRestriction( src )
+    return CreateRegexRestriction( src )
 }
 
 func ( r *BinReader ) readRangeVal() ( Value, error ) {

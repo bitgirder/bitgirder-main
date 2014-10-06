@@ -298,6 +298,29 @@ type ValueRestriction interface {
     equalsRestriction( vr ValueRestriction ) bool
 }
 
+const (
+
+    errMsgEmptyRange = "empty range"
+
+    errMsgUnsatisfiableRange = "unsatisfiable range"
+
+    rxErrNameRegex = "regex"
+
+    rxErrNameRange = "range"
+)
+
+type RestrictionError struct { msg string }
+
+func ( e *RestrictionError ) Error() string { return e.msg }
+
+func newRestrictionErrorInapplicable( 
+    rxName string, attempted *QualifiedTypeName ) error {
+
+    msg := fmt.Sprintf( "%s restriction cannot be applied to %s", 
+        rxName, attempted )
+    return &RestrictionError{ msg }
+}
+
 func equalComparers( c1, c2 interface{} ) bool {
     if c1 == c2 { return true }
     if c1 == nil { return c2 == nil }
@@ -310,14 +333,14 @@ type RegexRestriction struct {
     exp *regexp.Regexp
 }
 
-func NewRegexRestriction( src string ) ( *RegexRestriction, error ) {
+func CreateRegexRestriction( src string ) ( *RegexRestriction, error ) {
     exp, err := regexp.Compile( src )
     if err == nil { return &RegexRestriction{ src, exp }, nil }
-    return nil, err
+    return nil, &RestrictionError{ err.Error() }
 }
 
 func MustRegexRestriction( src string ) *RegexRestriction {
-    res, err := NewRegexRestriction( src )
+    res, err := CreateRegexRestriction( src )
     if err == nil { return res }
     panic( err )
 }
@@ -341,11 +364,29 @@ func ( r *RegexRestriction ) AcceptsValue( val Value ) bool {
     return r.exp.MatchString( string( val.( String ) ) )
 }
 
+func formatRange( minClosed bool, min, max Value, maxClosed bool ) string {
+    buf := bytes.Buffer{}
+    if minClosed { buf.WriteRune( '[' ) } else { buf.WriteRune( '(' ) }
+    if min != nil { buf.WriteString( quoteRangeValue( min ) ) }
+    buf.WriteRune( ',' )
+    if max != nil { buf.WriteString( quoteRangeValue( max ) ) }
+    if maxClosed { buf.WriteRune( ']' ) } else { buf.WriteRune( ')' ) }
+    return buf.String()
+}
+
 type RangeRestriction struct {
     minClosed bool
     min Value 
     max Value
     maxClosed bool
+}
+
+// because *RangeRestriction instances cannot be empty and must have min/max of
+// the same type this always returns a valid non-nil type
+func ( rr *RangeRestriction ) inferredType() *QualifiedTypeName {
+    var val = rr.min
+    if val == nil { val = rr.max }
+    return TypeNameIn( TypeOf( val ) )
 }
 
 func NewRangeRestriction( 
@@ -370,13 +411,7 @@ func quoteRangeValue( val Value ) string {
 }
 
 func ( r *RangeRestriction ) ExternalForm() string {
-    buf := bytes.Buffer{}
-    if r.MinClosed() { buf.WriteRune( '[' ) } else { buf.WriteRune( '(' ) }
-    if r.Min() != nil { buf.WriteString( quoteRangeValue( r.Min() ) ) }
-    buf.WriteRune( ',' )
-    if r.Max() != nil { buf.WriteString( quoteRangeValue( r.Max() ) ) }
-    if r.MaxClosed() { buf.WriteRune( ']' ) } else { buf.WriteRune( ')' ) }
-    return buf.String()
+    return formatRange( r.minClosed, r.min, r.max, r.maxClosed )
 }
 
 func ( r *RangeRestriction ) equalsRestriction( vr ValueRestriction ) bool {
@@ -409,6 +444,76 @@ func ( r *RangeRestriction ) AcceptsValue( val Value ) bool {
     return true
 }
 
+type RangeRestrictionBuilder struct {
+    Type *QualifiedTypeName
+    MinClosed bool
+    Min Value 
+    Max Value
+    MaxClosed bool
+}
+
+func ( b *RangeRestrictionBuilder ) String() string {
+    return fmt.Sprintf( "%T{ Type: %s, Range: %s }", b, b.Type, 
+        formatRange( b.MinClosed, b.Min, b.Max, b.MaxClosed ) )
+}
+
+func ( b *RangeRestrictionBuilder ) checkApplicable() error {
+    for _, rrt := range restrictableRangeTypeNames {
+        if b.Type.Equals( rrt ) { return nil }
+    }
+    return newRestrictionErrorInapplicable( rxErrNameRange, b.Type )
+}
+
+func ( b *RangeRestrictionBuilder ) checkEmpty() error {
+    if b.Min == nil && b.Max == nil {
+        return &RestrictionError{ errMsgEmptyRange } 
+    }
+    return nil
+}
+
+func ( b *RangeRestrictionBuilder ) checkValueTypes() error {
+    f := func( bound string, val Value ) error {
+        if val == nil { return nil }
+        qn := TypeNameIn( TypeOf( val ) )
+        if qn.Equals( b.Type ) { return nil }
+        msg := fmt.Sprintf( "illegal %s value of type %s in range of type %s",
+            bound, qn, b.Type )
+        return &RestrictionError{ msg }
+    }
+    if err := f( "min", b.Min ); err != nil { return err }
+    return f( "max", b.Max )
+}
+
+func areAdjacentInts( min, max Value ) bool {
+    switch minV := min.( type ) {
+    case Int32: return int32( max.( Int32 ) ) - int32( minV ) == int32( 1 )
+    case Uint32: return uint32( max.( Uint32 ) ) - uint32( minV ) == uint32( 1 )
+    case Int64: return int64( max.( Int64 ) ) - int64( minV ) == int64( 1 )
+    case Uint64: return uint64( max.( Uint64 ) ) - uint64( minV ) == uint64( 1 )
+    }
+    return false
+}
+
+func ( b *RangeRestrictionBuilder ) checkSatisfiable() error {
+    switch i := b.Min.( Comparer ).Compare( b.Max ); {
+    case i == 0: if b.MinClosed && b.MaxClosed { return nil }
+    case i > 0: ;
+    case i < 0: 
+        open := ! ( b.MinClosed || b.MaxClosed )
+        adjacent := areAdjacentInts( b.Min, b.Max ) 
+        if ! ( open && adjacent ) { return nil }
+    }
+    return &RestrictionError{ errMsgUnsatisfiableRange }
+}
+
+func ( b *RangeRestrictionBuilder ) Build() ( *RangeRestriction, error ) {
+    if err := b.checkApplicable(); err != nil { return nil, err }
+    if err := b.checkEmpty(); err != nil { return nil, err }
+    if err := b.checkValueTypes(); err != nil { return nil, err }
+    if err := b.checkSatisfiable(); err != nil { return nil, err }
+    return &RangeRestriction{ b.MinClosed, b.Min, b.Max, b.MaxClosed }, nil
+}
+
 type AtomicTypeReference struct {
     name *QualifiedTypeName
     restriction ValueRestriction
@@ -418,6 +523,35 @@ func NewAtomicTypeReference(
     nm *QualifiedTypeName, vr ValueRestriction ) *AtomicTypeReference {
 
     return &AtomicTypeReference{ name: nm, restriction: vr }
+}
+
+func atomicCheckRestrictionApplicable( 
+    nm *QualifiedTypeName, vr ValueRestriction ) error {
+
+    switch v := vr.( type ) {
+    case *RegexRestriction: 
+        if nm.Equals( QnameString ) { return nil }
+        return newRestrictionErrorInapplicable( rxErrNameRegex, nm )
+    case *RangeRestriction: 
+        rngTyp := v.inferredType()
+        if nm.Equals( rngTyp ) { return nil }
+        msg := fmt.Sprintf( "cannot apply %s range to base type %s", 
+            rngTyp, nm )
+        return &RestrictionError{ msg }
+    }
+    panic( libErrorf( "unhandled restriction: %T", vr ) )
+}
+
+func CreateAtomicTypeReference(
+    nm *QualifiedTypeName, 
+    vr ValueRestriction ) ( *AtomicTypeReference, error ) {
+
+    if vr != nil {
+        if err := atomicCheckRestrictionApplicable( nm, vr ); err != nil {
+            return nil, err
+        }
+    }
+    return &AtomicTypeReference{ name: nm, restriction: vr }, nil
 }
 
 func ( t *AtomicTypeReference ) Name() *QualifiedTypeName { return t.name }
@@ -1151,6 +1285,7 @@ var (
 var coreQnameResolver map[ string ]*QualifiedTypeName
 var PrimitiveTypes []*AtomicTypeReference
 var NumericTypeNames []*QualifiedTypeName
+var restrictableRangeTypeNames []*QualifiedTypeName
 
 var CoreNsV1 *Namespace
 
@@ -1201,6 +1336,16 @@ func init() {
         QnameInt32,
         QnameInt64,
         QnameUint32,
+        QnameUint64,
+        QnameFloat32,
+        QnameFloat64,
+    }
+    restrictableRangeTypeNames = []*QualifiedTypeName{
+        QnameString,
+        QnameTimestamp,
+        QnameInt32,
+        QnameUint32,
+        QnameInt64,
         QnameUint64,
         QnameFloat32,
         QnameFloat64,

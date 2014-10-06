@@ -330,7 +330,7 @@ func ( bs *buildScope ) resolveRegexRestriction(
     errLoc *parser.Location ) mg.ValueRestriction {
 
     if qn.Equals( mg.QnameString ) { 
-        if rr, err := mg.NewRegexRestriction( rx.Pat ); err == nil { 
+        if rr, err := mg.CreateRegexRestriction( rx.Pat ); err == nil { 
             return rr 
         } else {
             bs.c.addError( rx.Loc, err.Error() )
