@@ -348,7 +348,7 @@ func ( rti *rtInit ) addNumTests() {
     dm := types.NewDefinitionMap()
     for _, qn := range mg.NumericTypeNames {
         rti.addVcError( "not-a-num", qn.AsAtomicType(), 
-            `invalid number: not-a-num`, dm )
+            fmt.Sprintf( `invalid %s: not-a-num`, qn ), dm )
     }
     rti.addIdentityNumTests()
     rti.addTruncateNumTests()

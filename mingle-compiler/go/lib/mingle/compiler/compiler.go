@@ -309,38 +309,6 @@ func ( bs *buildScope ) qnameForMixin(
     return qn
 }
 
-func ( bs *buildScope ) addRestrictionTargetTypeError(
-    qn *mg.QualifiedTypeName, 
-    rx parser.RestrictionSyntax, 
-    errLoc *parser.Location ) {
-
-    rxNm := ""
-    switch rx.( type ) {
-    case *parser.RangeRestrictionSyntax: rxNm = "range"
-    case *parser.RegexRestrictionSyntax: rxNm = "regex"
-    default: panic( libErrorf( "unhandled restriction: %T", rx ) )
-    }
-    bs.c.addErrorf( errLoc, "Invalid target type for %s restriction: %s", 
-        rxNm, qn )
-}
-
-func ( bs *buildScope ) resolveRegexRestriction( 
-    qn *mg.QualifiedTypeName, 
-    rx *parser.RegexRestrictionSyntax,
-    errLoc *parser.Location ) mg.ValueRestriction {
-
-    if qn.Equals( mg.QnameString ) { 
-        if rr, err := mg.CreateRegexRestriction( rx.Pat ); err == nil { 
-            return rr 
-        } else {
-            bs.c.addError( rx.Loc, err.Error() )
-            return nil
-        }
-    }
-    bs.addRestrictionTargetTypeError( qn, rx, errLoc )
-    return nil
-}
-
 func ( bs *buildScope ) parseTimestamp( 
     str string, errLoc *parser.Location ) ( mg.Timestamp, bool ) {
     
@@ -354,63 +322,17 @@ func ( bs *buildScope ) parseTimestamp(
     return tm, false
 }
 
-var rangeValTypeNames []*mg.QualifiedTypeName
+func ( bs *buildScope ) buildRegexRestriction( 
+    rx *parser.RegexRestrictionSyntax,
+    tr *typeResolution ) mg.ValueRestriction {
 
-func init() {
-    rangeValTypeNames = []*mg.QualifiedTypeName{
-        mg.QnameString,
-        mg.QnameInt32,
-        mg.QnameInt64,
-        mg.QnameUint32,
-        mg.QnameUint64,
-        mg.QnameFloat32,
-        mg.QnameFloat64,
-        mg.QnameTimestamp,
-    }
+    rr, err := mg.CreateRegexRestriction( rx.Pat )
+    if err == nil { return rr }
+    bs.c.addError( tr.errLoc, err.Error() )
+    return nil
 }
 
-type rangeBuilder struct {
-    minClosed bool
-    min mg.Value
-    max mg.Value
-    maxClosed bool
-}
-
-func ( bs *buildScope ) setRangeNumValue(
-    valPtr *mg.Value,
-    rx *parser.NumRestrictionSyntax,
-    qn *mg.QualifiedTypeName,
-    errLoc *parser.Location,
-    bound string ) int {
-
-    if ! mg.IsNumericTypeName( qn ) {
-        bs.c.addErrorf( rx.Loc, "Got number as %s value for range", bound )
-        return 1
-    }
-    if mg.IsIntegerTypeName( qn ) && ( ! rx.Num.IsInt() ) {
-        bs.c.addErrorf( rx.Loc, "Got decimal as %s value for range", bound )
-        return 1
-    }
-    num, err := mg.ParseNumber( rx.LiteralString(), qn )
-    if err == nil {
-        *valPtr = num
-        return 0
-    }
-    bs.c.addError( rx.Loc, err.Error() )
-    return 1
-}
-
-func ( bs *buildScope ) setRangeTimestampValue(
-    valPtr *mg.Value, str string, errLoc *parser.Location ) int {
-        
-    if tm, ok := bs.parseTimestamp( str, errLoc ); ok {
-        *valPtr = tm
-        return 0
-    }
-    return 1
-}
-
-func ( bs *buildScope ) setRangeStringValue(
+func ( bs *buildScope ) setRangeBuilderStringValue(
     valPtr *mg.Value,
     rx *parser.StringRestrictionSyntax,
     qn *mg.QualifiedTypeName,
@@ -422,109 +344,85 @@ func ( bs *buildScope ) setRangeStringValue(
         *valPtr = mg.String( rx.Str )
         return 0
     case qn.Equals( mg.QnameTimestamp ):
-        return bs.setRangeTimestampValue( valPtr, rx.Str, errLoc )
+        if tm, ok := bs.parseTimestamp( rx.Str, errLoc ); ok {
+            *valPtr = tm
+            return 0
+        }
+        return 1
     }
-    bs.c.addErrorf( rx.Loc, "Got string as %s value for range", bound )
+    bs.c.addErrorf( rx.Loc, "got string as %s value for range", bound )
+    return 1
+}
+
+func ( bs *buildScope ) setRangeBuilderNumValue(
+    valPtr *mg.Value,
+    rx *parser.NumRestrictionSyntax,
+    qn *mg.QualifiedTypeName,
+    errLoc *parser.Location,
+    bound string ) int {
+
+    if ! mg.IsNumericTypeName( qn ) {
+        bs.c.addErrorf( rx.Loc, "got number as %s value for range", bound )
+        return 1
+    }
+    num, err := mg.ParseNumber( rx.LiteralString(), qn )
+    if err == nil {
+        *valPtr = num
+        return 0
+    }
+    bs.c.addError( rx.Loc, err.Error() )
     return 1
 }
 
 // bound is which bound to report in the error: "min" or "max"
-func ( bs *buildScope ) setRangeValue(
+func ( bs *buildScope ) setRangeBuilderValue(
     valPtr *mg.Value, 
     rx parser.RestrictionSyntax,
     qn *mg.QualifiedTypeName, 
     errLoc *parser.Location,
     bound string ) int {
 
+    if rx == nil { return 0 }
     switch v := rx.( type ) {
-    case *parser.NumRestrictionSyntax: 
-        return bs.setRangeNumValue( valPtr, v, qn, errLoc, bound )
-    case *parser.StringRestrictionSyntax: 
-        return bs.setRangeStringValue( valPtr, v, qn, errLoc, bound )
+    case *parser.StringRestrictionSyntax:
+        return bs.setRangeBuilderStringValue( valPtr, v, qn, errLoc, bound )
+    case *parser.NumRestrictionSyntax:
+        return bs.setRangeBuilderNumValue( valPtr, v, qn, errLoc, bound )
     }
-    panic( libErrorf( "unhandled restriction: %T", rx ) )
+    panic( libErrorf( "unhandled rx: %T", rx ) )
 }
 
-func areAdjacentInts( min, max mg.Value ) bool {
-    switch minV := min.( type ) {
-    case mg.Int32: 
-        return int32( max.( mg.Int32 ) ) - int32( minV ) == int32( 1 )
-    case mg.Uint32: 
-        return uint32( max.( mg.Uint32 ) ) - uint32( minV ) == uint32( 1 )
-    case mg.Int64: 
-        return int64( max.( mg.Int64 ) ) - int64( minV ) == int64( 1 )
-    case mg.Uint64: 
-        return uint64( max.( mg.Uint64 ) ) - uint64( minV ) == uint64( 1 )
-    }
-    return false
-}
-
-func ( bs *buildScope ) checkRangeBounds( 
-    rb *rangeBuilder, errLoc *parser.Location ) int {
-
-    failed := false
-    switch i := rb.min.( mg.Comparer ).Compare( rb.max ); {
-    case i == 0: failed = ! ( rb.minClosed && rb.maxClosed )
-    case i > 0: failed = true
-    case i < 0: 
-        open := ! ( rb.minClosed || rb.maxClosed )
-        failed = open && areAdjacentInts( rb.min, rb.max )
-    }
-    if failed { 
-        bs.c.addError( errLoc, "Unsatisfiable range" )
-        return 1
-    }
-    return 0
-}
-
-func ( bs *buildScope ) setRangeValues(
-    rb *rangeBuilder, 
-    rx *parser.RangeRestrictionSyntax, 
-    qn *mg.QualifiedTypeName,
-    errLoc *parser.Location ) bool {
-
-    fails := 0
-    if rx.Left != nil {
-        fails += bs.setRangeValue( &( rb.min ), rx.Left, qn, errLoc, "min" )
-    }
-    if rx.Right != nil {
-        fails += bs.setRangeValue( &( rb.max ), rx.Right, qn, errLoc, "max" ) 
-    }
-    if ! ( rb.min == nil || rb.max == nil ) { 
-        fails += bs.checkRangeBounds( rb, rx.Loc ) 
-    }
-    return fails == 0
-}
-
-func ( bs *buildScope ) resolveRangeRestriction(
+func ( bs *buildScope ) buildRangeRestriction(
     qn *mg.QualifiedTypeName,
     rx *parser.RangeRestrictionSyntax,
-    errLoc *parser.Location ) mg.ValueRestriction {
+    tr *typeResolution ) mg.ValueRestriction {
 
-    rb := &rangeBuilder{ minClosed: rx.LeftClosed, maxClosed: rx.RightClosed }
-    for _, rvTypNm := range rangeValTypeNames {
-        if qn.Equals( rvTypNm ) {
-            if bs.setRangeValues( rb, rx, rvTypNm, errLoc ) { 
-                return mg.NewRangeRestriction( 
-                    rb.minClosed, rb.min, rb.max, rb.maxClosed )
-            }
-            return nil
-        }
+    rb := &mg.RangeRestrictionBuilder{
+        Type: qn,
+        MinClosed: rx.LeftClosed, 
+        MaxClosed: rx.RightClosed,
     }
-    bs.addRestrictionTargetTypeError( qn, rx, errLoc )
+    errLoc := tr.errLoc
+    fails := 0
+    fails += bs.setRangeBuilderValue( &( rb.Min ), rx.Left, qn, errLoc, "min" ) 
+    fails += bs.setRangeBuilderValue( &( rb.Max ), rx.Right, qn, errLoc, "max" )
+    if fails > 0 { return nil }
+    res, err := rb.Build()
+    if err == nil { return res }
+    bs.c.addError( errLoc, err.Error() )
     return nil
 }
 
-func ( bs *buildScope ) resolveRestriction(
+func ( bs *buildScope ) buildValueRestriction(
     qn *mg.QualifiedTypeName, 
     rx parser.RestrictionSyntax,
-    errLoc *parser.Location ) mg.ValueRestriction {
+    tr *typeResolution ) mg.ValueRestriction {
 
     switch v := rx.( type ) {
     case *parser.RegexRestrictionSyntax: 
-        return bs.resolveRegexRestriction( qn, v, errLoc )
+        return bs.buildRegexRestriction( v, tr )
     case *parser.RangeRestrictionSyntax: 
-        return bs.resolveRangeRestriction( qn, v, errLoc )
+        return bs.buildRangeRestriction( qn, v, tr )
     }
     panic( libErrorf( "unhandled restriction: %T", rx ) )
 }
@@ -534,10 +432,14 @@ func ( bs *buildScope ) getAtomicTypeReference(
     rx parser.RestrictionSyntax,
     tr *typeResolution ) *mg.AtomicTypeReference {
 
-    if rx == nil { return mg.NewAtomicTypeReference( qn, nil ) }
-    vr := bs.resolveRestriction( qn, rx, tr.errLoc )
-    if vr == nil { return nil }
-    return mg.NewAtomicTypeReference( qn, vr )
+    var vr mg.ValueRestriction
+    if rx != nil {
+        if vr = bs.buildValueRestriction( qn, rx, tr ); vr == nil { return nil }
+    }
+    at, err := mg.CreateAtomicTypeReference( qn, vr )
+    if err == nil { return at }
+    bs.c.addError( tr.errLoc, err.Error() )
+    return nil
 }
 
 func ( bs *buildScope ) unalias( 

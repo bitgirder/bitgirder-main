@@ -1,11 +1,94 @@
 package compiler
 
 import (
+    "log"
     "testing"
+    "fmt"
+    "bytes"
     "bitgirder/assert"
+    mg "mingle"
     "mingle/types"
     "mingle/parser"
 )
+
+func canFormatAsRangeSource( v mg.Value ) bool {
+    if v == nil { return true }
+    switch v.( type ) {
+    case mg.Int32, mg.Uint32, mg.Int64, mg.Uint64, mg.Float32, mg.Float64,
+         mg.String, mg.Timestamp:
+        return true
+    }
+    return false
+}
+
+func applyAtomicRestrictionErrorTest( 
+    t *mg.AtomicRestrictionErrorTest, idx int ) bool {
+
+    if idx == 24 { return false }
+    rb, ok := t.Restriction.( *mg.RangeRestrictionBuilder )
+    if ! ok { return true }
+    return canFormatAsRangeSource( rb.Min ) && canFormatAsRangeSource( rb.Max )
+}
+
+func sourceStringForTest( t *mg.AtomicRestrictionErrorTest ) string {
+    res := &bytes.Buffer{}
+    res.WriteString( t.Name.ExternalForm() )
+    res.WriteString( "~" )
+    switch v := t.Restriction.( type ) {
+    case *mg.RegexRestriction: res.WriteString( v.ExternalForm() )
+    case string: fmt.Fprintf( res, "%q", v )
+    case *mg.RangeRestrictionBuilder: res.WriteString( v.RangeToString() )
+    default: panic( libErrorf( "unhandled restriction: %T", v ) )
+    }
+    return res.String()
+}
+
+func atomicRestrictionErrorTestSetExpectedError(
+    t *mg.AtomicRestrictionErrorTest, idx int, ct *compilerTest ) {
+
+    line := 6
+    switch idx {
+    case 2: ct.expectError( line, 43, "got number as min value for range" )
+    case 3: ct.expectError( line, 47, "got number as max value for range" )
+    case 4: ct.expectError( line, 47, "got number as max value for range" )
+    case 5: ct.expectError( line, 42, "got string as min value for range" )
+    case 6: ct.expectError( line, 44, "got string as max value for range" )
+    case 7: 
+        ct.expectError( line, 42, "invalid mingle:core@v1/Int32: 1.1" )
+        ct.expectError( line, 46, "invalid mingle:core@v1/Int32: 2.1" )
+    case 8: 
+        ct.expectError( line, 44, "invalid mingle:core@v1/Int32: 2.1" )
+    default: ct.expectError( line, 20, t.Error.Error() )
+    }
+}
+
+func createAtomicRestrictionErrorTest( 
+    t *mg.AtomicRestrictionErrorTest, idx int ) *compilerTest {
+
+    srcTmpl := `
+            @version v1
+            namespace ns1
+            struct S1 {}
+            struct S2 {
+                f1 %s
+            }`
+    src := fmt.Sprintf( srcTmpl, sourceStringForTest( t ) )
+    log.Printf( "source for %d:\n%s", idx, src )
+    res := newCompilerTest( fmt.Sprintf( "restriction-error-test%d", idx ) )
+    res.setSource( src )
+    atomicRestrictionErrorTestSetExpectedError( t, idx, res )
+    return res
+}
+
+func getAtomicRestrictionErrorTests() []*compilerTest {
+    tests := mg.GetAtomicRestrictionErrorTests()
+    res := make( []*compilerTest, 0, len( tests ) )
+    for i, test := range tests {
+        if ! applyAtomicRestrictionErrorTest( test, i ) { continue }
+        res = append( res, createAtomicRestrictionErrorTest( test, i ) )
+    }
+    return res
+}
 
 func TestCompiler( t *testing.T ) {
     tests := []*compilerTest{
@@ -36,9 +119,8 @@ func TestCompiler( t *testing.T ) {
                 int3 &Int64?
                 int4 Int32 default 12
                 int5 Int32~[0,) default 1111
-                int6 Int64~(,)
-                int7 Uint32
-                int8 Uint64~[0,100)
+                int6 Uint32
+                int7 Uint64~[0,100)
                 ints1 Int64*
                 ints2 Int32+ default [ 1, -2, 3, -4 ]
                 float1 Float64 default 3.1
@@ -97,11 +179,9 @@ func TestCompiler( t *testing.T ) {
                         "int4", "mingle:core@v1/Int32", int32( 12 ) ),
                     types.MakeFieldDef( 
                         "int5", "mingle:core@v1/Int32~[0,)", int32( 1111 ) ),
+                    types.MakeFieldDef( "int6", "mingle:core@v1/Uint32", nil ),
                     types.MakeFieldDef( 
-                        "int6", "mingle:core@v1/Int64~(,)", nil ),
-                    types.MakeFieldDef( "int7", "mingle:core@v1/Uint32", nil ),
-                    types.MakeFieldDef( 
-                        "int8", "mingle:core@v1/Uint64~[0,100)", nil ),
+                        "int7", "mingle:core@v1/Uint64~[0,100)", nil ),
                     types.MakeFieldDef( "ints1", "mingle:core@v1/Int64*", nil ),
                     types.MakeFieldDef(
                         "ints2",
@@ -1449,73 +1529,6 @@ func TestCompiler( t *testing.T ) {
             ),
         ),
 
-        newCompilerTest( "invalid-restrictions" ).
-        setSource( `
-            @version v1
-            namespace ns1
-            struct S1 {}
-            struct S2 {
-                f1 S1~(,)
-                f2 S1~"a"
-                f3 String~[0, "1")
-                f4 String~["0", 1)
-                f5 Timestamp~(,1)
-                f6 Int32~["a", 2)
-                f7 Int32~(1, "20" )
-                f8 Int32~"a"
-                f9 Buffer~[0,1]
-                f10 Timestamp~[ "2012-01-02T12:00:00Z", "2012-01-01T12:00:00Z" ]
-                f11 Timestamp~["2001-0x-22",)
-                f12 String~"ab[a-z"
-                f13 Int32~[0,-1]
-                f14 Uint32~(0,0)
-                f15 Int64~[0,0)
-                f16 Uint64~(0,0]
-                f17 Int32~(0,1)
-                f18 String~("a","a")
-                f19 Timestamp~( "2012-01-01T12:00:00Z", "2012-01-01T12:00:00Z" )
-                f20 Int32~[1.0,2]
-                f21 Int32~[1,2.0]
-                f22 Float32~(1.0,1.0)
-                f23 Float64~(0.0,-1.0)
-                f24 Int32~("1",3]
-                f25 Int32~[0,"2")
-                f26 String~["aab", "aaa"]
-            }
-        ` ).
-        expectError( 6, 20, 
-            "Invalid target type for range restriction: ns1@v1/S1" ).
-        expectError( 7, 20, 
-            "Invalid target type for regex restriction: ns1@v1/S1" ).
-        expectError( 8, 28, "Got number as min value for range" ).
-        expectError( 9, 33, "Got number as max value for range" ).
-        expectError( 10, 32, "Got number as max value for range" ).
-        expectError( 11, 27, "Got string as min value for range" ).
-        expectError( 12, 30, "Got string as max value for range" ).
-        expectError( 13, 20, 
-            "Invalid target type for regex restriction: mingle:core@v1/Int32" ).
-        expectError( 14, 20, 
-            "Invalid target type for range restriction: mingle:core@v1/Buffer",
-        ).
-        expectError( 15, 31,"Unsatisfiable range" ).
-        expectError( 16, 21, `Invalid RFC3339 time: "2001-0x-22"` ).
-        expectError( 17, 28,
-            "error parsing regexp: missing closing ]: `[a-z`" ).
-        expectError( 18, 27, "Unsatisfiable range" ).
-        expectError( 19, 28, "Unsatisfiable range" ).
-        expectError( 20, 27, "Unsatisfiable range" ).
-        expectError( 21, 28, "Unsatisfiable range" ).
-        expectError( 22, 27, "Unsatisfiable range" ).
-        expectError( 23, 28, "Unsatisfiable range" ).
-        expectError( 24, 31, "Unsatisfiable range" ).
-        expectError( 25, 28, "Got decimal as min value for range" ).
-        expectError( 26, 30, "Got decimal as max value for range" ).
-        expectError( 27, 29, "Unsatisfiable range" ).
-        expectError( 28, 29, "Unsatisfiable range" ).
-        expectError( 29, 28, "Got string as min value for range" ).
-        expectError( 30, 30, "Got string as max value for range" ).
-        expectError( 31, 28, "Unsatisfiable range" ),
-
         newCompilerTest( "schema-cycle-errors" ).
         setSource( `
             @version v1
@@ -1929,7 +1942,7 @@ func TestCompiler( t *testing.T ) {
         expectError( 
             6, 13, "Type T1 is already declared in [<>, line 4, col 13]" ).
         expectError( 
-            8, 22, "Invalid target type for regex restriction: ns@v1/S1" ).
+            8, 22, "regex restriction cannot be applied to ns@v1/S1" ).
         expectError( 10, 38, "List value not expected" ).
         expectError( 12, 38, `Value "b" does not satisfy restriction "^a+$"` ).
         expectError( 14, 38, `Value -1 does not satisfy restriction [0,3]` ),
@@ -2138,6 +2151,7 @@ func TestCompiler( t *testing.T ) {
         expectGlobalError( 
             `one or more dependency cycles exist amongst namespaces: ns1@v1, ns2@v1` ),
     }
+    tests = append( tests, getAtomicRestrictionErrorTests()... )
     a := assert.NewPathAsserter( t )
     for _, test := range tests {
         test.PathAsserter = a.Descend( test.name )

@@ -364,12 +364,14 @@ func ( r *RegexRestriction ) AcceptsValue( val Value ) bool {
     return r.exp.MatchString( string( val.( String ) ) )
 }
 
-func formatRange( minClosed bool, min, max Value, maxClosed bool ) string {
+func formatRange( 
+    minClosed bool, min, max Value, maxClosed bool, must bool ) string {
+
     buf := bytes.Buffer{}
     if minClosed { buf.WriteRune( '[' ) } else { buf.WriteRune( '(' ) }
-    if min != nil { buf.WriteString( quoteRangeValue( min ) ) }
+    if min != nil { buf.WriteString( quoteRangeValue( min, must ) ) }
     buf.WriteRune( ',' )
-    if max != nil { buf.WriteString( quoteRangeValue( max ) ) }
+    if max != nil { buf.WriteString( quoteRangeValue( max, must ) ) }
     if maxClosed { buf.WriteRune( ']' ) } else { buf.WriteRune( ')' ) }
     return buf.String()
 }
@@ -400,18 +402,19 @@ func ( rr *RangeRestriction ) Min() Value { return rr.min }
 func ( rr *RangeRestriction ) Max() Value { return rr.max }
 func ( rr *RangeRestriction ) MaxClosed() bool { return rr.maxClosed }
 
-func quoteRangeValue( val Value ) string {
+func quoteRangeValue( val Value, must bool ) string {
     switch v := val.( type ) {
     case Int32, Int64, Uint32, Uint64, Float32, Float64: 
         return val.( fmt.Stringer ).String()
     case String: return fmt.Sprintf( "%q", string( v ) )
     case Timestamp: return fmt.Sprintf( "%q", v.Rfc3339Nano() )
     }
-    panic( fmt.Errorf( "Unhandled range val type: %T", val ) )
+    if must { panic( libErrorf( "unhandled range val for quote: %T", val ) ) }
+    return fmt.Sprintf( "<range val: %T>", val )
 }
 
 func ( r *RangeRestriction ) ExternalForm() string {
-    return formatRange( r.minClosed, r.min, r.max, r.maxClosed )
+    return formatRange( r.minClosed, r.min, r.max, r.maxClosed, true )
 }
 
 func ( r *RangeRestriction ) equalsRestriction( vr ValueRestriction ) bool {
@@ -452,9 +455,8 @@ type RangeRestrictionBuilder struct {
     MaxClosed bool
 }
 
-func ( b *RangeRestrictionBuilder ) String() string {
-    return fmt.Sprintf( "%T{ Type: %s, Range: %s }", b, b.Type, 
-        formatRange( b.MinClosed, b.Min, b.Max, b.MaxClosed ) )
+func ( b *RangeRestrictionBuilder ) RangeToString() string {
+    return formatRange( b.MinClosed, b.Min, b.Max, b.MaxClosed, false )
 }
 
 func ( b *RangeRestrictionBuilder ) checkApplicable() error {
@@ -495,6 +497,8 @@ func areAdjacentInts( min, max Value ) bool {
 }
 
 func ( b *RangeRestrictionBuilder ) checkSatisfiable() error {
+    // first check: an open or half-open non-empty range is always satisfiable
+    if b.Min == nil || b.Max == nil { return nil }
     switch i := b.Min.( Comparer ).Compare( b.Max ); {
     case i == 0: if b.MinClosed && b.MaxClosed { return nil }
     case i > 0: ;
@@ -506,9 +510,11 @@ func ( b *RangeRestrictionBuilder ) checkSatisfiable() error {
     return &RestrictionError{ errMsgUnsatisfiableRange }
 }
 
+// order of checks here is important -- ex: satisfiability check assumes that
+// range is known non-empty
 func ( b *RangeRestrictionBuilder ) Build() ( *RangeRestriction, error ) {
-    if err := b.checkApplicable(); err != nil { return nil, err }
     if err := b.checkEmpty(); err != nil { return nil, err }
+    if err := b.checkApplicable(); err != nil { return nil, err }
     if err := b.checkValueTypes(); err != nil { return nil, err }
     if err := b.checkSatisfiable(); err != nil { return nil, err }
     return &RangeRestriction{ b.MinClosed, b.Min, b.Max, b.MaxClosed }, nil
@@ -1500,8 +1506,10 @@ func newNumberRangeError( in string ) *NumberFormatError {
     return &NumberFormatError{ msg: msg }
 }
 
-func newNumberSyntaxError( in string ) *NumberFormatError {
-    return &NumberFormatError{ msg: fmt.Sprintf( "invalid number: %s", in ) }
+func newNumberSyntaxError( 
+    qn *QualifiedTypeName, in string ) *NumberFormatError {
+
+    return &NumberFormatError{ msg: fmt.Sprintf( "invalid %s: %s", qn, in ) }
 }
 
 func parseIntNumberInitial(
@@ -1549,12 +1557,12 @@ func parseFloatNumber(
     panic( libErrorf( "unhandled num type: %s", numTyp ) )
 }
 
-func asParseNumberError( s string, err error ) error {
+func asParseNumberError( qn *QualifiedTypeName, s string, err error ) error {
     ne, ok := err.( *strconv.NumError )
     if ! ok { return err }
     switch {
     case ne.Err == strconv.ErrRange: err = newNumberRangeError( s )
-    case ne.Err == strconv.ErrSyntax: err = newNumberSyntaxError( s )
+    case ne.Err == strconv.ErrSyntax: err = newNumberSyntaxError( qn, s )
     }
     return err
 }
@@ -1569,7 +1577,7 @@ func ParseNumber( s string, qn *QualifiedTypeName ) ( val Value, err error ) {
     case qn.Equals( QnameFloat64 ): val, err = parseFloatNumber( s, 64, qn )
     default: panic( libErrorf( "unhandled number type: %s", qn ) )
     }
-    if err != nil { err = asParseNumberError( s, err ) }
+    if err != nil { err = asParseNumberError( qn, s, err ) }
     return
 }
 

@@ -204,3 +204,208 @@ func AssertBinIoRoundtripRead(
     default: a.Fatalf( "Unhandled expct val: %T", expct )
     }
 }
+
+type AtomicRestrictionErrorTest struct {
+    Name *QualifiedTypeName
+    Restriction interface{}
+    Error error
+}
+
+func ( t *AtomicRestrictionErrorTest ) getRestriction() ( ValueRestriction, 
+                                                          error ) {
+
+    switch v := t.Restriction.( type ) {
+    case ValueRestriction: return v, nil
+    case string: return CreateRegexRestriction( v )
+    case *RangeRestrictionBuilder: return v.Build()
+    }
+    panic( libErrorf( "unhandled restriction: %T", t.Restriction ) )
+}
+
+// values used for floats always have a string representation that will
+// unequivocally include a decimal, to simplify testing that recreates literal
+// strings based on these inputs
+func GetAtomicRestrictionErrorTests() []*AtomicRestrictionErrorTest {
+    regx := MustRegexRestriction
+    // we create our expected errors separately from the way the lib code does
+    // so we can catch failures in which the lib formats these errors
+    typMsg := func( bound string, expct, act *QualifiedTypeName ) error {
+        return &RestrictionError{
+            fmt.Sprintf( "illegal %s value of type %s in range of type %s",
+                bound, act, expct ),
+        }
+    }
+    inapplicable := func( rxTyp string, attempted *QualifiedTypeName ) error {
+        return &RestrictionError{ 
+            fmt.Sprintf( "%s restriction cannot be applied to %s", 
+                rxTyp, attempted ),
+        }
+    }
+    return []*AtomicRestrictionErrorTest{
+        { 
+            Name: ns1V1Qn( "S1" ), 
+            Restriction: regx( "a" ),
+            Error: inapplicable( "regex", ns1V1Qn( "S1" ) ),
+        },
+        {
+            Name: QnameString, // could be any type here for this test
+            Restriction: &RangeRestrictionBuilder{
+                QnameString, false, nil, nil, false },
+            Error: &RestrictionError{ errMsgEmptyRange },
+        },
+        {
+            Name: QnameString,
+            Restriction: &RangeRestrictionBuilder{
+                QnameString, true, Int32( 0 ), String( "1" ), false },
+            Error: typMsg( "min", QnameString, QnameInt32 ),
+        },
+        {
+            Name: QnameString,
+            Restriction: &RangeRestrictionBuilder{
+                QnameString, true, String( "0" ), Int32( 1 ), false },
+            Error: typMsg( "max", QnameString, QnameInt32 ),
+        },
+        {
+            Name: QnameTimestamp,
+            Restriction: &RangeRestrictionBuilder{
+                QnameTimestamp, false, nil, Int32( 1 ), false },
+            Error: typMsg( "max", QnameTimestamp, QnameInt32 ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt32, true, String( "a" ), Int32( 2 ), false },
+            Error: typMsg( "min", QnameInt32, QnameString ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt32, false, Int32( 1 ), String( "20" ), false },
+            Error: typMsg( "max", QnameInt32, QnameString ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt32, true, Float32( 1.1 ), Float64( 2.1 ), true },
+            Error: typMsg( "min", QnameInt32, QnameFloat32 ),
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt32, true, Int32( 1 ), Float32( 2.1 ), true },
+            Error: typMsg( "max", QnameInt32, QnameFloat32 ),
+        },
+        { 
+            Name: QnameInt32, 
+            Restriction: regx( "a" ),
+            Error: inapplicable( "regex", QnameInt32 ),
+        },
+        {
+            Name: QnameBuffer,
+            Restriction: &RangeRestrictionBuilder{
+                QnameBuffer, 
+                true, 
+                Buffer( []byte{ 0 } ), 
+                Buffer( []byte{ 1 } ), 
+                true,
+            },
+            Error: inapplicable( "range", QnameBuffer ),
+        },
+        { 
+            Name: QnameTimestamp, 
+            Restriction: regx( "2001-0x-22" ),
+            Error: inapplicable( "regex", QnameTimestamp ),
+        },
+        { 
+            Name: QnameString, 
+            Restriction: "ab[a-z",
+            Error: &RestrictionError{
+                "error parsing regexp: missing closing ]: `[a-z`" },
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt32, true, Int32( 0 ), Int32( -1 ), true },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameUint32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameUint32, false, Uint32( 0 ), Uint32( 0 ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameInt64,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt64, true, Int64( 0 ), Int64( 0 ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameUint64,
+            Restriction: &RangeRestrictionBuilder{
+                QnameUint64, false, Uint64( 0 ), Uint64( 0 ), true },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt32, false, Int32( 0 ), Int32( 1 ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameString,
+            Restriction: &RangeRestrictionBuilder{
+                QnameString, false, String( "a" ), String( "a" ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameString,
+            Restriction: &RangeRestrictionBuilder{
+                QnameString, false, String( "b" ), String( "a" ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameTimestamp,
+            Restriction: &RangeRestrictionBuilder{
+                QnameTimestamp,
+                false,
+                MustTimestamp( "2012-01-01T12:00:00Z" ), 
+                MustTimestamp( "2012-01-01T12:00:00Z" ),
+                false,
+            },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameTimestamp,
+            Restriction: &RangeRestrictionBuilder{
+                QnameTimestamp,
+                true,
+                MustTimestamp( "2012-01-02T12:00:00Z" ), 
+                MustTimestamp( "2012-01-01T12:00:00Z" ),
+                true,
+            },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameFloat32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameFloat32, false, Float32( 1.1 ), Float32( 1.1 ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameFloat64,
+            Restriction: &RangeRestrictionBuilder{
+                QnameFloat64, false, Float64( 0.1 ), Float64( -1.1 ), false },
+            Error: &RestrictionError{ errMsgUnsatisfiableRange },
+        },
+        {
+            Name: QnameInt32,
+            Restriction: &RangeRestrictionBuilder{
+                QnameInt64, false, Int64( 0 ), Int64( 100 ), false },
+            Error: &RestrictionError{
+                fmt.Sprintf( "cannot apply %s range to base type %s",
+                    QnameInt64, QnameInt32 ),
+            },
+        },
+    }
+}
