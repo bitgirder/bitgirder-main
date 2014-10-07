@@ -55,6 +55,48 @@ func getBoundTestValues() *mg.IdentifierMap {
     res.Put( mkId( "missing-fields-error-f1-f2-f3-loc-f1-i2" ), mfeInst1 )
     return res
 }
+    
+func makeIdStruct( parts ...string ) *mg.Struct {
+    l := mg.NewList( asType( "String+" ).( *mg.ListTypeReference ) )
+    for _, part := range parts { l.AddUnsafe( mg.String( part ) ) }
+    return parser.MustStruct( mg.QnameIdentifier, "parts", l )
+}
+
+func makeRestrictionInput( rx interface{} ) *mg.Struct {
+    switch v := rx.( type ) {
+    case *mg.RegexRestriction: return makeRestrictionInput( v.ExternalForm() )
+    case string:
+        return parser.MustStruct( mg.QnameRegexRestriction, "pattern", v ) 
+    case *mg.RangeRestrictionBuilder:
+        return parser.MustStruct( mg.QnameRangeRestriction,
+            "min-closed", v.MinClosed,
+            "min", v.Min,
+            "max", v.Max,
+            "max-closed", v.MaxClosed,
+        )
+    }
+    panic( libErrorf( "unhandled restriction: %T", rx ) )
+}
+
+func makeAtomicRestrictionErrorTestInput( 
+    t *mg.AtomicRestrictionErrorTest ) *mg.Struct {
+
+    return parser.MustStruct( mg.QnameAtomicTypeReference,
+        "name", parser.MustStruct( mg.QnameQualifiedTypeName,
+            "namespace", parser.MustStruct( mg.QnameNamespace,
+                "parts", mg.MustList(
+                    makeIdStruct( "mingle" ),
+                    makeIdStruct( "core" ),
+                ),
+                "version", makeIdStruct( "v1" ),
+            ),
+            "name", parser.MustStruct( mg.QnameDeclaredTypeName,
+                "name", t.Name.Name.ExternalForm(),
+            ),
+        ),
+        "restriction", makeRestrictionInput( t.Restriction ),
+    )
+}
 
 func getBindTests() []*bind.BindTest {
     res := []*bind.BindTest{}
@@ -68,11 +110,7 @@ func getBindTests() []*bind.BindTest {
     p := func( rootId string ) objpath.PathNode {
         return objpath.RootedAt( mkId( rootId ) )
     }
-    idStruct := func( parts ...string ) *mg.Struct {
-        l := mg.NewList( asType( "String+" ).( *mg.ListTypeReference ) )
-        for _, part := range parts { l.AddUnsafe( mg.String( part ) ) }
-        return parser.MustStruct( mg.QnameIdentifier, "parts", l )
-    }
+    idStruct := makeIdStruct
     addTest := func( t *bind.BindTest ) {
         t.Domain = bind.DomainDefault
         res = append( res, t )
@@ -482,14 +520,6 @@ func getBindTests() []*bind.BindTest {
 //    addRt(
 //        parser.MustStruct( mg.QnameAtomicTypeReference,
 //            "name", int32Qn,
-//            "restriction", mkRng( false, nil, nil, false ), // any int32
-//        ),
-//        mg.TypeAtomicTypeReference,
-//        "int32-infinite-range",
-//    )
-//    addRt(
-//        parser.MustStruct( mg.QnameAtomicTypeReference,
-//            "name", int32Qn,
 //            "restriction", mkRng( true, mg.Int32( 0 ), mg.Int32( 10 ), false ),
 //        ),
 //        mg.TypeAtomicTypeReference,
@@ -506,33 +536,14 @@ func getBindTests() []*bind.BindTest {
 //        mg.TypeAtomicTypeReference,
 //        "string-a-star",
 //    )
-//    addVcErr(
-//        parser.MustStruct( mg.QnameAtomicTypeReference,
-//            "name", int32Qn,
-//            "restriction", mkRng( true, nil, nil, false ),
-//        ),
-//        mg.TypeAtomicTypeReference,
-//        objpath.RootedAt( mkId( "restriction" ) ),
-//        "STUB",
-//    )
-//    addVcErr(
-//        parser.MustStruct( mg.QnameAtomicTypeReference,
-//            "name", stringQn,
-//            "restriction", mkRegx( "[a" ),
-//        ),
-//        mg.TypeAtomicTypeReference,
-//        objpath.RootedAt( mkId( "restriction" ) ),
-//        "STUB",
-//    )
-//    addVcErr(
-//        parser.MustStruct( mg.QnameAtomicTypeReference,
-//            "name", int32Qn,
-//            "restriction", mkRegx( "[a" ),
-//        ),
-//        mg.TypeAtomicTypeReference,
-//        objpath.RootedAt( mkId( "restriction" ) ),
-//        "STUB",
-//    )
+//    for _, aret := range mg.GetAtomicRestrictionErrorTests() {
+//        addVcErr(
+//            makeAtomicRestrictionErrorTestInput( aret ),
+//            mg.TypeAtomicTypeReference,
+//            nil,
+//            aret.Error.Error(),
+//        )
+//    }
     return res
 }
 
