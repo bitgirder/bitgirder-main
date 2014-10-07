@@ -409,3 +409,15 @@ func GetAtomicRestrictionErrorTests() []*AtomicRestrictionErrorTest {
         },
     }
 }
+
+func MustRangeRestriction(
+    typ *QualifiedTypeName, 
+    minClosed bool,
+    min, max Value,
+    maxClosed bool ) *RangeRestriction {
+
+    rb := &RangeRestrictionBuilder{ typ, minClosed, min, max, maxClosed }
+    res, err := rb.Build()
+    if err == nil { return res }
+    panic( err )
+}

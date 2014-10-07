@@ -470,11 +470,13 @@ func TestRestrictionAccept( t *testing.T ) {
     f := func( v Value, vr ValueRestriction, expct bool ) {
         assert.Equal( expct, vr.AcceptsValue( v ) )
     }
-    vr1 := NewRangeRestriction( true, Int32( 0 ), Int32( 10 ), true )
+    vr1 := MustRangeRestriction( 
+        QnameInt32, true, Int32( 0 ), Int32( 10 ), true )
     f( Int32( 0 ), vr1, true )
     f( Int32( 10 ), vr1, true )
     f( Int32( 5 ), vr1, true )
-    vr2 := NewRangeRestriction( false, Int32( 0 ), Int32( 10 ), false )
+    vr2 := MustRangeRestriction( 
+        QnameInt32, false, Int32( 0 ), Int32( 10 ), false )
     f( Int32( 0 ), vr2, false )
     f( Int32( 10 ), vr2, false )
     f( Int32( -1 ), vr2, false )
@@ -509,7 +511,7 @@ func TestCanAssign( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
     int32Rng := NewAtomicTypeReference(
         QnameInt32,
-        NewRangeRestriction( true, Int32( 0 ), Int32( 1 ), true ),
+        MustRangeRestriction( QnameInt32, true, Int32( 0 ), Int32( 1 ), true ),
     )
     mkList := func( typ *ListTypeReference, vals ...interface{} ) *List {
         res := MustList( vals... )
@@ -639,7 +641,7 @@ func TestCanAssignType( t *testing.T ) {
     chk( ltInt32( true ), TypeValue, true )
     int32Rng := NewAtomicTypeReference(
         QnameInt32,
-        NewRangeRestriction( true, Int32( 0 ), Int32( 1 ), true ),
+        MustRangeRestriction( QnameInt32, true, Int32( 0 ), Int32( 1 ), true ),
     )
     int32RngPtr := NewPointerTypeReference( int32Rng )
     chk( int32Rng, TypeInt32, true )
@@ -859,7 +861,8 @@ func TestTypeReferenceEquals( t *testing.T ) {
     }
     at1Rgx := NewAtomicTypeReference( qn1, rgx( ".*" ) )
     rng := func( i int32 ) *RangeRestriction {
-        return NewRangeRestriction( true, Int32( i ), Int32( i + 1 ), true )
+        return MustRangeRestriction( 
+            QnameInt32, true, Int32( i ), Int32( i + 1 ), true )
     }
     at1Rng := NewAtomicTypeReference( qn1, rng( 1 ) )
     at2 := NewAtomicTypeReference( qn2, nil )

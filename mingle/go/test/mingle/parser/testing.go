@@ -221,7 +221,8 @@ func ( tc *unsafeTypeCompleter ) getRangeRestriction(
     var min, max mg.Value
     if l := rx.Left; l != nil { tc.setRangeValue( &( min ), qn, l ) }
     if r := rx.Right; r != nil { tc.setRangeValue( &( max ), qn, r ) }
-    return mg.NewRangeRestriction( rx.LeftClosed, min, max, rx.RightClosed )
+    return mg.MustRangeRestriction( 
+        qn, rx.LeftClosed, min, max, rx.RightClosed )
 }
 
 func ( tc *unsafeTypeCompleter ) getRestriction(

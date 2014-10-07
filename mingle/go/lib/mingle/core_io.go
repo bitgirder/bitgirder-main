@@ -484,7 +484,7 @@ func ( r *BinReader ) readRegexRestriction() ( rr *RegexRestriction,
     return CreateRegexRestriction( src )
 }
 
-func ( r *BinReader ) readRangeVal() ( Value, error ) {
+func ( r *BinReader ) readRangeVal( bound string ) ( Value, error ) {
     tc, err := r.ReadTypeCode()
     if err != nil { return nil, err }
     switch tc {
@@ -496,30 +496,30 @@ func ( r *BinReader ) readRangeVal() ( Value, error ) {
         if _, err := r.ReadScalarValue( tc ); err != nil { return nil, err }
         return nil, nil
     }
-    err = r.IoErrorf( "mingle: Unrecognized range value code: 0x%02x", tc )
-    return nil, err
+    return nil, fmt.Errorf( "invalid range %s value type: 0x%02x", bound, tc )
 } 
 
 // Note: type code is already read
-func ( r *BinReader ) readRangeRestriction() ( rr *RangeRestriction,
-                                               err error ) {
+func ( r *BinReader ) readRangeRestriction(
+    qn *QualifiedTypeName ) ( vr ValueRestriction, err error ) {
 
-    var minClosed, maxClosed bool
-    var min, max Value
-    if minClosed, err = r.readBool(); err != nil { return }
-    if min, err = r.readRangeVal(); err != nil { return }
-    if max, err = r.readRangeVal(); err != nil { return }
-    if maxClosed, err = r.readBool(); err != nil { return }
-    return NewRangeRestriction( minClosed, min, max, maxClosed ), nil
+    rb := &RangeRestrictionBuilder{ Type: qn }
+    if rb.MinClosed, err = r.readBool(); err != nil { return }
+    if rb.Min, err = r.readRangeVal( "min" ); err != nil { return }
+    if rb.Max, err = r.readRangeVal( "max" ); err != nil { return }
+    if rb.MaxClosed, err = r.readBool(); err != nil { return }
+    return rb.Build()
 }
 
-func ( r *BinReader ) readRestriction() ( vr ValueRestriction, err error ) {
+func ( r *BinReader ) readRestriction( 
+    qn *QualifiedTypeName ) ( vr ValueRestriction, err error ) {
+
     var tc IoTypeCode 
     if tc, err = r.ReadTypeCode(); err != nil { return }
     switch tc {
     case IoTypeCodeNull: return nil, nil
     case IoTypeCodeRegexRestrict: return r.readRegexRestriction()
-    case IoTypeCodeRangeRestrict: return r.readRangeRestriction()
+    case IoTypeCodeRangeRestrict: return r.readRangeRestriction( qn )
     }
     err = fmt.Errorf( "mingle: Unrecognized restriction type code: 0x%02x", tc )
     return
@@ -530,9 +530,17 @@ func ( r *BinReader ) ReadAtomicTypeReference() ( at *AtomicTypeReference,
     if _, err = r.ExpectTypeCode( IoTypeCodeAtomTyp ); err != nil { return }
     var nm *QualifiedTypeName
     var rx ValueRestriction
-    if nm, err = r.ReadQualifiedTypeName(); err != nil { return }
-    if rx, err = r.readRestriction(); err != nil { return }
-    at = NewAtomicTypeReference( nm, rx )
+    atOff := r.offset()
+//    if nm, err = r.ReadQualifiedTypeName(); err != nil { return }
+//    if rx, err = r.readRestriction(); err != nil { return }
+//    if at, err = CreateAtomicTypeReference( nm, rx ); err != nil {
+//        err = NewBinIoErrorOffset( atOff, err.Error() )
+//        return
+//    }
+    nm, err = r.ReadQualifiedTypeName()
+    if err == nil { rx, err = r.readRestriction( nm ) }
+    if err == nil { at, err = CreateAtomicTypeReference( nm, rx ) }
+    if err != nil { err = NewBinIoErrorOffset( atOff, err.Error() ) }
     return
 }
 

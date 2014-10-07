@@ -398,7 +398,8 @@ func ( tc *typeCompleterImpl ) getRestriction(
         var min, max mg.Value
         if v.Left != nil { min = mkInt( v.Left ) }
         if v.Right != nil { max = mkInt( v.Right ) }
-        rr := mg.NewRangeRestriction( v.LeftClosed, min, max, v.RightClosed )
+        rr := mg.MustRangeRestriction( 
+            qn, v.LeftClosed, min, max, v.RightClosed )
         return rr, nil
     }
     panic( libErrorf( "unhandled restriction: %T", rx ) )
@@ -435,7 +436,8 @@ func TestCompleteType( t *testing.T ) {
             in: `mingle:core@v1/Int32~[0,2)`,
             expct: mg.NewAtomicTypeReference(
                 mg.QnameInt32,
-                mg.NewRangeRestriction(
+                mg.MustRangeRestriction(
+                    mg.QnameInt32,
                     true,
                     mg.Int32( int32( 0 ) ),
                     mg.Int32( int32( 2 ) ),

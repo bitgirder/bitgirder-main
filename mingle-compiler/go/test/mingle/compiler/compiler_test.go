@@ -1,7 +1,7 @@
 package compiler
 
 import (
-    "log"
+//    "log"
     "testing"
     "fmt"
     "bytes"
@@ -73,7 +73,6 @@ func createAtomicRestrictionErrorTest(
                 f1 %s
             }`
     src := fmt.Sprintf( srcTmpl, sourceStringForTest( t ) )
-    log.Printf( "source for %d:\n%s", idx, src )
     res := newCompilerTest( fmt.Sprintf( "restriction-error-test%d", idx ) )
     res.setSource( src )
     atomicRestrictionErrorTestSetExpectedError( t, idx, res )

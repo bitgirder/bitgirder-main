@@ -391,12 +391,6 @@ func ( rr *RangeRestriction ) inferredType() *QualifiedTypeName {
     return TypeNameIn( TypeOf( val ) )
 }
 
-func NewRangeRestriction( 
-    minC bool, minV Value, maxV Value, maxC bool ) *RangeRestriction {
-
-    return &RangeRestriction{ minC, minV, maxV, maxC }
-}
-
 func ( rr *RangeRestriction ) MinClosed() bool { return rr.minClosed }
 func ( rr *RangeRestriction ) Min() Value { return rr.min }
 func ( rr *RangeRestriction ) Max() Value { return rr.max }

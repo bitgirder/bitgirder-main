@@ -130,14 +130,16 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
         return NewAtomicTypeReference( qn, rx )
     }
     set( mkV1Typ( "String", MustRegexRestriction( "a" ) ) )
-    mkRng := NewRangeRestriction
+    mkRng := MustRangeRestriction
     set( 
-        mkV1Typ( "String", mkRng( true, String( "a" ), String( "b" ), true ) ),
+        mkV1Typ( "String",
+            mkRng( QnameString, true, String( "a" ), String( "b" ), true ) ),
     )
     set( 
         mkV1Typ( 
             "Timestamp",
             mkRng(
+                QnameTimestamp,
                 true,
                 MustTimestamp( "2012-01-01T00:00:00Z" ),
                 MustTimestamp( "2012-02-01T00:00:00Z" ),
@@ -148,43 +150,37 @@ func ( b *binIoRoundtripTestBuilder ) addDefinitionTests() {
     set( 
         mkV1Typ(
             "Int32",
-            mkRng( false, Int32( 0 ), Int32( 10 ), false ),
+            mkRng( QnameInt32, false, Int32( 0 ), Int32( 10 ), false ),
         ),
     )
     set(
         mkV1Typ(
             "Int64",
-            mkRng( true, Int64( 0 ), Int64( 10 ), true ),
+            mkRng( QnameInt64, true, Int64( 0 ), Int64( 10 ), true ),
         ),
     )
     set( 
         mkV1Typ(
             "Uint32",
-            mkRng( false, Uint32( 0 ), Uint32( 10 ), false ),
+            mkRng( QnameUint32, false, Uint32( 0 ), Uint32( 10 ), false ),
         ),
     )
     set( 
         mkV1Typ( 
             "Uint64",
-            mkRng( true, Uint64( 0 ), Uint64( 0 ), true ),
+            mkRng( QnameUint64, true, Uint64( 0 ), Uint64( 0 ), true ),
         ),
     )
     set(
         mkV1Typ(
             "Float32",
-            mkRng( false, Float32( 0.0 ), Float32( 1.0 ), true ),
+            mkRng( QnameFloat32, false, Float32( 0.0 ), Float32( 1.0 ), true ),
         ),
     )
     set( 
         mkV1Typ(
             "Float64",
-            mkRng( true, Float64( 0.0 ), Float64( 1.0 ), false ),
-        ),
-    )
-    set( 
-        mkV1Typ(
-            "Float64",
-            mkRng( false, nil, nil, false ),
+            mkRng( QnameFloat64, true, Float64( 0.0 ), Float64( 1.0 ), false ),
         ),
     )
     typNs1V1T1 := mkQn( ns1V1, mkDeclNm( "T1" ) ).AsAtomicType()
@@ -244,8 +240,14 @@ func addBinIoSequenceRoundtripTests( tests []interface{} ) []interface{} {
 // BinIo libs
 const binIoInvalidTypeCode = int32( 0x64 )
 
+const (
+    BinIoInvalidDataTestReadTypeValue = "value"
+    BinIoInvalidDataTestReadTypeAtomicType = "atomic-type"
+)
+
 type BinIoInvalidDataTest struct {
     Name string
+    ReadType string
     ErrMsg string
     Input []byte
 }
@@ -254,12 +256,13 @@ type utf8Input string
 
 func appendInput( data interface{}, w *BinWriter ) {
     switch v := data.( type ) {
-    case string: 
-        if err := w.WriteScalarValue( String( v ) ); err != nil { panic( err ) }
+    case string: appendInput( String( v ), w )
+    case Value: if err := w.WriteScalarValue( v ); err != nil { panic( err ) }
     case uint8: if err := w.WriteUint8( v ); err != nil { panic( err ) }
     case IoTypeCode: if err := w.WriteTypeCode( v ); err != nil { panic( err ) }
     case int32: if err := w.WriteInt32( v ); err != nil { panic( err ) }
     case uint64: if err := w.WriteUint64( v ); err != nil { panic( err ) }
+    case bool: if err := w.WriteBool( v ); err != nil { panic( err ) }
     case utf8Input: 
         if err := w.WriteUtf8( string( v ) ); err != nil { panic( err ) }
     case *Identifier: 
@@ -281,16 +284,22 @@ func makeBinIoInvalidDataTest( data ...interface{} ) []byte {
     return buf.Bytes()
 }
 
-func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
+func addBinIoInvalidStructuralTests( tests []interface{} ) []interface{} {
     nsV1 := mkNs( mkId( "v1" ), mkId( "ns" ) )
     qnNsV1S := mkQn( nsV1, mkDeclNm( "S" ) )
     idF1 := mkId( "f1" )
-    return append( tests, 
+    add := func( t *BinIoInvalidDataTest ) {
+        t.ReadType = BinIoInvalidDataTestReadTypeValue
+        tests = append( tests, t )
+    }
+    add(
         &BinIoInvalidDataTest{
             Name: "unexpected-top-level-type-code",
             ErrMsg: "[offset 0]: unrecognized value code: 0x64",
             Input: makeBinIoInvalidDataTest( binIoInvalidTypeCode ),
         },
+    )
+    add(
         &BinIoInvalidDataTest{
             Name: "unexpected-symmap-val-type-code",
             ErrMsg: `[offset 35]: unrecognized value code: 0x64`,
@@ -299,6 +308,8 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
                 IoTypeCodeField, idF1, binIoInvalidTypeCode,
             ),
         },
+    )
+    add(
         &BinIoInvalidDataTest{
             Name: "unexpected-list-val-type-code",
             ErrMsg: `[offset 88]: unrecognized value code: 0x64`,
@@ -314,11 +325,15 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
                     binIoInvalidTypeCode,
             ),
         },
+    )
+    add(
         &BinIoInvalidDataTest{
             Name: "invalid-list-type",
             ErrMsg: `[offset 1]: Expected type code 0x06 but got 0x05`,
             Input: makeBinIoInvalidDataTest( IoTypeCodeList, TypeInt32 ),
         },
+    )
+    add(
         &BinIoInvalidDataTest{
             Name: "invalid-identifier-part",
             ErrMsg: `[offset 36]: invalid identifier part: Part`,
@@ -329,6 +344,8 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
                         uint8( 2 ), utf8Input( "bad" ), utf8Input( "Part" ),
             ),
         },
+    )
+    add(
         &BinIoInvalidDataTest{
             Name: "invalid-declared-type-name",
             ErrMsg: `[offset 21]: invalid type name: "A$BadName"`,
@@ -340,6 +357,60 @@ func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
             ),
         },
     )
+    return tests
+}
+
+func atomicRestrictionErrorTestGetRxElements( rx interface{} ) []interface{} {
+    switch v := rx.( type ) {
+    case string: return []interface{}{ IoTypeCodeRegexRestrict, utf8Input( v ) }
+    case *RegexRestriction: 
+        return atomicRestrictionErrorTestGetRxElements( v.ExternalForm() )
+    case *RangeRestrictionBuilder:
+        rngVal := func( v Value ) Value {
+            if v == nil { return NullVal }
+            return v
+        }
+        return []interface{}{
+            IoTypeCodeRangeRestrict,
+            v.MinClosed, rngVal( v.Min ), rngVal( v.Max ), v.MaxClosed,
+        }
+    }
+    panic( libErrorf( "unhandled restriction: %T", rx ) )
+}
+
+func atomicRestrictionErrorTestGetErrorMessage(
+    t *AtomicRestrictionErrorTest, idx int ) string {
+
+    switch idx {
+    case 10: return "invalid range min value type: 0x14"
+    case 24: return "illegal min value of type mingle:core@v1/Int64 in range of type mingle:core@v1/Int32"
+    }
+    return t.Error.Error()
+}
+
+func addBinIoInvalidAtomicRestrictionTests( 
+    tests []interface{} ) []interface{} {
+
+    for i, test := range GetAtomicRestrictionErrorTests() {
+        input := []interface{}{ IoTypeCodeAtomTyp, test.Name }
+        rxElts := atomicRestrictionErrorTestGetRxElements( test.Restriction )
+        input = append( input, rxElts... )
+        msgStr := atomicRestrictionErrorTestGetErrorMessage( test, i )
+        idt := &BinIoInvalidDataTest{
+            ReadType: BinIoInvalidDataTestReadTypeAtomicType,
+            Name: fmt.Sprintf( "atomic-restriction-error%d", i ),
+            ErrMsg: fmt.Sprintf( `[offset 1]: %s`, msgStr ),
+            Input: makeBinIoInvalidDataTest( input... ),
+        }
+        tests = append( tests, idt )
+    }
+    return tests
+}
+
+func addBinIoInvalidDataTests( tests []interface{} ) []interface{} {
+    tests = addBinIoInvalidStructuralTests( tests )
+    tests = addBinIoInvalidAtomicRestrictionTests( tests )
+    return tests
 }
 
 // We can't create this result in an init() func since we make use of other

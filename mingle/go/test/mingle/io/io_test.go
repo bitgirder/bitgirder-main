@@ -36,12 +36,18 @@ func assertSequenceRoundtrip(
 
 func assertInvalidData( t *mg.BinIoInvalidDataTest, a *assert.PathAsserter ) {
     rd := NewReader( bytes.NewBuffer( t.Input ) )
-    if val, err := rd.ReadValue(); err == nil {
-        a.Fatalf( "expected %s (%T) but got val: %s", err, err, 
-            mg.QuoteValue( val ) )
+    var err error
+    switch t.ReadType {
+    case mg.BinIoInvalidDataTestReadTypeValue: _, err = rd.ReadValue()
+    case mg.BinIoInvalidDataTestReadTypeAtomicType: 
+        _, err = rd.ReadAtomicTypeReference()
+    default: a.Fatalf( "unhandled read type: %s", t.ReadType )
+    }
+    if ioe, ok := err.( *mg.BinIoError ); ok {
+        a.Equal( t.ErrMsg, ioe.Error() )
     } else { 
-        if ioe, ok := err.( *mg.BinIoError ); ok {
-            a.Equal( t.ErrMsg, ioe.Error() )
+        if err == nil {
+            a.Fatalf( "expected error: %s", t.ErrMsg )
         } else { a.Fatal( err ) }
     }
 }
