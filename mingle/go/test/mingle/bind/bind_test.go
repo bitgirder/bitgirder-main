@@ -174,7 +174,17 @@ func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
         tests = append( tests, t )
     }
     addOk := func( in mg.Value, id string ) {
-        addTest( &BindTest{ Mingle: in, BoundId: mkId( id ) } )
+        boundId := mkId( id )
+        addTest( &BindTest{ Mingle: in, BoundId: boundId } )
+        addTest( 
+            &BindTest{ 
+                Mingle: in, 
+                BoundId: boundId, 
+                Type: mg.TypeValue,
+                StrictTypeMatching: true,
+                Direction: BindTestDirectionIn,
+            },
+        )
     }
     addOk( mg.NullVal, "null-val" )
     addOk( mg.Boolean( true ), "true-val" )

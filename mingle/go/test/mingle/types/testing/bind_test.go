@@ -53,9 +53,21 @@ func getBoundTestValues() *mg.IdentifierMap {
     mfeInst1.SetFields(
         []*mg.Identifier{ mkId( "f1" ), mkId( "f2" ), mkId( "f3" ) } )
     res.Put( mkId( "missing-fields-error-f1-f2-f3-loc-f1-i2" ), mfeInst1 )
+    res.Put( 
+        mkId( "atomic-type-name-ns1-v1-name1" ),
+        asType( "ns1@v1/Name1" ).( *mg.AtomicTypeReference ),
+    )
+    res.Put(
+        mkId( "int32-closed-zero-ten-open" ),
+        asType( "Int32~[0,10)" ).( *mg.AtomicTypeReference ),
+    )
+    res.Put(
+        mkId( "string-a-star" ),
+        asType( `String~"a*"` ).( *mg.AtomicTypeReference ),
+    )
     return res
 }
-    
+ 
 func makeIdStruct( parts ...string ) *mg.Struct {
     l := mg.NewList( asType( "String+" ).( *mg.ListTypeReference ) )
     for _, part := range parts { l.AddUnsafe( mg.String( part ) ) }
@@ -483,59 +495,59 @@ func getBindTests() []*bind.BindTest {
         ),
         binOpts,
     )
-//    qnNs1V1Name1 := parser.MustStruct( mg.QnameQualifiedTypeName,
-//        "namespace", ns1V1,
-//        "name", declNm1,
-//    )
-//    addRt( 
-//        qnNs1V1Name1,
-//        mg.TypeQualifiedTypeName,
-//        "qualified-type-name-ns1-v1-name1",
-//    )
-//    addRt(
-//        parser.MustStruct( mg.QnameAtomicTypeReference, "name", qnNs1V1Name1 ),
-//        mg.TypeAtomicTypeReference,
-//        "atomic-type-name-ns1-v1-name1",
-//    )
-//    coreQn := func( nm string ) *mg.Struct {
-//        return parser.MustStruct( mg.QnameQualifiedTypeName,
-//            "namespace", parser.MustStruct( mg.QnameNamespace,
-//                "parts", mg.MustList( 
-//                    idStruct( "mingle" ), idStruct( "core" ),
-//                ),
-//                "version", idStruct( "v1" ),
-//            ),
-//            "name", parser.MustStruct( mg.QnameDeclaredTypeName, "name", nm ),
-//        )
-//    }
-//    int32Qn := coreQn( "Int32" )
-//    stringQn := coreQn( "String" )
-//    mkRng := func( lc bool, lv mg.Value, rv mg.Value, rc bool ) *mg.Struct {
-//        pairs := []interface{}{}
-//        pairs = append( pairs, "min-closed", lc, "max-closed", rc )
-//        if lv != nil { pairs = append( pairs, "min", lv ) }
-//        if rv != nil { pairs = append( pairs, "max", rv ) }
-//        return parser.MustStruct( mg.QnameRangeRestriction, pairs... )
-//    }
-//    addRt(
-//        parser.MustStruct( mg.QnameAtomicTypeReference,
-//            "name", int32Qn,
-//            "restriction", mkRng( true, mg.Int32( 0 ), mg.Int32( 10 ), false ),
-//        ),
-//        mg.TypeAtomicTypeReference,
-//        "int32-closed-zero-ten-open",
-//    )
-//    mkRegx := func( pat string ) *mg.Struct {
-//        return parser.MustStruct( mg.QnameRegexRestriction, "pattern", pat )
-//    }
-//    addRt(
-//        parser.MustStruct( mg.QnameAtomicTypeReference,
-//            "name", stringQn,
-//            "restriction", mkRegx( "a*" ),
-//        ),
-//        mg.TypeAtomicTypeReference,
-//        "string-a-star",
-//    )
+    qnNs1V1Name1 := parser.MustStruct( mg.QnameQualifiedTypeName,
+        "namespace", ns1V1,
+        "name", declNm1,
+    )
+    addRt( 
+        qnNs1V1Name1,
+        mg.TypeQualifiedTypeName,
+        "qualified-type-name-ns1-v1-name1",
+    )
+    addRt(
+        parser.MustStruct( mg.QnameAtomicTypeReference, "name", qnNs1V1Name1 ),
+        mg.TypeAtomicTypeReference,
+        "atomic-type-name-ns1-v1-name1",
+    )
+    coreQn := func( nm string ) *mg.Struct {
+        return parser.MustStruct( mg.QnameQualifiedTypeName,
+            "namespace", parser.MustStruct( mg.QnameNamespace,
+                "parts", mg.MustList( 
+                    idStruct( "mingle" ), idStruct( "core" ),
+                ),
+                "version", idStruct( "v1" ),
+            ),
+            "name", parser.MustStruct( mg.QnameDeclaredTypeName, "name", nm ),
+        )
+    }
+    int32Qn := coreQn( "Int32" )
+    stringQn := coreQn( "String" )
+    mkRng := func( lc bool, lv mg.Value, rv mg.Value, rc bool ) *mg.Struct {
+        pairs := []interface{}{}
+        pairs = append( pairs, "min-closed", lc, "max-closed", rc )
+        if lv != nil { pairs = append( pairs, "min", lv ) }
+        if rv != nil { pairs = append( pairs, "max", rv ) }
+        return parser.MustStruct( mg.QnameRangeRestriction, pairs... )
+    }
+    addRt(
+        parser.MustStruct( mg.QnameAtomicTypeReference,
+            "name", int32Qn,
+            "restriction", mkRng( true, mg.Int32( 0 ), mg.Int32( 10 ), false ),
+        ),
+        mg.TypeAtomicTypeReference,
+        "int32-closed-zero-ten-open",
+    )
+    mkRegx := func( pat string ) *mg.Struct {
+        return parser.MustStruct( mg.QnameRegexRestriction, "pattern", pat )
+    }
+    addRt(
+        parser.MustStruct( mg.QnameAtomicTypeReference,
+            "name", stringQn,
+            "restriction", mkRegx( "a*" ),
+        ),
+        mg.TypeAtomicTypeReference,
+        "string-a-star",
+    )
 //    for _, aret := range mg.GetAtomicRestrictionErrorTests() {
 //        addVcErr(
 //            makeAtomicRestrictionErrorTestInput( aret ),

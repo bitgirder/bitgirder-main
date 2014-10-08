@@ -210,7 +210,10 @@ type TestStruct1 struct {
     F3 *TestStruct1
 }
 
-type TestStruct2 struct {}
+type TestStruct2 struct {
+    F1 int32
+    F2 *TestStruct2
+}
 
 func CheckBuiltValue( 
     expct mg.Value, br *BuildReactor, a *assert.PathAsserter ) {

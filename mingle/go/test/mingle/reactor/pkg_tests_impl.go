@@ -199,9 +199,36 @@ func init() {
             case sse.Type.Equals( mkQn( "mingle:reactor@v1/TestStruct2" ) ):
                 res := NewFunctionsFieldSetBuilder()
                 res.Value = new( TestStruct2 )
-                res.FinalValue = func() interface{} {
-                    return *( res.Value.( *TestStruct2 ) )
+                res.FinalValue = func( 
+                    path objpath.PathNode ) ( interface{}, error ) {
+
+                    ts := *( res.Value.( *TestStruct2 ) )
+                    if ts.F1 == int32( buildReactorErrorTestVal ) {
+                        return nil, testErrForPath( path )
+                    }
+                    return ts, nil
                 }
+                res.RegisterField(
+                    mkId( "f1" ),
+                    func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                        return testBuilderFactory, nil
+                    },
+                    func( val interface{}, path objpath.PathNode ) error {
+                        res.Value.( *TestStruct2 ).F1 = val.( int32 )
+                        return nil
+                    },
+                )
+                res.RegisterField(
+                    mkId( "f2" ),
+                    func( path objpath.PathNode ) ( BuilderFactory, error ) {
+                        return testBuilderFactory, nil
+                    },
+                    func( val interface{}, path objpath.PathNode ) error {
+                        ts2 := val.( TestStruct2 )
+                        res.Value.( *TestStruct2 ).F2 = &ts2
+                        return nil
+                    },
+                )
                 return res, nil
             }
             return nil, nil

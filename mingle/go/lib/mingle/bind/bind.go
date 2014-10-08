@@ -126,6 +126,7 @@ func ( reg *Registry ) BuilderFactoryForName(
     if v, ok := reg.m.GetOk( nm ); ok { 
         return v.( mgRct.BuilderFactory ), true
     }
+    if nm.Equals( mg.QnameValue ) { return NewBuilderFactory( reg ), true }
     return nil, false
 }
 
@@ -306,7 +307,7 @@ func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
     res := NewFunctionsBuilderFactory()
     res.ValueFunc = func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
         qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name()
-        if bf, ok := reg.m.GetOk( qn ); ok {
+        if bf, ok := reg.BuilderFactoryForName( qn ); ok {
             res, err := bf.( mgRct.BuilderFactory ).BuildValue( ve )
             return res, err, true
         }
@@ -315,7 +316,7 @@ func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
     res.StructFunc = func( 
         sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
         
-        if bf, ok := reg.m.GetOk( sse.Type ); ok {
+        if bf, ok := reg.BuilderFactoryForName( sse.Type ); ok {
             res, err := bf.( mgRct.BuilderFactory ).StartStruct( sse )
             return res, err
         }

@@ -23,6 +23,7 @@ type BindTest struct {
     BoundId *mg.Identifier
     Direction BindTestDirection
     Type mg.TypeReference
+    StrictTypeMatching bool
     Domain *mg.Identifier
     SerialOptions *SerialOptions
     Error error

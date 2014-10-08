@@ -133,7 +133,7 @@ type FunctionsFieldSetBuilder struct {
 
     Value interface{}
 
-    FinalValue func() interface{}
+    FinalValue func( path objpath.PathNode ) ( interface{}, error )
 
     flds *mg.IdentifierMap
 
@@ -173,7 +173,7 @@ func ( fsb *FunctionsFieldSetBuilder ) ProduceValue(
     ee *EndEvent ) ( interface{}, error ) {
 
     if fsb.FinalValue == nil { return fsb.Value, nil }
-    return fsb.FinalValue(), nil
+    return fsb.FinalValue( ee.GetPath() )
 }
 
 func ( fsb *FunctionsFieldSetBuilder ) SetValue(

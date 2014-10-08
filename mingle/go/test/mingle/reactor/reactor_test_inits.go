@@ -219,6 +219,20 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
         },
     )
     add( parser.MustStruct( "mingle:reactor@v1/TestStruct2" ), TestStruct2{} )
+    addErr(
+        parser.MustStruct( "mingle:reactor@v1/TestStruct2",
+            "f1", buildReactorErrorTestVal,
+        ),
+        testErrForPath( nil ),
+    )
+    addErr(
+        parser.MustStruct( "mingle:reactor@v1/TestStruct2",
+            "f2", parser.MustStruct( "mingle:reactor@v1/TestStruct2",
+                "f1", buildReactorErrorTestVal,
+            ),
+        ),
+        testErrForPath( p( 2 ) ),
+    )
     addErr( mg.Int32( int32( -1 ) ), testErrForPath( nil ) )
     addErr( 
         mg.Int64( int64( 1 ) ), 

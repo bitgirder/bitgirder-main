@@ -6,6 +6,7 @@ import (
     "mingle/bind"
     mg "mingle"
     "bitgirder/objpath"
+//    "bitgirder/stub"
 //    "log"
 )
 
@@ -170,6 +171,132 @@ func newQnBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             },
         },
     )
+}
+
+type atomicBuilder struct {
+    name *mg.QualifiedTypeName
+    rx interface{} // will become a mg.ValueRestriction
+}
+
+type regexBuilder struct {
+    pat string
+}
+
+func ( b *atomicBuilder ) build() ( interface{}, error ) {
+    var rx mg.ValueRestriction
+    if b.rx != nil {
+        var err error
+        switch v := b.rx.( type ) {
+        case *mg.RangeRestrictionBuilder: 
+            v.Type = b.name
+            rx, err = v.Build()
+        case *regexBuilder: rx, err = mg.CreateRegexRestriction( v.pat )
+        default: panic( libErrorf( "unhandled restriction: %T", b.rx ) )
+        }
+        if err != nil { return nil, err }
+    }
+    return mg.CreateAtomicTypeReference( b.name, rx )
+}
+
+var atomicNameFieldSetter = &bind.CheckedFieldSetter{
+    Field: identifierName,
+    Type: mg.TypeQualifiedTypeName,
+    Assign: func( obj, fldVal interface{} ) {
+        obj.( *atomicBuilder ).name = fldVal.( *mg.QualifiedTypeName )
+    },
+}
+
+var rangeSetters = []*bind.CheckedFieldSetter{
+    &bind.CheckedFieldSetter{
+        Field: identifierMinClosed,
+        Type: mg.TypeBoolean,
+        Assign: func( val, obj interface{} ) {
+            val.( *mg.RangeRestrictionBuilder ).MinClosed = obj.( bool )
+        },
+    },
+    &bind.CheckedFieldSetter{
+        Field: identifierMin,
+        Type: mg.TypeValue,
+        Assign: func( val, obj interface{} ) {
+            val.( *mg.RangeRestrictionBuilder ).Min = mg.MustValue( obj )
+        },
+    },
+    &bind.CheckedFieldSetter{
+        Field: identifierMax,
+        Type: mg.TypeValue,
+        Assign: func( val, obj interface{} ) {
+            val.( *mg.RangeRestrictionBuilder ).Max = mg.MustValue( obj )
+        },
+    },
+    &bind.CheckedFieldSetter{
+        Field: identifierMaxClosed,
+        Type: mg.TypeBoolean,
+        Assign: func( val, obj interface{} ) {
+            val.( *mg.RangeRestrictionBuilder ).MaxClosed = obj.( bool )
+        },
+    },
+}
+
+func newRangeBuilderBuilder( reg *bind.Registry ) mgRct.FieldSetBuilder {
+    return bind.CheckedFunctionsFieldSetBuilder(
+        reg, &mg.RangeRestrictionBuilder{}, rangeSetters... )
+}
+
+var regexSetters = []*bind.CheckedFieldSetter {
+    &bind.CheckedFieldSetter{
+        Field: identifierPattern,
+        Type: mg.TypeString,
+        Assign: func( val, obj interface{} ) {
+            val.( *regexBuilder ).pat = obj.( string )
+        },
+    },
+}
+
+func newRegexBuilder( reg *bind.Registry ) mgRct.FieldSetBuilder {
+    return bind.CheckedFunctionsFieldSetBuilder(
+        reg, &regexBuilder{}, regexSetters... )
+}
+
+func newAtomicRestrictionBuilder( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    res.StructFunc = func( 
+        sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
+
+        switch t := sse.Type; {
+        case t.Equals( mg.QnameRangeRestriction ):
+            return newRangeBuilderBuilder( reg ), nil
+        case t.Equals( mg.QnameRegexRestriction ):
+            return newRegexBuilder( reg ), nil
+        }
+        return nil, nil
+    }
+    return res
+}
+
+var atomicRestrictionFieldSetter = &bind.CheckedFieldSetter{
+    Field: identifierRestriction,
+    Type: mg.TypeValue,
+    StartField: func( reg *bind.Registry ) mgRct.BuilderFactory {
+        return newAtomicRestrictionBuilder( reg )
+    },
+    Assign: func( val, obj interface{} ) { val.( *atomicBuilder ).rx = obj },
+}
+
+func atomicBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
+    res := bind.NewFunctionsFieldSetBuilder()
+    res.Value = &atomicBuilder{}
+    res.FinalValue = func( path objpath.PathNode ) ( interface{}, error ) { 
+        return res.Value.( *atomicBuilder ).build() 
+    }
+    bind.AddCheckedField( res, reg, atomicNameFieldSetter )
+    bind.AddCheckedField( res, reg, atomicRestrictionFieldSetter )
+    return res
+}
+
+func newAtomicBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    res := bind.NewFunctionsBuilderFactory()
+    setStructFunc( res, reg, atomicBuilderForStruct )
+    return res
 }
 
 func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
@@ -416,6 +543,42 @@ func VisitQualifiedTypeName(
     })
 }
 
+func VisitAtomicTypeReference(
+    at *mg.AtomicTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameAtomicTypeReference, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, at.Name() )
+        if err != nil { return err }
+        rx := at.Restriction()
+        if rx == nil { return nil }
+        return bind.VisitFieldValue( vc, identifierRestriction, rx )
+    })
+}
+
+func VisitRangeRestriction(
+    rx *mg.RangeRestriction, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameRangeRestriction, func() error {
+        err := bind.VisitFieldValue( vc, identifierMinClosed, rx.MinClosed() )
+        if err != nil { return err }
+        optVis := func( val mg.Value, id *mg.Identifier ) error {
+            if val == nil { return nil }
+            return bind.VisitFieldValue( vc, id, val )
+        }
+        if err = optVis( rx.Min(), identifierMin ); err != nil { return err }
+        if err = optVis( rx.Max(), identifierMax ); err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierMaxClosed, rx.MaxClosed() )
+    })
+}
+
+func VisitRegexRestriction(
+    rx *mg.RegexRestriction, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameRegexRestriction, func() error {
+        return bind.VisitFieldValue( vc, identifierPattern, rx.Source() )
+    })
+}
+
 type idPathPartsEventSendVisitor struct {
     vc bind.VisitContext
 }
@@ -495,6 +658,9 @@ func visitBuiltinTypeOk(
     case *mg.Namespace: return VisitNamespace( v, vc ), true
     case *mg.DeclaredTypeName: return VisitDeclaredTypeName( v, vc ), true
     case *mg.QualifiedTypeName: return VisitQualifiedTypeName( v, vc ), true
+    case *mg.AtomicTypeReference: return VisitAtomicTypeReference( v, vc ), true
+    case *mg.RangeRestriction: return VisitRangeRestriction( v, vc ), true
+    case *mg.RegexRestriction: return VisitRegexRestriction( v, vc ), true
     case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
     case *mg.CastError: return VisitCastError( v, vc ), true
     case *mg.UnrecognizedFieldError: 
@@ -510,6 +676,10 @@ func initBind() {
     reg.MustAddValue( mg.QnameDeclaredTypeName, newDeclNmBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameQualifiedTypeName, newQnBuilderFactory( reg ) )
+    reg.MustAddValue( 
+        mg.QnameAtomicTypeReference, 
+        newAtomicBuilderFactory( reg ),
+    )
     reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameCastError, newCastErrorBuilderFactory( reg ) )
     reg.MustAddValue( 

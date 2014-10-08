@@ -5,26 +5,11 @@ import (
     mg "mingle"
 )
 
-var identifierParts *mg.Identifier
-var identifierVersion *mg.Identifier
-var identifierLocation *mg.Identifier
-var identifierMessage *mg.Identifier
-var identifierField *mg.Identifier
-var identifierFields *mg.Identifier
-var identifierName *mg.Identifier
-var identifierNamespace *mg.Identifier
-var typeIdentifierPartsList *mg.ListTypeReference
-var typeIdentifierPointer *mg.PointerTypeReference
-var typeIdentifierPointerList *mg.ListTypeReference
-var typeIdentifierPathPartsList *mg.ListTypeReference
-var typeNonEmptyStringList *mg.ListTypeReference
-var typeNonEmptyBufferList *mg.ListTypeReference
-
 func idUnsafe( parts ...string ) *mg.Identifier {
     return mg.NewIdentifierUnsafe( parts )
 }
 
-func initNames() {
+var (
     identifierParts = idUnsafe( "parts" )
     identifierVersion = idUnsafe( "version" )
     identifierLocation = idUnsafe( "location" )
@@ -33,6 +18,13 @@ func initNames() {
     identifierFields = idUnsafe( "fields" )
     identifierName = idUnsafe( "name" )
     identifierNamespace = idUnsafe( "namespace" )
+    identifierRestriction = idUnsafe( "restriction" )
+    identifierPattern = idUnsafe( "pattern" )
+    identifierMinClosed = idUnsafe( "min", "closed" )
+    identifierMin = idUnsafe( "min" )
+    identifierMax = idUnsafe( "max" )
+    identifierMaxClosed = idUnsafe( "max", "closed" )
+
     typeIdentifierPartsList = &mg.ListTypeReference{
         ElementType: mg.NewAtomicTypeReference(
             mg.QnameString,
@@ -40,24 +32,29 @@ func initNames() {
         ),
         AllowsEmpty: false,
     }
+
     typeIdentifierPointer = mg.NewPointerTypeReference( mg.TypeIdentifier )
+    
     typeIdentifierPointerList = &mg.ListTypeReference{
         ElementType: typeIdentifierPointer,
         AllowsEmpty: false,
     }
+
     typeIdentifierPathPartsList = &mg.ListTypeReference{
         ElementType: mg.TypeValue,
         AllowsEmpty: false,
     }
+
     typeNonEmptyStringList = &mg.ListTypeReference{
         ElementType: mg.TypeString,
         AllowsEmpty: false,
     }
+
     typeNonEmptyBufferList = &mg.ListTypeReference{
         ElementType: mg.TypeBuffer,
         AllowsEmpty: false,
     }
-}
+)
 
 func AddLocatableErrorFields( sd *types.StructDefinition ) {
     sd.Fields.MustAdd(
@@ -188,6 +185,78 @@ func initQnameType() {
     MustAddBuiltinType( sd )
 }
 
+func initRangeRestrictionType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameRangeRestriction
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierMinClosed,
+            Type: mg.TypeBoolean,
+            Default: mg.Boolean( false ),
+        },
+    )
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierMin,
+            Type: mg.TypeNullableValue,
+        },
+    )
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierMax,
+            Type: mg.TypeNullableValue,
+        },
+    )
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierMaxClosed,
+            Type: mg.TypeBoolean,
+            Default: mg.Boolean( false ),
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
+func initRegexRestrictionType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameRegexRestriction
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierPattern,
+            Type: mg.TypeString,
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
+func initRestrictionTypes() {
+    initRangeRestrictionType()
+    initRegexRestrictionType()
+}
+
+func initAtomicTypeReferenceType() {
+    initRestrictionTypes()
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameAtomicTypeReference
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierName,
+            Type: mg.NewPointerTypeReference( mg.TypeQualifiedTypeName ),
+        },
+    )
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierRestriction,
+            Type: mg.TypeNullableValue, 
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
+func initTypeReferenceTypes() {
+    initAtomicTypeReferenceType()
+}
+
 func initIdentifierPathType() {
     sd := types.NewStructDefinition()
     sd.Name = mg.QnameIdentifierPath
@@ -235,6 +304,7 @@ func initLangV1Types() {
     initDeclaredTypeNameType()
     initNamespaceType()
     initQnameType()
+    initTypeReferenceTypes()
     initIdentifierPathType()
     MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameCastError ) )
     initUnrecognizedFieldError()

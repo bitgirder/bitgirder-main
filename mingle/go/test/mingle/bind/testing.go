@@ -40,6 +40,9 @@ func ( t *bindTestCall ) getBuilderFactory() mgRct.BuilderFactory {
     typ := t.t.Type
     if typ == nil { typ = mg.TypeOf( t.t.Mingle ) }
     if bf, ok := t.reg.BuilderFactoryForType( typ ); ok { return bf }
+    if t.t.StrictTypeMatching {
+        t.Fatalf( "no builder factory for type: %s", typ )
+    }
     return NewBuilderFactory( t.reg )
 }
 
@@ -58,7 +61,8 @@ func ( t *bindTestCall ) bindBindTest() {
 
 func ( t *bindTestCall ) visitBindTest() bool {
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
-    pip := mgRct.InitReactorPipeline( vb )
+//    pip := mgRct.InitReactorPipeline( vb )
+    pip := mgRct.InitReactorPipeline( mgRct.NewDebugReactor( t ), vb )
     bc := NewBindContext( t.reg )
     if o := t.t.SerialOptions; o != nil { bc.SerialOptions = o }
     vc := VisitContext{ BindContext: bc, Destination: pip }

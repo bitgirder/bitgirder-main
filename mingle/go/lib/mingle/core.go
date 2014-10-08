@@ -349,6 +349,8 @@ func ( r *RegexRestriction ) ExternalForm() string {
     return fmt.Sprintf( "%q", string( r.src ) )
 }
 
+func ( r *RegexRestriction ) Source() string { return r.src }
+
 func ( r *RegexRestriction ) equalsRestriction( vr ValueRestriction ) bool {
     if vr == nil { return false }
     if r == vr { return true }
