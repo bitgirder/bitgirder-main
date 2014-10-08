@@ -90,24 +90,45 @@ func makeRestrictionInput( rx interface{} ) *mg.Struct {
     panic( libErrorf( "unhandled restriction: %T", rx ) )
 }
 
+func makeNsStruct( ns *mg.Namespace ) *mg.Struct {
+    nsParts := mg.NewList(
+        &mg.ListTypeReference{
+            AllowsEmpty: false,
+            ElementType: mg.NewPointerTypeReference( mg.TypeIdentifier ),
+        },
+    )
+    for _, nsPart := range ns.Parts {
+        idPart := makeIdStruct( nsPart.GetPartsUnsafe()... )
+        nsParts.AddUnsafe( idPart )
+    }
+    return parser.MustStruct( mg.QnameNamespace,
+        "parts", nsParts,
+        "version", makeIdStruct( "v1" ),
+    )
+}
+
 func makeAtomicRestrictionErrorTestInput( 
     t *mg.AtomicRestrictionErrorTest ) *mg.Struct {
 
     return parser.MustStruct( mg.QnameAtomicTypeReference,
         "name", parser.MustStruct( mg.QnameQualifiedTypeName,
-            "namespace", parser.MustStruct( mg.QnameNamespace,
-                "parts", mg.MustList(
-                    makeIdStruct( "mingle" ),
-                    makeIdStruct( "core" ),
-                ),
-                "version", makeIdStruct( "v1" ),
-            ),
+            "namespace", makeNsStruct( t.Name.Namespace ),
             "name", parser.MustStruct( mg.QnameDeclaredTypeName,
                 "name", t.Name.Name.ExternalForm(),
             ),
         ),
         "restriction", makeRestrictionInput( t.Restriction ),
     )
+}
+
+func atomicRestrictionErrorTestMessageAtIndex( 
+    t *mg.AtomicRestrictionErrorTest, idx int ) string {
+
+    switch idx {
+    case 24: 
+        return "illegal min value of type mingle:core@v1/Int64 in range of type mingle:core@v1/Int32"
+    }
+    return t.Error.Error()
 }
 
 func getBindTests() []*bind.BindTest {
@@ -548,14 +569,29 @@ func getBindTests() []*bind.BindTest {
         mg.TypeAtomicTypeReference,
         "string-a-star",
     )
-//    for _, aret := range mg.GetAtomicRestrictionErrorTests() {
-//        addVcErr(
-//            makeAtomicRestrictionErrorTestInput( aret ),
-//            mg.TypeAtomicTypeReference,
-//            nil,
-//            aret.Error.Error(),
-//        )
-//    }
+    addTest(
+        &bind.BindTest{
+            Mingle: parser.MustStruct( mg.QnameAtomicTypeReference,
+                "name", int32Qn,
+                "restriction", mkRegx( "a*" ),
+            ),
+            Type: mg.TypeAtomicTypeReference,
+            Error: newVcErr( 
+                p( "f1" ), 
+                "regex restriction cannot be applied to mingle:core@v1/Int32",
+            ),
+            StartPath: p( "f1" ),
+            Direction: bind.BindTestDirectionIn,
+        },
+    )
+    for i, aret := range mg.GetAtomicRestrictionErrorTests() {
+        addVcErr(
+            makeAtomicRestrictionErrorTestInput( aret ),
+            mg.TypeAtomicTypeReference,
+            nil,
+            atomicRestrictionErrorTestMessageAtIndex( aret, i ),
+        )
+    }
     return res
 }
 

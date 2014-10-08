@@ -182,7 +182,7 @@ type regexBuilder struct {
     pat string
 }
 
-func ( b *atomicBuilder ) build() ( interface{}, error ) {
+func ( b *atomicBuilder ) buildInitial() ( *mg.AtomicTypeReference, error ) {
     var rx mg.ValueRestriction
     if b.rx != nil {
         var err error
@@ -198,12 +198,27 @@ func ( b *atomicBuilder ) build() ( interface{}, error ) {
     return mg.CreateAtomicTypeReference( b.name, rx )
 }
 
+func ( b *atomicBuilder ) build( 
+    path objpath.PathNode ) ( interface{}, error ) {
+
+    at, err := b.buildInitial()
+    if re, ok := err.( *mg.RestrictionError ); ok {
+        err = mg.NewCastError( path, re.Error() )
+    }
+    return at, err
+}
+
 var atomicNameFieldSetter = &bind.CheckedFieldSetter{
     Field: identifierName,
     Type: mg.TypeQualifiedTypeName,
     Assign: func( obj, fldVal interface{} ) {
         obj.( *atomicBuilder ).name = fldVal.( *mg.QualifiedTypeName )
     },
+}
+
+func setOptRangeVal( valPtr *mg.Value, val interface{} ) {
+    if val == nil { return }
+    *valPtr = mg.MustValue( val )
 }
 
 var rangeSetters = []*bind.CheckedFieldSetter{
@@ -218,14 +233,14 @@ var rangeSetters = []*bind.CheckedFieldSetter{
         Field: identifierMin,
         Type: mg.TypeValue,
         Assign: func( val, obj interface{} ) {
-            val.( *mg.RangeRestrictionBuilder ).Min = mg.MustValue( obj )
+            setOptRangeVal( &( val.( *mg.RangeRestrictionBuilder ).Min ), obj )
         },
     },
     &bind.CheckedFieldSetter{
         Field: identifierMax,
         Type: mg.TypeValue,
         Assign: func( val, obj interface{} ) {
-            val.( *mg.RangeRestrictionBuilder ).Max = mg.MustValue( obj )
+            setOptRangeVal( &( val.( *mg.RangeRestrictionBuilder ).Max ), obj )
         },
     },
     &bind.CheckedFieldSetter{
@@ -286,7 +301,7 @@ func atomicBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     res := bind.NewFunctionsFieldSetBuilder()
     res.Value = &atomicBuilder{}
     res.FinalValue = func( path objpath.PathNode ) ( interface{}, error ) { 
-        return res.Value.( *atomicBuilder ).build() 
+        return res.Value.( *atomicBuilder ).build( path ) 
     }
     bind.AddCheckedField( res, reg, atomicNameFieldSetter )
     bind.AddCheckedField( res, reg, atomicRestrictionFieldSetter )

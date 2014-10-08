@@ -49,7 +49,12 @@ func ( t *bindTestCall ) getBuilderFactory() mgRct.BuilderFactory {
 func ( t *bindTestCall ) bindBindTest() {
     bf := t.getBuilderFactory()
     br := NewBuildReactor( bf )
-    rcts := append( t.iface.CreateReactors( t.t ), br )
+    rcts := []interface{}{}
+    if p := t.t.StartPath; p != nil {
+        rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
+    }
+    rcts = append( rcts, t.iface.CreateReactors( t.t )... )
+    rcts = append( rcts, br )
     pip := mgRct.InitReactorPipeline( rcts... )
     if err := mgRct.VisitValue( t.t.Mingle, pip ); err == nil {
         t.EqualErrors( t.t.Error, err ) // fine if both nil
@@ -61,8 +66,7 @@ func ( t *bindTestCall ) bindBindTest() {
 
 func ( t *bindTestCall ) visitBindTest() bool {
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
-//    pip := mgRct.InitReactorPipeline( vb )
-    pip := mgRct.InitReactorPipeline( mgRct.NewDebugReactor( t ), vb )
+    pip := mgRct.InitReactorPipeline( vb )
     bc := NewBindContext( t.reg )
     if o := t.t.SerialOptions; o != nil { bc.SerialOptions = o }
     vc := VisitContext{ BindContext: bc, Destination: pip }

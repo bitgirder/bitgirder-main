@@ -2,6 +2,7 @@ package bind
 
 import (
     mg "mingle"
+    "bitgirder/objpath"
 )
 
 var domainPackageBindTest = mkId( "package-bind-test" )
@@ -22,6 +23,7 @@ type BindTest struct {
     Mingle mg.Value
     BoundId *mg.Identifier
     Direction BindTestDirection
+    StartPath objpath.PathNode
     Type mg.TypeReference
     StrictTypeMatching bool
     Domain *mg.Identifier
