@@ -250,7 +250,7 @@ func equalSlices( lenL, lenR int, comp func( i int ) bool ) bool {
 }
 
 type QualifiedTypeName struct {
-    *Namespace
+    Namespace *Namespace
     Name *DeclaredTypeName
 }
 
