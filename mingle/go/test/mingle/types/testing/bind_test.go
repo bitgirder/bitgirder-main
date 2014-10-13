@@ -9,42 +9,39 @@ import (
     "mingle/types/builtin"
     "mingle/parser"
     "mingle/bind"
+    "fmt"
 )
 
-func getBoundTestValues() *mg.IdentifierMap {
-    res := mg.NewIdentifierMap()
-    res.Put( mkId( "identifier-id1" ), mkId( "id1" ) )
-    res.Put( mkId( "identifier-id1-id2" ), mkId( "id1-id2" ) )
-    res.Put( 
+func putCoreBoundTestValues( m *mg.IdentifierMap ) {
+    m.Put( mkId( "identifier-id1" ), mkId( "id1" ) )
+    m.Put( mkId( "identifier-id1-id2" ), mkId( "id1-id2" ) )
+    m.Put( 
         mkId( "declared-type-name-name1" ), 
         parser.MustDeclaredTypeName( "Name1" ),
     )
-    res.Put( mkId( "namespace-ns1-v1" ), mkNs( "ns1@v1" ) )
-    res.Put( mkId( "namespace-ns1-ns2-v1" ), mkNs( "ns1:ns2@v1" ) )
-    res.Put(
-        mkId( "qualified-type-name-ns1-v1-name1" ),
-        mkQn( "ns1@v1/Name1" ),
-    )
+    m.Put( mkId( "namespace-ns1-v1" ), mkNs( "ns1@v1" ) )
+    m.Put( mkId( "namespace-ns1-ns2-v1" ), mkNs( "ns1:ns2@v1" ) )
+    m.Put( mkId( "qualified-type-name-ns1-v1-name1" ), mkQn( "ns1@v1/Name1" ) )
     tp := mg.MakeTestIdPath
-    res.Put( mkId( "identifier-path-f1-f2-i1-f3" ), tp( 1, 2, "1", 3 ) )
-    res.Put( 
+    m.Put( mkId( "identifier-path-f1-f2-i1-f3" ), tp( 1, 2, "1", 3 ) )
+    m.Put( 
         mkId( "identifier-path-f1-f2-i1-i2-i3-i4-f3" ),
         tp( 1, 2, "1", "2", "3", "4", 3 ),
     )
-    res.Put( mkId( "identifier-path-f1-i2" ), tp( 1, "2" ) )
-    res.Put( mkId( "identifier-path-f1-f2-i3-f4" ), tp( 1, 2, "3", 4 ) )
-    res.Put( mkId( "identifier-path-f1-i2-f3" ), tp( 1, "2", 3 ) )
-    res.Put( mkId( "atomic-type-name-ns1-v1-name1" ), asType( "ns1@v1/Name1" ) )
-    res.Put( mkId( "int32-closed-zero-ten-open" ), asType( "Int32~[0,10)" ) )
-    res.Put( mkId( "string-a-star" ), asType( `String~"a*"` ) )
-    res.Put( mkId( "list-type1-allows-empty" ), asType( "ns1@v1/Name1*" ) )
-    res.Put( mkId( "pointer-type1" ), asType( "&ns1@v1/Name1" ) )
-    res.Put( mkId( "nullable-type1" ), asType( "&ns1@v1/Name1?" ) )
-    res.Put( 
+    m.Put( mkId( "identifier-path-f1-i2" ), tp( 1, "2" ) )
+    m.Put( mkId( "identifier-path-f1-f2-i3-f4" ), tp( 1, 2, "3", 4 ) )
+    m.Put( mkId( "identifier-path-f1-i2-f3" ), tp( 1, "2", 3 ) )
+    m.Put( mkId( "atomic-type-name-ns1-v1-name1" ), asType( "ns1@v1/Name1" ) )
+    m.Put( mkId( "int32-closed-zero-ten-open" ), asType( "Int32~[0,10)" ) )
+    m.Put( mkId( "string-a-star" ), asType( `String~"a*"` ) )
+    m.Put( mkId( "list-type1-allows-empty" ), asType( "ns1@v1/Name1*" ) )
+    m.Put( mkId( "pointer-type1" ), asType( "&ns1@v1/Name1" ) )
+    m.Put( mkId( "nullable-type1" ), asType( "&ns1@v1/Name1?" ) )
+    m.Put( 
         mkId( "cast-error-loc-f1-i2" ),
         mg.NewCastError( tp( 1, "2" ), "test-message" ),
     )
-    res.Put(
+    m.Put(
         mkId( "unrecognized-field-error-loc-f1-i2" ),
         &mg.UnrecognizedFieldError{
             Location: tp( 1, "2" ),
@@ -58,7 +55,12 @@ func getBoundTestValues() *mg.IdentifierMap {
     }
     mfeInst1.SetFields(
         []*mg.Identifier{ mkId( "f1" ), mkId( "f2" ), mkId( "f3" ) } )
-    res.Put( mkId( "missing-fields-error-f1-f2-f3-loc-f1-i2" ), mfeInst1 )
+    m.Put( mkId( "missing-fields-error-f1-f2-f3-loc-f1-i2" ), mfeInst1 )
+}
+
+func getBoundTestValues() *mg.IdentifierMap {
+    res := mg.NewIdentifierMap()
+    putCoreBoundTestValues( res )
     return res
 }
  
@@ -84,6 +86,7 @@ func makeRestrictionInput( rx interface{} ) *mg.Struct {
     panic( libErrorf( "unhandled restriction: %T", rx ) )
 }
 
+// ignores version
 func makeNsStruct( ns *mg.Namespace ) *mg.Struct {
     nsParts := mg.NewList(
         &mg.ListTypeReference{
@@ -200,6 +203,18 @@ func ( b *bindTestBuilder ) nsBytes( s string ) []byte {
     return mg.NamespaceAsBytes( mkNs( s ) )
 }
 
+func ( b *bindTestBuilder ) coreQn( nm string ) *mg.Struct {
+    return parser.MustStruct( mg.QnameQualifiedTypeName,
+        "namespace", parser.MustStruct( mg.QnameNamespace,
+            "parts", mg.MustList( 
+                makeIdStruct( "mingle" ), makeIdStruct( "core" ),
+            ),
+            "version", makeIdStruct( "v1" ),
+        ),
+        "name", parser.MustStruct( mg.QnameDeclaredTypeName, "name", nm ),
+    )
+}
+
 func ( b *bindTestBuilder ) p( rootId string ) objpath.PathNode {
     return objpath.RootedAt( mkId( rootId ) )
 }
@@ -259,9 +274,12 @@ func ( b *bindTestBuilder ) addIdentifierTests() {
     )
 }
 
-func ( b *bindTestBuilder ) declNm1() *mg.Struct {
-    return parser.MustStruct( mg.QnameDeclaredTypeName, "name", "Name1" )
+func ( b *bindTestBuilder ) declNm( i int ) *mg.Struct {
+    nm := fmt.Sprintf( "Name%d", i )
+    return parser.MustStruct( mg.QnameDeclaredTypeName, "name", nm )
 }
+
+func ( b *bindTestBuilder ) declNm1() *mg.Struct { return b.declNm( 1 ) }
 
 func ( b *bindTestBuilder ) addDeclaredTypeNameTests() {
     b.addRt( b.declNm1(), mg.TypeDeclaredTypeName, "declared-type-name-name1" )
@@ -460,11 +478,15 @@ func ( b *bindTestBuilder ) addIdentifierPathTests() {
     )
 }
 
-func ( b *bindTestBuilder ) qnNs1V1Name1() *mg.Struct {
+func ( b *bindTestBuilder ) qnNs1V1Name( i int ) *mg.Struct {
     return parser.MustStruct( mg.QnameQualifiedTypeName,
         "namespace", b.ns1V1(),
-        "name", b.declNm1(),
+        "name", b.declNm( i ),
     )
+}
+
+func ( b *bindTestBuilder ) qnNs1V1Name1() *mg.Struct {
+    return b.qnNs1V1Name( 1 )
 }
 
 func ( b *bindTestBuilder ) addQualifiedTypeNameTests() {
@@ -580,10 +602,14 @@ func ( b *bindTestBuilder ) addCoreErrorTests() {
     )
 }
 
-func ( b *bindTestBuilder ) atomicQnNs1V1Name1() *mg.Struct {
+func ( b *bindTestBuilder ) atomicQnNs1V1Name( i int ) *mg.Struct {
     return parser.MustStruct( mg.QnameAtomicTypeReference, 
-        "name", b.qnNs1V1Name1(),
+        "name", b.qnNs1V1Name( i ),
     )
+}
+
+func ( b *bindTestBuilder ) atomicQnNs1V1Name1() *mg.Struct {
+    return b.atomicQnNs1V1Name( 1 )
 }
 
 func ( b *bindTestBuilder ) addAtomicTypeReferenceTests() {
@@ -592,19 +618,8 @@ func ( b *bindTestBuilder ) addAtomicTypeReferenceTests() {
         mg.TypeAtomicTypeReference,
         "atomic-type-name-ns1-v1-name1",
     )
-    coreQn := func( nm string ) *mg.Struct {
-        return parser.MustStruct( mg.QnameQualifiedTypeName,
-            "namespace", parser.MustStruct( mg.QnameNamespace,
-                "parts", mg.MustList( 
-                    makeIdStruct( "mingle" ), makeIdStruct( "core" ),
-                ),
-                "version", makeIdStruct( "v1" ),
-            ),
-            "name", parser.MustStruct( mg.QnameDeclaredTypeName, "name", nm ),
-        )
-    }
-    int32Qn := coreQn( "Int32" )
-    stringQn := coreQn( "String" )
+    int32Qn := b.coreQn( "Int32" )
+    stringQn := b.coreQn( "String" )
     mkRng := func( lc bool, lv mg.Value, rv mg.Value, rc bool ) *mg.Struct {
         pairs := []interface{}{}
         pairs = append( pairs, "min-closed", lc, "max-closed", rc )
@@ -689,6 +704,320 @@ func ( b *bindTestBuilder ) addNullableTypeReferenceTests() {
     )
 }
 
+func ( b *bindTestBuilder ) addPrimitiveDefinitionTests() {
+    b.addRt(
+        parser.MustStruct( builtin.QnamePrimitiveDefinition,
+            "name", b.coreQn( "Int32" ),
+        ),
+        builtin.TypePrimitiveDefinition,
+        "prim-def1",
+    )
+}
+
+func ( b *bindTestBuilder ) fieldDef( i int ) *mg.Struct {
+    return parser.MustStruct( builtin.QnameFieldDefinition,
+        "name", makeIdStruct( fmt.Sprintf( "f%d", i ) ),
+        "type", b.atomicQnNs1V1Name1(),
+        "default", mg.Int32( i ),
+    )
+}
+
+func ( b *bindTestBuilder ) addFieldDefinitionTests() {
+    b.addRt( b.fieldDef( 1 ), builtin.TypeFieldDefinition, "field-def1" )
+}
+
+func ( b *bindTestBuilder ) fieldSet( sz int ) *mg.Struct {
+    fldsTyp := asType( "mingle:types@v1/FieldDefinition*" ).
+        ( *mg.ListTypeReference )
+    flds := mg.NewList( fldsTyp )
+    for i := 0; i < sz; i++ { flds.AddUnsafe( b.fieldDef( i ) ) }
+    return parser.MustStruct( builtin.QnameFieldSet, "fields", flds )
+}
+
+func ( b *bindTestBuilder ) addFieldSetTests() {
+    b.addRt(
+        parser.MustStruct( builtin.QnameFieldSet ),
+        builtin.TypeFieldSet,
+        "empty-field-set",
+    )
+    b.addRt( b.fieldSet( 0 ), builtin.TypeFieldSet, "empty-field-set" )
+    b.addRt( b.fieldSet( 2 ), builtin.TypeFieldSet, "field-set1" )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameFieldSet,
+            "fields", mg.MustList( 
+                asType( "mingle:types@v1/FieldDefinition*" ),
+                b.fieldDef( 1 ),
+                b.fieldDef( 1 ),
+            ),
+        ),
+        builtin.TypeFieldSet,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "fields" ) ).StartList().SetIndex( 1 ),
+            "field redefined: f1",
+        ),
+    )
+}
+
+func ( b *bindTestBuilder ) callSig2() *mg.Struct {
+    return parser.MustStruct( builtin.QnameCallSignature,
+        "fields", b.fieldSet( 2 ),
+        "return", b.atomicQnNs1V1Name1(),
+        "throws", mg.MustList(
+            asType( "mingle:core@v1/TypeReference*" ),
+            b.atomicQnNs1V1Name( 1 ),
+            b.atomicQnNs1V1Name( 2 ),
+        ),
+    )
+}
+
+func ( b *bindTestBuilder ) addCallSignatureTests() {
+    b.addRt(
+        parser.MustStruct( builtin.QnameCallSignature,
+            "fields", b.fieldSet( 2 ),
+            "return", b.atomicQnNs1V1Name1(),
+        ),
+        builtin.TypeCallSignature,
+        "call-sig1",
+    )
+    b.addRt( b.callSig2(), builtin.TypeCallSignature, "call-sig2" )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameCallSignature,
+            "fields", b.fieldSet( 2 ),
+            "return", b.atomicQnNs1V1Name1(),
+            "throws", mg.MustList(
+                asType( "mingle:core@v1/TypeReference*" ),
+                b.atomicQnNs1V1Name( 1 ),
+                b.atomicQnNs1V1Name( 1 ),
+            ),
+        ),
+        builtin.TypeCallSignature,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "throws" ) ).StartList().SetIndex( 1 ),
+            "duplicate thrown type: ns1@v1/Name1",
+        ),
+    )
+}
+
+func ( b *bindTestBuilder ) addPrototypeDefinitionTests() {
+    b.addRt(
+        parser.MustStruct( builtin.QnamePrototypeDefinition,
+            "name", b.atomicQnNs1V1Name1(),
+            "signature", b.callSig2(),
+        ),
+        builtin.TypePrototypeDefinition,
+        "proto-def1",
+    )
+}
+
+func ( b *bindTestBuilder ) constructorDef( i int ) *mg.Struct {
+    return parser.MustStruct( builtin.QnameConstructorDefinition,
+        "type", b.atomicQnNs1V1Name( i ),
+    )
+}
+
+func ( b *bindTestBuilder ) addConstructorDefinitionTests() {
+    b.addRt(
+        b.constructorDef( 1 ),
+        builtin.TypeConstructorDefinition,
+        "constructor-def1",
+    )
+}
+
+func ( b *bindTestBuilder ) addStructDefinitionTests() {
+    b.addRt(
+        parser.MustStruct( builtin.QnameStructDefinition,
+            "name", b.qnNs1V1Name1(),
+            "fields", b.fieldSet( 1 ),
+        ),
+        builtin.TypeStructDefinition,
+        "struct-def1",
+    )
+    b.addRt(
+        parser.MustStruct( builtin.QnameStructDefinition,
+            "name", b.qnNs1V1Name1(),
+            "fields", b.fieldSet( 1 ),
+            "constructors", mg.MustList(
+                asType( "mingle:types@v1/ConstructorDefinition*" ),
+            ),
+        ),
+        builtin.TypeStructDefinition,
+        "struct-def1",
+    )
+    b.addRt(
+        parser.MustStruct( builtin.QnameStructDefinition,
+            "name", b.qnNs1V1Name1(),
+            "fields", b.fieldSet( 1 ),
+            "constructors", mg.MustList(
+                asType( "mingle:types@v1/ConstructorDefinition*" ),
+                b.constructorDef( 1 ),
+                b.constructorDef( 2 ),
+            ),
+        ),
+        builtin.TypeStructDefinition,
+        "struct-def2",
+    )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameStructDefinition,
+            "name", b.qnNs1V1Name1(),
+            "fields", b.fieldSet( 1 ),
+            "constructors", mg.MustList(
+                asType( "mingle:types@v1/ConstructorDefinition*" ),
+                b.constructorDef( 1 ),
+                b.constructorDef( 1 ),
+            ),
+        ),
+        builtin.TypeStructDefinition,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "constructors" ) ).
+                StartList().SetIndex( 1 ),
+            "duplicate constructor definitions with type: ns1@v1/Name1",
+        ),
+    )
+}
+
+func ( b *bindTestBuilder ) addSchemaDefinitionTests() {
+    b.addRt(
+        parser.MustStruct( builtin.QnameSchemaDefinition,
+            "name", b.qnNs1V1Name1(),
+        ),
+        builtin.TypeSchemaDefinition,
+        "schema-def-empty-fields",
+    )
+    b.addRt(
+        parser.MustStruct( builtin.QnameSchemaDefinition,
+            "name", b.qnNs1V1Name1(),
+            "fields", b.fieldSet( 0 ),
+        ),
+        builtin.TypeSchemaDefinition,
+        "schema-def-empty-fields",
+    )
+    b.addRt(
+        parser.MustStruct( builtin.QnameSchemaDefinition,
+            "name", b.qnNs1V1Name1(),
+            "fields", b.fieldSet( 2 ),
+        ),
+        builtin.TypeSchemaDefinition,
+        "schema-def1",
+    )
+}
+
+func ( b *bindTestBuilder ) addAliasedTypeDefinition() {
+    b.addRt(
+        parser.MustStruct( builtin.QnameAliasedTypeDefinition,
+            "name", b.qnNs1V1Name1(),
+            "aliased-type", b.coreQn( "Int32" ),
+        ),
+        builtin.TypeAliasedTypeDefinition,
+        "aliased-def1",
+    )
+}
+
+func ( b *bindTestBuilder ) addEnumDefinition() {
+    idListTyp := 
+        asType( "&mingle:core@v1/Identifier+" ).( *mg.ListTypeReference )
+    b.addRt(
+        parser.MustStruct( builtin.QnameEnumDefinition,
+            "name", b.qnNs1V1Name1(),
+            "values", mg.MustList( idListTyp, 
+                makeIdStruct( "v1" ), 
+                makeIdStruct( "v2" ),
+            ),
+        ),
+        builtin.TypeEnumDefinition,
+        "enum-def1",
+    )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameEnumDefinition,
+            "name", b.qnNs1V1Name1(),
+            "values", mg.MustList( idListTyp, 
+                makeIdStruct( "v1" ), 
+                makeIdStruct( "v1" ),
+            ),
+        ),
+        builtin.TypeEnumDefinition,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "values" ) ).StartList().SetIndex( 1 ),
+            "duplicate enum value: v1",
+        ),
+    )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameEnumDefinition,
+            "name", b.qnNs1V1Name1(),
+            "values", mg.MustList( idListTyp ),
+        ),
+        builtin.TypeEnumDefinition,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "values" ) ),
+            "enum definition has no values",
+        ),
+    )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameEnumDefinition,
+            "name", b.qnNs1V1Name1(),
+        ),
+        builtin.TypeEnumDefinition,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "values" ) ),
+            "enum definition has no values",
+        ),
+    )
+}
+
+func ( b *bindTestBuilder ) opDef( opNm string ) *mg.Struct {
+    return parser.MustStruct( builtin.QnameOperationDefinition,
+        "name", makeIdStruct( opNm ),
+        "signature", b.callSig2(),
+    )
+}
+
+func ( b *bindTestBuilder ) addOperationDefinitionTests() {
+    b.addRt( b.opDef( "op1" ), builtin.TypeOperationDefinition, "op-def1" )
+}
+
+func ( b *bindTestBuilder ) addServiceDefinitionTests() {
+    listTyp := asType( "&mingle:types@v1/OperationDefinition*" ).
+        ( *mg.ListTypeReference )
+    b.addRt(
+        parser.MustStruct( builtin.QnameServiceDefinition,
+            "name", b.qnNs1V1Name1(),
+            "operations", mg.MustList( listTyp ),
+        ),
+        builtin.TypeServiceDefinition,
+        "service-def1",
+    )
+    b.addRt(
+        parser.MustStruct( builtin.QnameServiceDefinition,
+            "name", b.qnNs1V1Name1(),
+        ),
+        builtin.TypeServiceDefinition,
+        "service-def1",
+    )
+    b.addRt(
+        parser.MustStruct( builtin.QnameServiceDefinition,
+            "name", b.qnNs1V1Name1(),
+            "operations", mg.MustList( listTyp, 
+                b.opDef( "op1" ), b.opDef( "op2" ),
+            ),
+            "security", b.qnNs1V1Name1(),
+        ),
+        builtin.TypeServiceDefinition,
+        "service-def2",
+    )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameServiceDefinition,
+            "name", b.qnNs1V1Name1(),
+            "operations", mg.MustList( listTyp, 
+                b.opDef( "op1" ), b.opDef( "op1" ),
+            ),
+        ),
+        builtin.TypeServiceDefinition,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "operations" ) ).StartList().SetIndex( 1 ),
+            "operation redefined: op1",
+        ),
+    )
+}
+
 func getBindTests() []*bind.BindTest {
     b := &bindTestBuilder{ tests: make( []*bind.BindTest, 0, 128 ) }
     b.addIdentifierTests()
@@ -701,6 +1030,18 @@ func getBindTests() []*bind.BindTest {
     b.addListTypeReferenceTests()
     b.addPointerTypeReferenceTests()
     b.addNullableTypeReferenceTests()
+    b.addPrimitiveDefinitionTests()
+    b.addFieldDefinitionTests()
+    b.addFieldSetTests()
+    b.addCallSignatureTests()
+    b.addPrototypeDefinitionTests()
+    b.addConstructorDefinitionTests()
+    b.addStructDefinitionTests()
+    b.addSchemaDefinitionTests()
+    b.addAliasedTypeDefinition()
+    b.addEnumDefinition()
+    b.addOperationDefinitionTests()
+    b.addServiceDefinitionTests()
     return b.tests
 }
 

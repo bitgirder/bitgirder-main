@@ -1,5 +1,7 @@
 - move mingle-interpreter into mingle-compiler as an internal const evaluator
 
+- rename CastError to something more general like InputError
+
 - add union types, replace TypeValue in some places:
 
     union IdentifierPathPart { Uint64, &Identifier }

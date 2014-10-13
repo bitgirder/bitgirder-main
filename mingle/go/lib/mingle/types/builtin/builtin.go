@@ -9,6 +9,17 @@ func idUnsafe( parts ...string ) *mg.Identifier {
     return mg.NewIdentifierUnsafe( parts )
 }
 
+func mkTypesQnTypPair( 
+    nm string ) ( *mg.QualifiedTypeName, *mg.AtomicTypeReference ) {
+
+    if typesNs == nil { panic( libError( "typesNs not initialized" ) ) }
+    qn := &mg.QualifiedTypeName{
+        Namespace: typesNs,
+        Name: mg.NewDeclaredTypeNameUnsafe( nm ),
+    }
+    return qn, qn.AsAtomicType()
+}
+
 var (
     identifierParts = idUnsafe( "parts" )
     identifierVersion = idUnsafe( "version" )
@@ -57,6 +68,45 @@ var (
         ElementType: mg.TypeBuffer,
         AllowsEmpty: false,
     }
+
+    typesNs = &mg.Namespace{
+        Parts: []*mg.Identifier{ idUnsafe( "mingle" ), idUnsafe( "types" ) },
+        Version: idUnsafe( "v1" ),
+    }
+
+    QnamePrimitiveDefinition, TypePrimitiveDefinition = 
+        mkTypesQnTypPair( "PrimitiveDefinition" )
+
+    QnameFieldDefinition, TypeFieldDefinition = 
+        mkTypesQnTypPair( "FieldDefinition" )
+
+    QnameFieldSet, TypeFieldSet = mkTypesQnTypPair( "FieldSet" )
+
+    QnameCallSignature, TypeCallSignature = mkTypesQnTypPair( "CallSignature" )
+
+    QnamePrototypeDefinition, TypePrototypeDefinition = 
+        mkTypesQnTypPair( "PrototypeDefinition" )
+
+    QnameConstructorDefinition, TypeConstructorDefinition = 
+        mkTypesQnTypPair( "ConstructorDefinition" )
+
+    QnameStructDefinition, TypeStructDefinition = 
+        mkTypesQnTypPair( "StructDefinition" )
+
+    QnameSchemaDefinition, TypeSchemaDefinition = 
+        mkTypesQnTypPair( "SchemaDefinition" )
+
+    QnameAliasedTypeDefinition, TypeAliasedTypeDefinition = 
+        mkTypesQnTypPair( "AliasedTypeDefinition" )
+
+    QnameEnumDefinition, TypeEnumDefinition = 
+        mkTypesQnTypPair( "EnumDefinition" )
+
+    QnameOperationDefinition, TypeOperationDefinition = 
+        mkTypesQnTypPair( "OperationDefinition" )
+
+    QnameServiceDefinition, TypeServiceDefinition = 
+        mkTypesQnTypPair( "ServiceDefinition" )
 )
 
 func AddLocatableErrorFields( sd *types.StructDefinition ) {
@@ -359,8 +409,57 @@ func initLangV1Types() {
     initMissingFieldsError()
 }
 
+func initTypesTypes() {
+//type PrimitiveDefinition struct { Name *mg.QualifiedTypeName }
+//type FieldDefinition struct {
+//    Name *mg.Identifier
+//    Type mg.TypeReference
+//    Default mg.Value
+//}
+//type FieldSet struct {
+//    flds *mg.IdentifierMap
+//}
+//type CallSignature struct {
+//    Fields *FieldSet
+//    Return mg.TypeReference
+//    Throws []mg.TypeReference
+//}
+//type PrototypeDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Signature *CallSignature
+//}
+//type ConstructorDefinition struct { Type mg.TypeReference }
+//type StructDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Fields *FieldSet
+//    Constructors []*ConstructorDefinition
+//}
+//type SchemaDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Fields *FieldSet
+//}
+//type AliasedTypeDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    AliasedType mg.TypeReference
+//}
+//type EnumDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Values []*mg.Identifier
+//}
+//type OperationDefinition struct {
+//    Name *mg.Identifier
+//    Signature *CallSignature
+//}
+//type ServiceDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Operations []*OperationDefinition
+//    Security *mg.QualifiedTypeName
+//}
+}
+
 func initBuiltinTypes() {
     builtinTypes = types.NewDefinitionMap()
     initCoreV1Types()
     initLangV1Types()
+    initTypesTypes()
 }

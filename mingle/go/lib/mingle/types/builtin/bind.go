@@ -785,8 +785,7 @@ func visitBuiltinTypeOk(
     return nil, false
 }
 
-func initBind() {
-    reg := bind.RegistryForDomain( bind.DomainDefault )
+func initCoreBindings( reg *bind.Registry ) {
     reg.MustAddValue( mg.QnameIdentifier, newIdBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameDeclaredTypeName, newDeclNmBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameNamespace, newNsBuilderFactory( reg ) )
@@ -816,4 +815,58 @@ func initBind() {
     reg.MustAddValue( 
         mg.QnameMissingFieldsError, newMissingFieldsErrorBuilderFactory( reg ) )
     reg.AddVisitValueOkFunc( visitBuiltinTypeOk )
+}
+
+func initTypesBindings( reg *bind.Registry ) {
+//type PrimitiveDefinition struct { Name *mg.QualifiedTypeName }
+//type FieldDefinition struct {
+//    Name *mg.Identifier
+//    Type mg.TypeReference
+//    Default mg.Value
+//}
+//type FieldSet struct {
+//    flds *mg.IdentifierMap
+//}
+//type CallSignature struct {
+//    Fields *FieldSet
+//    Return mg.TypeReference
+//    Throws []mg.TypeReference
+//}
+//type PrototypeDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Signature *CallSignature
+//}
+//type ConstructorDefinition struct { Type mg.TypeReference }
+//type StructDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Fields *FieldSet
+//    Constructors []*ConstructorDefinition
+//}
+//type SchemaDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Fields *FieldSet
+//}
+//type AliasedTypeDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    AliasedType mg.TypeReference
+//}
+//type EnumDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Values []*mg.Identifier
+//}
+//type OperationDefinition struct {
+//    Name *mg.Identifier
+//    Signature *CallSignature
+//}
+//type ServiceDefinition struct {
+//    Name *mg.QualifiedTypeName
+//    Operations []*OperationDefinition
+//    Security *mg.QualifiedTypeName
+//}
+}
+
+func initBind() {
+    reg := bind.RegistryForDomain( bind.DomainDefault )
+    initCoreBindings( reg )
+    initTypesBindings( reg )
 }
