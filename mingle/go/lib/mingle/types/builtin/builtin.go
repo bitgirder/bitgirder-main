@@ -24,6 +24,9 @@ var (
     identifierMin = idUnsafe( "min" )
     identifierMax = idUnsafe( "max" )
     identifierMaxClosed = idUnsafe( "max", "closed" )
+    identifierElementType = idUnsafe( "element", "type" )
+    identifierAllowsEmpty = idUnsafe( "allows", "empty" )
+    identifierType = idUnsafe( "type" )
 
     typeIdentifierPartsList = &mg.ListTypeReference{
         ElementType: mg.NewAtomicTypeReference(
@@ -253,8 +256,53 @@ func initAtomicTypeReferenceType() {
     MustAddBuiltinType( sd )
 }
 
+func initListTypeReferenceType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameListTypeReference
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierElementType,
+            Type: mg.TypeValue, 
+        },
+    )
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierAllowsEmpty,
+            Type: mg.TypeBoolean,
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
+func initNullableTypeReferenceType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnameNullableTypeReference
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierType,
+            Type: mg.TypeValue,
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
+func initPointerTypeReferenceType() {
+    sd := types.NewStructDefinition()
+    sd.Name = mg.QnamePointerTypeReference
+    sd.Fields.Add(
+        &types.FieldDefinition{
+            Name: identifierType,
+            Type: mg.TypeValue,
+        },
+    )
+    MustAddBuiltinType( sd )
+}
+
 func initTypeReferenceTypes() {
     initAtomicTypeReferenceType()
+    initListTypeReferenceType()
+    initPointerTypeReferenceType()
+    initNullableTypeReferenceType()
 }
 
 func initIdentifierPathType() {

@@ -1272,6 +1272,8 @@ var (
     TypeNullableTypeReference *AtomicTypeReference
     QnamePointerTypeReference *QualifiedTypeName
     TypePointerTypeReference *AtomicTypeReference
+    QnameTypeReference *QualifiedTypeName
+    TypeTypeReference *AtomicTypeReference
     QnameIdentifierPath *QualifiedTypeName
     TypeIdentifierPath *AtomicTypeReference
     QnameStandardError *QualifiedTypeName
@@ -1366,6 +1368,7 @@ func init() {
         f1( "NullableTypeReference" )
     QnamePointerTypeReference, TypePointerTypeReference = 
         f1( "PointerTypeReference" )
+    QnameTypeReference, TypeTypeReference = f1( "TypeReference" )
     QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
     QnameStandardError, TypeStandardError = f1( "StandardError" )
     QnameCastError, TypeCastError = f1( "CastError" )

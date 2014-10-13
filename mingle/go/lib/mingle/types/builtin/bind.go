@@ -94,6 +94,7 @@ func newDeclNmBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
         func() interface{} { return &mg.DeclaredTypeName{} },
+        nil,
         &bind.CheckedFieldSetter{
             Field: identifierName,
             Type: mg.TypeString,
@@ -108,6 +109,7 @@ func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
     return bind.CheckedFunctionsFieldSetBuilder(
         reg,
         &mg.Namespace{},
+        nil,
         &bind.CheckedFieldSetter{
             Field: identifierVersion,
             Type: mg.TypeIdentifier,
@@ -155,6 +157,7 @@ func newQnBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
         func() interface{} { return &mg.QualifiedTypeName{} },
+        nil,
         &bind.CheckedFieldSetter{
             Field: identifierNamespace,
             Type: mg.TypeNamespace,
@@ -254,7 +257,7 @@ var rangeSetters = []*bind.CheckedFieldSetter{
 
 func newRangeBuilderBuilder( reg *bind.Registry ) mgRct.FieldSetBuilder {
     return bind.CheckedFunctionsFieldSetBuilder(
-        reg, &mg.RangeRestrictionBuilder{}, rangeSetters... )
+        reg, &mg.RangeRestrictionBuilder{}, nil, rangeSetters... )
 }
 
 var regexSetters = []*bind.CheckedFieldSetter {
@@ -269,7 +272,7 @@ var regexSetters = []*bind.CheckedFieldSetter {
 
 func newRegexBuilder( reg *bind.Registry ) mgRct.FieldSetBuilder {
     return bind.CheckedFunctionsFieldSetBuilder(
-        reg, &regexBuilder{}, regexSetters... )
+        reg, &regexBuilder{}, nil, regexSetters... )
 }
 
 func newAtomicRestrictionBuilder( reg *bind.Registry ) mgRct.BuilderFactory {
@@ -312,6 +315,71 @@ func newAtomicBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
     setStructFunc( res, reg, atomicBuilderForStruct )
     return res
+}
+
+func newListTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &mg.ListTypeReference{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierElementType,
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.ListTypeReference ).ElementType = 
+                    val.( mg.TypeReference )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierAllowsEmpty,
+            Type: mg.TypeBoolean,
+            Assign: func( obj, val interface{} ) {
+                obj.( *mg.ListTypeReference ).AllowsEmpty = val.( bool )
+            },
+        },
+    )
+}
+
+type typeHolder struct {
+    typ mg.TypeReference
+}
+
+func newPointerTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &typeHolder{} },
+        bind.CheckedInstanceConvertFunc(
+            func( val interface{} ) interface{} {
+                return mg.NewPointerTypeReference( val.( *typeHolder ).typ )
+            },
+        ),
+        &bind.CheckedFieldSetter{
+            Field: identifierType,
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *typeHolder ).typ = val.( mg.TypeReference )
+            },
+        },
+    )
+}
+
+func newNullableTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &typeHolder{} },
+        bind.CheckedInstanceConvertFunc(
+            func( val interface{} ) interface{} {
+                return mg.MustNullableTypeReference( val.( *typeHolder ).typ )
+            },
+        ),
+        &bind.CheckedFieldSetter{
+            Field: identifierType,
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *typeHolder ).typ = val.( mg.TypeReference )
+            },
+        },
+    )
 }
 
 func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
@@ -429,6 +497,7 @@ func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
         func() interface{} { return new( mg.CastError ) },
+        nil,
         createLocatableErrorSetters(
             func( obj, val interface{} ) {
                 obj.( *mg.CastError ).Message = val.( string )
@@ -460,7 +529,7 @@ func newUnrecognizedFieldErrorBuilderFactory(
             obj.( *mg.UnrecognizedFieldError ).Field = val.( *mg.Identifier )
         },
     })
-    return bind.CheckedStructFactory( reg, fact, flds... )
+    return bind.CheckedStructFactory( reg, fact, nil, flds... )
 }
 
 func newMissingFieldsErrorBuilderFactory( 
@@ -482,7 +551,7 @@ func newMissingFieldsErrorBuilderFactory(
             obj.( *mg.MissingFieldsError ).SetFields( val.( []*mg.Identifier ) )
         },
     })
-    return bind.CheckedStructFactory( reg, fact, flds... )
+    return bind.CheckedStructFactory( reg, fact, nil, flds... )
 }
 
 func visitIdentifierAsStruct( id *mg.Identifier, vc bind.VisitContext ) error {
@@ -558,18 +627,6 @@ func VisitQualifiedTypeName(
     })
 }
 
-func VisitAtomicTypeReference(
-    at *mg.AtomicTypeReference, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnameAtomicTypeReference, func() error {
-        err := bind.VisitFieldValue( vc, identifierName, at.Name() )
-        if err != nil { return err }
-        rx := at.Restriction()
-        if rx == nil { return nil }
-        return bind.VisitFieldValue( vc, identifierRestriction, rx )
-    })
-}
-
 func VisitRangeRestriction(
     rx *mg.RangeRestriction, vc bind.VisitContext ) error {
 
@@ -591,6 +648,44 @@ func VisitRegexRestriction(
 
     return bind.VisitStruct( vc, mg.QnameRegexRestriction, func() error {
         return bind.VisitFieldValue( vc, identifierPattern, rx.Source() )
+    })
+}
+
+func VisitAtomicTypeReference(
+    at *mg.AtomicTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameAtomicTypeReference, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, at.Name() )
+        if err != nil { return err }
+        rx := at.Restriction()
+        if rx == nil { return nil }
+        return bind.VisitFieldValue( vc, identifierRestriction, rx )
+    })
+}
+
+func VisitListTypeReference(
+    lt *mg.ListTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameListTypeReference, func() error {
+        err := bind.VisitFieldValue( vc, identifierElementType, lt.ElementType )
+        if err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierAllowsEmpty, lt.AllowsEmpty )
+    })
+}
+
+func VisitPointerTypeReference(
+    pt *mg.PointerTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnamePointerTypeReference, func() error {
+        return bind.VisitFieldValue( vc, identifierType, pt.Type )
+    })
+}
+
+func VisitNullableTypeReference(
+    nt *mg.NullableTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameNullableTypeReference, func() error {
+        return bind.VisitFieldValue( vc, identifierType, nt.Type )
     })
 }
 
@@ -674,6 +769,11 @@ func visitBuiltinTypeOk(
     case *mg.DeclaredTypeName: return VisitDeclaredTypeName( v, vc ), true
     case *mg.QualifiedTypeName: return VisitQualifiedTypeName( v, vc ), true
     case *mg.AtomicTypeReference: return VisitAtomicTypeReference( v, vc ), true
+    case *mg.ListTypeReference: return VisitListTypeReference( v, vc ), true
+    case *mg.PointerTypeReference: 
+        return VisitPointerTypeReference( v, vc ), true
+    case *mg.NullableTypeReference:
+        return VisitNullableTypeReference( v, vc ), true
     case *mg.RangeRestriction: return VisitRangeRestriction( v, vc ), true
     case *mg.RegexRestriction: return VisitRegexRestriction( v, vc ), true
     case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
@@ -694,6 +794,18 @@ func initBind() {
     reg.MustAddValue( 
         mg.QnameAtomicTypeReference, 
         newAtomicBuilderFactory( reg ),
+    )
+    reg.MustAddValue(
+        mg.QnameListTypeReference,
+        newListTypeBuilderFactory( reg ),
+    )
+    reg.MustAddValue(
+        mg.QnamePointerTypeReference,
+        newPointerTypeBuilderFactory( reg ),
+    )
+    reg.MustAddValue(
+        mg.QnameNullableTypeReference,
+        newNullableTypeBuilderFactory( reg ),
     )
     reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
     reg.MustAddValue( mg.QnameCastError, newCastErrorBuilderFactory( reg ) )

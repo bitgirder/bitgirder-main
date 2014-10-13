@@ -73,13 +73,32 @@ func AddCheckedField(
     )
 }
 
+type InstanceConvertFunc func( 
+    val interface{}, path objpath.PathNode ) ( interface{}, error )
+
+func CheckedInstanceConvertFunc( 
+    f func( val interface{} ) interface{} ) InstanceConvertFunc {
+
+    return func( 
+        val interface{}, path objpath.PathNode ) ( interface{}, error ) {
+
+        return f( val ), nil
+    }
+}
+
 func CheckedFunctionsFieldSetBuilder(
     reg *Registry,
     val interface{},
+    conv InstanceConvertFunc,
     setters ...*CheckedFieldSetter ) mgRct.FieldSetBuilder {
 
     res := NewFunctionsFieldSetBuilder()
     res.Value = val
+    if conv != nil {
+        res.FinalValue = func( path objpath.PathNode ) ( interface{}, error ) {
+            return conv( res.Value, path )
+        }
+    }
     for _, s := range setters { AddCheckedField( res, reg, s ) }
     return res
 }
@@ -89,21 +108,24 @@ type InstanceFactoryFunc func() interface{}
 func CheckedStructFunc( 
     reg *Registry, 
     fact InstanceFactoryFunc,
+    conv InstanceConvertFunc,
     setters []*CheckedFieldSetter ) mgRct.StructStartFunc {
 
     validateSetters( setters )
     return func( _ *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
-        return CheckedFunctionsFieldSetBuilder( reg, fact(), setters... ), nil
+        res := CheckedFunctionsFieldSetBuilder( reg, fact(), conv, setters... )
+        return res, nil
     }
 }
 
 func CheckedStructFactory( 
     reg *Registry, 
     fact InstanceFactoryFunc,
+    conv InstanceConvertFunc,
     setters ...*CheckedFieldSetter ) mgRct.BuilderFactory {
 
     res := NewFunctionsBuilderFactory()
-    res.StructFunc = CheckedStructFunc( reg, fact, setters )
+    res.StructFunc = CheckedStructFunc( reg, fact, conv, setters )
     return res
 }
 
