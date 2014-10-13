@@ -1,1 +1,25 @@
 - move mingle-interpreter into mingle-compiler as an internal const evaluator
+
+- add union types, replace TypeValue in some places:
+
+    union IdentifierPathPart { Uint64, &Identifier }
+    struct IdentifierPath { parts IdentifierPathPart+ }
+
+    union ValueRestriction { RangeRestriction, RegexRestriction }
+
+    struct AtomicTypeReference {
+        type &QualifiedTypeName
+        restriction &ValueRestriction?
+    }
+
+    union TypeReference {
+        AtomicTypeReference,
+        ListTypeReference,
+        PointerTypeReference,
+        NullableTypeReference,
+    }
+
+    struct ListTypeReference {
+        elementType TypeReference,
+        ...
+    }
