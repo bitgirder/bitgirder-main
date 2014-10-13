@@ -99,6 +99,7 @@ func ensureTestBuilderFactories() {
         CheckedStructFactory( 
             reg, 
             func() interface{} { return &S1{} },
+            nil,
             &CheckedFieldSetter{ 
                 Field: mkId( "f1" ), 
                 Type: mg.TypeInt32, 
