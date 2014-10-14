@@ -3,6 +3,7 @@ package types
 import (
     "fmt"
 //    "log"
+    "sort"
     mg "mingle"
 )
 
@@ -91,6 +92,81 @@ type PrimitiveDefinition struct { Name *mg.QualifiedTypeName }
 
 func ( pd *PrimitiveDefinition ) GetName() *mg.QualifiedTypeName {
     return pd.Name
+}
+
+type UnionTypeDefinitionInput interface {
+    Len() int
+    TypeAtIndex( idx int ) mg.TypeReference
+}
+
+type UnionTypeDefinitionError struct {
+    ErrorGroups [][]int
+}
+
+func ( e *UnionTypeDefinitionError ) Error() string {
+    return "union contains one or more ambiguous types"
+}
+
+// Should not be created directly -- use CreateUnionTypeDefinition()
+type UnionTypeDefinition struct {
+    Types []mg.TypeReference
+}
+
+func unionTypeKeyForType( typ mg.TypeReference ) string {
+    switch v := typ.( type ) {
+    case *mg.AtomicTypeReference: return v.Name().ExternalForm()
+    case *mg.NullableTypeReference: return unionTypeKeyForType( v.Type )
+    case *mg.PointerTypeReference: return unionTypeKeyForType( v.Type )
+    case *mg.ListTypeReference: 
+        return unionTypeKeyForType( v.ElementType ) + "[]"
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
+// sorts union type error groups by increasing order of each group's first
+// element (groups themselves are assumed to already be sorted in increasing
+// order)
+type errorGroupSort [][]int
+
+func ( s errorGroupSort ) Len() int { return len( s ) }
+
+func ( s errorGroupSort ) Less( i, j int ) bool {
+    return s[ i ][ 0 ] < s[ j ][ 0 ]
+}
+
+func ( s errorGroupSort ) Swap( i, j int ) { s[ i ], s[ j ] = s[ j ], s[ i ] }
+
+// strips pointers, nullability, and differentiation between lists that allow
+// empty and those that do not, and organizes types into groups that are thereby
+// equal, or groups those that are not together by index
+func checkUnionType( 
+    in UnionTypeDefinitionInput ) ( []mg.TypeReference, [][]int ) {
+    
+    m := make( map[ string ] []int )
+    typs := make( []mg.TypeReference, in.Len() )
+    for i, e := 0, in.Len(); i < e; i++ {
+        typ := in.TypeAtIndex( i )
+        typs[ i ] = typ
+        key := unionTypeKeyForType( typ )
+        matched, ok := m[ key ]
+        if ! ok { matched = make( []int, 0, 4 ) }
+        matched = append( matched, i )
+        m[ key ] = matched
+    }
+    errGrps := make( [][]int, 0, len( m ) )
+    for _, v := range m { 
+        if len( v ) > 1 { errGrps = append( errGrps, v ) }
+    }
+    sort.Sort( errorGroupSort( errGrps ) )
+    return typs, errGrps
+}
+
+func CreateUnionTypeDefinition( 
+    in UnionTypeDefinitionInput ) ( *UnionTypeDefinition, error ) {
+
+    typs, errGroups := checkUnionType( in )
+    if len( errGroups ) == 0 { return &UnionTypeDefinition{ typs }, nil }
+    return nil, &UnionTypeDefinitionError{ errGroups } 
 }
 
 type FieldDefinition struct {

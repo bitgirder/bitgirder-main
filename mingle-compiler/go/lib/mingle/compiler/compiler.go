@@ -1053,59 +1053,33 @@ func newTypeSelectionCheck( c *Compilation ) *typeSelectionCheck {
     }
 }
 
+func ( c *typeSelectionCheck ) Len() int { return len( c.elts ) }
+
+func ( c *typeSelectionCheck ) TypeAtIndex( idx int ) mg.TypeReference {
+    return c.elts[ idx ].typ
+}
+
 func ( c *typeSelectionCheck ) addType( 
     typ mg.TypeReference, lc tree.Locatable ) {
 
     c.elts = append( c.elts, typeSelectionCheckInput{ typ, lc } )
 }
 
-func erasedTypeKeyForType( typ mg.TypeReference ) string {
-    switch v := typ.( type ) {
-    case *mg.AtomicTypeReference: return v.Name().ExternalForm()
-    case *mg.NullableTypeReference: return erasedTypeKeyForType( v.Type )
-    case *mg.PointerTypeReference: return erasedTypeKeyForType( v.Type )
-    case *mg.ListTypeReference: 
-        return erasedTypeKeyForType( v.ElementType ) + "[]"
-    }
-    panic( libErrorf( "unhandled type: %T", typ ) )
-}
-
-type typeSelectionCheckLocSort []typeSelectionCheckInput
-
-func ( s typeSelectionCheckLocSort ) Len() int { return len( s ) }
-
-func ( s typeSelectionCheckLocSort ) Less( i, j int ) bool {
-    lcI, lcJ := s[ i ].lc.Locate(), s[ j ].lc.Locate()
-    return lcI.String() < lcJ.String()
-}
-
-func ( s typeSelectionCheckLocSort ) Swap( i, j int ) {
-    s[ i ], s[ j ] = s[ j ], s[ i ]
-}
-
-// strips pointers, nullability, and differntiation between lists that allow
-// empty and those that do not, and organizes typs into groups that are thereby
-// equal
-func ( c *typeSelectionCheck ) ambiguousGroups() [][]typeSelectionCheckInput {
-
-    m := make( map[ string ] []typeSelectionCheckInput )
-    for _, elt := range c.elts {
-        key := erasedTypeKeyForType( elt.typ )
-        matched, ok := m[ key ]
-        if ! ok { matched = make( []typeSelectionCheckInput, 0, 2 ) }
-        matched = append( matched, elt )
-        m[ key ] = matched
-    }
-    res := make( [][]typeSelectionCheckInput, 0, len( m ) )
-    for _, v := range m { 
-        sort.Sort( typeSelectionCheckLocSort( v ) )
-        if len( v ) > 1 { res = append( res, v ) }
+func ( c *typeSelectionCheck ) errorGroups() [][]typeSelectionCheckInput {
+    _, err := types.CreateUnionTypeDefinition( c )
+    if err == nil { return nil }
+    grps := err.( *types.UnionTypeDefinitionError ).ErrorGroups
+    res := make( [][]typeSelectionCheckInput, len( grps ) )
+    for i, grp := range grps {
+        inputs := make( []typeSelectionCheckInput, len( grp ) )
+        for j, idx := range grp { inputs[ j ] = c.elts[ idx ] }
+        res[ i ] = inputs
     }
     return res
 }
 
 func ( c *typeSelectionCheck ) check() bool {
-    grps := c.ambiguousGroups()
+    grps := c.errorGroups()
     if len( grps ) == 0 { return true }
     for _, grp := range grps {
         strs := make( []string, len( grp ) )

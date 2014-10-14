@@ -126,3 +126,77 @@ func TestFieldSetContainsFields( t *testing.T ) {
         la = la.Next()
     }
 }
+
+type unionTypeDefinitionTest struct {
+    input []mg.TypeReference
+    errGroups [][]int
+}
+
+func ( t *unionTypeDefinitionTest ) Len() int { return len( t.input ) }
+
+func ( t *unionTypeDefinitionTest ) TypeAtIndex( idx int ) mg.TypeReference {
+    return t.input[ idx ]
+}
+
+func ( t *unionTypeDefinitionTest ) call( a *assert.PathAsserter ) {
+    ud, err := CreateUnionTypeDefinition( t )
+    if t.errGroups == nil {
+        a.EqualErrors( nil, err )
+        a.Equal( ud.Types, t.input )
+        return
+    }
+    if err == nil { a.Fatalf( "expected err groups: %#v", t.errGroups ) }
+    udErr, ok := err.( *UnionTypeDefinitionError )
+    if ! ok { a.Fatal( err ) }
+    a.Equal( t.errGroups, udErr.ErrorGroups )
+}
+
+func getUnionDefinitionTests() []*unionTypeDefinitionTest {
+    res := make( []*unionTypeDefinitionTest, 0, 4 )
+    res = append( res,
+        &unionTypeDefinitionTest{
+            input: []mg.TypeReference{
+                mg.TypeInt32,
+                mg.TypeUint32,
+                mg.NewPointerTypeReference( mg.TypeString ),
+                &mg.ListTypeReference{ mg.TypeString, false },
+                mg.MustNullableTypeReference( mg.TypeSymbolMap ),
+            },
+        },
+        &unionTypeDefinitionTest{
+            input: []mg.TypeReference{ mg.TypeString, mg.TypeString },
+            errGroups: [][]int{ []int{ 0, 1 } },
+        },
+        &unionTypeDefinitionTest{
+            input: []mg.TypeReference{
+                mg.TypeInt32,
+                mg.NewPointerTypeReference( mg.TypeInt32 ),
+                mg.NewPointerTypeReference( mg.TypeInt64 ),
+                mg.MustNullableTypeReference(
+                    mg.NewPointerTypeReference( mg.TypeInt64 ) ),
+                &mg.ListTypeReference{ mg.TypeInt32, true },
+                &mg.ListTypeReference{ mg.TypeInt32, false },
+                mg.NewPointerTypeReference(
+                    &mg.ListTypeReference{ mg.TypeInt32, true } ),
+                &mg.ListTypeReference{
+                    mg.NewPointerTypeReference( mg.TypeInt32 ), 
+                    true,
+                },
+            },
+            errGroups: [][]int{
+                []int{ 0, 1 },
+                []int{ 2, 3 },
+                []int{ 4, 5, 6, 7 },
+            },
+        },
+    )
+    return res
+}
+
+func TestUnionDefinition( t *testing.T ) {
+    la := assert.NewListPathAsserter( t )
+    for _, test := range getUnionDefinitionTests() {
+        test.call( la )
+        la = la.Next()
+    }
+}

@@ -1891,7 +1891,7 @@ func TestCompiler( t *testing.T ) {
         expectError( 4, 13,
             "ambiguous constructors in ns@v1/S1: &(mingle:core@v1/Int64) ([<>, line 7, col 17]), &(mingle:core@v1/Int64)? ([<>, line 8, col 17])" ).
         expectError( 4, 13,
-            "ambiguous constructors in ns@v1/S1: mingle:core@v1/Int32+ ([<>, line 10, col 17]), &(mingle:core@v1/Int32*) ([<>, line 11, col 17]), &(mingle:core@v1/Int32)* ([<>, line 12, col 17]), mingle:core@v1/Int32* ([<>, line 9, col 17])" ).
+            "ambiguous constructors in ns@v1/S1: mingle:core@v1/Int32* ([<>, line 9, col 17]), mingle:core@v1/Int32+ ([<>, line 10, col 17]), &(mingle:core@v1/Int32*) ([<>, line 11, col 17]), &(mingle:core@v1/Int32)* ([<>, line 12, col 17])" ).
         expectError( 15, 35,
             "operation op1 has ambiguous thrown types: ns@v1/Err1 ([<>, line 15, col 54]), &(ns@v1/Err1) ([<>, line 15, col 60])" ).
         expectError( 16, 23,
