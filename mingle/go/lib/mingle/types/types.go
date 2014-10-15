@@ -267,14 +267,11 @@ type FieldContainer interface { GetFields() *FieldSet }
 type CallSignature struct {
     Fields *FieldSet
     Return mg.TypeReference
-    Throws []mg.TypeReference
+    Throws *UnionTypeDefinition
 }
 
 func NewCallSignature() *CallSignature {
-    return &CallSignature{ 
-        Fields: NewFieldSet(),
-        Throws: []mg.TypeReference{},
-    }
+    return &CallSignature{ Fields: NewFieldSet() }
 }
 
 func ( cs *CallSignature ) GetFields() *FieldSet { return cs.Fields }

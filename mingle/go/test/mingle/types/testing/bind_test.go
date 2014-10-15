@@ -762,11 +762,7 @@ func ( b *bindTestBuilder ) callSig2() *mg.Struct {
     return parser.MustStruct( builtin.QnameCallSignature,
         "fields", b.fieldSet( 2 ),
         "return", b.atomicQnNs1V1Name1(),
-        "throws", mg.MustList(
-            asType( "mingle:core@v1/TypeReference*" ),
-            b.atomicQnNs1V1Name( 1 ),
-            b.atomicQnNs1V1Name( 2 ),
-        ),
+        "throws", b.unionDef( 2 ),
     )
 }
 
@@ -780,22 +776,6 @@ func ( b *bindTestBuilder ) addCallSignatureTests() {
         "call-sig1",
     )
     b.addRt( b.callSig2(), builtin.TypeCallSignature, "call-sig2" )
-    b.addInErr(
-        parser.MustStruct( builtin.QnameCallSignature,
-            "fields", b.fieldSet( 2 ),
-            "return", b.atomicQnNs1V1Name1(),
-            "throws", mg.MustList(
-                asType( "mingle:core@v1/TypeReference*" ),
-                b.atomicQnNs1V1Name( 1 ),
-                b.atomicQnNs1V1Name( 1 ),
-            ),
-        ),
-        builtin.TypeCallSignature,
-        mg.NewCastError(
-            objpath.RootedAt( mkId( "throws" ) ).StartList().SetIndex( 1 ),
-            "duplicate thrown type: ns1@v1/Name1",
-        ),
-    )
 }
 
 func ( b *bindTestBuilder ) addPrototypeDefinitionTests() {

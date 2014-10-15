@@ -1393,10 +1393,9 @@ func ( c *Compilation ) buildCallSignature(
             chkOk := c.checkThrownType( thrownTyp, thrownTyp, thrown )
             if ok = ok && chkOk; ! ok { continue }
             chk.addType( thrownTyp, thrown )
-            res.Throws = append( res.Throws, thrownTyp ) 
         }
     }
-    if ok { _, ok = chk.build() }
+    if ok { res.Throws, ok = chk.build() }
     if ok { return res }
     return nil
 }
@@ -1562,7 +1561,9 @@ func ( c nsUnitCycleCheck ) addSigFromDef(
 
     c.addFieldsFromDef( sig.Fields, def )
     c.updateWithDefDepType( sig.Return, def )
-    for _, typ := range sig.Throws { c.updateWithDefDepType( typ, def ) }
+    if ut := sig.Throws; ut != nil {
+        for _, typ := range ut.Types { c.updateWithDefDepType( typ, def ) }
+    }
 }
 
 func ( c nsUnitCycleCheck ) addSigsFromService( sd *types.ServiceDefinition ) {

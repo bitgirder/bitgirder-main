@@ -73,14 +73,15 @@ func MakeEnumDef( qn string, vals ...string ) *EnumDefinition {
 }
 
 func MakeCallSig( 
-    flds []*FieldDefinition,
-    retType string,
-    throws []string ) *CallSignature {
+    flds []*FieldDefinition, retType string, throws []string ) *CallSignature {
+
     res := NewCallSignature()
     for _, fld := range flds { res.Fields.MustAdd( fld ) }
     res.Return = mkTyp( retType )
-    for _, typ := range throws { 
-        res.Throws = append( res.Throws, mkTyp( typ ) )
+    throwsTyps := make( []mg.TypeReference, len( throws ) )
+    for i, typ := range throws { throwsTyps[ i ] = mkTyp( typ ) }
+    if len( throwsTyps ) > 0 {
+        res.Throws = MustUnionTypeDefinitionTypes( throwsTyps... )
     }
     return res
 }
@@ -213,13 +214,7 @@ func ( a *DefAsserter ) assertEnumDef(
 func ( a *DefAsserter ) assertCallSig( s1, s2 *CallSignature ) {
     a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
     a.descend( "(Return)" ).Equal( s1.Return, s2.Return )
-    throws1, throws2 := s1.Throws, s2.Throws
-    ta := a.descend( "(Throws)" )
-    ta.descend( "(Len)" ).Equal( len( throws1 ), len( throws2 ) )
-    for la, i, e := ta.startList(), 0, len( throws1 ); i < e; i++ {
-        la.Equal( throws1[ i ], throws2[ i ] )
-        la = la.next()
-    }
+    a.descend( "(Throws)" ).assertUnionType( s1.Throws, s2.Throws )
 }
 
 func ( a *DefAsserter ) assertProtoDef(
