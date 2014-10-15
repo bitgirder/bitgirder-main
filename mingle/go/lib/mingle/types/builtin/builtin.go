@@ -21,23 +21,33 @@ func mkTypesQnTypPair(
 }
 
 var (
-    identifierParts = idUnsafe( "parts" )
-    identifierVersion = idUnsafe( "version" )
-    identifierLocation = idUnsafe( "location" )
-    identifierMessage = idUnsafe( "message" )
+    identifierAliasedType = idUnsafe( "aliased", "type" )
+    identifierAllowsEmpty = idUnsafe( "allows", "empty" )
+    identifierConstructors = idUnsafe( "constructors" )
+    identifierDefault = idUnsafe( "default" )
+    identifierElementType = idUnsafe( "element", "type" )
     identifierField = idUnsafe( "field" )
     identifierFields = idUnsafe( "fields" )
-    identifierName = idUnsafe( "name" )
-    identifierNamespace = idUnsafe( "namespace" )
-    identifierRestriction = idUnsafe( "restriction" )
-    identifierPattern = idUnsafe( "pattern" )
-    identifierMinClosed = idUnsafe( "min", "closed" )
-    identifierMin = idUnsafe( "min" )
+    identifierLocation = idUnsafe( "location" )
     identifierMax = idUnsafe( "max" )
     identifierMaxClosed = idUnsafe( "max", "closed" )
-    identifierElementType = idUnsafe( "element", "type" )
-    identifierAllowsEmpty = idUnsafe( "allows", "empty" )
+    identifierMessage = idUnsafe( "message" )
+    identifierMin = idUnsafe( "min" )
+    identifierMinClosed = idUnsafe( "min", "closed" )
+    identifierName = idUnsafe( "name" )
+    identifierNamespace = idUnsafe( "namespace" )
+    identifierOperation = idUnsafe( "operation" )
+    identifierOperations = idUnsafe( "operations" )
+    identifierParts = idUnsafe( "parts" )
+    identifierPattern = idUnsafe( "pattern" )
+    identifierRestriction = idUnsafe( "restriction" )
+    identifierReturn = idUnsafe( "return" )
+    identifierSecurity = idUnsafe( "security" )
+    identifierSignature = idUnsafe( "signature" )
+    identifierThrows = idUnsafe( "throws" )
     identifierType = idUnsafe( "type" )
+    identifierValues = idUnsafe( "values" )
+    identifierVersion = idUnsafe( "version" )
 
     typeIdentifierPartsList = &mg.ListTypeReference{
         ElementType: mg.NewAtomicTypeReference(
@@ -79,6 +89,8 @@ var (
 
     QnameFieldDefinition, TypeFieldDefinition = 
         mkTypesQnTypPair( "FieldDefinition" )
+
+    QnameFieldSetEntry, TypeFieldSetEntry = mkTypesQnTypPair( "FieldSetEntry" )
 
     QnameFieldSet, TypeFieldSet = mkTypesQnTypPair( "FieldSet" )
 
@@ -144,6 +156,27 @@ func BuiltinTypes() *types.DefinitionMap {
 }
 
 func MustAddBuiltinType( def types.Definition ) { builtinTypes.MustAdd( def ) }
+
+var ptrTyp = mg.NewPointerTypeReference
+
+func nilPtrTyp( typ mg.TypeReference ) *mg.NullableTypeReference {
+    return mg.MustNullableTypeReference( ptrTyp( typ ) )
+}
+
+func mustAddBuiltinStruct( 
+    qn *mg.QualifiedTypeName, flds ...*types.FieldDefinition ) {
+
+    sd := types.NewStructDefinition()
+    sd.Name = qn
+    for _, fld := range flds { sd.Fields.Add( fld ) }
+    MustAddBuiltinType( sd )
+}
+
+func mkField0( 
+    nm *mg.Identifier, typ mg.TypeReference ) *types.FieldDefinition {
+
+    return &types.FieldDefinition{ Name: nm, Type: typ }
+}
 
 func initStandardError() {
     sd := types.NewSchemaDefinition()
@@ -404,51 +437,75 @@ func initLangV1Types() {
 }
 
 func initTypesTypes() {
-//type PrimitiveDefinition struct { Name *mg.QualifiedTypeName }
-//type FieldDefinition struct {
-//    Name *mg.Identifier
-//    Type mg.TypeReference
-//    Default mg.Value
-//}
-//type FieldSet struct {
-//    flds *mg.IdentifierMap
-//}
-//type CallSignature struct {
-//    Fields *FieldSet
-//    Return mg.TypeReference
-//    Throws []mg.TypeReference
-//}
-//type PrototypeDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Signature *CallSignature
-//}
-//type ConstructorDefinition struct { Type mg.TypeReference }
-//type StructDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Fields *FieldSet
-//    Constructors []*ConstructorDefinition
-//}
-//type SchemaDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Fields *FieldSet
-//}
-//type AliasedTypeDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    AliasedType mg.TypeReference
-//}
-//type EnumDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Values []*mg.Identifier
-//}
-//type OperationDefinition struct {
-//    Name *mg.Identifier
-//    Signature *CallSignature
-//}
-//type ServiceDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Operations []*OperationDefinition
-//    Security *mg.QualifiedTypeName
-//}
+    mustAddBuiltinStruct( QnamePrimitiveDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+    )
+    mustAddBuiltinStruct( QnameFieldDefinition,
+        mkField0( identifierName, typeIdentifierPointer ),
+        mkField0( identifierType, mg.TypeValue ),
+        mkField0( identifierDefault, mg.TypeNullableValue ),
+    )
+    mustAddBuiltinStruct( QnameFieldSetEntry,
+        mkField0( identifierName, typeIdentifierPointer ),
+        mkField0( identifierField, TypeFieldDefinition ),
+    )
+    mustAddBuiltinStruct( QnameFieldSet,
+        mkField0( 
+            identifierFields, 
+            &mg.ListTypeReference{
+                ElementType: TypeFieldSetEntry,
+                AllowsEmpty: true,
+            },
+        ),
+    )
+    mustAddBuiltinStruct( QnameCallSignature,
+        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
+        mkField0( identifierReturn, mg.TypeValue ),
+        mkField0( identifierThrows, nilPtrTyp( TypeUnionTypeDefinition ) ),
+    )
+    mustAddBuiltinStruct( QnamePrototypeDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierSignature, ptrTyp( TypeCallSignature ) ),
+    )
+    mustAddBuiltinStruct( QnameStructDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
+        mkField0( 
+            identifierConstructors, nilPtrTyp( TypeUnionTypeDefinition ) ),
+    )
+    mustAddBuiltinStruct( QnameSchemaDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
+    )
+    mustAddBuiltinStruct( QnameAliasedTypeDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierAliasedType, mg.TypeValue ),
+    )
+    mustAddBuiltinStruct( QnameEnumDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( 
+            identifierValues,
+            &mg.ListTypeReference{
+                ElementType: typeIdentifierPointer,
+                AllowsEmpty: false,
+            },
+        ),
+    )
+    mustAddBuiltinStruct( QnameOperationDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierSignature, ptrTyp( TypeCallSignature ) ),
+    )
+    mustAddBuiltinStruct( QnameServiceDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0(
+            identifierOperations,
+            &mg.ListTypeReference{
+                ElementType: ptrTyp( TypeOperationDefinition ),
+                AllowsEmpty: true,
+            },
+        ),
+        mkField0( identifierSecurity, nilPtrTyp( mg.TypeQualifiedTypeName ) ),
+    ) 
 }
 
 func initBuiltinTypes() {
