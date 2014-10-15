@@ -178,13 +178,15 @@ func ( a *DefAsserter ) assertFieldSets( fs1, fs2 *FieldSet ) {
     })
 }
 
-func ( a *DefAsserter ) assertConstructors( 
-    defs1, defs2 []*ConstructorDefinition ) {
-    a.descend( "(Len)" ).Equal( len( defs1 ), len( defs2 ) )
+func ( a *DefAsserter ) assertUnionType( ut1, ut2 *UnionTypeDefinition ) {
+    if ut1 == nil && ut2 == nil { return }
+    if ut1 == nil { a.Truef( ut2 == nil, "ut2 not nil" ) }
+    if ut2 == nil { a.Truef( ut1 == nil, "ut1 not nil" ) }
+    typs1, typs2 := ut1.Types, ut2.Types
+    a.descend( "(Len)" ).Equal( len( typs1 ), len( typs2 ) )
     la := a.startList()
-    for i, e := 0, len( defs1 ); i < e; i++ {
-        cons1, cons2 := defs1[ i ], defs2[ i ]
-        la.descend( "(Type)" ).Equal( cons1.Type, cons2.Type )
+    for i, e := 0, len( typs1 ); i < e; i++ {
+        la.descend( "(Type)" ).Equal( typs1[ i ], typs2[ i ] )
         la = la.next()
     }
 }
@@ -194,7 +196,7 @@ func ( a *DefAsserter ) assertStructDef(
     s2 := a.equalType( s1, d2 ).( *StructDefinition )
     a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
     a.descend( "(Constructors)" ).
-        assertConstructors( s1.Constructors, s2.Constructors )
+        assertUnionType( s1.Constructors, s2.Constructors )
 }
 
 func ( a *DefAsserter ) assertSchemaDef( s1 *SchemaDefinition, d2 Definition ) {

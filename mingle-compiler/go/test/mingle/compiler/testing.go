@@ -25,10 +25,10 @@ func fldDef( nm, typ string, defl interface{} ) *types.FieldDefinition {
 func makeStructDefWithConstructors( 
     nm string, 
     flds []*types.FieldDefinition, 
-    cons []*types.ConstructorDefinition ) *types.StructDefinition {
+    consTyps []mg.TypeReference ) *types.StructDefinition {
 
     res := types.MakeStructDef( nm, flds )
-    res.Constructors = cons
+    res.Constructors = types.MustUnionTypeDefinitionTypes( consTyps... )
     return res
 }
 

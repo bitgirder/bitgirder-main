@@ -258,10 +258,10 @@ func TestCompiler( t *testing.T ) {
                         parser.MustEnum( "ns1@v1/Enum1", "green" ),
                     ),
                 },
-                []*types.ConstructorDefinition{
-                    { mkTyp( "mingle:core@v1/Int64" ) },
-                    { mkTyp( "ns1@v1/Struct1" ) },
-                    { mkTyp( `mingle:core@v1/String~"^a+$"` ) },
+                []mg.TypeReference{
+                    mkTyp( "mingle:core@v1/Int64" ),
+                    mkTyp( "ns1@v1/Struct1" ),
+                    mkTyp( `mingle:core@v1/String~"^a+$"` ),
                 },
             ),
         ).

@@ -112,13 +112,13 @@ type UnionTypeDefinition struct {
     Types []mg.TypeReference
 }
 
-func unionTypeKeyForType( typ mg.TypeReference ) string {
+func UnionTypeKeyForType( typ mg.TypeReference ) string {
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference: return v.Name().ExternalForm()
-    case *mg.NullableTypeReference: return unionTypeKeyForType( v.Type )
-    case *mg.PointerTypeReference: return unionTypeKeyForType( v.Type )
+    case *mg.NullableTypeReference: return UnionTypeKeyForType( v.Type )
+    case *mg.PointerTypeReference: return UnionTypeKeyForType( v.Type )
     case *mg.ListTypeReference: 
-        return unionTypeKeyForType( v.ElementType ) + "[]"
+        return UnionTypeKeyForType( v.ElementType ) + "[]"
     }
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
@@ -147,7 +147,7 @@ func checkUnionType(
     for i, e := 0, in.Len(); i < e; i++ {
         typ := in.TypeAtIndex( i )
         typs[ i ] = typ
-        key := unionTypeKeyForType( typ )
+        key := UnionTypeKeyForType( typ )
         matched, ok := m[ key ]
         if ! ok { matched = make( []int, 0, 4 ) }
         matched = append( matched, i )
@@ -164,9 +164,26 @@ func checkUnionType(
 func CreateUnionTypeDefinition( 
     in UnionTypeDefinitionInput ) ( *UnionTypeDefinition, error ) {
 
+    if in.Len() == 0 { panic( libErrorf( "attempt to create empty union" ) ) }
     typs, errGroups := checkUnionType( in )
     if len( errGroups ) == 0 { return &UnionTypeDefinition{ typs }, nil }
     return nil, &UnionTypeDefinitionError{ errGroups } 
+}
+
+type unionTypesInput []mg.TypeReference
+
+func ( i unionTypesInput ) Len() int { return len( i ) }
+
+func ( i unionTypesInput ) TypeAtIndex( idx int ) mg.TypeReference {
+    return i[ idx ]
+}
+
+func MustUnionTypeDefinitionTypes( 
+    typs ...mg.TypeReference ) *UnionTypeDefinition {
+
+    res, err := CreateUnionTypeDefinition( unionTypesInput( typs ) )
+    if err == nil { return res }
+    panic( err )
 }
 
 type FieldDefinition struct {
@@ -271,19 +288,14 @@ func ( pd *PrototypeDefinition ) GetName() *mg.QualifiedTypeName {
     return pd.Name
 }
 
-type ConstructorDefinition struct { Type mg.TypeReference }
-
 type StructDefinition struct {
     Name *mg.QualifiedTypeName
     Fields *FieldSet
-    Constructors []*ConstructorDefinition
+    Constructors *UnionTypeDefinition
 }
 
 func NewStructDefinition() *StructDefinition {
-    return &StructDefinition{ 
-        Fields: NewFieldSet(),
-        Constructors: []*ConstructorDefinition{},
-    }
+    return &StructDefinition{ Fields: NewFieldSet() }
 }
 
 func ( sd *StructDefinition ) GetName() *mg.QualifiedTypeName {

@@ -1065,9 +1065,12 @@ func ( c *typeSelectionCheck ) addType(
     c.elts = append( c.elts, typeSelectionCheckInput{ typ, lc } )
 }
 
-func ( c *typeSelectionCheck ) errorGroups() [][]typeSelectionCheckInput {
-    _, err := types.CreateUnionTypeDefinition( c )
-    if err == nil { return nil }
+func ( c *typeSelectionCheck ) implBuild() ( *types.UnionTypeDefinition,
+                                             [][]typeSelectionCheckInput ) {
+
+    if len( c.elts ) == 0 { return nil, nil }
+    ut, err := types.CreateUnionTypeDefinition( c )
+    if err == nil { return ut, nil }
     grps := err.( *types.UnionTypeDefinitionError ).ErrorGroups
     res := make( [][]typeSelectionCheckInput, len( grps ) )
     for i, grp := range grps {
@@ -1075,12 +1078,15 @@ func ( c *typeSelectionCheck ) errorGroups() [][]typeSelectionCheckInput {
         for j, idx := range grp { inputs[ j ] = c.elts[ idx ] }
         res[ i ] = inputs
     }
-    return res
+    return nil, res
 }
 
-func ( c *typeSelectionCheck ) check() bool {
-    grps := c.errorGroups()
-    if len( grps ) == 0 { return true }
+// returned union type may be nil because check is empty, in which case bool
+// result will be true; or union type may be nil because check failed, in which
+// case error will have been reported and bool result will be false
+func ( c *typeSelectionCheck ) build() ( *types.UnionTypeDefinition, bool ) {
+    ut, grps := c.implBuild()
+    if grps == nil { return ut, true }
     for _, grp := range grps {
         strs := make( []string, len( grp ) )
         argv := append( []interface{}{}, c.errArgv... )
@@ -1090,7 +1096,7 @@ func ( c *typeSelectionCheck ) check() bool {
         argv = append( argv, strings.Join( strs, ", " ) )
         c.c.addErrorf( c.errTopLoc, c.errTmpl, argv... )
     }
-    return false
+    return nil, false
 }
 
 func ( c *Compilation ) checkConstructorType(
@@ -1098,7 +1104,7 @@ func ( c *Compilation ) checkConstructorType(
     enclosedBy *mg.QualifiedTypeName,
     typ mg.TypeReference ) bool {
     
-    switch erasedKey := erasedTypeKeyForType( typ ); {
+    switch erasedKey := types.UnionTypeKeyForType( typ ); {
     case enclosedBy.ExternalForm() == erasedKey:
         c.addError( consDecl, "constructor cannot take enclosing type" )
         return false
@@ -1114,20 +1120,20 @@ func ( c *Compilation ) processConstructor(
     consDecl *tree.ConstructorDecl,
     chk *typeSelectionCheck,
     seen map[ string ]bool,
-    bs *buildScope ) *types.ConstructorDefinition {
+    bs *buildScope ) bool {
 
     typ := bs.resolveType( consDecl.ArgType, consDecl.ArgType.Location() )
-    if typ == nil { return nil }
-    if ! c.checkConstructorType( consDecl, enclosedBy, typ ) { return nil }
+    if typ == nil { return false }
+    if ! c.checkConstructorType( consDecl, enclosedBy, typ ) { return false }
     keyStr := typ.ExternalForm()
     if _, hadPrev := seen[ keyStr ]; hadPrev {
         c.addErrorf( consDecl, 
             "Duplicate constructor signature for type %s", typ )
-        return nil
+        return false
     } 
     seen[ keyStr ] = true
     chk.addType( typ, consDecl )
-    return &types.ConstructorDefinition{ typ }
+    return true
 }
 
 func ( c *Compilation ) processConstructors(
@@ -1142,13 +1148,11 @@ func ( c *Compilation ) processConstructors(
     chk.errArgv = []interface{}{ sd.Name }
     chk.errTopLoc = bc.td
     for _, consDecl := range consDecls {
-        consDef := 
-            c.processConstructor( sd.Name, consDecl, chk, seen, bc.scope )
-        if consDef == nil {
+        if ! c.processConstructor( sd.Name, consDecl, chk, seen, bc.scope ) {
             ok = false
-        } else { sd.Constructors = append( sd.Constructors, consDef ) }
+        }
     }
-    ok = ok && chk.check()
+    if ok { sd.Constructors, ok = chk.build() }
     return ok
 }
 
@@ -1392,7 +1396,7 @@ func ( c *Compilation ) buildCallSignature(
             res.Throws = append( res.Throws, thrownTyp ) 
         }
     }
-    ok = ok && chk.check()
+    if ok { _, ok = chk.build() }
     if ok { return res }
     return nil
 }

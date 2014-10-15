@@ -809,17 +809,37 @@ func ( b *bindTestBuilder ) addPrototypeDefinitionTests() {
     )
 }
 
-func ( b *bindTestBuilder ) constructorDef( i int ) *mg.Struct {
-    return parser.MustStruct( builtin.QnameConstructorDefinition,
-        "type", b.atomicQnNs1V1Name( i ),
-    )
+func ( b *bindTestBuilder ) unionDef( sz int ) *mg.Struct {
+    l := mg.NewList( 
+        asType( "mingle:core@v1/TypeReference+" ).( *mg.ListTypeReference ) )
+    for i := 0; i < sz; i++ { l.AddUnsafe( b.atomicQnNs1V1Name( i ) ) }
+    return parser.MustStruct( builtin.QnameUnionTypeDefinition, "types", l )
 }
 
-func ( b *bindTestBuilder ) addConstructorDefinitionTests() {
+func ( b *bindTestBuilder ) addUnionTypeDefinitionTests() {
     b.addRt(
-        b.constructorDef( 1 ),
-        builtin.TypeConstructorDefinition,
-        "constructor-def1",
+        b.unionDef( 2 ),
+        builtin.TypeUnionTypeDefinition,
+        "union-def1",
+    )
+    b.addInErr(
+        b.unionDef( 0 ),
+        builtin.TypeUnionTypeDefinition,
+        mg.NewCastError( nil, "empty union" ),
+    )
+    b.addInErr(
+        parser.MustStruct( builtin.QnameUnionTypeDefinition,
+            "types", mg.MustList(
+                asType( "mingle:core@v1/TypeReference+" ),
+                b.atomicQnNs1V1Name1(),
+                b.atomicQnNs1V1Name1(),
+            ),
+        ),
+        builtin.TypeUnionTypeDefinition,
+        mg.NewCastError(
+            objpath.RootedAt( mkId( "types" ) ),
+            "STUB",
+        ),
     )
 }
 
@@ -836,42 +856,10 @@ func ( b *bindTestBuilder ) addStructDefinitionTests() {
         parser.MustStruct( builtin.QnameStructDefinition,
             "name", b.qnNs1V1Name1(),
             "fields", b.fieldSet( 1 ),
-            "constructors", mg.MustList(
-                asType( "mingle:types@v1/ConstructorDefinition*" ),
-            ),
-        ),
-        builtin.TypeStructDefinition,
-        "struct-def1",
-    )
-    b.addRt(
-        parser.MustStruct( builtin.QnameStructDefinition,
-            "name", b.qnNs1V1Name1(),
-            "fields", b.fieldSet( 1 ),
-            "constructors", mg.MustList(
-                asType( "mingle:types@v1/ConstructorDefinition*" ),
-                b.constructorDef( 1 ),
-                b.constructorDef( 2 ),
-            ),
+            "constructors", b.unionDef( 2 ),
         ),
         builtin.TypeStructDefinition,
         "struct-def2",
-    )
-    b.addInErr(
-        parser.MustStruct( builtin.QnameStructDefinition,
-            "name", b.qnNs1V1Name1(),
-            "fields", b.fieldSet( 1 ),
-            "constructors", mg.MustList(
-                asType( "mingle:types@v1/ConstructorDefinition*" ),
-                b.constructorDef( 1 ),
-                b.constructorDef( 1 ),
-            ),
-        ),
-        builtin.TypeStructDefinition,
-        mg.NewCastError(
-            objpath.RootedAt( mkId( "constructors" ) ).
-                StartList().SetIndex( 1 ),
-            "duplicate constructor definitions with type: ns1@v1/Name1",
-        ),
     )
 }
 
@@ -1018,8 +1006,7 @@ func ( b *bindTestBuilder ) addServiceDefinitionTests() {
     )
 }
 
-func getBindTests() []*bind.BindTest {
-    b := &bindTestBuilder{ tests: make( []*bind.BindTest, 0, 128 ) }
+func ( b *bindTestBuilder ) addCoreBindTests() {
     b.addIdentifierTests()
     b.addDeclaredTypeNameTests()
     b.addNamespaceTests()
@@ -1030,18 +1017,27 @@ func getBindTests() []*bind.BindTest {
     b.addListTypeReferenceTests()
     b.addPointerTypeReferenceTests()
     b.addNullableTypeReferenceTests()
+}
+
+func ( b *bindTestBuilder ) addTypesBindTests() {
     b.addPrimitiveDefinitionTests()
     b.addFieldDefinitionTests()
     b.addFieldSetTests()
     b.addCallSignatureTests()
     b.addPrototypeDefinitionTests()
-    b.addConstructorDefinitionTests()
+    b.addUnionTypeDefinitionTests()
     b.addStructDefinitionTests()
     b.addSchemaDefinitionTests()
     b.addAliasedTypeDefinition()
     b.addEnumDefinition()
     b.addOperationDefinitionTests()
     b.addServiceDefinitionTests()
+}
+
+func getBindTests() []*bind.BindTest {
+    b := &bindTestBuilder{ tests: make( []*bind.BindTest, 0, 128 ) }
+    b.addCoreBindTests()
+//    b.addTypesBindTests()
     return b.tests
 }
 

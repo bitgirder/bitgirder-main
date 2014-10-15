@@ -87,8 +87,8 @@ var (
     QnamePrototypeDefinition, TypePrototypeDefinition = 
         mkTypesQnTypPair( "PrototypeDefinition" )
 
-    QnameConstructorDefinition, TypeConstructorDefinition = 
-        mkTypesQnTypPair( "ConstructorDefinition" )
+    QnameUnionTypeDefinition, TypeUnionTypeDefinition = 
+        mkTypesQnTypPair( "UnionTypeDefinition" )
 
     QnameStructDefinition, TypeStructDefinition = 
         mkTypesQnTypPair( "StructDefinition" )
@@ -176,10 +176,8 @@ func initIdentifierType() {
             Type: typeIdentifierPartsList,
         },
     )
-    sd.Constructors = append( sd.Constructors,
-        &types.ConstructorDefinition{ mg.TypeString },
-        &types.ConstructorDefinition{ mg.TypeBuffer },
-    )
+    sd.Constructors = 
+        types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
     MustAddBuiltinType( sd )
 }
 
@@ -213,10 +211,8 @@ func initNamespaceType() {
             Type: typeIdentifierPointerList,
         },
     )
-    sd.Constructors = append( sd.Constructors,
-        &types.ConstructorDefinition{ mg.TypeString },
-        &types.ConstructorDefinition{ mg.TypeBuffer },
-    )
+    sd.Constructors = 
+        types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
     MustAddBuiltinType( sd )
 }
 
@@ -364,10 +360,8 @@ func initIdentifierPathType() {
             Type: typeIdentifierPathPartsList,
         },
     )
-    sd.Constructors = append( sd.Constructors,
-        &types.ConstructorDefinition{ mg.TypeString },
-        &types.ConstructorDefinition{ mg.TypeBuffer },
-    )
+    sd.Constructors = 
+        types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
     MustAddBuiltinType( sd )
 }
 

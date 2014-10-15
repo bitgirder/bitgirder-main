@@ -223,8 +223,9 @@ func ( cr *CastReactor ) getStructDef(
 func ( cr *CastReactor ) constructorTypeForType(
     typ mg.TypeReference, sd *StructDefinition ) mg.TypeReference {
 
-    for _, cd := range sd.Constructors {
-        if cd.Type.Equals( typ ) { return cd.Type }
+    if sd.Constructors == nil { return nil }
+    for _, consTyp := range sd.Constructors.Types {
+        if consTyp.Equals( typ ) { return consTyp }
     }
     return nil
 }

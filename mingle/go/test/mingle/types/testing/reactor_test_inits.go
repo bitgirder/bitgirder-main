@@ -1553,13 +1553,13 @@ func ( rti *rtInit ) addConstructorCastTests() {
     s1Typ := types.NewStructDefinition()
     s1Typ.Name = mkQn( "ns1@v1/S1" )
     s1Typ.Fields.MustAdd( types.MakeFieldDef( "f1", "Int32", nil ) )
-    s1Typ.Constructors = append( s1Typ.Constructors, 
-        &types.ConstructorDefinition{ mg.TypeInt32 },
-        &types.ConstructorDefinition{ mg.TypeString },
-        &types.ConstructorDefinition{ asType( "String*" ) },
-        &types.ConstructorDefinition{ asType( "ns1@v1/S2" ) },
-        &types.ConstructorDefinition{ asType( "ns1@v1/S2*" ) },
-        &types.ConstructorDefinition{ asType( "ns1@v1/E1" ) },
+    s1Typ.Constructors = types.MustUnionTypeDefinitionTypes(
+        mg.TypeInt32,
+        mg.TypeString,
+        asType( "String*" ),
+        asType( "ns1@v1/S2" ),
+        asType( "ns1@v1/S2*" ),
+        asType( "ns1@v1/E1" ),
     )
     dm.MustAdd( s1Typ )
     s1Inst1 := parser.MustStruct( "ns1@v1/S1", "f1", int32( 1 ) )
