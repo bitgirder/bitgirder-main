@@ -86,18 +86,16 @@ var (
         Version: idUnsafe( "v1" ),
     }
 
-    typeFieldDefList = &mg.ListTypeReference{ 
-        ptrTyp( TypeFieldDefinition ),
-        true,
-    }
-
-    typeUnionTypeTypesList = &mg.ListTypeReference{ mg.TypeValue, false }
-
     QnamePrimitiveDefinition, TypePrimitiveDefinition = 
         mkTypesQnTypPair( "PrimitiveDefinition" )
 
     QnameFieldDefinition, TypeFieldDefinition = 
         mkTypesQnTypPair( "FieldDefinition" )
+
+    typeFieldDefList = &mg.ListTypeReference{ 
+        ptrTyp( TypeFieldDefinition ),
+        true,
+    }
 
     QnameFieldSet, TypeFieldSet = mkTypesQnTypPair( "FieldSet" )
 
@@ -108,6 +106,8 @@ var (
 
     QnameUnionTypeDefinition, TypeUnionTypeDefinition = 
         mkTypesQnTypPair( "UnionTypeDefinition" )
+
+    typeUnionTypeTypesList = &mg.ListTypeReference{ mg.TypeValue, false }
 
     QnameUnionDefinition, TypeUnionDefinition = 
         mkTypesQnTypPair( "UnionDefinition" )
@@ -126,6 +126,11 @@ var (
 
     QnameOperationDefinition, TypeOperationDefinition = 
         mkTypesQnTypPair( "OperationDefinition" )
+
+    typeOpDefList = &mg.ListTypeReference{
+        ElementType: ptrTyp( TypeOperationDefinition ),
+        AllowsEmpty: true,
+    }
 
     QnameServiceDefinition, TypeServiceDefinition = 
         mkTypesQnTypPair( "ServiceDefinition" )
@@ -202,9 +207,10 @@ func initPrimitiveV1Types() {
 
 func initCoreV1Types() {
     initPrimitiveV1Types()
-    mustAddBuiltinStruct( mg.QnameStandardError,
-        mkField0( identifierMessage, nilTyp( mg.TypeString ) ),
-    )
+    stdErr := types.NewSchemaDefinition()
+    stdErr.Name = mg.QnameStandardError
+    stdErr.Fields.Add( mkField0( identifierMessage, nilTyp( mg.TypeString ) ) )
+    MustAddBuiltinType( stdErr )
     idDef := mustAddBuiltinStruct( mg.QnameIdentifier,
         mkField0( identifierParts, typeIdentifierPartsList ),
     )
@@ -318,27 +324,15 @@ func initTypesTypes() {
     )
     mustAddBuiltinStruct( QnameEnumDefinition,
         mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-        mkField0( 
-            identifierValues,
-            &mg.ListTypeReference{
-                ElementType: typeIdentifierPointer,
-                AllowsEmpty: false,
-            },
-        ),
+        mkField0( identifierValues, typeIdentifierPointerList ),
     )
     mustAddBuiltinStruct( QnameOperationDefinition,
-        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierName, ptrTyp( mg.TypeIdentifier ) ),
         mkField0( identifierSignature, ptrTyp( TypeCallSignature ) ),
     )
     mustAddBuiltinStruct( QnameServiceDefinition,
         mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-        mkField0(
-            identifierOperations,
-            &mg.ListTypeReference{
-                ElementType: ptrTyp( TypeOperationDefinition ),
-                AllowsEmpty: true,
-            },
-        ),
+        mkField0( identifierOperations, typeOpDefList ),
         mkField0( identifierSecurity, nilPtrTyp( mg.TypeQualifiedTypeName ) ),
     ) 
 }

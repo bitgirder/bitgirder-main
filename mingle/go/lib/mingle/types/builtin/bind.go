@@ -900,7 +900,7 @@ func VisitUnionTypeDefinition(
 
     return bind.VisitStruct( vc, QnameUnionTypeDefinition, func() error {
         ln := len( utd.Types )
-        f := func( idx int ) interface{} { return utd.Types[ idx ] }
+        f := func( i int ) interface{} { return utd.Types[ i ] }
         return bind.VisitFieldFunc( vc, identifierTypes, func() error {
             return bind.VisitListValue( vc, typeUnionTypeTypesList, ln, f )
         })
@@ -1051,45 +1051,265 @@ func newProtoDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         },
     )
 }
-//    mustAddBuiltinStruct( QnameStructDefinition,
-//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-//        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
-//        mkField0( 
-//            identifierConstructors, nilPtrTyp( TypeUnionTypeDefinition ) ),
-//    )
-//    mustAddBuiltinStruct( QnameSchemaDefinition,
-//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-//        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
-//    )
-//    mustAddBuiltinStruct( QnameAliasedTypeDefinition,
-//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-//        mkField0( identifierAliasedType, mg.TypeValue ),
-//    )
-//    mustAddBuiltinStruct( QnameEnumDefinition,
-//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-//        mkField0( 
-//            identifierValues,
-//            &mg.ListTypeReference{
-//                ElementType: typeIdentifierPointer,
-//                AllowsEmpty: false,
-//            },
-//        ),
-//    )
-//    mustAddBuiltinStruct( QnameOperationDefinition,
-//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-//        mkField0( identifierSignature, ptrTyp( TypeCallSignature ) ),
-//    )
-//    mustAddBuiltinStruct( QnameServiceDefinition,
-//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-//        mkField0(
-//            identifierOperations,
-//            &mg.ListTypeReference{
-//                ElementType: ptrTyp( TypeOperationDefinition ),
-//                AllowsEmpty: true,
-//            },
-//        ),
-//        mkField0( identifierSecurity, nilPtrTyp( mg.TypeQualifiedTypeName ) ),
-//    ) 
+
+func VisitStructDefinition(
+    sd *types.StructDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameStructDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, sd.Name )
+        if err != nil { return err }
+        err = bind.VisitFieldValue( vc, identifierFields, sd.Fields )
+        if err != nil { return err }
+        if c := sd.Constructors; c != nil {
+            err = bind.VisitFieldValue( vc, identifierConstructors, c )
+            if err != nil { return err }
+        }
+        return nil
+    })
+}
+
+func newStructDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return types.NewStructDefinition() },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.StructDefinition ).Name = 
+                    val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierFields,
+            Type: TypeFieldSet,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.StructDefinition ).Fields = val.( *types.FieldSet )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierConstructors,
+            Type: TypeUnionTypeDefinition,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.StructDefinition ).Constructors =
+                    val.( *types.UnionTypeDefinition )
+            },
+        },
+    )
+}
+
+func VisitSchemaDefinition( 
+    sd *types.SchemaDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameSchemaDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, sd.Name )
+        if err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierFields, sd.Fields )
+    })
+}
+
+func newSchemaDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return types.NewSchemaDefinition() },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.SchemaDefinition ).Name =
+                    val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierFields,
+            Type: TypeFieldSet,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.SchemaDefinition ).Fields = val.( *types.FieldSet )
+            },
+        },
+    )
+}
+
+func VisitAliasedTypeDefinition(
+    ad *types.AliasedTypeDefinition, vc bind.VisitContext ) error {
+    
+    return bind.VisitStruct( vc, QnameAliasedTypeDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, ad.Name )
+        if err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierAliasedType, ad.AliasedType )
+    })
+}
+
+func newAliasedTypeDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &types.AliasedTypeDefinition{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.AliasedTypeDefinition ).Name =
+                    val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierAliasedType,
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.AliasedTypeDefinition ).AliasedType =
+                    val.( mg.TypeReference )
+            },
+        },
+    )
+}
+
+func VisitEnumDefinition(
+    ed *types.EnumDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameEnumDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, ed.Name )
+        if err != nil { return err }
+        return bind.VisitFieldFunc( vc, identifierValues, func() error {
+            ln := len( ed.Values )
+            f := func( i int ) interface{} { return ed.Values[ i ] }
+            return bind.VisitListValue( vc, typeIdentifierPointerList, ln, f )
+        })
+    })
+}
+
+func newEnumDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    type edBldr struct { nm *mg.QualifiedTypeName; vals []*mg.Identifier }
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &edBldr{} },
+        func( val interface{}, path objpath.PathNode ) ( interface{}, error ) {
+            edb := val.( *edBldr )
+            ed, err := types.CreateEnumDefinition( edb.nm, edb.vals... )
+            if err == nil { return ed, nil }
+            return nil, mg.NewCastError( path, err.Error() )
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *edBldr ).nm = val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierValues,
+            StartField: idSliceBuilderFactory,
+            Assign: func( obj, val interface{} ) {
+                obj.( *edBldr ).vals = val.( []*mg.Identifier )
+            },
+        },
+    )
+}
+
+func VisitOperationDefinition(
+    od *types.OperationDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameOperationDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, od.Name )
+        if err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierSignature, od.Signature )
+    })
+}
+
+func newOpDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &types.OperationDefinition{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeIdentifier,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.OperationDefinition ).Name = val.( *mg.Identifier )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierSignature,
+            Type: TypeCallSignature,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.OperationDefinition ).Signature =
+                    val.( *types.CallSignature )
+            },
+        },
+    )
+}
+
+func VisitServiceDefinition(
+    sd *types.ServiceDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameServiceDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, sd.Name )
+        if err != nil { return err }
+        err = bind.VisitFieldFunc( vc, identifierOperations, func() error {
+            ln := len( sd.Operations )
+            f := func( i int ) interface{} { return sd.Operations[ i ] }
+            return bind.VisitListValue( vc, typeOpDefList, ln, f )
+        })
+        if err != nil { return err }
+        if sec := sd.Security; sec != nil {
+            err = bind.VisitFieldValue( vc, identifierSecurity, sec )
+            if err != nil { return err }
+        }
+        return nil
+    })
+}
+
+func newServiceDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    type svcBldr struct { 
+        sd *types.ServiceDefinition
+        ops []*types.OperationDefinition 
+    }
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { 
+            return &svcBldr{ sd: types.NewServiceDefinition() }
+        },
+        func( val interface{}, path objpath.PathNode ) ( interface{}, error ) {
+            sb := val.( *svcBldr )
+            if err := sb.sd.AddOperations( sb.ops ); err != nil {
+                return nil, mg.NewCastError( path, err.Error() )
+            }
+            return sb.sd, nil
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *svcBldr ).sd.Name = val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierOperations,
+            StartField: bind.CheckedListFieldStarter(
+                func() interface{} { 
+                    return make( []*types.OperationDefinition, 0, 4 ) 
+                },
+                bind.ListElementFactoryFuncForType( TypeOperationDefinition ),
+                func( l, val interface{} ) interface{} {
+                    ops := l.( []*types.OperationDefinition )
+                    return append( ops, val.( *types.OperationDefinition ) )
+                },
+            ),
+            Assign: func( obj, val interface{} ) {
+                obj.( *svcBldr ).ops = val.( []*types.OperationDefinition )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierSecurity,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *svcBldr ).sd.Security = val.( *mg.QualifiedTypeName )
+            },
+        },
+    )
+}
 
 func visitBuiltinTypeOk(
     val interface{}, vc bind.VisitContext ) ( error, bool ) {
@@ -1122,6 +1342,14 @@ func visitBuiltinTypeOk(
     case *types.CallSignature: return VisitCallSignature( v, vc ), true
     case *types.PrototypeDefinition: 
         return VisitPrototypeDefinition( v, vc ), true
+    case *types.StructDefinition: return VisitStructDefinition( v, vc ), true
+    case *types.SchemaDefinition: return VisitSchemaDefinition( v, vc ), true
+    case *types.AliasedTypeDefinition:
+        return VisitAliasedTypeDefinition( v, vc ), true
+    case *types.EnumDefinition: return VisitEnumDefinition( v, vc ), true
+    case *types.OperationDefinition: 
+        return VisitOperationDefinition( v, vc ), true
+    case *types.ServiceDefinition: return VisitServiceDefinition( v, vc ), true
     }
     return nil, false
 }
@@ -1165,6 +1393,13 @@ func initTypesBindings( reg *bind.Registry ) {
     reg.MustAddValue( QnameUnionDefinition, newUnionDefFactory( reg ) )
     reg.MustAddValue( QnameCallSignature, newCallSigFactory( reg ) )
     reg.MustAddValue( QnamePrototypeDefinition, newProtoDefFactory( reg ) )
+    reg.MustAddValue( QnameStructDefinition, newStructDefFactory( reg ) )
+    reg.MustAddValue( QnameSchemaDefinition, newSchemaDefFactory( reg ) )
+    reg.MustAddValue(
+        QnameAliasedTypeDefinition, newAliasedTypeDefFactory( reg ) )
+    reg.MustAddValue( QnameEnumDefinition, newEnumDefFactory( reg ) )
+    reg.MustAddValue( QnameOperationDefinition, newOpDefFactory( reg ) )
+    reg.MustAddValue( QnameServiceDefinition, newServiceDefFactory( reg ) )
 }
 
 func initBind() {

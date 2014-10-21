@@ -200,3 +200,17 @@ func TestUnionDefinition( t *testing.T ) {
         la = la.Next()
     }
 }
+
+func TestCreateEnumDefinitionError( t *testing.T ) {
+    _, err := CreateEnumDefinition( 
+        mkQn( "ns1@v1/E1" ),
+        mkId( "v1" ),
+        mkId( "v2" ),
+        mkId( "v3" ),
+        mkId( "v1" ),
+        mkId( "v2" ),
+    )
+    a := assert.Asserter{ t }
+    a.EqualErrors( 
+        EnumDefinitionError( "duplicate enum value(s): v1, v2" ), err )
+}

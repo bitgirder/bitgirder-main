@@ -4,11 +4,21 @@ import (
     "fmt"
 //    "log"
     "sort"
+    "strings"
     mg "mingle"
 )
 
 func idUnsafe( parts ...string ) *mg.Identifier {
     return mg.NewIdentifierUnsafe( parts )
+}
+
+func makeDupsDesc( ids []*mg.Identifier ) string {
+    dups := make( []*mg.Identifier, len( ids ) )
+    copy( dups, ids )
+    dups = mg.SortIds( dups )
+    dupStrs := make( []string, len( dups ) )
+    for i, dup := range dups { dupStrs[ i ] = dup.ExternalForm() }
+    return strings.Join( dupStrs, ", " )
 }
 
 type DefinitionGetter interface {
@@ -351,9 +361,32 @@ func ( m *EnumValueMap ) Get( id *mg.Identifier ) *mg.Enum {
     return nil
 }
 
+type EnumDefinitionError string
+
+func ( e EnumDefinitionError ) Error() string { return string( e ) }
+
 type EnumDefinition struct {
     Name *mg.QualifiedTypeName
     Values []*mg.Identifier
+}
+
+func CreateEnumDefinition( 
+    nm *mg.QualifiedTypeName, 
+    vals ...*mg.Identifier ) ( *EnumDefinition, error ) {
+
+    m := mg.NewIdentifierMap()
+    for _, val := range vals {
+        i := 1
+        if ct, ok := m.GetOk( val ); ok { i = ct.( int ) + 1 }
+        m.Put( val, i )
+    }
+    dups := make( []*mg.Identifier, 0, 2 )
+    m.EachPair( func( fld *mg.Identifier, ct interface{} ) {
+        if ct.( int ) > 1 { dups = append( dups, fld ) }
+    })
+    if len( dups ) == 0 { return &EnumDefinition{ nm, vals }, nil }
+    msg := fmt.Sprintf( "duplicate enum value(s): %s", makeDupsDesc( dups ) )
+    return nil, EnumDefinitionError( msg )
 }
 
 func ( ed *EnumDefinition ) GetName() *mg.QualifiedTypeName { return ed.Name }
@@ -386,6 +419,10 @@ func OpDefsByName( defs []*OperationDefinition ) *mg.IdentifierMap {
     return res
 }
 
+type ServiceDefinitionError string
+
+func ( e ServiceDefinitionError ) Error() string { return string( e ) }
+
 type ServiceDefinition struct {
     Name *mg.QualifiedTypeName
     Operations []*OperationDefinition
@@ -394,6 +431,24 @@ type ServiceDefinition struct {
 
 func NewServiceDefinition() *ServiceDefinition {
     return &ServiceDefinition{ Operations: []*OperationDefinition{} }
+}
+
+func ( sd *ServiceDefinition ) AddOperations( 
+    ops []*OperationDefinition ) error {
+
+    m, dups := mg.NewIdentifierMap(), mg.NewIdentifierMap()
+    for _, op := range sd.Operations { m.Put( op.Name, 1 ) }
+    for _, op := range ops {
+        if _, ok := m.GetOk( op.Name ); ok { dups.Put( op.Name, true ) }
+        m.Put( op.Name, op )
+    }
+    if dups.Len() == 0 {
+        sd.Operations = append( sd.Operations, ops... )
+        return nil
+    }
+    dupIds := dups.GetKeys()
+    msg := fmt.Sprintf( "operation(s) redefined: %s", makeDupsDesc( dupIds ) )
+    return ServiceDefinitionError( msg )
 }
 
 func ( sd *ServiceDefinition ) GetName() *mg.QualifiedTypeName {

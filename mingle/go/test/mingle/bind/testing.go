@@ -93,7 +93,7 @@ func ( t *bindTestCall ) visitBindTest() bool {
 }
 
 func ( t *bindTestCall ) call() {
-    t.debug()
+//    t.debug()
     t.reg = MustRegistryForDomain( t.t.Domain )
     if t.t.BoundId != nil && t.t.Direction.Includes( BindTestDirectionOut ) {
         if ok := t.visitBindTest(); ! ok { return }
