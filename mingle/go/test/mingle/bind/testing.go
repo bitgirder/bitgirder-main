@@ -16,15 +16,25 @@ type BindTestCallInterface interface {
     BoundValues() *mg.IdentifierMap
 }
 
+type BindTestCallControl struct {
+    Interface BindTestCallInterface
+    MingleValueForAssert func( v mg.Value ) mg.Value
+}
+
 type bindTestCall struct {
     t *BindTest
-    iface BindTestCallInterface
+    cc *BindTestCallControl
     *assert.PathAsserter
     reg *Registry
 }
 
+func ( t *bindTestCall ) iface() BindTestCallInterface { return t.cc.Interface }
+
 func ( t *bindTestCall ) boundVal() interface{} {
-    if val, ok := t.iface.BoundValues().GetOk( t.t.BoundId ); ok { return val }
+    if val, ok := t.iface().BoundValues().GetOk( t.t.BoundId ); ok { 
+        return val 
+    }
+    t.Logf( "no bound val for id: %s", t.t.BoundId )
     return nil
 }
 
@@ -53,7 +63,7 @@ func ( t *bindTestCall ) bindBindTest() {
     if p := t.t.StartPath; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
-    rcts = append( rcts, t.iface.CreateReactors( t.t )... )
+    rcts = append( rcts, t.iface().CreateReactors( t.t )... )
     rcts = append( rcts, br )
     pip := mgRct.InitReactorPipeline( rcts... )
     if err := mgRct.VisitValue( t.t.Mingle, pip ); err == nil {
@@ -70,17 +80,20 @@ func ( t *bindTestCall ) visitBindTest() bool {
     bc := NewBindContext( t.reg )
     if o := t.t.SerialOptions; o != nil { bc.SerialOptions = o }
     vc := VisitContext{ BindContext: bc, Destination: pip }
-    if err := VisitValue( t.boundVal(), vc ); err != nil {
+    bv := t.boundVal()
+    if err := VisitValue( bv, vc ); err != nil {
         t.EqualErrors( t.t.Error, err )
         return false
     }
     act := vb.GetValue().( mg.Value )
+    if f := t.cc.MingleValueForAssert; f != nil { act = f( act ) }
+    t.Logf( "asserting unbind, act: %s", mg.QuoteValue( act ) )
     mg.AssertEqualValues( t.t.Mingle, act, t.PathAsserter )
     return true
 }
 
 func ( t *bindTestCall ) call() {
-//    t.debug()
+    t.debug()
     t.reg = MustRegistryForDomain( t.t.Domain )
     if t.t.BoundId != nil && t.t.Direction.Includes( BindTestDirectionOut ) {
         if ok := t.visitBindTest(); ! ok { return }
@@ -89,11 +102,12 @@ func ( t *bindTestCall ) call() {
 }
 
 func AssertBindTests( 
-    tests []*BindTest, iface BindTestCallInterface, a *assert.PathAsserter ) {
+    tests []*BindTest, cc *BindTestCallControl, a *assert.PathAsserter ) {
 
     la := a.StartList()
     for _, test := range tests {
-        ( &bindTestCall{ t: test, iface: iface, PathAsserter: la } ).call()
+        btc := &bindTestCall{ t: test, cc: cc, PathAsserter: la } 
+        btc.call()
         la = la.Next()
     }
 }

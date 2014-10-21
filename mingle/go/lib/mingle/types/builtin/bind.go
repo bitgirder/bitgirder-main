@@ -4,6 +4,7 @@ import (
     mgRct "mingle/reactor"
     "mingle/parser"
     "mingle/bind"
+    "mingle/types"
     mg "mingle"
     "bitgirder/objpath"
 //    "bitgirder/stub"
@@ -90,6 +91,39 @@ func newIdBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func visitIdentifierAsStruct( id *mg.Identifier, vc bind.VisitContext ) error {
+    return bind.VisitStruct( vc, mg.QnameIdentifier, func() error {
+        return bind.VisitFieldFunc( vc, identifierParts, func() error {
+            parts := id.GetPartsUnsafe()
+            l := len( parts )
+            f := func( i int ) interface{} { return parts[ i ] }
+            return bind.VisitListValue( vc, typeIdentifierPartsList, l, f )
+        })
+    })
+}
+
+func VisitIdentifier( id *mg.Identifier, vc bind.VisitContext ) error {
+    es := vc.EventSender()
+    switch opts := vc.BindContext.SerialOptions; opts.Format {
+    case bind.SerialFormatBinary:
+        return es.Value( mg.Buffer( mg.IdentifierAsBytes( id ) ) )
+    case bind.SerialFormatText:
+        return es.Value( mg.String( id.Format( opts.Identifiers ) ) )
+    }
+    return visitIdentifierAsStruct( id, vc )
+}
+
+func visitIdentifierList( ids []*mg.Identifier, vc bind.VisitContext ) error {
+    lt := typeIdentifierPointerList
+    switch vc.BindContext.SerialOptions.Format {
+    case bind.SerialFormatText: lt = typeNonEmptyStringList
+    case bind.SerialFormatBinary: lt = typeNonEmptyBufferList
+    }
+    return bind.VisitListFunc( vc, lt, len( ids ), func( i int ) error {
+        return VisitIdentifier( ids[ i ], vc )
+    })
+}
+
 func newDeclNmBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
@@ -103,6 +137,34 @@ func newDeclNmBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             },
         },
     )
+}
+
+func VisitDeclaredTypeName( 
+    nm *mg.DeclaredTypeName, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameDeclaredTypeName, func() error {
+        return bind.VisitFieldValue( vc, identifierName, nm.ExternalForm() )
+    })
+}
+
+func visitNamespaceAsStruct( ns *mg.Namespace, vc bind.VisitContext ) error {
+    return bind.VisitStruct( vc, mg.QnameNamespace, func() ( err error ) {
+        err = bind.VisitFieldFunc( vc, identifierParts, func() error {
+            return visitIdentifierList( ns.Parts, vc )
+        })
+        if err != nil { return }
+        return bind.VisitFieldValue( vc, identifierVersion, ns.Version )
+    })
+}
+
+func VisitNamespace( ns *mg.Namespace, vc bind.VisitContext ) error {
+    switch opts := vc.BindContext.SerialOptions; opts.Format {
+    case bind.SerialFormatText:
+        return vc.EventSender().Value( mg.String( ns.ExternalForm() ) )
+    case bind.SerialFormatBinary:
+        return vc.EventSender().Value( mg.Buffer( mg.NamespaceAsBytes( ns ) ) )
+    }
+    return visitNamespaceAsStruct( ns, vc )
 }
 
 func nsBuilderForStruct( reg *bind.Registry ) mgRct.FieldSetBuilder {
@@ -153,6 +215,18 @@ func newNsBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func VisitQualifiedTypeName( 
+    qn *mg.QualifiedTypeName, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameQualifiedTypeName, func() error {
+        if err := bind.VisitFieldValue( vc, identifierNamespace, qn.Namespace );
+           err != nil {
+            return err
+        }
+        return bind.VisitFieldValue( vc, identifierName, qn.Name )
+    })
+}
+
 func newQnBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
@@ -174,6 +248,42 @@ func newQnBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             },
         },
     )
+}
+
+func VisitRangeRestriction(
+    rx *mg.RangeRestriction, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameRangeRestriction, func() error {
+        err := bind.VisitFieldValue( vc, identifierMinClosed, rx.MinClosed() )
+        if err != nil { return err }
+        optVis := func( val mg.Value, id *mg.Identifier ) error {
+            if val == nil { return nil }
+            return bind.VisitFieldValue( vc, id, val )
+        }
+        if err = optVis( rx.Min(), identifierMin ); err != nil { return err }
+        if err = optVis( rx.Max(), identifierMax ); err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierMaxClosed, rx.MaxClosed() )
+    })
+}
+
+func VisitRegexRestriction(
+    rx *mg.RegexRestriction, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameRegexRestriction, func() error {
+        return bind.VisitFieldValue( vc, identifierPattern, rx.Source() )
+    })
+}
+
+func VisitAtomicTypeReference(
+    at *mg.AtomicTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameAtomicTypeReference, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, at.Name() )
+        if err != nil { return err }
+        rx := at.Restriction()
+        if rx == nil { return nil }
+        return bind.VisitFieldValue( vc, identifierRestriction, rx )
+    })
 }
 
 type atomicBuilder struct {
@@ -317,6 +427,16 @@ func newAtomicBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func VisitListTypeReference(
+    lt *mg.ListTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameListTypeReference, func() error {
+        err := bind.VisitFieldValue( vc, identifierElementType, lt.ElementType )
+        if err != nil { return err }
+        return bind.VisitFieldValue( vc, identifierAllowsEmpty, lt.AllowsEmpty )
+    })
+}
+
 func newListTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
@@ -344,6 +464,14 @@ type typeHolder struct {
     typ mg.TypeReference
 }
 
+func VisitPointerTypeReference(
+    pt *mg.PointerTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnamePointerTypeReference, func() error {
+        return bind.VisitFieldValue( vc, identifierType, pt.Type )
+    })
+}
+
 func newPointerTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
@@ -363,6 +491,14 @@ func newPointerTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     )
 }
 
+func VisitNullableTypeReference(
+    nt *mg.NullableTypeReference, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameNullableTypeReference, func() error {
+        return bind.VisitFieldValue( vc, identifierType, nt.Type )
+    })
+}
+
 func newNullableTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
@@ -380,6 +516,36 @@ func newNullableTypeBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             },
         },
     )
+}
+
+type idPathPartsEventSendVisitor struct {
+    vc bind.VisitContext
+}
+
+func ( vis idPathPartsEventSendVisitor ) Descend( elt interface{} ) error {
+    return VisitIdentifier( elt.( *mg.Identifier ), vis.vc )
+}
+
+func ( vis idPathPartsEventSendVisitor ) List( idx uint64 ) error {
+    return vis.vc.EventSender().Value( mg.Uint64( idx ) )
+}
+
+func visitIdPathAsStruct( p objpath.PathNode, vc bind.VisitContext ) error {
+    return bind.VisitStruct( vc, mg.QnameIdentifierPath, func() error {
+        return bind.VisitFieldFunc( vc, identifierParts, func() error {
+            body := func() error {
+                return objpath.Visit( p, idPathPartsEventSendVisitor{ vc } )
+            }
+            return bind.VisitList( vc, typeIdentifierPathPartsList, body )
+        })
+    })
+}
+
+func VisitIdentifierPath( p objpath.PathNode, vc bind.VisitContext ) error {
+    if vc.BindContext.SerialOptions.Format == bind.SerialFormatText {
+        return vc.EventSender().Value( mg.String( mg.FormatIdPath( p ) ) )
+    }
+    return visitIdPathAsStruct( p, vc )
 }
 
 func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
@@ -476,6 +642,17 @@ func newIdPathBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func visitLocatableError( 
+    loc objpath.PathNode, msg string, vc bind.VisitContext ) error {
+
+    if loc != nil {
+        err := bind.VisitFieldValue( vc, identifierLocation, loc )
+        if err != nil { return err }
+    }
+    if msg == "" { return nil }
+    return bind.VisitFieldValue( vc, identifierMessage, msg )
+}
+
 func createLocatableErrorSetters( 
     msg, loc bind.CheckedFieldSetValFunction ) []*bind.CheckedFieldSetter {
 
@@ -493,6 +670,12 @@ func createLocatableErrorSetters(
     }
 }
 
+func VisitCastError( e *mg.CastError, vc bind.VisitContext ) error {
+    return bind.VisitStruct( vc, mg.QnameCastError, func() error {
+        return visitLocatableError( e.Location, e.Message, vc )
+    })
+}
+
 func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
@@ -507,6 +690,17 @@ func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             },
         )...,
     )
+}
+
+func VisitUnrecognizedFieldError( 
+    e *mg.UnrecognizedFieldError, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameUnrecognizedFieldError, func() error {
+        if err := visitLocatableError( e.Location, e.Message, vc ); err != nil {
+            return err
+        }
+        return bind.VisitFieldValue( vc, identifierField, e.Field )
+    })
 }
 
 func newUnrecognizedFieldErrorBuilderFactory( 
@@ -532,6 +726,19 @@ func newUnrecognizedFieldErrorBuilderFactory(
     return bind.CheckedStructFactory( reg, fact, nil, flds... )
 }
 
+func VisitMissingFieldsError( 
+    e *mg.MissingFieldsError, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, mg.QnameMissingFieldsError, func() error {
+        if err := visitLocatableError( e.Location, e.Message, vc ); err != nil {
+            return err
+        }
+        return bind.VisitFieldFunc( vc, identifierFields, func() error {
+            return visitIdentifierList( e.Fields(), vc )
+        })
+    })
+}
+
 func newMissingFieldsErrorBuilderFactory( 
     reg *bind.Registry ) mgRct.BuilderFactory {
 
@@ -554,211 +761,335 @@ func newMissingFieldsErrorBuilderFactory(
     return bind.CheckedStructFactory( reg, fact, nil, flds... )
 }
 
-func visitIdentifierAsStruct( id *mg.Identifier, vc bind.VisitContext ) error {
-    return bind.VisitStruct( vc, mg.QnameIdentifier, func() error {
-        return bind.VisitFieldFunc( vc, identifierParts, func() error {
-            parts := id.GetPartsUnsafe()
-            l := len( parts )
-            f := func( i int ) interface{} { return parts[ i ] }
-            return bind.VisitListValue( vc, typeIdentifierPartsList, l, f )
+func VisitPrimitiveDefinition(
+    def *types.PrimitiveDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnamePrimitiveDefinition, func() error {
+        return bind.VisitFieldValue( vc, identifierName, def.Name )
+    })
+} 
+
+func newPrimitiveDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &types.PrimitiveDefinition{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.PrimitiveDefinition ).Name =
+                    val.( *mg.QualifiedTypeName )
+            },
+        },
+    )
+}
+
+func VisitFieldDefinition(
+    def *types.FieldDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameFieldDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, def.Name )
+        if err != nil { return err }
+        err = bind.VisitFieldValue( vc, identifierType, def.Type )
+        if err != nil { return err }
+        if def.Default != nil {
+            err = bind.VisitFieldValue( vc, identifierDefault, def.Default )
+            if err != nil { return err }
+        }
+        return nil
+    })
+}
+
+func newFieldDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &types.FieldDefinition{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName, 
+            Type: mg.TypeIdentifier,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.FieldDefinition ).Name = val.( *mg.Identifier )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierType,
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.FieldDefinition ).Type = val.( mg.TypeReference )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierDefault, 
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.FieldDefinition ).Default = mg.MustValue( val )
+            },
+        },
+    )
+}
+
+func VisitFieldSet( fs *types.FieldSet, vc bind.VisitContext ) error {
+    return bind.VisitStruct( vc, QnameFieldSet, func() error {
+        return bind.VisitFieldFunc( vc, identifierFields, func() error {        
+            return bind.VisitList( vc, typeFieldDefList, func() error {
+                var err error
+                fs.EachDefinition( func( fd *types.FieldDefinition ) {
+                    if err != nil { return }
+                    err = VisitFieldDefinition( fd, vc )
+                })
+                return err
+            })
         })
     })
 }
 
-func VisitIdentifier( id *mg.Identifier, vc bind.VisitContext ) error {
-    es := vc.EventSender()
-    switch opts := vc.BindContext.SerialOptions; opts.Format {
-    case bind.SerialFormatBinary:
-        return es.Value( mg.Buffer( mg.IdentifierAsBytes( id ) ) )
-    case bind.SerialFormatText:
-        return es.Value( mg.String( id.Format( opts.Identifiers ) ) )
+func newFieldDefListFieldSetBuilder( reg *bind.Registry ) mgRct.ListBuilder {
+    res := bind.NewFunctionsListBuilder()
+    res.Value = types.NewFieldSet()
+    res.NextFunc = func() mgRct.BuilderFactory {
+        return reg.MustBuilderFactoryForType( TypeFieldDefinition )
     }
-    return visitIdentifierAsStruct( id, vc )
-}
-
-func visitIdentifierList( ids []*mg.Identifier, vc bind.VisitContext ) error {
-    lt := typeIdentifierPointerList
-    switch vc.BindContext.SerialOptions.Format {
-    case bind.SerialFormatText: lt = typeNonEmptyStringList
-    case bind.SerialFormatBinary: lt = typeNonEmptyBufferList
-    }
-    return bind.VisitListFunc( vc, lt, len( ids ), func( i int ) error {
-        return VisitIdentifier( ids[ i ], vc )
-    })
-}
-
-func visitNamespaceAsStruct( ns *mg.Namespace, vc bind.VisitContext ) error {
-    return bind.VisitStruct( vc, mg.QnameNamespace, func() ( err error ) {
-        err = bind.VisitFieldFunc( vc, identifierParts, func() error {
-            return visitIdentifierList( ns.Parts, vc )
-        })
-        if err != nil { return }
-        return bind.VisitFieldValue( vc, identifierVersion, ns.Version )
-    })
-}
-
-func VisitDeclaredTypeName( 
-    nm *mg.DeclaredTypeName, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnameDeclaredTypeName, func() error {
-        return bind.VisitFieldValue( vc, identifierName, nm.ExternalForm() )
-    })
-}
-
-func VisitNamespace( ns *mg.Namespace, vc bind.VisitContext ) error {
-    switch opts := vc.BindContext.SerialOptions; opts.Format {
-    case bind.SerialFormatText:
-        return vc.EventSender().Value( mg.String( ns.ExternalForm() ) )
-    case bind.SerialFormatBinary:
-        return vc.EventSender().Value( mg.Buffer( mg.NamespaceAsBytes( ns ) ) )
-    }
-    return visitNamespaceAsStruct( ns, vc )
-}
-
-func VisitQualifiedTypeName( 
-    qn *mg.QualifiedTypeName, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnameQualifiedTypeName, func() error {
-        if err := bind.VisitFieldValue( vc, identifierNamespace, qn.Namespace );
-           err != nil {
-            return err
+    res.AddFunc = func( val interface{}, path objpath.PathNode ) error {
+        fs := res.Value.( *types.FieldSet )
+        fd := val.( *types.FieldDefinition )
+        if nm := fd.Name; fs.Get( nm ) != nil {
+            return mg.NewCastErrorf( path, "field redefined: %s", nm )
         }
-        return bind.VisitFieldValue( vc, identifierName, qn.Name )
-    })
+        fs.Add( fd )
+        return nil
+    }
+    return res
 }
 
-func VisitRangeRestriction(
-    rx *mg.RangeRestriction, vc bind.VisitContext ) error {
+func newFieldDefListFieldSetBuilderFactory( 
+    reg *bind.Registry ) mgRct.BuilderFactory {
 
-    return bind.VisitStruct( vc, mg.QnameRangeRestriction, func() error {
-        err := bind.VisitFieldValue( vc, identifierMinClosed, rx.MinClosed() )
-        if err != nil { return err }
-        optVis := func( val mg.Value, id *mg.Identifier ) error {
-            if val == nil { return nil }
-            return bind.VisitFieldValue( vc, id, val )
-        }
-        if err = optVis( rx.Min(), identifierMin ); err != nil { return err }
-        if err = optVis( rx.Max(), identifierMax ); err != nil { return err }
-        return bind.VisitFieldValue( vc, identifierMaxClosed, rx.MaxClosed() )
-    })
+    res := bind.NewFunctionsBuilderFactory()
+    res.ListFunc = func( 
+        _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
+
+        return newFieldDefListFieldSetBuilder( reg ), nil
+    }
+    return res
 }
 
-func VisitRegexRestriction(
-    rx *mg.RegexRestriction, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnameRegexRestriction, func() error {
-        return bind.VisitFieldValue( vc, identifierPattern, rx.Source() )
-    })
+func newFieldSetFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    type fsHolder struct { fs *types.FieldSet }
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &fsHolder{} },
+        bind.CheckedInstanceConvertFunc(
+            func( val interface{} ) interface{} { return val.( *fsHolder ).fs },
+        ),
+        &bind.CheckedFieldSetter{
+            Field: identifierFields,
+            StartField: func( reg *bind.Registry ) mgRct.BuilderFactory {
+                return newFieldDefListFieldSetBuilderFactory( reg )
+            },
+            Assign: func( obj, val interface{} ) {
+                obj.( *fsHolder ).fs = val.( *types.FieldSet )
+            },
+        },
+    )
 }
 
-func VisitAtomicTypeReference(
-    at *mg.AtomicTypeReference, vc bind.VisitContext ) error {
+func VisitUnionTypeDefinition( 
+    utd *types.UnionTypeDefinition, vc bind.VisitContext ) error {
 
-    return bind.VisitStruct( vc, mg.QnameAtomicTypeReference, func() error {
-        err := bind.VisitFieldValue( vc, identifierName, at.Name() )
-        if err != nil { return err }
-        rx := at.Restriction()
-        if rx == nil { return nil }
-        return bind.VisitFieldValue( vc, identifierRestriction, rx )
-    })
-}
-
-func VisitListTypeReference(
-    lt *mg.ListTypeReference, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnameListTypeReference, func() error {
-        err := bind.VisitFieldValue( vc, identifierElementType, lt.ElementType )
-        if err != nil { return err }
-        return bind.VisitFieldValue( vc, identifierAllowsEmpty, lt.AllowsEmpty )
-    })
-}
-
-func VisitPointerTypeReference(
-    pt *mg.PointerTypeReference, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnamePointerTypeReference, func() error {
-        return bind.VisitFieldValue( vc, identifierType, pt.Type )
-    })
-}
-
-func VisitNullableTypeReference(
-    nt *mg.NullableTypeReference, vc bind.VisitContext ) error {
-
-    return bind.VisitStruct( vc, mg.QnameNullableTypeReference, func() error {
-        return bind.VisitFieldValue( vc, identifierType, nt.Type )
-    })
-}
-
-type idPathPartsEventSendVisitor struct {
-    vc bind.VisitContext
-}
-
-func ( vis idPathPartsEventSendVisitor ) Descend( elt interface{} ) error {
-    return VisitIdentifier( elt.( *mg.Identifier ), vis.vc )
-}
-
-func ( vis idPathPartsEventSendVisitor ) List( idx uint64 ) error {
-    return vis.vc.EventSender().Value( mg.Uint64( idx ) )
-}
-
-func visitIdPathAsStruct( p objpath.PathNode, vc bind.VisitContext ) error {
-    return bind.VisitStruct( vc, mg.QnameIdentifierPath, func() error {
-        return bind.VisitFieldFunc( vc, identifierParts, func() error {
-            body := func() error {
-                return objpath.Visit( p, idPathPartsEventSendVisitor{ vc } )
-            }
-            return bind.VisitList( vc, typeIdentifierPathPartsList, body )
+    return bind.VisitStruct( vc, QnameUnionTypeDefinition, func() error {
+        ln := len( utd.Types )
+        f := func( idx int ) interface{} { return utd.Types[ idx ] }
+        return bind.VisitFieldFunc( vc, identifierTypes, func() error {
+            return bind.VisitListValue( vc, typeUnionTypeTypesList, ln, f )
         })
     })
 }
 
-func VisitIdentifierPath( p objpath.PathNode, vc bind.VisitContext ) error {
-    if vc.BindContext.SerialOptions.Format == bind.SerialFormatText {
-        return vc.EventSender().Value( mg.String( mg.FormatIdPath( p ) ) )
-    }
-    return visitIdPathAsStruct( p, vc )
+func newUnionTypeDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    type utBldr struct { typs []mg.TypeReference }
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &utBldr{} },
+        func( val interface{}, path objpath.PathNode ) ( interface{}, error ) {
+            utb := val.( *utBldr )
+            res, err := types.CreateUnionTypeDefinitionTypes( utb.typs... )
+            if err == nil { return res, nil }
+            return nil, mg.NewCastError( path, err.Error() )
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierTypes,
+            StartField: bind.CheckedListFieldStarter(
+                func() interface{} { return make( []mg.TypeReference, 0, 4 ) },
+                bind.ListElementFactoryFuncForType( mg.TypeValue ),
+                func( l, val interface{} ) interface{} {
+                    typs := l.( []mg.TypeReference )
+                    typ := val.( mg.TypeReference )
+                    return append( typs, typ )
+                },
+            ),
+            Assign: func( obj, val interface{} ) {
+                obj.( *utBldr ).typs = val.( []mg.TypeReference )
+            },
+        },
+    )
 }
 
-func visitLocatableError( 
-    loc objpath.PathNode, msg string, vc bind.VisitContext ) error {
+func VisitUnionDefinition( 
+    ud *types.UnionDefinition, vc bind.VisitContext ) error {
 
-    if loc != nil {
-        err := bind.VisitFieldValue( vc, identifierLocation, loc )
+    return bind.VisitStruct( vc, QnameUnionDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, ud.Name )
         if err != nil { return err }
-    }
-    if msg == "" { return nil }
-    return bind.VisitFieldValue( vc, identifierMessage, msg )
-}
-
-func VisitCastError( e *mg.CastError, vc bind.VisitContext ) error {
-    return bind.VisitStruct( vc, mg.QnameCastError, func() error {
-        return visitLocatableError( e.Location, e.Message, vc )
+        err = bind.VisitFieldValue( vc, identifierUnion, ud.Union )
+        return err
     })
 }
 
-func VisitUnrecognizedFieldError( 
-    e *mg.UnrecognizedFieldError, vc bind.VisitContext ) error {
+func newUnionDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &types.UnionDefinition{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.UnionDefinition ).Name =
+                    val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierUnion,
+            Type: TypeUnionTypeDefinition,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.UnionDefinition ).Union =
+                    val.( *types.UnionTypeDefinition )
+            },
+        },
+    )
+}
 
-    return bind.VisitStruct( vc, mg.QnameUnrecognizedFieldError, func() error {
-        if err := visitLocatableError( e.Location, e.Message, vc ); err != nil {
-            return err
+func VisitCallSignature( 
+    cs *types.CallSignature, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnameCallSignature, func() error {
+        err := bind.VisitFieldValue( vc, identifierFields, cs.GetFields() )
+        if err != nil { return err }
+        err = bind.VisitFieldValue( vc, identifierReturn, cs.Return )
+        if err != nil { return err }
+        if ut := cs.Throws; ut != nil {
+            err = bind.VisitFieldValue( vc, identifierThrows, ut )
+            if err != nil { return err }
         }
-        return bind.VisitFieldValue( vc, identifierField, e.Field )
+        return nil
     })
 }
 
-func VisitMissingFieldsError( 
-    e *mg.MissingFieldsError, vc bind.VisitContext ) error {
+func newCallSigFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return types.NewCallSignature() },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierFields,
+            Type: TypeFieldSet,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.CallSignature ).Fields = val.( *types.FieldSet )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierReturn,
+            Type: mg.TypeValue,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.CallSignature ).Return = val.( mg.TypeReference )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierThrows,
+            Type: TypeUnionTypeDefinition,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.CallSignature ).Throws = 
+                    val.( *types.UnionTypeDefinition )
+            },
+        },
+    )
+}
 
-    return bind.VisitStruct( vc, mg.QnameMissingFieldsError, func() error {
-        if err := visitLocatableError( e.Location, e.Message, vc ); err != nil {
-            return err
-        }
-        return bind.VisitFieldFunc( vc, identifierFields, func() error {
-            return visitIdentifierList( e.Fields(), vc )
-        })
+func VisitPrototypeDefinition(
+    pd *types.PrototypeDefinition, vc bind.VisitContext ) error {
+
+    return bind.VisitStruct( vc, QnamePrototypeDefinition, func() error {
+        err := bind.VisitFieldValue( vc, identifierName, pd.Name )
+        if err != nil { return err }
+        err = bind.VisitFieldValue( vc, identifierSignature, pd.Signature )
+        return err
     })
 }
+
+func newProtoDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+    return bind.CheckedStructFactory(
+        reg,
+        func() interface{} { return &types.PrototypeDefinition{} },
+        nil,
+        &bind.CheckedFieldSetter{
+            Field: identifierName,
+            Type: mg.TypeQualifiedTypeName,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.PrototypeDefinition ).Name =
+                    val.( *mg.QualifiedTypeName )
+            },
+        },
+        &bind.CheckedFieldSetter{
+            Field: identifierSignature,
+            Type: TypeCallSignature,
+            Assign: func( obj, val interface{} ) {
+                obj.( *types.PrototypeDefinition ).Signature =
+                    val.( *types.CallSignature )
+            },
+        },
+    )
+}
+//    mustAddBuiltinStruct( QnameStructDefinition,
+//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+//        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
+//        mkField0( 
+//            identifierConstructors, nilPtrTyp( TypeUnionTypeDefinition ) ),
+//    )
+//    mustAddBuiltinStruct( QnameSchemaDefinition,
+//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+//        mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
+//    )
+//    mustAddBuiltinStruct( QnameAliasedTypeDefinition,
+//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+//        mkField0( identifierAliasedType, mg.TypeValue ),
+//    )
+//    mustAddBuiltinStruct( QnameEnumDefinition,
+//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+//        mkField0( 
+//            identifierValues,
+//            &mg.ListTypeReference{
+//                ElementType: typeIdentifierPointer,
+//                AllowsEmpty: false,
+//            },
+//        ),
+//    )
+//    mustAddBuiltinStruct( QnameOperationDefinition,
+//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+//        mkField0( identifierSignature, ptrTyp( TypeCallSignature ) ),
+//    )
+//    mustAddBuiltinStruct( QnameServiceDefinition,
+//        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+//        mkField0(
+//            identifierOperations,
+//            &mg.ListTypeReference{
+//                ElementType: ptrTyp( TypeOperationDefinition ),
+//                AllowsEmpty: true,
+//            },
+//        ),
+//        mkField0( identifierSecurity, nilPtrTyp( mg.TypeQualifiedTypeName ) ),
+//    ) 
 
 func visitBuiltinTypeOk(
     val interface{}, vc bind.VisitContext ) ( error, bool ) {
@@ -781,6 +1112,16 @@ func visitBuiltinTypeOk(
     case *mg.UnrecognizedFieldError: 
         return VisitUnrecognizedFieldError( v, vc ), true
     case *mg.MissingFieldsError: return VisitMissingFieldsError( v, vc ), true
+    case *types.PrimitiveDefinition:
+        return VisitPrimitiveDefinition( v, vc ), true
+    case *types.FieldDefinition: return VisitFieldDefinition( v, vc ), true
+    case *types.FieldSet: return VisitFieldSet( v, vc ), true
+    case *types.UnionTypeDefinition:
+        return VisitUnionTypeDefinition( v, vc ), true
+    case *types.UnionDefinition: return VisitUnionDefinition( v, vc ), true
+    case *types.CallSignature: return VisitCallSignature( v, vc ), true
+    case *types.PrototypeDefinition: 
+        return VisitPrototypeDefinition( v, vc ), true
     }
     return nil, false
 }
@@ -814,59 +1155,21 @@ func initCoreBindings( reg *bind.Registry ) {
     )
     reg.MustAddValue( 
         mg.QnameMissingFieldsError, newMissingFieldsErrorBuilderFactory( reg ) )
-    reg.AddVisitValueOkFunc( visitBuiltinTypeOk )
 }
 
 func initTypesBindings( reg *bind.Registry ) {
-//type PrimitiveDefinition struct { Name *mg.QualifiedTypeName }
-//type FieldDefinition struct {
-//    Name *mg.Identifier
-//    Type mg.TypeReference
-//    Default mg.Value
-//}
-//type FieldSet struct {
-//    flds *mg.IdentifierMap
-//}
-//type CallSignature struct {
-//    Fields *FieldSet
-//    Return mg.TypeReference
-//    Throws []mg.TypeReference
-//}
-//type PrototypeDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Signature *CallSignature
-//}
-//type ConstructorDefinition struct { Type mg.TypeReference }
-//type StructDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Fields *FieldSet
-//    Constructors []*ConstructorDefinition
-//}
-//type SchemaDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Fields *FieldSet
-//}
-//type AliasedTypeDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    AliasedType mg.TypeReference
-//}
-//type EnumDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Values []*mg.Identifier
-//}
-//type OperationDefinition struct {
-//    Name *mg.Identifier
-//    Signature *CallSignature
-//}
-//type ServiceDefinition struct {
-//    Name *mg.QualifiedTypeName
-//    Operations []*OperationDefinition
-//    Security *mg.QualifiedTypeName
-//}
+    reg.MustAddValue( QnamePrimitiveDefinition, newPrimitiveDefFactory( reg ) )
+    reg.MustAddValue( QnameFieldDefinition, newFieldDefFactory( reg ) )
+    reg.MustAddValue( QnameFieldSet, newFieldSetFactory( reg ) )
+    reg.MustAddValue( QnameUnionTypeDefinition, newUnionTypeDefFactory( reg ) )
+    reg.MustAddValue( QnameUnionDefinition, newUnionDefFactory( reg ) )
+    reg.MustAddValue( QnameCallSignature, newCallSigFactory( reg ) )
+    reg.MustAddValue( QnamePrototypeDefinition, newProtoDefFactory( reg ) )
 }
 
 func initBind() {
     reg := bind.RegistryForDomain( bind.DomainDefault )
     initCoreBindings( reg )
     initTypesBindings( reg )
+    reg.AddVisitValueOkFunc( visitBuiltinTypeOk )
 }

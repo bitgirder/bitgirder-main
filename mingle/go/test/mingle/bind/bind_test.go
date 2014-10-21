@@ -315,7 +315,8 @@ func ( c defaultBindTestCallInterface ) CreateReactors(
 func TestBind( t *testing.T ) {
     ensureTestBuilderFactories()
     iface := defaultBindTestCallInterface{ getDefaultValBindTestValues() }
-    AssertBindTests( getBindTests(), iface, assert.NewPathAsserter( t ) )
+    cc := &BindTestCallControl{ Interface: iface }
+    AssertBindTests( getBindTests(), cc, assert.NewPathAsserter( t ) )
 }
 
 func TestRegistryAccessors( t *testing.T ) {

@@ -46,6 +46,8 @@ var (
     identifierSignature = idUnsafe( "signature" )
     identifierThrows = idUnsafe( "throws" )
     identifierType = idUnsafe( "type" )
+    identifierTypes = idUnsafe( "types" )
+    identifierUnion = idUnsafe( "union" )
     identifierValues = idUnsafe( "values" )
     identifierVersion = idUnsafe( "version" )
 
@@ -84,13 +86,18 @@ var (
         Version: idUnsafe( "v1" ),
     }
 
+    typeFieldDefList = &mg.ListTypeReference{ 
+        ptrTyp( TypeFieldDefinition ),
+        true,
+    }
+
+    typeUnionTypeTypesList = &mg.ListTypeReference{ mg.TypeValue, false }
+
     QnamePrimitiveDefinition, TypePrimitiveDefinition = 
         mkTypesQnTypPair( "PrimitiveDefinition" )
 
     QnameFieldDefinition, TypeFieldDefinition = 
         mkTypesQnTypPair( "FieldDefinition" )
-
-    QnameFieldSetEntry, TypeFieldSetEntry = mkTypesQnTypPair( "FieldSetEntry" )
 
     QnameFieldSet, TypeFieldSet = mkTypesQnTypPair( "FieldSet" )
 
@@ -101,6 +108,9 @@ var (
 
     QnameUnionTypeDefinition, TypeUnionTypeDefinition = 
         mkTypesQnTypPair( "UnionTypeDefinition" )
+
+    QnameUnionDefinition, TypeUnionDefinition = 
+        mkTypesQnTypPair( "UnionDefinition" )
 
     QnameStructDefinition, TypeStructDefinition = 
         mkTypesQnTypPair( "StructDefinition" )
@@ -158,18 +168,21 @@ func BuiltinTypes() *types.DefinitionMap {
 func MustAddBuiltinType( def types.Definition ) { builtinTypes.MustAdd( def ) }
 
 var ptrTyp = mg.NewPointerTypeReference
+var nilTyp = mg.MustNullableTypeReference
 
 func nilPtrTyp( typ mg.TypeReference ) *mg.NullableTypeReference {
-    return mg.MustNullableTypeReference( ptrTyp( typ ) )
+    return nilTyp( ptrTyp( typ ) )
 }
 
 func mustAddBuiltinStruct( 
-    qn *mg.QualifiedTypeName, flds ...*types.FieldDefinition ) {
+    qn *mg.QualifiedTypeName, 
+    flds ...*types.FieldDefinition ) *types.StructDefinition {
 
     sd := types.NewStructDefinition()
     sd.Name = qn
     for _, fld := range flds { sd.Fields.Add( fld ) }
     MustAddBuiltinType( sd )
+    return sd
 }
 
 func mkField0( 
@@ -178,262 +191,87 @@ func mkField0(
     return &types.FieldDefinition{ Name: nm, Type: typ }
 }
 
-func initStandardError() {
-    sd := types.NewSchemaDefinition()
-    sd.Name = mg.QnameStandardError
-    sd.Fields.MustAdd(
-        &types.FieldDefinition{
-            Name: identifierMessage,
-            Type: mg.MustNullableTypeReference( mg.TypeString ),
-        },
-    )
-    MustAddBuiltinType( sd )
-}
-
-func initCoreV1Types() {
+func initPrimitiveV1Types() {
     for _, primTyp := range mg.PrimitiveTypes {
         pd := &types.PrimitiveDefinition{}
         pd.Name = primTyp.Name()
         MustAddBuiltinType( pd )
     }
     MustAddBuiltinType( &types.PrimitiveDefinition{ Name: mg.QnameValue } )
-    initStandardError()
 }
 
-func initIdentifierType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameIdentifier
-    sd.Fields.Add( 
-        &types.FieldDefinition{
-            Name: identifierParts,
-            Type: typeIdentifierPartsList,
-        },
+func initCoreV1Types() {
+    initPrimitiveV1Types()
+    mustAddBuiltinStruct( mg.QnameStandardError,
+        mkField0( identifierMessage, nilTyp( mg.TypeString ) ),
     )
-    sd.Constructors = 
+    idDef := mustAddBuiltinStruct( mg.QnameIdentifier,
+        mkField0( identifierParts, typeIdentifierPartsList ),
+    )
+    idDef.Constructors = 
         types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
-    MustAddBuiltinType( sd )
-}
-
-func initDeclaredTypeNameType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameDeclaredTypeName
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierName,
-            Type: mg.NewAtomicTypeReference(
-                mg.QnameString,
-                mg.MustRegexRestriction( mg.DeclaredTypeNameRegexp.String() ),
-            ),
-        },
+    declNmNameType := mg.NewAtomicTypeReference(
+        mg.QnameString,
+        mg.MustRegexRestriction( mg.DeclaredTypeNameRegexp.String() ),
     )
-    MustAddBuiltinType( sd )
-}
-
-func initNamespaceType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameNamespace
-    sd.Fields.Add(
-        &types.FieldDefinition{ 
-            Name: identifierVersion, 
-            Type: typeIdentifierPointer,
-        },
+    mustAddBuiltinStruct( mg.QnameDeclaredTypeName,
+        mkField0( identifierName, declNmNameType ),
     )
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierParts,
-            Type: typeIdentifierPointerList,
-        },
+    nsDef := mustAddBuiltinStruct( mg.QnameNamespace,
+        mkField0( identifierVersion, typeIdentifierPointer ),
+        mkField0( identifierParts, typeIdentifierPointerList ),
     )
-    sd.Constructors = 
+    nsDef.Constructors = 
         types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
-    MustAddBuiltinType( sd )
-}
-
-func initQnameType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameQualifiedTypeName
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierNamespace,
-            Type: mg.NewPointerTypeReference( mg.TypeNamespace ),
-        },
+    mustAddBuiltinStruct( mg.QnameQualifiedTypeName,
+        mkField0( identifierNamespace, ptrTyp( mg.TypeNamespace ) ),
+        mkField0( identifierName, ptrTyp( mg.TypeDeclaredTypeName ) ),
     )
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierName,
-            Type: mg.NewPointerTypeReference( mg.TypeDeclaredTypeName ),
-        },
-    )
-    MustAddBuiltinType( sd )
-}
-
-func initRangeRestrictionType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameRangeRestriction
-    sd.Fields.Add(
+    mustAddBuiltinStruct( mg.QnameRangeRestriction,
         &types.FieldDefinition{
             Name: identifierMinClosed,
             Type: mg.TypeBoolean,
             Default: mg.Boolean( false ),
         },
-    )
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierMin,
-            Type: mg.TypeNullableValue,
-        },
-    )
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierMax,
-            Type: mg.TypeNullableValue,
-        },
-    )
-    sd.Fields.Add(
+        mkField0( identifierMin, mg.TypeNullableValue ),
+        mkField0( identifierMax, mg.TypeNullableValue ),
         &types.FieldDefinition{
             Name: identifierMaxClosed,
             Type: mg.TypeBoolean,
             Default: mg.Boolean( false ),
         },
     )
-    MustAddBuiltinType( sd )
-}
-
-func initRegexRestrictionType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameRegexRestriction
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierPattern,
-            Type: mg.TypeString,
-        },
+    mustAddBuiltinStruct( mg.QnameRegexRestriction,
+        mkField0( identifierPattern, mg.TypeString ),
     )
-    MustAddBuiltinType( sd )
-}
-
-func initRestrictionTypes() {
-    initRangeRestrictionType()
-    initRegexRestrictionType()
-}
-
-func initAtomicTypeReferenceType() {
-    initRestrictionTypes()
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameAtomicTypeReference
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierName,
-            Type: mg.NewPointerTypeReference( mg.TypeQualifiedTypeName ),
-        },
+    mustAddBuiltinStruct( mg.QnameAtomicTypeReference,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierRestriction, mg.TypeNullableValue ),
     )
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierRestriction,
-            Type: mg.TypeNullableValue, 
-        },
+    mustAddBuiltinStruct( mg.QnameListTypeReference,
+        mkField0( identifierElementType, mg.TypeValue ),
+        mkField0( identifierAllowsEmpty, mg.TypeBoolean ),
     )
-    MustAddBuiltinType( sd )
-}
-
-func initListTypeReferenceType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameListTypeReference
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierElementType,
-            Type: mg.TypeValue, 
-        },
+    mustAddBuiltinStruct( mg.QnameNullableTypeReference,
+        mkField0( identifierType, mg.TypeValue ),
     )
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierAllowsEmpty,
-            Type: mg.TypeBoolean,
-        },
+    mustAddBuiltinStruct( mg.QnamePointerTypeReference,
+        mkField0( identifierType, mg.TypeValue ),
     )
-    MustAddBuiltinType( sd )
-}
-
-func initNullableTypeReferenceType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameNullableTypeReference
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierType,
-            Type: mg.TypeValue,
-        },
+    idPathDef := mustAddBuiltinStruct( mg.QnameIdentifierPath,
+        mkField0( identifierParts, typeIdentifierPathPartsList ),
     )
-    MustAddBuiltinType( sd )
-}
-
-func initPointerTypeReferenceType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnamePointerTypeReference
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierType,
-            Type: mg.TypeValue,
-        },
-    )
-    MustAddBuiltinType( sd )
-}
-
-func initTypeReferenceTypes() {
-    initAtomicTypeReferenceType()
-    initListTypeReferenceType()
-    initPointerTypeReferenceType()
-    initNullableTypeReferenceType()
-}
-
-func initIdentifierPathType() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameIdentifierPath
-    sd.Fields.Add(
-        &types.FieldDefinition{
-            Name: identifierParts,
-            Type: typeIdentifierPathPartsList,
-        },
-    )
-    sd.Constructors = 
+    idPathDef.Constructors = 
         types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
-    MustAddBuiltinType( sd )
-}
-
-func initUnrecognizedFieldError() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameUnrecognizedFieldError
-    AddLocatableErrorFields( sd )
-    sd.Fields.MustAdd(
-        &types.FieldDefinition{
-            Name: identifierField,
-            Type: mg.NewPointerTypeReference( mg.TypeIdentifier ),
-        },
-    )
-    MustAddBuiltinType( sd )
-}
-
-func initMissingFieldsError() {
-    sd := types.NewStructDefinition()
-    sd.Name = mg.QnameMissingFieldsError
-    AddLocatableErrorFields( sd )
-    sd.Fields.MustAdd(
-        &types.FieldDefinition{
-            Name: identifierFields,
-            Type: typeIdentifierPointerList,
-        },
-    )
-    MustAddBuiltinType( sd )
-}
-
-func initLangV1Types() {
-    initIdentifierType()
-    initDeclaredTypeNameType()
-    initNamespaceType()
-    initQnameType()
-    initTypeReferenceTypes()
-    initIdentifierPathType()
     MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameCastError ) )
-    initUnrecognizedFieldError()
-    initMissingFieldsError()
+    ufeDef := mustAddBuiltinStruct( mg.QnameUnrecognizedFieldError,
+        mkField0( identifierField, ptrTyp( mg.TypeIdentifier ) ),
+    )
+    AddLocatableErrorFields( ufeDef )
+    mfeDef := mustAddBuiltinStruct( mg.QnameMissingFieldsError,
+        mkField0( identifierFields, typeIdentifierPointerList ),
+    )
+    AddLocatableErrorFields( mfeDef )
 }
 
 func initTypesTypes() {
@@ -445,18 +283,15 @@ func initTypesTypes() {
         mkField0( identifierType, mg.TypeValue ),
         mkField0( identifierDefault, mg.TypeNullableValue ),
     )
-    mustAddBuiltinStruct( QnameFieldSetEntry,
-        mkField0( identifierName, typeIdentifierPointer ),
-        mkField0( identifierField, TypeFieldDefinition ),
-    )
     mustAddBuiltinStruct( QnameFieldSet,
-        mkField0( 
-            identifierFields, 
-            &mg.ListTypeReference{
-                ElementType: TypeFieldSetEntry,
-                AllowsEmpty: true,
-            },
-        ),
+        mkField0( identifierFields, typeFieldDefList ),
+    )
+    mustAddBuiltinStruct( QnameUnionTypeDefinition,
+        mkField0( identifierTypes, typeUnionTypeTypesList ),
+    )
+    mustAddBuiltinStruct( QnameUnionDefinition,
+        mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
+        mkField0( identifierUnion, ptrTyp( TypeUnionTypeDefinition ) ),
     )
     mustAddBuiltinStruct( QnameCallSignature,
         mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
@@ -511,6 +346,5 @@ func initTypesTypes() {
 func initBuiltinTypes() {
     builtinTypes = types.NewDefinitionMap()
     initCoreV1Types()
-    initLangV1Types()
     initTypesTypes()
 }

@@ -118,40 +118,6 @@ func ( sr *StructuralReactor ) listValueTypeError(
         expct, sr.sawDescFor( ev ) )
 }
 
-// drops pointer and restriction expectations from effectiveType, checking only
-// that the structure of the assignment would make sense (downstream casts can
-// check the actual validity of the assignment)
-func ( sr *StructuralReactor ) checkValueForList(
-    calledType, effectiveType, valType mg.TypeReference, 
-    ev Event ) error {
-    
-    switch typ := effectiveType.( type ) {
-    case *mg.PointerTypeReference:
-        return sr.checkValueForList( calledType, typ.Type, valType, ev )
-    case *mg.AtomicTypeReference:
-        if typ.Restriction() != nil {
-            at := typ.Name().AsAtomicType()
-            return sr.checkValueForList( calledType, at, valType, ev )
-        }
-    }
-    if mg.CanAssignType( valType, effectiveType ) { return nil }
-    return sr.listValueTypeError( calledType, ev )
-}
-
-func ( sr *StructuralReactor ) checkEventForList(
-    lc listStructureCheck, ev Event ) error {
-
-    var evTyp mg.TypeReference
-    switch v := ev.( type ) {
-    case *ValueEvent: evTyp = mg.TypeOf( v.Val )
-    case *ListStartEvent: evTyp = v.Type
-    case *MapStartEvent: evTyp = mg.TypeSymbolMap
-    case *StructStartEvent: evTyp = v.Type.AsAtomicType()
-    default: return nil
-    }
-    return sr.checkValueForList( lc.typ, lc.typ, evTyp, ev )
-}
-
 func ( sr *StructuralReactor ) execValueCheck( 
     ev Event, pushIfOk interface{} ) ( err error ) {
 
@@ -159,7 +125,7 @@ func ( sr *StructuralReactor ) execValueCheck(
         err = sr.checkTopType( ev )
     } else {
         switch v := sr.stack.Peek().( type ) {
-        case listStructureCheck: err = sr.checkEventForList( v, ev )
+        case listStructureCheck: break;
         case *mg.Identifier: break;
         case *mapStructureCheck: return sr.failUnexpectedMapEnd( ev )
         default: 

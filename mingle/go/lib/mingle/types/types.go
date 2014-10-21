@@ -161,6 +161,14 @@ func checkUnionType(
     return typs, errGrps
 }
 
+type unionTypesInput []mg.TypeReference
+
+func ( i unionTypesInput ) Len() int { return len( i ) }
+
+func ( i unionTypesInput ) TypeAtIndex( idx int ) mg.TypeReference {
+    return i[ idx ]
+}
+
 func CreateUnionTypeDefinition( 
     in UnionTypeDefinitionInput ) ( *UnionTypeDefinition, error ) {
 
@@ -170,21 +178,26 @@ func CreateUnionTypeDefinition(
     return nil, &UnionTypeDefinitionError{ errGroups } 
 }
 
-type unionTypesInput []mg.TypeReference
+func CreateUnionTypeDefinitionTypes( 
+    typs ...mg.TypeReference ) ( *UnionTypeDefinition, error ) {
 
-func ( i unionTypesInput ) Len() int { return len( i ) }
-
-func ( i unionTypesInput ) TypeAtIndex( idx int ) mg.TypeReference {
-    return i[ idx ]
+    return CreateUnionTypeDefinition( unionTypesInput( typs ) )
 }
 
 func MustUnionTypeDefinitionTypes( 
     typs ...mg.TypeReference ) *UnionTypeDefinition {
 
-    res, err := CreateUnionTypeDefinition( unionTypesInput( typs ) )
+    res, err := CreateUnionTypeDefinitionTypes( typs... )
     if err == nil { return res }
     panic( err )
 }
+
+type UnionDefinition struct {
+    Name *mg.QualifiedTypeName
+    Union *UnionTypeDefinition
+}
+
+func ( ud *UnionDefinition ) GetName() *mg.QualifiedTypeName { return ud.Name }
 
 type FieldDefinition struct {
     Name *mg.Identifier

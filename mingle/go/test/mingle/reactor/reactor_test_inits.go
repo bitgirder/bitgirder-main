@@ -362,39 +362,6 @@ func initStructuralReactorTests( b *ReactorTestSliceBuilder ) {
             evStartField1,
         ),
     )
-    addListFail := func( expct, saw string, evs ...Event ) {
-        msg := fmt.Sprintf( "expected list value of type %s but saw %s", 
-            asType( expct ), saw )
-        b.AddTests( mk1( msg, evs... ) )
-    }
-    for _, s := range []struct { expctTyp, saw string; ev Event } {
-        { expctTyp: "Int32", 
-          saw: asType( "Int64" ).ExternalForm(),
-          ev: NewValueEvent( mg.Int64( int64( 1 ) ) ),
-        },
-        { expctTyp: "Int32", 
-          saw: "start of mingle:core@v1/Int32*",
-          ev: nextListStart( listTypeRef( "Int32*" ) ),
-        },
-        { expctTyp: "SymbolMap",
-          saw: asType( "Int32" ).ExternalForm(),
-          ev: NewValueEvent( mg.Int32( int32( 1 ) ) ),
-        },
-    } {
-        lt := listTypeRef( s.expctTyp + "*" )
-        lse := nextListStart( lt )
-        addListFail( s.expctTyp, s.saw, lse, s.ev )
-    }
-    // check that we're correctly handling errors in a nested list
-    b.AddTests(
-        mk1(
-            "expected list value of type mingle:core@v1/Int32 but saw mingle:core@v1/Int64",
-            nextListStart( listTypeRef( "Int32**" ) ),
-            nextListStart( listTypeRef( "Int32*" ) ),
-            NewValueEvent( mg.Int32( 1 ) ),
-            NewValueEvent( mg.Int64( 2 ) ),
-        ),
-    )
 }
 
 func initEventPathTests( b *ReactorTestSliceBuilder ) {
