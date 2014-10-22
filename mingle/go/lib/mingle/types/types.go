@@ -122,6 +122,19 @@ type UnionTypeDefinition struct {
     Types []mg.TypeReference
 }
 
+func ( utd *UnionTypeDefinition ) MatchType( 
+    typ mg.TypeReference ) ( mg.TypeReference, bool ) {
+
+    typKey := UnionTypeKeyForType( typ )
+    for _, ut := range utd.Types {
+        if typKey == UnionTypeKeyForType( ut ) { return ut, true }
+    }
+    return nil, false
+}
+
+type UnionMatchFunction func( 
+    typ mg.TypeReference, ut *UnionTypeDefinition ) ( mg.TypeReference, bool )
+
 func UnionTypeKeyForType( typ mg.TypeReference ) string {
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference: return v.Name().ExternalForm()

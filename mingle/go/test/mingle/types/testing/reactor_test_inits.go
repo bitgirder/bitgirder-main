@@ -1102,7 +1102,7 @@ func ( rti *rtInit ) addEnumValCastTests() {
     addFail( 
         parser.MustStruct( "ns1@v1/E1" ), 
         "ns1@v1/E1", 
-        vcErr( "not a type with fields: ns1@v1/E1" ),
+        vcErr( "not a struct type: ns1@v1/E1" ),
     )
     addFail( 
         int32( 1 ), "ns1@v1/E1+", newTcErr( "ns1@v1/E1+", mg.TypeInt32, nil ) )
@@ -1316,6 +1316,127 @@ func ( rti *rtInit ) addDefaultCastTests() {
         parser.MustSymbolMap( "f1", []byte{} ),
         "ns1@v1/S1",
         newTcErr( mg.TypeInt32, mg.TypeBuffer, p( 1 ) ),
+    )
+}
+
+func ( rti *rtInit ) addUnionTests() {
+    dm := builtin.MakeDefMap( 
+        types.MakeStructDef( "ns1@v1/S1", nil ),
+        types.MakeStructDef( "ns1@v1/S2", nil ),
+        types.MakeStructDef( "ns1@v1/S3", nil ),
+        types.MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
+        &types.UnionDefinition{
+            Name: mkQn( "ns1@v1/Union1" ),
+            Union: types.MustUnionTypeDefinitionTypes(
+                asType( "Int32" ),
+                asType( "&Int64?" ),
+                asType( "String*" ),
+                asType( "String" ),
+                asType( "SymbolMap" ),
+                asType( "ns1@v1/S1" ),
+                asType( "ns1@v1/S2" ),
+                asType( "ns1@v1/E1" ),
+            ),
+        },
+        &types.UnionDefinition{
+            Name: mkQn( "ns1@v1/Union2" ),
+            Union: types.MustUnionTypeDefinitionTypes(
+                asType( "ns1@v1/S2" ),
+                asType( "Float32" ),
+                asType( "Uint64" ),
+                asType( "String*" ),
+            ),
+        },
+    )
+    add := func( t *CastReactorTest ) {
+        t.Profile = ProfileUnionImpl
+        t.Map = dm
+        rti.addTests( t )
+    }
+    addOk := func( in, expct, typ interface{} ) {
+        add(
+            &CastReactorTest{
+                In: mg.MustValue( in ),
+                Expect: mg.MustValue( expct ),
+                Type: asType( typ ),
+            },
+        )
+    }
+    addIdent := func( in, typ interface{} ) { addOk( in, in, typ ) }
+    addErr := func( in, typ interface{}, err error ) {
+        add(
+            &CastReactorTest{
+                In: mg.MustValue( in ),
+                Type: asType( typ ),
+                Err: err,
+            },
+        )
+    }
+    addIdent( mg.Int32( 1 ), "ns1@v1/Union1" )
+    addIdent( mg.Int64( 1 ), "ns1@v1/Union1" )
+    addIdent( mg.String( "s1" ), "ns1@v1/Union1" )
+    addIdent( mg.MustList( asType( "String*" ), "s1", "s2" ), "ns1@v1/Union1" )
+    addIdent( mg.EmptySymbolMap(), "ns1@v1/Union1" )
+    addIdent( parser.MustStruct( "ns1@v1/S1" ), "ns1@v1/Union1" )
+    addIdent( parser.MustStruct( "ns1@v1/S2" ), "ns1@v1/Union1" )
+    addIdent( parser.MustEnum( "ns1@v1/E1", "e1" ), "ns1@v1/Union1" )
+    addIdent( mg.Int32( 1 ), "&ns1@v1/Union1" )
+    addIdent( mg.Int32( 1 ), "&ns1@v1/Union1?" )
+    addIdent( mg.NullVal, "&ns1@v1/Union1?" )
+    addIdent(
+        mg.MustList(
+            asType( "ns1@v1/Union*" ),
+            int32( 1 ),
+            int64( 1 ),
+            "s1",
+            mg.MustList( asType( "String*" ), "s1", "s2" ),
+            parser.MustSymbolMap( "f1", int32( 1 ) ),
+            parser.MustStruct( "ns1@v1/S1" ),
+            parser.MustStruct( "ns1@v1/S2" ),
+            parser.MustEnum( "ns1@v1/E1", "e2" ),
+        ),
+        "ns1@v1/Union1*",
+    )
+    addErr(
+        mg.Float32( 1 ), 
+        "ns1@v1/Union1",
+        newTcErr( "ns1@v1/Union1", "Float32", nil ),
+    )
+    addErr(
+        mg.MustList( "s1", "s2" ),
+        "ns1@v1/Union1",
+        newTcErr( "ns1@v1/Union1", mg.TypeOpaqueList, nil ),
+    )
+    addErr(
+        parser.MustStruct( "ns1@v1/S3" ),
+        "&ns1@v1/Union1?",
+        newTcErr( "&ns1@v1/Union1?", "ns1@v1/S3", nil ),
+    )
+    addOk( mg.Int64( 1 ), mg.Uint64( 1 ), "ns1@v1/Union2" )
+    addOk(
+        mg.MustList( "s1", "s2" ),
+        mg.MustList( asType( "String*" ), "s1", "s2" ),
+        "ns1@v1/Union2",
+    )
+//    addErr(
+//        mg.Int64( -1 ),
+//        "ns1@v1/Union2",
+//        newVcErr( nil, "expected uint64 (STUB)" ),
+//    )
+    addErr(
+        mg.MustList( asType( "ns1@v1/S3*" ), parser.MustStruct( "ns1@v1/S3" ) ),
+        "ns1@v1/Union2",
+        newTcErr( "String", "ns1@v1/S3", objpath.RootedAtList() ),
+    )
+    addErr(
+        parser.MustEnum( "ns1@v1/Union1", "e1" ),
+        mg.TypeValue,
+        newVcErr( nil, "not an enum type: ns1@v1/Union1" ),
+    )
+    addErr(
+        parser.MustStruct( "ns1@v1/Union1" ),
+        mg.TypeValue,
+        newVcErr( nil, "not a struct type: ns1@v1/Union1" ),
     )
 }
 
@@ -1608,6 +1729,7 @@ func GetReactorTests() []mgRct.ReactorTest {
     rti.addEnumValCastTests()
     rti.addDeepCatchallTests()
     rti.addDefaultCastTests()
+    rti.addUnionTests()
     rti.addConstructorCastTests()
     rti.addDefaultPathTests()
     rti.addCastDisableTests()

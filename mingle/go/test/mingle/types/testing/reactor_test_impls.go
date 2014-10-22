@@ -27,6 +27,19 @@ func ( f customFieldSetFactory ) GetFieldSet(
     return nil, mg.NewCastError( path, "custom-field-set-test-error" )
 }
 
+func matchUnion2Type( 
+    typ mg.TypeReference, 
+    _ *types.UnionTypeDefinition ) ( mg.TypeReference, bool ) {
+
+    if _, ok := typ.( *mg.ListTypeReference ); ok {
+        return asType( "String*" ), true
+    }
+    switch {
+    case typ.Equals( mg.TypeInt64 ): return mg.TypeUint64, true
+    }
+    return nil, false
+}
+
 func ( t *CastReactorTest ) addCastReactor( 
     rcts []interface{}, c *mgRct.ReactorTestCall ) []interface{} {
 
@@ -39,6 +52,9 @@ func ( t *CastReactorTest ) addCastReactor(
         dt := mgRct.NewDepthTracker()
         rcts = append( rcts, dt )
         cr.FieldSetFactory = customFieldSetFactory{ dt, c }
+    case ProfileUnionImpl:
+        cr.SetUnionDefinitionMatcher(
+            mkQn( "ns1@v1/Union2" ), matchUnion2Type )
     }
     return append( rcts, cr )
 }

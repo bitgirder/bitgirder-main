@@ -10,6 +10,7 @@ import (
 const (
     ProfileCastDisable = "cast-disable"
     ProfileCustomFieldSet = "custom-field-set"
+    ProfileUnionImpl = "union-impl"
 )
 
 type CastReactorTest struct {

@@ -2,6 +2,8 @@
 
 - rename CastError to something more general like InputError
 
+- disallow casting of negative number types to uint types
+
 - add union types, replace TypeValue in some places:
 
     union IdentifierPathPart { Uint64, &Identifier }
@@ -25,3 +27,6 @@
         elementType TypeReference,
         ...
     }
+
+- union types should not allow schemas, unions, or mg.TypeValue, and should not
+  include aliases 

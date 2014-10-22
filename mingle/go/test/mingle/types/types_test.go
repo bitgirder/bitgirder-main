@@ -214,3 +214,33 @@ func TestCreateEnumDefinitionError( t *testing.T ) {
     a.EqualErrors( 
         EnumDefinitionError( "duplicate enum value(s): v1, v2" ), err )
 }
+
+func TestUnionTypeDefinitionMatch( t *testing.T ) {
+    ut := MustUnionTypeDefinitionTypes(
+        asType( "Int32" ),
+        asType( "&Int64" ),
+        asType( "SymbolMap" ),
+        asType( "String+" ),
+        asType( "ns1@v1/S1" ),
+        asType( "ns1@v1/S1*+" ),
+    )
+    a := assert.NewPathAsserter( t )
+    chk := func( in, expctTyp interface{}, expctOk bool ) {
+        inTyp := asType( in )
+        act, ok := ut.MatchType( inTyp )
+        a.Equal( expctOk, ok )
+        if ok { a.Equal( asType( expctTyp ), act ) }
+    }
+    chk( "Int32", "Int32", true )
+    chk( "&Int32", "Int32", true )
+    chk( "&Int32?", "Int32", true )
+    chk( "Int32*", nil, false )
+    chk( "Int64", "&Int64", true )
+    chk( "String*", "String+", true )
+    chk( "String+", "String+", true )
+    chk( "ns1@v1/S1", "ns1@v1/S1", true )
+    chk( "&ns1@v1/S1", "ns1@v1/S1", true )
+    chk( "ns1@v1/S1++", "ns1@v1/S1*+", true )
+    chk( "&&ns1@v1/S1++", "ns1@v1/S1*+", true )
+    chk( "ns1@v1/E1", nil, false )
+}

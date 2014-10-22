@@ -67,6 +67,8 @@ type CastReactor struct {
 
     passthroughTracker *mgRct.DepthTracker
 
+    unionMatchFuncs *mg.QnameMap
+
     FieldSetFactory SymbolMapFieldSetGetter
 
     SkipPathSetter bool
@@ -87,6 +89,10 @@ func ( cr *CastReactor ) dumpStack( pref string ) {
     log.Print( bb.String() )
 }
 
+func ( cr *CastReactor ) pushType( typ mg.TypeReference ) {
+    cr.stack.Push( typ )
+}
+
 func NewCastReactor( 
     expct mg.TypeReference, dm DefinitionGetter ) *CastReactor {
 
@@ -94,8 +100,9 @@ func NewCastReactor(
         stack: stack.NewStack(), 
         dm: dm,
         passFieldsByQn: mg.NewQnameMap(),
+        unionMatchFuncs: mg.NewQnameMap(),
     }
-    res.stack.Push( expct )
+    res.pushType( expct )
     return res
 }
 
@@ -117,6 +124,12 @@ func ( cr *CastReactor ) AddPassthroughField(
         cr.passFieldsByQn.Put( qn, pf )
     }
     pf.Put( fld, true )
+}
+
+func ( cr *CastReactor ) SetUnionDefinitionMatcher(
+    qn *mg.QualifiedTypeName, mf UnionMatchFunction ) {
+
+    cr.unionMatchFuncs.Put( qn, mf )
 }
 
 func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
@@ -211,6 +224,15 @@ func ( cr *CastReactor ) errStackUnrecognized() error {
     return libErrorf( "unrecognized stack element: %T", cr.stack.Peek() )
 }
 
+func ( cr *CastReactor ) unionTypeDefForAtomicType( 
+    at *mg.AtomicTypeReference ) *UnionTypeDefinition {
+
+    if td, ok := cr.dm.GetDefinition( at.Name() ); ok {
+        if utd, ok := td.( *UnionDefinition ); ok { return utd.Union }
+    }
+    return nil
+}
+
 func ( cr *CastReactor ) getStructDef( 
     nm *mg.QualifiedTypeName ) *StructDefinition {
 
@@ -218,6 +240,34 @@ func ( cr *CastReactor ) getStructDef(
         if sd, ok := def.( *StructDefinition ); ok { return sd }
     }
     return nil
+}
+
+// Only handles positive mismatches in which a declared type carries a type that
+// corresponds to a known definition, but for which that definition makes no
+// sense. We let the case when no such definition exists at all be handled
+// elsewhere.
+func ( cr *CastReactor ) checkWellFormed(
+    ev mgRct.Event,
+    typ *mg.QualifiedTypeName,
+    errDesc string,
+    defCheck func( def Definition ) bool ) error {
+
+    if def, ok := cr.dm.GetDefinition( typ ); ok {
+        if defCheck( def ) { return nil }
+        tmpl := "not %s type: %s"
+        return mg.NewCastErrorf( ev.GetPath(), tmpl, errDesc, typ )
+    }
+    return nil
+}
+
+func ( cr *CastReactor ) checkValueWellFormed( ve *mgRct.ValueEvent ) error {
+    en, ok := ve.Val.( *mg.Enum )
+    if ! ok { return nil }
+    chk := func( def Definition ) bool {
+        _, ok := def.( *EnumDefinition ); 
+        return ok
+    }
+    return cr.checkWellFormed( ve, en.Type, "an enum", chk )
 }
 
 func ( cr *CastReactor ) constructorTypeForType(
@@ -237,13 +287,6 @@ func ( cr *CastReactor ) castStructConstructor(
 
     if cr.constructorTypeForType( mg.TypeOf( v ), sd ) != nil { 
         return v, nil, true 
-    }
-    if ev, ok := v.( *mg.Enum ); ok {
-        if ev.Type.Equals( sd.Name ) { 
-            err := mg.NewCastErrorf( 
-                path, "not an enum type: %s", sd.Name )
-            return nil, err, true
-        }
     }
     return nil, nil, false
 }
@@ -291,27 +334,13 @@ func ( cr *CastReactor ) processAtomicValue(
     return nil
 }
 
-func nullValueEventForType( 
-    ve *mgRct.ValueEvent, typ mg.TypeReference ) *mgRct.ValueEvent {
-
-    switch v := typ.( type ) {
-    case *mg.AtomicTypeReference: return ve
-    case *mg.PointerTypeReference: return nullValueEventForType( ve, v.Type )
-    case *mg.NullableTypeReference: return nullValueEventForType( ve, v.Type )
-    case *mg.ListTypeReference: return ve
-    }
-    panic( libErrorf( "unhandled type reference: %T", typ ) )
-}
-
 func ( cr *CastReactor ) processNullableValue(
     ve *mgRct.ValueEvent,
     nt *mg.NullableTypeReference,
     callTyp mg.TypeReference,
     next mgRct.EventProcessor ) error {
 
-    if _, ok := ve.Val.( *mg.Null ); ok { 
-        return next.ProcessEvent( nullValueEventForType( ve, nt ) ) 
-    }
+    if _, ok := ve.Val.( *mg.Null ); ok { return next.ProcessEvent( ve ) }
     return cr.processValueWithType( ve, nt.Type, callTyp, next )
 }
 
@@ -327,6 +356,35 @@ func ( cr *CastReactor ) processValueForListType(
     return mg.NewTypeCastErrorValue( callTyp, ve.Val, ve.GetPath() )
 }
 
+func ( cr *CastReactor ) matchUnionDefType(
+    ev mgRct.Event, ud *UnionDefinition ) ( mg.TypeReference, bool ) {
+
+    typ := mgRct.TypeOfEvent( ev )
+    ut := ud.Union
+    if mf, ok := cr.unionMatchFuncs.GetOk( ud.Name ); ok {
+        return mf.( UnionMatchFunction )( typ, ut )
+    }
+    return ut.MatchType( typ )
+}
+
+func ( cr *CastReactor ) getUnionApplication(
+    ev mgRct.Event,
+    at *mg.AtomicTypeReference,
+    next mgRct.EventProcessor ) func() error {
+
+    if def, ok := cr.dm.GetDefinition( at.Name() ); ok {
+        if ud, ok := def.( *UnionDefinition ); ok {
+            if mtch, ok := cr.matchUnionDefType( ev, ud ); ok {
+                return func() error { 
+                    cr.pushType( mtch )
+                    return cr.ProcessEvent( ev, next ) 
+                }
+            }
+        }
+    }
+    return nil
+}
+
 func ( cr *CastReactor ) processValueWithType(
     ve *mgRct.ValueEvent,
     typ mg.TypeReference,
@@ -335,6 +393,7 @@ func ( cr *CastReactor ) processValueWithType(
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference: 
+        if f := cr.getUnionApplication( ve, v, next ); f != nil { return f() }
         return cr.processAtomicValue( ve, v, callTyp, next )
     case *mg.PointerTypeReference:
         return cr.processValueWithType( ve, v.Type, callTyp, next )
@@ -349,6 +408,7 @@ func ( cr *CastReactor ) processValueWithType(
 func ( cr *CastReactor ) processValue( 
     ve *mgRct.ValueEvent, next mgRct.EventProcessor ) error {
 
+    if err := cr.checkValueWellFormed( ve ); err != nil { return err }
     switch v := cr.stack.Peek().( type ) {
     case mg.TypeReference: 
         cr.stack.Pop()
@@ -491,6 +551,7 @@ func ( cr *CastReactor ) processMapStartWithType(
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference:
+        if f := cr.getUnionApplication( me, v, next ); f != nil { return f() }
         return cr.processMapStartWithAtomicType( me, v, callTyp, next )
     case *mg.PointerTypeReference:
         return cr.processMapStartWithType( me, v.Type, callTyp, next )
@@ -526,7 +587,7 @@ func ( cr *CastReactor ) processFieldStart(
     } else {
         typ, err := fc.ft.fieldTypeFor( fs.Field, fs.GetPath().Parent() )
         if err != nil { return err }
-        cr.stack.Push( typ )
+        cr.pushType( typ )
     }
 
     return next.ProcessEvent( fs )
@@ -563,6 +624,17 @@ func ( cr *CastReactor ) processEnd(
 
     if err := next.ProcessEvent( ee ); err != nil { return err }
     return nil
+}
+
+func ( cr *CastReactor ) checkStructWellFormed(
+    ss *mgRct.StructStartEvent ) error {
+
+    return cr.checkWellFormed( ss, ss.Type, "a struct",
+        func ( def Definition ) bool {
+            _, ok := def.( *StructDefinition )
+            return ok
+        },
+    )
 }
 
 func ( cr *CastReactor ) allowStructStartForType( 
@@ -605,6 +677,7 @@ func ( cr *CastReactor ) processStructStartWithType(
 
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference:
+        if f := cr.getUnionApplication( ss, v, next ); f != nil { return f() }
         return cr.processStructStartWithAtomicType( ss, v, callTyp, next )
     case *mg.PointerTypeReference:
         return cr.processStructStartWithType( ss, v.Type, callTyp, next )
@@ -617,6 +690,7 @@ func ( cr *CastReactor ) processStructStartWithType(
 func ( cr *CastReactor ) processStructStart(
     ss *mgRct.StructStartEvent, next mgRct.EventProcessor ) error {
 
+    if err := cr.checkStructWellFormed( ss ); err != nil { return err }
     switch v := cr.stack.Peek().( type ) {
     case mg.TypeReference:
         cr.stack.Pop()
@@ -639,6 +713,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
         return cr.processListStartWithType( 
             le, mg.TypeOpaqueList, callTyp, next )
     }
+    if f := cr.getUnionApplication( le, at, next ); f != nil { return f() }
     if sd := cr.getStructDef( at.Name() ); sd != nil {
         if typ := cr.constructorTypeForType( le.Type, sd ); typ != nil {
             lt := typ.( *mg.ListTypeReference )
