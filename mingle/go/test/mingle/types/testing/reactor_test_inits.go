@@ -324,6 +324,7 @@ func ( rti *rtInit ) addTruncateNumTests() {
         rti.addSucc( val, mg.Int32( -1 ), mg.TypeInt32, dm )
         rti.addSucc( val, mg.Int64( -1 ), mg.TypeInt64, dm )
     }
+    // See https://code.google.com/p/go/issues/detail?id=2196
     negZero := math.Copysign( 0.0, -1.0 )
     negZeroes := []mg.Value{ 
         mg.Float32( float32( negZero ) ), 
