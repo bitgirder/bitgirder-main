@@ -274,9 +274,8 @@ func ( cr *CastReactor ) constructorTypeForType(
     typ mg.TypeReference, sd *StructDefinition ) mg.TypeReference {
 
     if sd.Constructors == nil { return nil }
-    for _, consTyp := range sd.Constructors.Types {
-        if consTyp.Equals( typ ) { return consTyp }
-    }
+    res, ok := sd.Constructors.MatchType( typ )
+    if ok { return res }
     return nil
 }
 

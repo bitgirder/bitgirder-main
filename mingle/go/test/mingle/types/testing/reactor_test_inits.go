@@ -1700,6 +1700,12 @@ func ( rti *rtInit ) addConstructorCastTests() {
     rti.addIdent( int32( 2 ), s1Typ.Name, dm )
     rti.addIdent( "hello", s1Typ.Name, dm )
     rti.addIdent( mg.MustList( asType( "String*" ), "a", "b" ), s1Typ.Name, dm )
+    rti.addSucc(
+        mg.MustList( asType( "String+" ), "a", "b" ),
+        mg.MustList( asType( "String*" ), "a", "b" ),
+        s1Typ.Name,
+        dm,
+    )
     rti.addIdent( parser.MustStruct( "ns1@v1/S2" ), s1Typ.Name, dm )
     rti.addIdent( 
         mg.MustList(
@@ -1713,12 +1719,6 @@ func ( rti *rtInit ) addConstructorCastTests() {
     rti.addIdent( parser.MustEnum( "ns1@v1/E1", "e1" ), s1Typ.Name, dm )
     rti.addIdent( int32( 2 ), asType( "&ns1@v1/S1" ), dm )
     rti.addTcError( int64( 1 ), s1Typ.Name, mg.TypeInt64, dm )
-    rti.addTcError(
-        mg.MustList( asType( "String+" ), "a", "b" ),
-        s1Typ.Name,
-        asType( "String+" ),
-        dm,
-    )
 }
 
 func GetReactorTests() []mgRct.ReactorTest {
