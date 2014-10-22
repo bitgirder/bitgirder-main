@@ -361,7 +361,7 @@ func ( cr *CastReactor ) matchUnionDefType(
     typ := mgRct.TypeOfEvent( ev )
     ut := ud.Union
     if mf, ok := cr.unionMatchFuncs.GetOk( ud.Name ); ok {
-        return mf.( UnionMatchFunction )( typ, ut )
+        return mf.( UnionMatchFunction )( UnionMatchInput{ typ, ut, cr.dm } )
     }
     return ut.MatchType( typ )
 }

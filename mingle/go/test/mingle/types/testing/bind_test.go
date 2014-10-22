@@ -505,6 +505,8 @@ func ( b *bindTestBuilder ) idPathStruct( parts ...interface{} ) *mg.Struct {
     )
 }
 
+// assumes correct upstream cast tests are passing, only adds error testing for
+// things not checked there
 func ( b *bindTestBuilder ) addIdentifierPathTests() {
     b.addRt(
         b.idPathStruct(
@@ -547,18 +549,6 @@ func ( b *bindTestBuilder ) addIdentifierPathTests() {
         nil,
         "[<input>, line 1, col 7]: Invalid id rune: \"$\" (U+0024)",
     )
-    b.addVcErr( 
-        b.idPathStruct(), 
-        mg.TypeIdentifierPath,
-        b.p( "parts" ),
-        "empty list",
-    )
-    b.addVcErr(
-        b.idPathStruct( true ),
-        mg.TypeIdentifierPath,
-        b.p( "parts" ).StartList(),
-        "invalid value for identifier path part: mingle:core@v1/Boolean",
-    )
     b.addVcErr(
         b.idPathStruct( "bad$Id" ),
         mg.TypeIdentifierPath,
@@ -570,30 +560,6 @@ func ( b *bindTestBuilder ) addIdentifierPathTests() {
         mg.TypeIdentifierPath,
         b.p( "parts" ).StartList(),
         "[offset 0]: Expected type code 0x01 but got 0x00",
-    )
-    b.addVcErr(
-        b.idPathStruct( float32( 1 ) ),
-        mg.TypeIdentifierPath,
-        b.p( "parts" ).StartList(),
-        "invalid value for identifier path part: mingle:core@v1/Float32",
-    )
-    b.addVcErr(
-        b.idPathStruct( float64( 1 ) ),
-        mg.TypeIdentifierPath,
-        b.p( "parts" ).StartList(),
-        "invalid value for identifier path part: mingle:core@v1/Float64",
-    )
-    b.addVcErr(
-        b.idPathStruct( int32( -1 ) ),
-        mg.TypeIdentifierPath,
-        b.p( "parts" ).StartList(),
-        "value is negative",
-    )
-    b.addVcErr(
-        b.idPathStruct( int64( -1 ) ),
-        mg.TypeIdentifierPath,
-        b.p( "parts" ).StartList(),
-        "value is negative",
     )
 }
 
@@ -1126,6 +1092,7 @@ func ( i bindTestCallInterface ) CreateReactors(
     typ := t.Type
     if typ == nil { typ = mg.TypeNullableValue }
     cr := types.NewCastReactor( typ, builtin.BuiltinTypes() )
+    builtin.CastBuiltinTypes( cr )
     return []interface{}{ cr }
 }
 

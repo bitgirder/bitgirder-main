@@ -55,17 +55,23 @@ func ( rti *rtInit ) addIdent(
     rti.addSucc( v, v, typ, dm )
 }
 
-func ( rti *rtInit ) addVcError(
-    in interface{}, typ interface{}, msg string, dm *types.DefinitionMap ) {
+func ( rti *rtInit ) addError(
+    in interface{}, typ interface{}, err error, dm *types.DefinitionMap ) {
 
     rti.addTests(
         &CastReactorTest{
             Map: dm,
             In: mg.MustValue( in ),
             Type: asType( typ ),
-            Err: newVcErr( nil, msg ),
+            Err: err,
         },
     )
+}
+
+func ( rti *rtInit ) addVcError(
+    in interface{}, typ interface{}, msg string, dm *types.DefinitionMap ) {
+
+    rti.addError( in, typ, newVcErr( nil, msg ), dm )
 }
 
 func ( rti *rtInit ) addNullValueError( 
@@ -1333,7 +1339,13 @@ func ( rti *rtInit ) addDefaultCastTests() {
 
 func ( rti *rtInit ) addUnionTests() {
     dm := builtin.MakeDefMap( 
-        types.MakeStructDef( "ns1@v1/S1", nil ),
+        func() *types.StructDefinition {
+            res := types.MakeStructDef( "ns1@v1/S1", nil )
+            res.Constructors = types.MustUnionTypeDefinitionTypes(
+                asType( "ns1@v1/S3" ),
+            )
+            return res
+        }(),
         types.MakeStructDef( "ns1@v1/S2", nil ),
         types.MakeStructDef( "ns1@v1/S3", nil ),
         types.MakeEnumDef( "ns1@v1/E1", "e1", "e2" ),
@@ -1419,8 +1431,10 @@ func ( rti *rtInit ) addUnionTests() {
         "ns1@v1/Union1",
         newTcErr( "ns1@v1/Union1", mg.TypeOpaqueList, nil ),
     )
+    // thoush S3 is a valid S1 constructor, we test that default union matching
+    // does not match constructor types
     addErr(
-        parser.MustStruct( "ns1@v1/S3" ),
+        parser.MustStruct( "ns1@v1/S3" ), 
         "&ns1@v1/Union1?",
         newTcErr( "&ns1@v1/Union1?", "ns1@v1/S3", nil ),
     )
@@ -1721,6 +1735,90 @@ func ( rti *rtInit ) addConstructorCastTests() {
     rti.addTcError( int64( 1 ), s1Typ.Name, mg.TypeInt64, dm )
 }
 
+// successes only test union coverage -- parsing and invalid string/buffer
+// values are checked further by the bind tests which actually process them (the
+// type definition for identifier part doesn't actually dictate the correct
+// format of strings or buffers, for instance)
+func ( rti *rtInit ) addIdentifierPathTests() {
+    dm := builtin.MakeDefMap()
+    idPathStruct := func( parts ...interface{} ) *mg.Struct {
+        return parser.MustStruct( mg.QnameIdentifierPath, "parts", parts )
+    }
+    rti.addSucc(
+        idPathStruct(
+            "id1", 
+            []byte{ 0 },
+            parser.MustStruct( mg.QnameIdentifier,
+                "parts", mg.MustList( "id2" ),
+            ),
+            int32( 1 ), 
+            int64( 2 ),
+            uint32( 3 ),
+            uint64( 4 ),
+        ),
+        idPathStruct(
+            "id1", 
+            []byte{ 0 },
+            parser.MustStruct( mg.QnameIdentifier,
+                "parts", mg.MustList( "id2" ),
+            ),
+            uint64( 1 ), 
+            uint64( 2 ), 
+            uint64( 3 ), 
+            uint64( 4 ), 
+        ),
+        mg.TypeIdentifierPath,
+        dm,
+    )
+    partsPath := objpath.RootedAt( mkId( "parts" ) )
+    rti.addError( 
+        idPathStruct(),
+        mg.TypeIdentifierPath,
+        newVcErr( partsPath, "empty list" ),
+        dm,
+    )
+    rti.addError(
+        idPathStruct( true ),
+        mg.TypeIdentifierPath,
+        newTcErr( 
+            mg.TypeIdentifierPathPart,
+            mg.TypeBoolean,
+            partsPath.StartList(),
+        ),
+        dm,
+    )
+    rti.addError(
+        idPathStruct( float32( 1 ) ),
+        mg.TypeIdentifierPath,
+        newTcErr( 
+            mg.TypeIdentifierPathPart,
+            mg.TypeFloat32,
+            partsPath.StartList(),
+        ),
+        dm,
+    )
+    rti.addError(
+        idPathStruct( float64( 1 ) ),
+        mg.TypeIdentifierPath,
+        newTcErr(
+            mg.TypeIdentifierPathPart,
+            mg.TypeFloat64,
+            partsPath.StartList(),
+        ),
+        dm,
+    )
+    rti.addError(
+        idPathStruct( int32( -1 ) ),
+        mg.TypeIdentifierPath,
+        newVcErr( partsPath.StartList(), "value out of range: -1" ),
+        dm,
+    )
+}
+
+func ( rti *rtInit ) addBuiltinTypeTests() {
+    rti.addIdentifierPathTests()
+}
+
 func GetReactorTests() []mgRct.ReactorTest {
     rti := &rtInit{ b: mgRct.NewReactorTestSliceBuilder() }
     rti.addBaseTypeTests()    
@@ -1746,5 +1844,6 @@ func GetReactorTests() []mgRct.ReactorTest {
     rti.addDefaultPathTests()
     rti.addCastDisableTests()
     rti.addCustomFieldSetTests()
+    rti.addBuiltinTypeTests()
     return rti.b.GetTests()
 }

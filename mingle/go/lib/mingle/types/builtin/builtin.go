@@ -61,25 +61,15 @@ var (
 
     typeIdentifierPointer = mg.NewPointerTypeReference( mg.TypeIdentifier )
     
-    typeIdentifierPointerList = &mg.ListTypeReference{
-        ElementType: typeIdentifierPointer,
-        AllowsEmpty: false,
-    }
+    typeIdentifierPointerList = 
+        &mg.ListTypeReference{ ElementType: typeIdentifierPointer }
 
-    typeIdentifierPathPartsList = &mg.ListTypeReference{
-        ElementType: mg.TypeValue,
-        AllowsEmpty: false,
-    }
+    typeIdentifierPathPartsList = 
+        &mg.ListTypeReference{ ElementType: mg.TypeIdentifierPathPart }
 
-    typeNonEmptyStringList = &mg.ListTypeReference{
-        ElementType: mg.TypeString,
-        AllowsEmpty: false,
-    }
+    typeNonEmptyStringList = &mg.ListTypeReference{ ElementType: mg.TypeString }
 
-    typeNonEmptyBufferList = &mg.ListTypeReference{
-        ElementType: mg.TypeBuffer,
-        AllowsEmpty: false,
-    }
+    typeNonEmptyBufferList = &mg.ListTypeReference{ ElementType: mg.TypeBuffer }
 
     typesNs = &mg.Namespace{
         Parts: []*mg.Identifier{ idUnsafe( "mingle" ), idUnsafe( "types" ) },
@@ -263,6 +253,17 @@ func initCoreV1Types() {
     )
     mustAddBuiltinStruct( mg.QnamePointerTypeReference,
         mkField0( identifierType, mg.TypeValue ),
+    )
+    MustAddBuiltinType(
+        &types.UnionDefinition{
+            Name: mg.QnameIdentifierPathPart,
+            Union: types.MustUnionTypeDefinitionTypes(
+                mg.TypeString,
+                mg.TypeBuffer,
+                mg.TypeIdentifier,
+                mg.TypeUint64,
+            ),
+        },
     )
     idPathDef := mustAddBuiltinStruct( mg.QnameIdentifierPath,
         mkField0( identifierParts, typeIdentifierPathPartsList ),

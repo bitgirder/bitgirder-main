@@ -132,8 +132,13 @@ func ( utd *UnionTypeDefinition ) MatchType(
     return nil, false
 }
 
-type UnionMatchFunction func( 
-    typ mg.TypeReference, ut *UnionTypeDefinition ) ( mg.TypeReference, bool )
+type UnionMatchInput struct {
+    TypeIn mg.TypeReference
+    Union *UnionTypeDefinition
+    Definitions DefinitionGetter
+}
+
+type UnionMatchFunction func( in UnionMatchInput ) ( mg.TypeReference, bool )
 
 func UnionTypeKeyForType( typ mg.TypeReference ) string {
     switch v := typ.( type ) {

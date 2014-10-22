@@ -87,7 +87,6 @@ func ( t *bindTestCall ) visitBindTest() bool {
     }
     act := vb.GetValue().( mg.Value )
     if f := t.cc.MingleValueForAssert; f != nil { act = f( act ) }
-    t.Logf( "asserting unbind, act: %s", mg.QuoteValue( act ) )
     mg.AssertEqualValues( t.t.Mingle, act, t.PathAsserter )
     return true
 }

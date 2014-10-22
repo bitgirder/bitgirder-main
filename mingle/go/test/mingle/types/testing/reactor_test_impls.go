@@ -3,6 +3,7 @@ package testing
 import ( 
     mg "mingle"
     "mingle/types"
+    "mingle/types/builtin"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
@@ -27,15 +28,12 @@ func ( f customFieldSetFactory ) GetFieldSet(
     return nil, mg.NewCastError( path, "custom-field-set-test-error" )
 }
 
-func matchUnion2Type( 
-    typ mg.TypeReference, 
-    _ *types.UnionTypeDefinition ) ( mg.TypeReference, bool ) {
-
-    if _, ok := typ.( *mg.ListTypeReference ); ok {
+func matchUnion2Type( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
+    if _, ok := in.TypeIn.( *mg.ListTypeReference ); ok {
         return asType( "String*" ), true
     }
     switch {
-    case typ.Equals( mg.TypeInt64 ): return mg.TypeUint64, true
+    case in.TypeIn.Equals( mg.TypeInt64 ): return mg.TypeUint64, true
     }
     return nil, false
 }
@@ -44,6 +42,7 @@ func ( t *CastReactorTest ) addCastReactor(
     rcts []interface{}, c *mgRct.ReactorTestCall ) []interface{} {
 
     cr := types.NewCastReactor( t.Type, t.Map )
+    builtin.CastBuiltinTypes( cr )
     switch t.Profile {
     case ProfileCastDisable: 
         cr.AddPassthroughField( mkQn( "ns1@v1/S1" ), mkId( "f1" ) )

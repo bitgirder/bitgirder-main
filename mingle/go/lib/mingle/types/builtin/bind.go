@@ -548,48 +548,21 @@ func VisitIdentifierPath( p objpath.PathNode, vc bind.VisitContext ) error {
     return visitIdPathAsStruct( p, vc )
 }
 
-func idPathPartFromValue( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
-    negErr := func() error {
-        return mg.NewCastError( ve.GetPath(), "value is negative" )
-    }
-    switch v := ve.Val.( type ) {
-    case mg.Int32:
-        if int32( v ) < 0 { return nil, negErr(), true }
-        return uint64( int32( v ) ), nil, true
-    case mg.Int64:
-        if int64( v ) < 0 { return nil, negErr(), true }
-        return uint64( int64( v ) ), nil, true
-    case mg.Uint32: return uint64( uint32( v ) ), nil, true
-    case mg.Uint64: return uint64( v ), nil, true
-    }
+func idPathPartFromUint64( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
+    if i, ok := ve.Val.( mg.Uint64 ); ok { return uint64( i ), nil, true }
     return nil, nil, false
 }
 
-func idPathPartFailBadVal( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
-    tmpl := "invalid value for identifier path part: %s"
-    err := mg.NewCastErrorf( ve.GetPath(), tmpl, mgRct.TypeOfEvent( ve ) )
-    return nil, err, true
-}
-
-// note that we have ValueFunc end with idPathPartFailBadVal so that we can fail
-// with a CastError instead of the default error. This is to reflect the
-// intent of IdentifierPart.parts being typed as Value+, but where the values
-// themselves are expected to be of a finite set of types (if we had union types
-// we would use that)
 func idPathPartBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     res := bind.NewFunctionsBuilderFactory()
     res.StructFunc = func( 
         sse *mgRct.StructStartEvent ) ( mgRct.FieldSetBuilder, error ) {
 
-        if qn := sse.Type; qn.Equals( mg.QnameIdentifier ) {
-            if bf, ok := reg.BuilderFactoryForName( qn ); ok {
-                return bf.StartStruct( sse )
-            }
-        }
-        return nil, nil
+        bf := reg.MustBuilderFactoryForType( sse.Type.AsAtomicType() )
+        return bf.StartStruct( sse )
     }
     res.ValueFunc = mgRct.NewBuildValueOkFunctionSequence(
-        idFromBytes, idFromString, idPathPartFromValue, idPathPartFailBadVal )
+        idFromBytes, idFromString, idPathPartFromUint64 )
     return res
 }
 
