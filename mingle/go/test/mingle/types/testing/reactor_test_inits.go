@@ -8,6 +8,7 @@ import (
     mgRct "mingle/reactor"
     "bitgirder/objpath"
     "encoding/base64"
+    "math"
     "fmt"
 )
 
@@ -99,22 +100,6 @@ func ( rti *rtInit ) addBaseTypeTests() {
     rti.addIdent( mg.Float64( 1.0 ), mg.TypeFloat64, dm )
     rti.addIdent( testValTm1, mg.TypeTimestamp, dm )
     rti.addIdent( nil, mg.TypeNullableValue, dm )
-    rti.addSucc( 
-        mg.Int32( -1 ), mg.Uint32( uint32( 4294967295 ) ), mg.TypeUint32, dm )
-    rti.addSucc( 
-        mg.Int64( -1 ), mg.Uint32( uint32( 4294967295 ) ), mg.TypeUint32, dm )
-    rti.addSucc( 
-        mg.Int32( -1 ), 
-        mg.Uint64( uint64( 18446744073709551615 ) ), 
-        mg.TypeUint64,
-        dm,
-    )
-    rti.addSucc( 
-        mg.Int64( -1 ), 
-        mg.Uint64( uint64( 18446744073709551615 ) ), 
-        mg.TypeUint64,
-        dm,
-    )
     rti.addSucc( "true", true, mg.TypeBoolean, dm )
     rti.addSucc( "TRUE", true, mg.TypeBoolean, dm )
     rti.addSucc( "TruE", true, mg.TypeBoolean, dm )
@@ -339,9 +324,48 @@ func ( rti *rtInit ) addTruncateNumTests() {
         rti.addSucc( val, mg.Int32( -1 ), mg.TypeInt32, dm )
         rti.addSucc( val, mg.Int64( -1 ), mg.TypeInt64, dm )
     }
+    negZero := math.Copysign( 0.0, -1.0 )
+    negZeroes := []mg.Value{ 
+        mg.Float32( float32( negZero ) ), 
+        mg.Float64( negZero ),
+    }
+    for _, val := range negZeroes {
+        rti.addSucc( val, mg.Int32( 0 ), mg.TypeInt32, dm )
+        rti.addSucc( val, mg.Int64( 0 ), mg.TypeInt64, dm )
+        rti.addSucc( val, mg.Uint32( 0 ), mg.TypeUint32, dm )
+        rti.addSucc( val, mg.Uint64( 0 ), mg.TypeUint64, dm )
+    }
     rti.addSucc( int64( 1 << 31 ), int32( -2147483648 ), mg.TypeInt32, dm )
     rti.addSucc( int64( 1 << 33 ), int32( 0 ), mg.TypeInt32, dm )
     rti.addSucc( int64( 1 << 31 ), uint32( 1 << 31 ), mg.TypeUint32, dm )
+}
+
+func ( rti *rtInit ) addRangeErrorNumTests() {
+    dm := types.NewDefinitionMap()
+    rngErr := func( val interface{}, typ mg.TypeReference ) {
+        mv := mg.MustValue( val )
+        valStr := mg.QuoteValue( mv )
+        if ms, ok := mv.( mg.String ); ok { valStr = string( ms ) }
+        msg := fmt.Sprintf( "value out of range: %s", valStr )
+        rti.addVcError( mv, typ, msg, dm )
+    }
+    rngErr( "2147483648", mg.TypeInt32 )
+    rngErr( "-2147483649", mg.TypeInt32 )
+    rngErr( "9223372036854775808", mg.TypeInt64 )
+    rngErr( "-9223372036854775809", mg.TypeInt64 )
+    rngErr( "4294967296", mg.TypeUint32 )
+    rngErr( "18446744073709551616", mg.TypeUint64 )
+    negs := []mg.Value{
+        mg.String( "-1" ),
+        mg.Int32( -1 ),
+        mg.Int64( -1 ),
+        mg.Float32( -1.0 ),
+        mg.Float64( -1.0 ),
+    }
+    for _, val := range negs {
+        rngErr( val, mg.TypeUint32 )
+        rngErr( val, mg.TypeUint64 )
+    }
 }
 
 func ( rti *rtInit ) addNumTests() {
@@ -352,21 +376,8 @@ func ( rti *rtInit ) addNumTests() {
     }
     rti.addIdentityNumTests()
     rti.addTruncateNumTests()
+    rti.addRangeErrorNumTests()
     rti.addSucc( "1", int64( 1 ), "Int64~[-1,1]", dm ) 
-    rngErr := func( val string, typ mg.TypeReference ) {
-        rti.addVcError( 
-            val, typ, fmt.Sprintf( "value out of range: %s", val ), dm )
-    }
-    rngErr( "2147483648", mg.TypeInt32 )
-    rngErr( "-2147483649", mg.TypeInt32 )
-    rngErr( "9223372036854775808", mg.TypeInt64 )
-    rngErr( "-9223372036854775809", mg.TypeInt64 )
-    rngErr( "4294967296", mg.TypeUint32 )
-    rti.addVcError( "-1", mg.TypeUint32, "value out of range: -1", dm )
-    rti.addVcError( "-1", mg.NewPointerTypeReference( mg.TypeUint32 ), 
-        "value out of range: -1", dm )
-    rngErr( "18446744073709551616", mg.TypeUint64 )
-    rti.addVcError( "-1", mg.TypeUint64, "value out of range: -1", dm )
     for _, tmpl := range []string{ "%s", "&%s", "&%s?" } {
         rti.addVcError(
             12, fmt.Sprintf( tmpl, "Int32~[0,10)" ), 
@@ -1418,11 +1429,11 @@ func ( rti *rtInit ) addUnionTests() {
         mg.MustList( asType( "String*" ), "s1", "s2" ),
         "ns1@v1/Union2",
     )
-//    addErr(
-//        mg.Int64( -1 ),
-//        "ns1@v1/Union2",
-//        newVcErr( nil, "expected uint64 (STUB)" ),
-//    )
+    addErr(
+        mg.Int64( -1 ),
+        "ns1@v1/Union2",
+        newVcErr( nil, "value out of range: -1" ),
+    )
     addErr(
         mg.MustList( asType( "ns1@v1/S3*" ), parser.MustStruct( "ns1@v1/S3" ) ),
         "ns1@v1/Union2",

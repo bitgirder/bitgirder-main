@@ -132,6 +132,15 @@ func castInt64(
     return nil, mg.NewTypeCastErrorValue( callTyp, mgVal, path )
 }
 
+func castCheckNeg( 
+    isNeg bool, in, ifOk mg.Value, path objpath.PathNode ) ( mg.Value, error ) {
+
+    if isNeg { 
+        return nil, mg.NewCastErrorf( path, "value out of range: %s", in )
+    }
+    return ifOk, nil
+}
+
 func castUint32(
     mgVal mg.Value,
     at *mg.AtomicTypeReference,
@@ -139,12 +148,16 @@ func castUint32(
     path objpath.PathNode ) ( mg.Value, error ) {
 
     switch v := mgVal.( type ) {
-    case mg.Int32: return mg.Uint32( uint32( v ) ), nil
+    case mg.Int32: 
+        return castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ), path )
     case mg.Uint32: return v, nil
-    case mg.Int64: return mg.Uint32( uint32( v ) ), nil
+    case mg.Int64: 
+        return castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ), path )
     case mg.Uint64: return mg.Uint32( uint32( v ) ), nil
-    case mg.Float32: return mg.Uint32( uint32( v ) ), nil
-    case mg.Float64: return mg.Uint32( uint32( v ) ), nil
+    case mg.Float32: 
+        return castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ), path )
+    case mg.Float64: 
+        return castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ), path )
     case mg.String: return parseNumberForCast( v, mg.QnameUint32, path )
     }
     return nil, mg.NewTypeCastErrorValue( callTyp, mgVal, path )
@@ -157,12 +170,16 @@ func castUint64(
     path objpath.PathNode ) ( mg.Value, error ) {
 
     switch v := mgVal.( type ) {
-    case mg.Int32: return mg.Uint64( uint64( v ) ), nil
+    case mg.Int32: 
+        return castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ), path )
     case mg.Uint32: return mg.Uint64( uint64( v ) ), nil
-    case mg.Int64: return mg.Uint64( uint64( v ) ), nil
+    case mg.Int64: 
+        return castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ), path )
     case mg.Uint64: return v, nil
-    case mg.Float32: return mg.Uint64( uint64( v ) ), nil
-    case mg.Float64: return mg.Uint64( uint64( v ) ), nil
+    case mg.Float32: 
+        return castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ), path )
+    case mg.Float64: 
+        return castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ), path )
     case mg.String: return parseNumberForCast( v, mg.QnameUint64, path )
     }
     return nil, mg.NewTypeCastErrorValue( callTyp, mgVal, path )
