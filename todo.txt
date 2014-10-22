@@ -1,27 +1,7 @@
-- move mingle-interpreter into mingle-compiler as an internal const evaluator
+- (compiler) move mingle-interpreter into mingle-compiler as an internal const
+  evaluator
 
-- rename CastError to something more general like InputError
+- (core) rename CastError to something more general like InputError
 
-- add union types, replace TypeValue in some places:
-
-    union ValueRestriction { RangeRestriction, RegexRestriction }
-
-    struct AtomicTypeReference {
-        type &QualifiedTypeName
-        restriction &ValueRestriction?
-    }
-
-    union TypeReference {
-        AtomicTypeReference,
-        ListTypeReference,
-        PointerTypeReference,
-        NullableTypeReference,
-    }
-
-    struct ListTypeReference {
-        elementType TypeReference,
-        ...
-    }
-
-- union types should not allow schemas, unions, or mg.TypeValue, and should not
-  include aliases 
+- (compiler) union types should not allow schemas, unions, or mg.TypeValue, and
+  should not include aliases 

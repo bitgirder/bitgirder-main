@@ -1266,6 +1266,8 @@ var (
     TypeRangeRestriction *AtomicTypeReference
     QnameRegexRestriction *QualifiedTypeName
     TypeRegexRestriction *AtomicTypeReference
+    QnameValueRestriction *QualifiedTypeName
+    TypeValueRestriction *AtomicTypeReference
     QnameListTypeReference *QualifiedTypeName
     TypeListTypeReference *AtomicTypeReference
     QnameNullableTypeReference *QualifiedTypeName
@@ -1365,6 +1367,7 @@ func init() {
         f1( "AtomicTypeReference" )
     QnameRangeRestriction, TypeRangeRestriction = f1( "RangeRestriction" )
     QnameRegexRestriction, TypeRegexRestriction = f1( "RegexRestriction" )
+    QnameValueRestriction, TypeValueRestriction = f1( "ValueRestriction" )
     QnameListTypeReference, TypeListTypeReference = f1( "ListTypeReference" )
     QnameNullableTypeReference, TypeNullableTypeReference = 
         f1( "NullableTypeReference" )

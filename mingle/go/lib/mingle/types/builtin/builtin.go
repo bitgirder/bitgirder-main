@@ -97,7 +97,8 @@ var (
     QnameUnionTypeDefinition, TypeUnionTypeDefinition = 
         mkTypesQnTypPair( "UnionTypeDefinition" )
 
-    typeUnionTypeTypesList = &mg.ListTypeReference{ mg.TypeValue, false }
+    typeUnionTypeTypesList = 
+        &mg.ListTypeReference{ ElementType: mg.TypeTypeReference }
 
     QnameUnionDefinition, TypeUnionDefinition = 
         mkTypesQnTypPair( "UnionDefinition" )
@@ -240,19 +241,39 @@ func initCoreV1Types() {
     mustAddBuiltinStruct( mg.QnameRegexRestriction,
         mkField0( identifierPattern, mg.TypeString ),
     )
+    MustAddBuiltinType(
+        &types.UnionDefinition{
+            Name: mg.QnameValueRestriction,
+            Union: types.MustUnionTypeDefinitionTypes(
+                mg.TypeRangeRestriction,
+                mg.TypeRegexRestriction,
+            ),
+        },
+    )
     mustAddBuiltinStruct( mg.QnameAtomicTypeReference,
         mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-        mkField0( identifierRestriction, mg.TypeNullableValue ),
+        mkField0( identifierRestriction, nilPtrTyp( mg.TypeValueRestriction ) ),
     )
     mustAddBuiltinStruct( mg.QnameListTypeReference,
-        mkField0( identifierElementType, mg.TypeValue ),
+        mkField0( identifierElementType, mg.TypeTypeReference ),
         mkField0( identifierAllowsEmpty, mg.TypeBoolean ),
     )
     mustAddBuiltinStruct( mg.QnameNullableTypeReference,
-        mkField0( identifierType, mg.TypeValue ),
+        mkField0( identifierType, mg.TypeTypeReference ),
     )
     mustAddBuiltinStruct( mg.QnamePointerTypeReference,
-        mkField0( identifierType, mg.TypeValue ),
+        mkField0( identifierType, mg.TypeTypeReference ),
+    )
+    MustAddBuiltinType(
+        &types.UnionDefinition{
+            Name: mg.QnameTypeReference,
+            Union: types.MustUnionTypeDefinitionTypes(
+                mg.TypeAtomicTypeReference,
+                mg.TypeListTypeReference,
+                mg.TypeNullableTypeReference,
+                mg.TypePointerTypeReference,
+            ),
+        },
     )
     MustAddBuiltinType(
         &types.UnionDefinition{
@@ -287,7 +308,7 @@ func initTypesTypes() {
     )
     mustAddBuiltinStruct( QnameFieldDefinition,
         mkField0( identifierName, typeIdentifierPointer ),
-        mkField0( identifierType, mg.TypeValue ),
+        mkField0( identifierType, mg.TypeTypeReference ),
         mkField0( identifierDefault, mg.TypeNullableValue ),
     )
     mustAddBuiltinStruct( QnameFieldSet,
@@ -302,7 +323,7 @@ func initTypesTypes() {
     )
     mustAddBuiltinStruct( QnameCallSignature,
         mkField0( identifierFields, ptrTyp( TypeFieldSet ) ),
-        mkField0( identifierReturn, mg.TypeValue ),
+        mkField0( identifierReturn, mg.TypeTypeReference ),
         mkField0( identifierThrows, nilPtrTyp( TypeUnionTypeDefinition ) ),
     )
     mustAddBuiltinStruct( QnamePrototypeDefinition,
@@ -321,7 +342,7 @@ func initTypesTypes() {
     )
     mustAddBuiltinStruct( QnameAliasedTypeDefinition,
         mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
-        mkField0( identifierAliasedType, mg.TypeValue ),
+        mkField0( identifierAliasedType, mg.TypeTypeReference ),
     )
     mustAddBuiltinStruct( QnameEnumDefinition,
         mkField0( identifierName, ptrTyp( mg.TypeQualifiedTypeName ) ),
