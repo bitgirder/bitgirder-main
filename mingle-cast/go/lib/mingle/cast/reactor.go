@@ -1,9 +1,10 @@
-package types
+package cast
 
 import (
     mg "mingle"
     mgRct "mingle/reactor"
     "mingle/parser"
+    "mingle/types"
     "bitgirder/objpath"
     "bitgirder/pipeline"
     "bitgirder/stack"
@@ -15,17 +16,21 @@ import (
 )
 
 func canAssignToStruct( 
-    targ *StructDefinition, def Definition, dm DefinitionGetter ) bool {
+    targ *types.StructDefinition, 
+    def types.Definition, 
+    dm types.DefinitionGetter ) bool {
 
-    sd, ok := def.( *StructDefinition )
+    sd, ok := def.( *types.StructDefinition )
     if ! ok { return false }
     return targ.GetName().Equals( sd.GetName() ) 
 }
 
 func canAssignToSchema(
-    targ *SchemaDefinition, def Definition, dm DefinitionGetter ) bool {
+    targ *types.SchemaDefinition, 
+    def types.Definition, 
+    dm types.DefinitionGetter ) bool {
 
-    if sd, ok := def.( *StructDefinition ); ok {
+    if sd, ok := def.( *types.StructDefinition ); ok {
         log.Printf( "checking whether %s satisfies schema %s", 
             sd.Name, targ.Name )
         return sd.SatisfiesSchema( targ )
@@ -33,11 +38,14 @@ func canAssignToSchema(
     return false
 }
 
-func canAssignType( t1, t2 *mg.QualifiedTypeName, dm DefinitionGetter ) bool {
-    d1, d2 := MustGetDefinition( t1, dm ), MustGetDefinition( t2, dm )
+func canAssignType( 
+    t1, t2 *mg.QualifiedTypeName, dm types.DefinitionGetter ) bool {
+
+    d1 := types.MustGetDefinition( t1, dm )
+    d2 := types.MustGetDefinition( t2, dm )
     switch v1 := d1.( type ) {
-    case *StructDefinition: return canAssignToStruct( v1, d2, dm )
-    case *SchemaDefinition: return canAssignToSchema( v1, d2, dm )
+    case *types.StructDefinition: return canAssignToStruct( v1, d2, dm )
+    case *types.SchemaDefinition: return canAssignToSchema( v1, d2, dm )
     }
     return false
 }
@@ -60,13 +68,13 @@ func notAFieldSetTypeError(
 
 func fieldSetForTypeInDefMap(
     qn *mg.QualifiedTypeName, 
-    dm DefinitionGetter, 
-    path objpath.PathNode ) ( *FieldSet, error ) {
+    dm types.DefinitionGetter, 
+    path objpath.PathNode ) ( *types.FieldSet, error ) {
 
     if def, ok := dm.GetDefinition( qn ); ok {
         switch v := def.( type ) {
-        case *StructDefinition: return v.Fields, nil
-        case *SchemaDefinition: return v.Fields, nil
+        case *types.StructDefinition: return v.Fields, nil
+        case *types.SchemaDefinition: return v.Fields, nil
         default: return nil, notAFieldSetTypeError( path, qn )
         } 
     } 
@@ -89,7 +97,7 @@ func ( vt valueFieldTyper ) fieldTypeFor(
 }
 
 type SymbolMapFieldSetGetter interface {
-    GetFieldSet( path objpath.PathNode ) ( *FieldSet, error )
+    GetFieldSet( path objpath.PathNode ) ( *types.FieldSet, error )
 }
 
 type TypeErrorFormatter func( 
@@ -97,7 +105,7 @@ type TypeErrorFormatter func(
 
 type CastReactor struct {
 
-    dm DefinitionGetter
+    dm types.DefinitionGetter
 
     stack *stack.Stack
 
@@ -149,7 +157,7 @@ func ( cr *CastReactor ) pushType( typ mg.TypeReference ) {
 }
 
 func NewCastReactor( 
-    expct mg.TypeReference, dm DefinitionGetter ) *CastReactor {
+    expct mg.TypeReference, dm types.DefinitionGetter ) *CastReactor {
 
     res := &CastReactor{ 
         stack: stack.NewStack(), 
@@ -182,7 +190,7 @@ func ( cr *CastReactor ) AddPassthroughField(
 }
 
 func ( cr *CastReactor ) SetUnionDefinitionMatcher(
-    qn *mg.QualifiedTypeName, mf UnionMatchFunction ) {
+    qn *mg.QualifiedTypeName, mf types.UnionMatchFunction ) {
 
     cr.unionMatchFuncs.Put( qn, mf )
 }
@@ -219,7 +227,7 @@ func ( fc *fieldCast ) isPassthroughField( fld *mg.Identifier ) bool {
 func ( fc *fieldCast ) removeOptFields() {
     done := make( []*mg.Identifier, 0, fc.await.Len() )
     fc.await.EachPair( func( _ *mg.Identifier, val interface{} ) {
-        fd := val.( *FieldDefinition )
+        fd := val.( *types.FieldDefinition)
         if _, ok := fd.Type.( *mg.NullableTypeReference ); ok {
             done = append( done, fd.Name )
         }
@@ -249,7 +257,7 @@ func processDefaults(
     next mgRct.EventProcessor ) error {
 
     vis := func( fld *mg.Identifier, val interface{} ) error {
-        fd := val.( *FieldDefinition )
+        fd := val.( *types.FieldDefinition)
         if defl := fd.GetDefault(); defl != nil { 
             if err := feedDefault( fld, defl, p, next ); err != nil { 
                 return err 
@@ -517,19 +525,19 @@ func ( cr *CastReactor ) errStackUnrecognized() error {
 }
 
 func ( cr *CastReactor ) unionTypeDefForAtomicType( 
-    at *mg.AtomicTypeReference ) *UnionTypeDefinition {
+    at *mg.AtomicTypeReference ) *types.UnionTypeDefinition {
 
     if td, ok := cr.dm.GetDefinition( at.Name() ); ok {
-        if utd, ok := td.( *UnionDefinition ); ok { return utd.Union }
+        if utd, ok := td.( *types.UnionDefinition ); ok { return utd.Union }
     }
     return nil
 }
 
 func ( cr *CastReactor ) getStructDef( 
-    nm *mg.QualifiedTypeName ) *StructDefinition {
+    nm *mg.QualifiedTypeName ) *types.StructDefinition {
 
     if def, ok := cr.dm.GetDefinition( nm ); ok {
-        if sd, ok := def.( *StructDefinition ); ok { return sd }
+        if sd, ok := def.( *types.StructDefinition ); ok { return sd }
     }
     return nil
 }
@@ -542,7 +550,7 @@ func ( cr *CastReactor ) checkWellFormed(
     ev mgRct.Event,
     typ *mg.QualifiedTypeName,
     errDesc string,
-    defCheck func( def Definition ) bool ) error {
+    defCheck func( def types.Definition ) bool ) error {
 
     if def, ok := cr.dm.GetDefinition( typ ); ok {
         if defCheck( def ) { return nil }
@@ -555,15 +563,15 @@ func ( cr *CastReactor ) checkWellFormed(
 func ( cr *CastReactor ) checkValueWellFormed( ve *mgRct.ValueEvent ) error {
     en, ok := ve.Val.( *mg.Enum )
     if ! ok { return nil }
-    chk := func( def Definition ) bool {
-        _, ok := def.( *EnumDefinition ); 
+    chk := func( def types.Definition ) bool {
+        _, ok := def.( *types.EnumDefinition ); 
         return ok
     }
     return cr.checkWellFormed( ve, en.Type, "an enum", chk )
 }
 
 func ( cr *CastReactor ) constructorTypeForType(
-    typ mg.TypeReference, sd *StructDefinition ) mg.TypeReference {
+    typ mg.TypeReference, sd *types.StructDefinition ) mg.TypeReference {
 
     if sd.Constructors == nil { return nil }
     res, ok := sd.Constructors.MatchType( typ )
@@ -573,7 +581,7 @@ func ( cr *CastReactor ) constructorTypeForType(
 
 func ( cr *CastReactor ) castStructConstructor(
     v mg.Value,
-    sd *StructDefinition,
+    sd *types.StructDefinition,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
 
     if cr.constructorTypeForType( mg.TypeOf( v ), sd ) != nil { 
@@ -584,7 +592,7 @@ func ( cr *CastReactor ) castStructConstructor(
 
 func ( cr *CastReactor ) completeCastEnum(
     id *mg.Identifier, 
-    ed *EnumDefinition, 
+    ed *types.EnumDefinition, 
     path objpath.PathNode ) ( *mg.Enum, error ) {
 
     if res := ed.GetValue( id ); res != nil { return res, nil }
@@ -593,7 +601,9 @@ func ( cr *CastReactor ) completeCastEnum(
 }
 
 func ( cr *CastReactor ) castEnumFromString( 
-    s string, ed *EnumDefinition, path objpath.PathNode ) ( *mg.Enum, error ) {
+    s string, 
+    ed *types.EnumDefinition, 
+    path objpath.PathNode ) ( *mg.Enum, error ) {
 
     id, err := parser.ParseIdentifier( s )
     if err != nil {
@@ -605,7 +615,7 @@ func ( cr *CastReactor ) castEnumFromString(
 
 func ( cr *CastReactor ) castEnum( 
     val mg.Value, 
-    ed *EnumDefinition, 
+    ed *types.EnumDefinition, 
     path objpath.PathNode ) ( *mg.Enum, error ) {
 
     switch v := val.( type ) {
@@ -626,10 +636,11 @@ func ( cr *CastReactor ) castAtomicForDefinition(
 
     if def, ok := cr.dm.GetDefinition( at.Name() ); ok {
         switch td := def.( type ) {
-        case *EnumDefinition:
+        case *types.EnumDefinition:
             res, err := cr.castEnum( v, td, path )
             return res, err, true
-        case *StructDefinition: return cr.castStructConstructor( v, td, path )
+        case *types.StructDefinition: 
+            return cr.castStructConstructor( v, td, path )
         } 
     }
     return nil, nil, false
@@ -687,12 +698,13 @@ func ( cr *CastReactor ) processValueForListType(
 }
 
 func ( cr *CastReactor ) matchUnionDefType(
-    ev mgRct.Event, ud *UnionDefinition ) ( mg.TypeReference, bool ) {
+    ev mgRct.Event, ud *types.UnionDefinition ) ( mg.TypeReference, bool ) {
 
     typ := mgRct.TypeOfEvent( ev )
     ut := ud.Union
     if mf, ok := cr.unionMatchFuncs.GetOk( ud.Name ); ok {
-        return mf.( UnionMatchFunction )( UnionMatchInput{ typ, ut, cr.dm } )
+        umf := mf.( types.UnionMatchFunction )
+        return umf( types.UnionMatchInput{ typ, ut, cr.dm } )
     }
     return ut.MatchType( typ )
 }
@@ -703,7 +715,7 @@ func ( cr *CastReactor ) getUnionApplication(
     next mgRct.EventProcessor ) func() error {
 
     if def, ok := cr.dm.GetDefinition( at.Name() ); ok {
-        if ud, ok := def.( *UnionDefinition ); ok {
+        if ud, ok := def.( *types.UnionDefinition ); ok {
             if mtch, ok := cr.matchUnionDefType( ev, ud ); ok {
                 return func() error { 
                     cr.pushType( mtch )
@@ -754,14 +766,14 @@ func ( cr *CastReactor ) processValue(
 func ( cr *CastReactor ) implMapStart(
     ev mgRct.Event, 
     ft fieldTyper, 
-    fs *FieldSet,
+    fs *types.FieldSet,
     passFields *mg.IdentifierMap,
     next mgRct.EventProcessor ) error {
 
     fc := &fieldCast{ ft: ft, passFields: passFields }
     if fs != nil {
         fc.await = mg.NewIdentifierMap()
-        fs.EachDefinition( func( fd *FieldDefinition ) {
+        fs.EachDefinition( func( fd *types.FieldDefinition) {
             fc.await.Put( fd.Name, fd )
         })
     }
@@ -770,8 +782,8 @@ func ( cr *CastReactor ) implMapStart(
 }
 
 type fieldSetTyper struct { 
-    flds *FieldSet 
-    dm DefinitionGetter
+    flds *types.FieldSet 
+    dm types.DefinitionGetter
     ignoreUnrecognized bool
 }
 
@@ -784,13 +796,14 @@ func ( ft *fieldSetTyper ) fieldTypeFor(
 }
 
 func ( cr *CastReactor ) fieldSetTyperForStruct(
-    def *StructDefinition, path objpath.PathNode ) ( *fieldSetTyper, error ) {
+    def *types.StructDefinition, 
+    path objpath.PathNode ) ( *fieldSetTyper, error ) {
 
     return &fieldSetTyper{ flds: def.Fields, dm: cr.dm }, nil
 }
 
 func ( cr *CastReactor ) fieldSetTyperForSchema( 
-    sd *SchemaDefinition ) *fieldSetTyper {
+    sd *types.SchemaDefinition ) *fieldSetTyper {
 
     return &fieldSetTyper{ 
         flds: sd.Fields, 
@@ -805,8 +818,9 @@ func ( cr *CastReactor ) fieldSetTyperFor(
 
     if def, ok := cr.dm.GetDefinition( qn ); ok {
         switch v := def.( type ) {
-        case *StructDefinition: return cr.fieldSetTyperForStruct( v, path )
-        case *SchemaDefinition: return cr.fieldSetTyperForSchema( v ), nil
+        case *types.StructDefinition: 
+            return cr.fieldSetTyperForStruct( v, path )
+        case *types.SchemaDefinition: return cr.fieldSetTyperForSchema( v ), nil
         default: return nil, notAFieldSetTypeError( path, qn )
         }
     }
@@ -823,7 +837,9 @@ func ( cr *CastReactor ) completeStartStruct(
     fs, err := fieldSetForTypeInDefMap( ss.Type, cr.dm, ss.GetPath() )
     if err != nil { return err }
     if def, ok := cr.dm.GetDefinition( ss.Type ); ok {
-        if _, ok := def.( *SchemaDefinition ); ok { ev = asMapStartEvent( ss ) }
+        if _, ok := def.( *types.SchemaDefinition ); ok { 
+            ev = asMapStartEvent( ss ) 
+        }
     } 
     pf := cr.passFieldsForQn( ss.Type )
     return cr.implMapStart( ev, ft, fs, pf, next )
@@ -831,8 +847,8 @@ func ( cr *CastReactor ) completeStartStruct(
 
 func ( cr *CastReactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
     if def, ok := cr.dm.GetDefinition( qn ); ok {
-        if _, ok = def.( *StructDefinition ); ok { return true }
-        if _, ok = def.( *SchemaDefinition ); ok { return true }
+        if _, ok = def.( *types.StructDefinition ); ok { return true }
+        if _, ok = def.( *types.SchemaDefinition ); ok { return true }
     }
     return false
 }
@@ -858,7 +874,7 @@ func ( cr *CastReactor ) processMapStartWithAtomicType(
 
     if at.Equals( mg.TypeSymbolMap ) || at.Equals( mg.TypeValue ) {
         var ft fieldTyper = valueFieldTyper( 1 )
-        var fs *FieldSet
+        var fs *types.FieldSet
         if cr.FieldSetFactory != nil {
             var err error
             fs, err = cr.FieldSetFactory.GetFieldSet( me.GetPath() )
@@ -960,8 +976,8 @@ func ( cr *CastReactor ) checkStructWellFormed(
     ss *mgRct.StructStartEvent ) error {
 
     return cr.checkWellFormed( ss, ss.Type, "a struct",
-        func ( def Definition ) bool {
-            _, ok := def.( *StructDefinition )
+        func ( def types.Definition ) bool {
+            _, ok := def.( *types.StructDefinition )
             return ok
         },
     )

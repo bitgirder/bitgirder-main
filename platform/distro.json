@@ -51,7 +51,8 @@
             "io",
             "mingle",
             "mingle-parser-tree",
-            "mingle-compiler"
+            "mingle-compiler",
+            "mingle-service"
         ]
     }
 }
