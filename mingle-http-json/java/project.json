@@ -1,5 +1,0 @@
-{
-    "$type": "bitgirder:build:ops@v1/JavaProject",
-
-    "direct-deps": [ "mingle-http", "mingle-json", "parser", "core", "http" ]
-}
