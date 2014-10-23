@@ -356,7 +356,26 @@ extends AbstractReactorTest
         void
         setValue( MingleIdentifier fld,
                   Object val )
-        {}
+        {
+            if ( fld.equals( id( "f1" ) ) ) {
+                res.f1 = (Integer) val;
+            } else if ( fld.equals( id( "f2" ) ) ) {
+                res.f2 = (TestStruct2) val;
+            }
+        }
+
+        @Override
+        public
+        Object
+        produceValue( ObjectPath< MingleIdentifier > path )
+            throws Exception
+        {
+            if ( res.f1 == ERR_TEST_VAL.intValue() ) {
+                throw testExceptionForPath( path );
+            }
+
+            return super.produceValue( path );
+        }
     }
 
     private
