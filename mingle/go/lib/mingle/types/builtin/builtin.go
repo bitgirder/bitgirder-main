@@ -291,7 +291,7 @@ func initCoreV1Types() {
     )
     idPathDef.Constructors = 
         types.MustUnionTypeDefinitionTypes( mg.TypeString, mg.TypeBuffer )
-    MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameCastError ) )
+    MustAddBuiltinType( NewLocatableErrorDefinition( mg.QnameInputError ) )
     ufeDef := mustAddBuiltinStruct( mg.QnameUnrecognizedFieldError,
         mkField0( identifierField, ptrTyp( mg.TypeIdentifier ) ),
     )

@@ -25,7 +25,7 @@ func ( f customFieldSetFactory ) GetFieldSet(
         )
         return fs, nil
     }
-    return nil, mg.NewCastError( path, "custom-field-set-test-error" )
+    return nil, mg.NewInputError( path, "custom-field-set-test-error" )
 }
 
 func matchUnion2Type( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
@@ -42,7 +42,7 @@ func formatTypeErrorCustom(
     expct, act mg.TypeReference, path objpath.PathNode ) ( error, bool ) {
 
     if expct.Equals( mg.TypeBuffer ) && act.Equals( mg.TypeInt32 ) {
-        return mg.NewCastError( path, "bad-int32-for-buffer" ), true
+        return mg.NewInputError( path, "bad-int32-for-buffer" ), true
     }
     return nil, false
 }

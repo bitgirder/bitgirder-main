@@ -15,9 +15,8 @@ import (
 // error is returned; otherwise err is returned unchanged
 func asValueError( ve mgRct.Event, err error ) error {
     switch v := err.( type ) {
-    case *parser.ParseError:
-        err = mg.NewCastError( ve.GetPath(), v.Error() )
-    case *mg.BinIoError: err = mg.NewCastError( ve.GetPath(), v.Error() )
+    case *parser.ParseError: err = mg.NewInputError( ve.GetPath(), v.Error() )
+    case *mg.BinIoError: err = mg.NewInputError( ve.GetPath(), v.Error() )
     }
     return err
 }
@@ -316,7 +315,7 @@ func ( b *atomicBuilder ) build(
 
     at, err := b.buildInitial()
     if re, ok := err.( *mg.RestrictionError ); ok {
-        err = mg.NewCastError( path, re.Error() )
+        err = mg.NewInputError( path, re.Error() )
     }
     return at, err
 }
@@ -643,23 +642,23 @@ func createLocatableErrorSetters(
     }
 }
 
-func VisitCastError( e *mg.CastError, vc bind.VisitContext ) error {
-    return bind.VisitStruct( vc, mg.QnameCastError, func() error {
+func VisitInputError( e *mg.InputError, vc bind.VisitContext ) error {
+    return bind.VisitStruct( vc, mg.QnameInputError, func() error {
         return visitLocatableError( e.Location, e.Message, vc )
     })
 }
 
-func newCastErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
+func newInputErrorBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
     return bind.CheckedStructFactory(
         reg,
-        func() interface{} { return new( mg.CastError ) },
+        func() interface{} { return new( mg.InputError ) },
         nil,
         createLocatableErrorSetters(
             func( obj, val interface{} ) {
-                obj.( *mg.CastError ).Message = val.( string )
+                obj.( *mg.InputError ).Message = val.( string )
             },
             func( obj, val interface{} ) {
-                obj.( *mg.CastError ).Location = val.( objpath.PathNode )
+                obj.( *mg.InputError ).Location = val.( objpath.PathNode )
             },
         )...,
     )
@@ -828,7 +827,7 @@ func newFieldDefListFieldSetBuilder( reg *bind.Registry ) mgRct.ListBuilder {
         fs := res.Value.( *types.FieldSet )
         fd := val.( *types.FieldDefinition )
         if nm := fd.Name; fs.Get( nm ) != nil {
-            return mg.NewCastErrorf( path, "field redefined: %s", nm )
+            return mg.NewInputErrorf( path, "field redefined: %s", nm )
         }
         fs.Add( fd )
         return nil
@@ -889,7 +888,7 @@ func newUnionTypeDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             utb := val.( *utBldr )
             res, err := types.CreateUnionTypeDefinitionTypes( utb.typs... )
             if err == nil { return res, nil }
-            return nil, mg.NewCastError( path, err.Error() )
+            return nil, mg.NewInputError( path, err.Error() )
         },
         &bind.CheckedFieldSetter{
             Field: identifierTypes,
@@ -1162,7 +1161,7 @@ func newEnumDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
             edb := val.( *edBldr )
             ed, err := types.CreateEnumDefinition( edb.nm, edb.vals... )
             if err == nil { return ed, nil }
-            return nil, mg.NewCastError( path, err.Error() )
+            return nil, mg.NewInputError( path, err.Error() )
         },
         &bind.CheckedFieldSetter{
             Field: identifierName,
@@ -1247,7 +1246,7 @@ func newServiceDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
         func( val interface{}, path objpath.PathNode ) ( interface{}, error ) {
             sb := val.( *svcBldr )
             if err := sb.sd.AddOperations( sb.ops ); err != nil {
-                return nil, mg.NewCastError( path, err.Error() )
+                return nil, mg.NewInputError( path, err.Error() )
             }
             return sb.sd, nil
         },
@@ -1301,7 +1300,7 @@ func visitBuiltinTypeOk(
     case *mg.RangeRestriction: return VisitRangeRestriction( v, vc ), true
     case *mg.RegexRestriction: return VisitRegexRestriction( v, vc ), true
     case objpath.PathNode: return VisitIdentifierPath( v, vc ), true
-    case *mg.CastError: return VisitCastError( v, vc ), true
+    case *mg.InputError: return VisitInputError( v, vc ), true
     case *mg.UnrecognizedFieldError: 
         return VisitUnrecognizedFieldError( v, vc ), true
     case *mg.MissingFieldsError: return VisitMissingFieldsError( v, vc ), true
@@ -1349,7 +1348,7 @@ func initCoreBindings( reg *bind.Registry ) {
         newNullableTypeBuilderFactory( reg ),
     )
     reg.MustAddValue( mg.QnameIdentifierPath, newIdPathBuilderFactory( reg ) )
-    reg.MustAddValue( mg.QnameCastError, newCastErrorBuilderFactory( reg ) )
+    reg.MustAddValue( mg.QnameInputError, newInputErrorBuilderFactory( reg ) )
     reg.MustAddValue( 
         mg.QnameUnrecognizedFieldError,
         newUnrecognizedFieldErrorBuilderFactory( reg ),

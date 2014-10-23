@@ -201,15 +201,15 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     )
     b.addErr(
         mg.Int32( 1 ),
-        mg.NewTypeCastError( TypeRequest, mg.TypeInt32, nil ),
+        mg.NewTypeInputError( TypeRequest, mg.TypeInt32, nil ),
     )
     b.addErr(
         parser.MustStruct( "ns1@v1/Bad" ),
-        mg.NewTypeCastError( TypeRequest, asType( "ns1@v1/Bad" ), nil ),
+        mg.NewTypeInputError( TypeRequest, asType( "ns1@v1/Bad" ), nil ),
     )
     b.addErr(
         parser.MustStruct( QnameRequest, "namespace", "Bad" ),
-        mg.NewCastError( 
+        mg.NewInputError( 
             objpath.RootedAt( mkId( "namespace" ) ), 
             "[<input>, line 1, col 1]: Illegal start of identifier part: \"B\" (U+0042)",
         ),
@@ -219,7 +219,7 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
             "namespace", "ns1@v1",
             "service", "bad$id",
         ),
-        mg.NewCastError( 
+        mg.NewInputError( 
             objpath.RootedAt( mkId( "service" ) ), 
             "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
         ),
@@ -230,7 +230,7 @@ func initBaseRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
             "service", "svc1",
             "operation", "bad$id",
         ),
-        mg.NewCastError( 
+        mg.NewInputError( 
             objpath.RootedAt( mkId( "operation" ) ),
             "[<input>, line 1, col 4]: Invalid id rune: \"$\" (U+0024)",
         ),
@@ -425,7 +425,7 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
         "authentication", int32( 1 ),
     )
     addErr( "mingle:tck@v1", "svc2", "getFixedInt",
-        mg.NewTypeCastError(
+        mg.NewTypeInputError(
             mg.TypeInt32,
             mg.TypeBuffer,
             objpath.RootedAt( IdAuthentication ),
@@ -449,7 +449,7 @@ func initTypedRequestTests( tsb *mgRct.ReactorTestSliceBuilder ) {
         ),
     )
     addErr( "mingle:tck@v1", "svc1", "echoS1",
-        mg.NewTypeCastError(
+        mg.NewTypeInputError(
             asType( "mingle:tck@v1/S1" ),
             mg.TypeBuffer,
             objpath.RootedAt( IdParameters ).Descend( mkId( "f1" ) ),
@@ -539,7 +539,7 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSliceBuilder ) {
     )
     addErr( "mingle:tck@v1", "svc1", "echoS1",
         mkErr( parser.MustStruct( "mingle:tck@v1/Err1", "f1", []byte{ 0 } ) ),
-        mg.NewTypeCastError(
+        mg.NewTypeInputError(
             mg.TypeInt32,
             mg.TypeBuffer,
             objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),
@@ -570,7 +570,7 @@ func initTypedResponseTests( tsb *mgRct.ReactorTestSliceBuilder ) {
         mkErr( 
             parser.MustStruct( "mingle:tck@v1/AuthErr1", "f1", []byte{ 0 } ),
         ),
-        mg.NewTypeCastError(
+        mg.NewTypeInputError(
             mg.TypeInt32,
             mg.TypeBuffer,
             objpath.RootedAt( IdError ).Descend( mkId( "f1" ) ),

@@ -735,37 +735,37 @@ func FormatError( path objpath.PathNode, msg string ) string {
     return FormatIdPath( path ) + ": " + msg 
 }
 
-type CastError struct {
+type InputError struct {
     Location objpath.PathNode
     Message string
 }
 
-func ( e *CastError ) Error() string { 
+func ( e *InputError ) Error() string { 
     return FormatError( e.Location, e.Message )
 }
 
-func NewCastError( path idPath, msg string ) *CastError {
-    return &CastError{ Message: msg, Location: path }
+func NewInputError( path idPath, msg string ) *InputError {
+    return &InputError{ Message: msg, Location: path }
 }
 
-func NewCastErrorf( path idPath, tmpl string, args ...interface{} ) *CastError {
-    return NewCastError( path, fmt.Sprintf( tmpl, args... ) )
+func NewInputErrorf( path idPath, tmpl string, args ...interface{} ) *InputError {
+    return NewInputError( path, fmt.Sprintf( tmpl, args... ) )
 }
 
-func NewTypeCastError( 
-    expct, act TypeReference, path objpath.PathNode ) *CastError {
+func NewTypeInputError( 
+    expct, act TypeReference, path objpath.PathNode ) *InputError {
 
-    return NewCastErrorf( 
+    return NewInputErrorf( 
         path,
         "Expected value of type %s but found %s",
         expct.ExternalForm(), act.ExternalForm(),
     )
 }
 
-func NewTypeCastErrorValue( 
-    t TypeReference, val Value, path objpath.PathNode ) *CastError {
+func NewTypeInputErrorValue( 
+    t TypeReference, val Value, path objpath.PathNode ) *InputError {
 
-    return NewTypeCastError( t, TypeOf( val ), path )
+    return NewTypeInputError( t, TypeOf( val ), path )
 }
 
 type Comparer interface {
@@ -1282,8 +1282,8 @@ var (
     TypeIdentifierPathPart *AtomicTypeReference
     QnameStandardError *QualifiedTypeName
     TypeStandardError *AtomicTypeReference
-    QnameCastError *QualifiedTypeName
-    TypeCastError *AtomicTypeReference
+    QnameInputError *QualifiedTypeName
+    TypeInputError *AtomicTypeReference
     QnameUnrecognizedFieldError *QualifiedTypeName
     TypeUnrecognizedFieldError *AtomicTypeReference
     QnameMissingFieldsError *QualifiedTypeName
@@ -1377,7 +1377,7 @@ func init() {
     QnameIdentifierPath, TypeIdentifierPath = f1( "IdentifierPath" )
     QnameIdentifierPathPart, TypeIdentifierPathPart = f1( "IdentifierPathPart" )
     QnameStandardError, TypeStandardError = f1( "StandardError" )
-    QnameCastError, TypeCastError = f1( "CastError" )
+    QnameInputError, TypeInputError = f1( "InputError" )
     QnameUnrecognizedFieldError, TypeUnrecognizedFieldError = 
         f1( "UnrecognizedFieldError" )
     QnameMissingFieldsError, TypeMissingFieldsError = f1( "MissingFieldsError" )

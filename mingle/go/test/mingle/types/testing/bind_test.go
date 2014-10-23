@@ -40,7 +40,7 @@ func putCoreBoundTestValues( m *mg.IdentifierMap ) {
     m.Put( mkId( "nullable-type1" ), asType( "&ns1@v1/Name1?" ) )
     m.Put( 
         mkId( "cast-error-loc-f1-i2" ),
-        mg.NewCastError( tp( 1, "2" ), "test-message" ),
+        mg.NewInputError( tp( 1, "2" ), "test-message" ),
     )
     m.Put(
         mkId( "unrecognized-field-error-loc-f1-i2" ),
@@ -584,24 +584,24 @@ func ( b *bindTestBuilder ) addQualifiedTypeNameTests() {
 
 func ( b *bindTestBuilder ) addCoreErrorTests() {
     b.addRt( 
-        parser.MustStruct( "mingle:core@v1/CastError",
+        parser.MustStruct( "mingle:core@v1/InputError",
             "message", "test-message",
             "location", b.idPathStruct( makeIdStruct( "f1" ), uint64( 2 ) ),
         ),
-        asType( "mingle:core@v1/CastError" ),
+        asType( "mingle:core@v1/InputError" ),
         "cast-error-loc-f1-i2",
     )
     b.addIn( 
-        parser.MustStruct( "mingle:core@v1/CastError",
+        parser.MustStruct( "mingle:core@v1/InputError",
             "message", "test-message",
             "location", "f1[ 2 ]",
         ),
-        asType( "mingle:core@v1/CastError" ),
+        asType( "mingle:core@v1/InputError" ),
         "cast-error-loc-f1-i2",
     )
     b.addOut( 
         "cast-error-loc-f1-i2",
-        parser.MustStruct( "mingle:core@v1/CastError",
+        parser.MustStruct( "mingle:core@v1/InputError",
             "message", "test-message",
             "location", "f1[ 2 ]",
         ),
@@ -842,7 +842,7 @@ func ( b *bindTestBuilder ) addFieldSetTests() {
             ),
         ),
         builtin.TypeFieldSet,
-        mg.NewCastError(
+        mg.NewInputError(
             objpath.RootedAt( mkId( "fields" ) ).StartList().SetIndex( 1 ),
             "field redefined: f1",
         ),
@@ -873,7 +873,7 @@ func ( b *bindTestBuilder ) addUnionDefinitionTests() {
     b.addInErr(
         b.unionTypeDef( 0 ),
         builtin.TypeUnionTypeDefinition,
-        mg.NewCastError( objpath.RootedAt( mkId( "types" ) ), "empty list" ),
+        mg.NewInputError( objpath.RootedAt( mkId( "types" ) ), "empty list" ),
     )
     b.addInErr(
         parser.MustStruct( builtin.QnameUnionTypeDefinition,
@@ -884,7 +884,7 @@ func ( b *bindTestBuilder ) addUnionDefinitionTests() {
             ),
         ),
         builtin.TypeUnionTypeDefinition,
-        mg.NewCastError( nil, "union contains one or more ambiguous types" ),
+        mg.NewInputError( nil, "union contains one or more ambiguous types" ),
     )
 }
 
@@ -994,7 +994,7 @@ func ( b *bindTestBuilder ) addEnumDefinition() {
             ),
         ),
         builtin.TypeEnumDefinition,
-        mg.NewCastError( nil, "duplicate enum value(s): v1" ),
+        mg.NewInputError( nil, "duplicate enum value(s): v1" ),
     )
 }
 
@@ -1039,7 +1039,7 @@ func ( b *bindTestBuilder ) addServiceDefinitionTests() {
             ),
         ),
         builtin.TypeServiceDefinition,
-        mg.NewCastError( nil, "operation(s) redefined: op1" ),
+        mg.NewInputError( nil, "operation(s) redefined: op1" ),
     )
 }
 

@@ -143,8 +143,8 @@ type errorAssert struct {
 }
 
 func ( ea errorAssert ) assertValueCast() {
-    expct := ea.expct.( *CastError )
-    act, ok := ea.act.( *CastError )
+    expct := ea.expct.( *InputError )
+    act, ok := ea.act.( *InputError )
     ea.Truef( ok, "not a value cast error: %T", ea.act )
     ea.Descend( "Message" ).Equal( expct.Message, act.Message )
     ea.Descend( "Location" ).Equal( expct.Location, act.Location )
@@ -162,7 +162,7 @@ func ( ea errorAssert ) assertMissingFieldsError() {
 func AssertErrors( expct, act error, a *assert.PathAsserter ) {
     ea := errorAssert{ expct: expct, act: act, PathAsserter: a }
     switch expct.( type ) {
-    case *CastError: ea.assertValueCast()
+    case *InputError: ea.assertValueCast()
     case *MissingFieldsError: ea.assertMissingFieldsError()
     default: ea.EqualErrors( ea.expct, ea.act )
     }

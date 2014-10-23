@@ -349,9 +349,9 @@ func TestTypeCastFormatting( t *testing.T ) {
     t1 := ns1V1At( "T1" )
     t2 := ns1V1At( "T2" )
     suff := "Expected value of type ns1@v1/T1 but found ns1@v1/T2"
-    err := NewTypeCastError( t1, t2, nil )
+    err := NewTypeInputError( t1, t2, nil )
     assert.Equal( suff, err.Error() )
-    err = NewTypeCastError( t1, t2, path )
+    err = NewTypeInputError( t1, t2, path )
     assert.Equal( FormatIdPath( path ) + ": " + suff, err.Error() )
 }
 
@@ -1184,7 +1184,7 @@ func TestTimestampStrings( t *testing.T ) {
 
 func TestCastValueErrorFormatting( t *testing.T ) {
     path := objpath.RootedAt( mkId( "f1" ) )
-    err := NewCastErrorf( path, "Blah %s", "X" )
+    err := NewInputErrorf( path, "Blah %s", "X" )
     assert.Equal( "f1: Blah X", err.Error() )
 }
 

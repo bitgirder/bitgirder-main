@@ -12,12 +12,12 @@ import (
     "fmt"
 )
 
-var newVcErr = mg.NewCastError
+var newVcErr = mg.NewInputError
 
 var pathInVal = objpath.RootedAt( mkId( "inVal" ) )
 
-func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.CastError {
-    return mg.NewTypeCastError( asType( expct ), asType( act ), p )
+func newTcErr( expct, act interface{}, p objpath.PathNode ) *mg.InputError {
+    return mg.NewTypeInputError( asType( expct ), asType( act ), p )
 }
 
 func makeIdList( strs ...string ) []*mg.Identifier {
@@ -630,7 +630,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
     s1F1Fail := func( in interface{}, typ string, err error ) {
         s1F1Add( in, nil, typ, err )
     }
-    tcErr1 := func( expct, act interface{} ) *mg.CastError {
+    tcErr1 := func( expct, act interface{} ) *mg.InputError {
         return newTcErr( expct, act, p( 1 ) )
     }
     s1F1Succ( int32( 1 ), int32( 1 ), "Int32" )
