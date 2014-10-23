@@ -37,11 +37,13 @@ Unless otherwise stated, the following apply in all languages:
         a=b+c[1]
         d=f(a)
         if (d==2) {stuff()}
+        if (!abc) blah()
     
         // Good
         a = b + c[ 1 ]
         d = f( a )
         if ( d == 2 ) { stuff() }
+        if ( ! abc ) blah()
 
 -   Wrap long statements to avoid spanning 80 columns, indenting the remainder
     of the statement according to the type of statement:
