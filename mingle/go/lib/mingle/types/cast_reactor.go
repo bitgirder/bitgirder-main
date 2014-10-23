@@ -14,6 +14,10 @@ import (
     "encoding/base64"
 )
 
+func newNullCastError( path objpath.PathNode ) *mg.CastError {
+    return mg.NewCastError( path, "Value is null" )
+}
+
 func asMapStartEvent( ev mgRct.Event ) *mgRct.MapStartEvent {
     res := mgRct.NewMapStartEvent() 
     res.SetPath( ev.GetPath() )
