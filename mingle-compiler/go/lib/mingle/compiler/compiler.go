@@ -11,6 +11,7 @@ import (
     "mingle/parser/tree"
     "mingle/parser"
     "mingle/code"
+    "mingle/cast"
     mgRct "mingle/reactor"
     interp "mingle/interpreter"
     "mingle/types"
@@ -1924,7 +1925,7 @@ func ( c *Compilation ) castConstVal(
     typ mg.TypeReference, 
     dm *types.DefinitionMap ) ( mg.Value, error ) {
 
-    rct := types.NewCastReactor( typ, dm )
+    rct := cast.NewReactor( typ, dm )
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     pip := mgRct.InitReactorPipeline( rct, vb )
     if err := mgRct.VisitValue( val, pip ); err != nil { return nil, err }

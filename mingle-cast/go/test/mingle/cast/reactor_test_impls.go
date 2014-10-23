@@ -46,11 +46,11 @@ func formatTypeErrorCustom(
     return nil, false
 }
 
-func addCustomErrorFormatting( cr *CastReactor ) {
+func addCustomErrorFormatting( cr *Reactor ) {
     cr.FormatTypeError = formatTypeErrorCustom
 }
 
-func ( t *CastReactorTest ) addCastReactor( 
+func ( t *ReactorTest ) addReactor( 
     rcts []interface{}, c *mgRct.ReactorTestCall ) []interface{} {
 
     cr := NewReactor( t.Type, t.Map )
@@ -70,13 +70,13 @@ func ( t *CastReactorTest ) addCastReactor(
     return append( rcts, cr )
 }
 
-func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
+func ( t *ReactorTest ) Call( c *mgRct.ReactorTestCall ) {
     rcts := []interface{}{}
     if p := t.Path; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
 //    rcts = append( rcts, mgRct.NewDebugReactor( c ) )
-    rcts = t.addCastReactor( rcts, c )
+    rcts = t.addReactor( rcts, c )
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     rcts = append( rcts, vb )
     pip := mgRct.InitReactorPipeline( rcts... )

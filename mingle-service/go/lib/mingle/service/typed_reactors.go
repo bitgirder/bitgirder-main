@@ -77,9 +77,7 @@ func ( i *typedReqIface ) StartRequest(
     return i.iface.StartRequest( ctx, path )
 }
 
-func ( i *typedReqIface ) newCastReactor( 
-    typ mg.TypeReference ) *cast.CastReactor {
-    
+func ( i *typedReqIface ) newReactor( typ mg.TypeReference ) *cast.Reactor {
     res := cast.NewReactor( typ, i.m.defs )
     res.SkipPathSetter = true
     return res
@@ -94,7 +92,7 @@ func ( i *typedReqIface ) StartAuthentication(
     }
     rct, err := i.iface.StartAuthentication( path )
     if err != nil { return nil, err }
-    cr := i.newCastReactor( authTyp )
+    cr := i.newReactor( authTyp )
     return mgRct.InitReactorPipeline( cr, rct ), nil
 }
 
@@ -118,7 +116,7 @@ func ( i *typedReqIface ) StartParameters(
     rct, err := i.iface.StartParameters( path )
     if err != nil { return nil, err }
     fsf := typedReqParamsFactory{ dt: mgRct.NewDepthTracker(), iface: i }
-    cr := i.newCastReactor( mg.TypeSymbolMap )
+    cr := i.newReactor( mg.TypeSymbolMap )
     cr.FieldSetFactory = fsf
     return mgRct.InitReactorPipeline( fsf.dt, cr, rct ), nil
 }
@@ -136,8 +134,8 @@ type typedRespIface struct {
     dg types.DefinitionGetter
 }
 
-func ( i *typedRespIface ) newCastReactor( 
-    typ mg.TypeReference, dg types.DefinitionGetter ) *cast.CastReactor {
+func ( i *typedRespIface ) newReactor( 
+    typ mg.TypeReference, dg types.DefinitionGetter ) *cast.Reactor {
 
     res := cast.NewReactor( typ, dg )
     res.SkipPathSetter = true
@@ -149,7 +147,7 @@ func ( i *typedRespIface ) StartResult(
 
     rct, err := i.iface.StartResult( path )
     if err != nil { return nil, err }
-    cr := i.newCastReactor( i.returnType, i.dg )
+    cr := i.newReactor( i.returnType, i.dg )
     return mgRct.InitReactorPipeline( cr, rct ), nil
 }
 
@@ -191,7 +189,7 @@ func ( i *typedRespIface ) StartError(
     rct, err := i.iface.StartError( path )
     if err != nil { return nil, err }
     errChk := &errorTypeChecker{ i }
-    cr := i.newCastReactor( typeThrownErrors, errChk )
+    cr := i.newReactor( typeThrownErrors, errChk )
     cr.FormatTypeError = formatRespErrorTypeError
     mtch := func( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
         return errChk.match( in )

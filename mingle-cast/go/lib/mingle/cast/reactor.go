@@ -103,7 +103,7 @@ type SymbolMapFieldSetGetter interface {
 type TypeErrorFormatter func( 
     expct, act mg.TypeReference, path objpath.PathNode ) ( error, bool )
 
-type CastReactor struct {
+type Reactor struct {
 
     dm types.DefinitionGetter
 
@@ -122,7 +122,7 @@ type CastReactor struct {
     SkipPathSetter bool
 }
 
-func ( cr *CastReactor ) dumpStack( pref string ) {
+func ( cr *Reactor ) dumpStack( pref string ) {
     bb := &bytes.Buffer{}
     fmt.Fprintf( bb, "%s: [", pref )
     cr.stack.VisitTop( func( v interface{} ) {
@@ -137,7 +137,7 @@ func ( cr *CastReactor ) dumpStack( pref string ) {
     log.Print( bb.String() )
 }
 
-func ( cr *CastReactor ) newTypeInputError(
+func ( cr *Reactor ) newTypeInputError(
     expct, act mg.TypeReference, path objpath.PathNode ) error {
 
     if f := cr.FormatTypeError; f != nil {
@@ -146,13 +146,13 @@ func ( cr *CastReactor ) newTypeInputError(
     return mg.NewTypeInputError( expct, act, path )
 }
 
-func ( cr *CastReactor ) newTypeInputErrorValue(
+func ( cr *Reactor ) newTypeInputErrorValue(
     expct mg.TypeReference, val mg.Value, path objpath.PathNode ) error {
 
     return cr.newTypeInputError( expct, mg.TypeOf( val ), path )
 }
 
-func ( cr *CastReactor ) pushType( typ mg.TypeReference ) {
+func ( cr *Reactor ) pushType( typ mg.TypeReference ) {
     cr.stack.Push( typ )
 }
 
@@ -169,15 +169,13 @@ func matchIdPathPart( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
 }
 
 // for now this is always enabled, but we may later find a need to allow callers
-// to create a CastReactor with no support for builtins
-func ( cr *CastReactor ) castBuiltinTypes() {
+// to create a Reactor with no support for builtins
+func ( cr *Reactor ) castBuiltinTypes() {
     cr.SetUnionDefinitionMatcher( mg.QnameIdentifierPathPart, matchIdPathPart )
 }
 
-func NewReactor( 
-    expct mg.TypeReference, dm types.DefinitionGetter ) *CastReactor {
-
-    res := &CastReactor{ 
+func NewReactor( expct mg.TypeReference, dm types.DefinitionGetter ) *Reactor {
+    res := &Reactor{ 
         stack: stack.NewStack(), 
         dm: dm,
         passFieldsByQn: mg.NewQnameMap(),
@@ -188,7 +186,7 @@ func NewReactor(
     return res
 }
 
-func ( cr *CastReactor ) passFieldsForQn( 
+func ( cr *Reactor ) passFieldsForQn( 
     qn *mg.QualifiedTypeName ) *mg.IdentifierMap {
 
     if v, ok := cr.passFieldsByQn.GetOk( qn ); ok {
@@ -197,7 +195,7 @@ func ( cr *CastReactor ) passFieldsForQn(
     return nil
 }
 
-func ( cr *CastReactor ) AddPassthroughField( 
+func ( cr *Reactor ) AddPassthroughField( 
     qn *mg.QualifiedTypeName, fld *mg.Identifier ) {
 
     pf := cr.passFieldsForQn( qn )
@@ -208,18 +206,18 @@ func ( cr *CastReactor ) AddPassthroughField(
     pf.Put( fld, true )
 }
 
-func ( cr *CastReactor ) SetUnionDefinitionMatcher(
+func ( cr *Reactor ) SetUnionDefinitionMatcher(
     qn *mg.QualifiedTypeName, mf types.UnionMatchFunction ) {
 
     cr.unionMatchFuncs.Put( qn, mf )
 }
 
-func ( cr *CastReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
+func ( cr *Reactor ) InitializePipeline( pip *pipeline.Pipeline ) {
     mgRct.EnsureStructuralReactor( pip )
     if ! cr.SkipPathSetter { mgRct.EnsurePathSettingProcessor( pip ) }
 }
 
-func ( cr *CastReactor ) processPassthrough(
+func ( cr *Reactor ) processPassthrough(
     ev mgRct.Event, next mgRct.EventProcessor ) error {
 
     if err := next.ProcessEvent( ev ); err != nil { return err }
@@ -306,7 +304,7 @@ type atomicCastCall struct {
     ve *mgRct.ValueEvent
     at *mg.AtomicTypeReference
     callTyp mg.TypeReference
-    cr *CastReactor
+    cr *Reactor
 }
 
 func ( c atomicCastCall ) val() mg.Value { return c.ve.Val }
@@ -539,11 +537,11 @@ func ( c atomicCastCall ) call() ( mg.Value, error ) {
     return val, err
 }
 
-func ( cr *CastReactor ) errStackUnrecognized() error {
+func ( cr *Reactor ) errStackUnrecognized() error {
     return libErrorf( "unrecognized stack element: %T", cr.stack.Peek() )
 }
 
-func ( cr *CastReactor ) unionTypeDefForAtomicType( 
+func ( cr *Reactor ) unionTypeDefForAtomicType( 
     at *mg.AtomicTypeReference ) *types.UnionTypeDefinition {
 
     if td, ok := cr.dm.GetDefinition( at.Name() ); ok {
@@ -552,7 +550,7 @@ func ( cr *CastReactor ) unionTypeDefForAtomicType(
     return nil
 }
 
-func ( cr *CastReactor ) getStructDef( 
+func ( cr *Reactor ) getStructDef( 
     nm *mg.QualifiedTypeName ) *types.StructDefinition {
 
     if def, ok := cr.dm.GetDefinition( nm ); ok {
@@ -565,7 +563,7 @@ func ( cr *CastReactor ) getStructDef(
 // corresponds to a known definition, but for which that definition makes no
 // sense. We let the case when no such definition exists at all be handled
 // elsewhere.
-func ( cr *CastReactor ) checkWellFormed(
+func ( cr *Reactor ) checkWellFormed(
     ev mgRct.Event,
     typ *mg.QualifiedTypeName,
     errDesc string,
@@ -579,7 +577,7 @@ func ( cr *CastReactor ) checkWellFormed(
     return nil
 }
 
-func ( cr *CastReactor ) checkValueWellFormed( ve *mgRct.ValueEvent ) error {
+func ( cr *Reactor ) checkValueWellFormed( ve *mgRct.ValueEvent ) error {
     en, ok := ve.Val.( *mg.Enum )
     if ! ok { return nil }
     chk := func( def types.Definition ) bool {
@@ -589,7 +587,7 @@ func ( cr *CastReactor ) checkValueWellFormed( ve *mgRct.ValueEvent ) error {
     return cr.checkWellFormed( ve, en.Type, "an enum", chk )
 }
 
-func ( cr *CastReactor ) constructorTypeForType(
+func ( cr *Reactor ) constructorTypeForType(
     typ mg.TypeReference, sd *types.StructDefinition ) mg.TypeReference {
 
     if sd.Constructors == nil { return nil }
@@ -598,7 +596,7 @@ func ( cr *CastReactor ) constructorTypeForType(
     return nil
 }
 
-func ( cr *CastReactor ) castStructConstructor(
+func ( cr *Reactor ) castStructConstructor(
     v mg.Value,
     sd *types.StructDefinition,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
@@ -609,7 +607,7 @@ func ( cr *CastReactor ) castStructConstructor(
     return nil, nil, false
 }
 
-func ( cr *CastReactor ) completeCastEnum(
+func ( cr *Reactor ) completeCastEnum(
     id *mg.Identifier, 
     ed *types.EnumDefinition, 
     path objpath.PathNode ) ( *mg.Enum, error ) {
@@ -619,7 +617,7 @@ func ( cr *CastReactor ) completeCastEnum(
     return nil, mg.NewInputErrorf( path, tmpl, ed.GetName(), id )
 }
 
-func ( cr *CastReactor ) castEnumFromString( 
+func ( cr *Reactor ) castEnumFromString( 
     s string, 
     ed *types.EnumDefinition, 
     path objpath.PathNode ) ( *mg.Enum, error ) {
@@ -632,7 +630,7 @@ func ( cr *CastReactor ) castEnumFromString(
     return cr.completeCastEnum( id, ed, path )
 }
 
-func ( cr *CastReactor ) castEnum( 
+func ( cr *Reactor ) castEnum( 
     val mg.Value, 
     ed *types.EnumDefinition, 
     path objpath.PathNode ) ( *mg.Enum, error ) {
@@ -648,7 +646,7 @@ func ( cr *CastReactor ) castEnum(
     return nil, cr.newTypeInputErrorValue( t, val, path )
 }
 
-func ( cr *CastReactor ) castAtomicForDefinition(
+func ( cr *Reactor ) castAtomicForDefinition(
     v mg.Value,
     at *mg.AtomicTypeReference,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
@@ -665,7 +663,7 @@ func ( cr *CastReactor ) castAtomicForDefinition(
     return nil, nil, false
 }
 
-func ( cr *CastReactor ) valueEventForAtomicCast( 
+func ( cr *Reactor ) valueEventForAtomicCast( 
     ve *mgRct.ValueEvent, 
     at *mg.AtomicTypeReference, 
     callTyp mg.TypeReference ) ( *mgRct.ValueEvent, error ) {
@@ -682,7 +680,7 @@ func ( cr *CastReactor ) valueEventForAtomicCast(
     return res, nil
 }
 
-func ( cr *CastReactor ) processAtomicValue(
+func ( cr *Reactor ) processAtomicValue(
     ve *mgRct.ValueEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
@@ -694,7 +692,7 @@ func ( cr *CastReactor ) processAtomicValue(
     return nil
 }
 
-func ( cr *CastReactor ) processNullableValue(
+func ( cr *Reactor ) processNullableValue(
     ve *mgRct.ValueEvent,
     nt *mg.NullableTypeReference,
     callTyp mg.TypeReference,
@@ -704,7 +702,7 @@ func ( cr *CastReactor ) processNullableValue(
     return cr.processValueWithType( ve, nt.Type, callTyp, next )
 }
 
-func ( cr *CastReactor ) processValueForListType(
+func ( cr *Reactor ) processValueForListType(
     ve *mgRct.ValueEvent,
     typ *mg.ListTypeReference,
     callTyp mg.TypeReference,
@@ -716,7 +714,7 @@ func ( cr *CastReactor ) processValueForListType(
     return cr.newTypeInputErrorValue( callTyp, ve.Val, ve.GetPath() )
 }
 
-func ( cr *CastReactor ) matchUnionDefType(
+func ( cr *Reactor ) matchUnionDefType(
     ev mgRct.Event, ud *types.UnionDefinition ) ( mg.TypeReference, bool ) {
 
     typ := mgRct.TypeOfEvent( ev )
@@ -728,7 +726,7 @@ func ( cr *CastReactor ) matchUnionDefType(
     return ut.MatchType( typ )
 }
 
-func ( cr *CastReactor ) getUnionApplication(
+func ( cr *Reactor ) getUnionApplication(
     ev mgRct.Event,
     at *mg.AtomicTypeReference,
     next mgRct.EventProcessor ) func() error {
@@ -746,7 +744,7 @@ func ( cr *CastReactor ) getUnionApplication(
     return nil
 }
 
-func ( cr *CastReactor ) processValueWithType(
+func ( cr *Reactor ) processValueWithType(
     ve *mgRct.ValueEvent,
     typ mg.TypeReference,
     callTyp mg.TypeReference,
@@ -766,7 +764,7 @@ func ( cr *CastReactor ) processValueWithType(
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
 
-func ( cr *CastReactor ) processValue( 
+func ( cr *Reactor ) processValue( 
     ve *mgRct.ValueEvent, next mgRct.EventProcessor ) error {
 
     if err := cr.checkValueWellFormed( ve ); err != nil { return err }
@@ -782,7 +780,7 @@ func ( cr *CastReactor ) processValue(
     panic( cr.errStackUnrecognized() )
 }
 
-func ( cr *CastReactor ) implMapStart(
+func ( cr *Reactor ) implMapStart(
     ev mgRct.Event, 
     ft fieldTyper, 
     fs *types.FieldSet,
@@ -814,14 +812,14 @@ func ( ft *fieldSetTyper ) fieldTypeFor(
     return nil, mg.NewUnrecognizedFieldError( path, fld )
 }
 
-func ( cr *CastReactor ) fieldSetTyperForStruct(
+func ( cr *Reactor ) fieldSetTyperForStruct(
     def *types.StructDefinition, 
     path objpath.PathNode ) ( *fieldSetTyper, error ) {
 
     return &fieldSetTyper{ flds: def.Fields, dm: cr.dm }, nil
 }
 
-func ( cr *CastReactor ) fieldSetTyperForSchema( 
+func ( cr *Reactor ) fieldSetTyperForSchema( 
     sd *types.SchemaDefinition ) *fieldSetTyper {
 
     return &fieldSetTyper{ 
@@ -831,7 +829,7 @@ func ( cr *CastReactor ) fieldSetTyperForSchema(
     }
 }
 
-func ( cr *CastReactor ) fieldSetTyperFor(
+func ( cr *Reactor ) fieldSetTyperFor(
     qn *mg.QualifiedTypeName, 
     path objpath.PathNode ) ( *fieldSetTyper, error ) {
 
@@ -847,7 +845,7 @@ func ( cr *CastReactor ) fieldSetTyperFor(
     return nil, mg.NewInputErrorf( path, tmpl, qn )
 }
 
-func ( cr *CastReactor ) completeStartStruct(
+func ( cr *Reactor ) completeStartStruct(
     ss *mgRct.StructStartEvent, next mgRct.EventProcessor ) error {
 
     ft, err := cr.fieldSetTyperFor( ss.Type, ss.GetPath() )
@@ -864,7 +862,7 @@ func ( cr *CastReactor ) completeStartStruct(
     return cr.implMapStart( ev, ft, fs, pf, next )
 }
 
-func ( cr *CastReactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
+func ( cr *Reactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
     if def, ok := cr.dm.GetDefinition( qn ); ok {
         if _, ok = def.( *types.StructDefinition ); ok { return true }
         if _, ok = def.( *types.SchemaDefinition ); ok { return true }
@@ -872,7 +870,7 @@ func ( cr *CastReactor ) inferStructForQname( qn *mg.QualifiedTypeName ) bool {
     return false
 }
 
-func ( cr *CastReactor ) inferStructForMap(
+func ( cr *Reactor ) inferStructForMap(
     me *mgRct.MapStartEvent,
     at *mg.AtomicTypeReference,
     next mgRct.EventProcessor ) ( error, bool ) {
@@ -885,7 +883,7 @@ func ( cr *CastReactor ) inferStructForMap(
     return cr.completeStartStruct( ev, next ), true
 }
 
-func ( cr *CastReactor ) processMapStartWithAtomicType(
+func ( cr *Reactor ) processMapStartWithAtomicType(
     me *mgRct.MapStartEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
@@ -908,7 +906,7 @@ func ( cr *CastReactor ) processMapStartWithAtomicType(
     return cr.newTypeInputError( callTyp, mg.TypeSymbolMap, me.GetPath() )
 }
 
-func ( cr *CastReactor ) processMapStartWithType(
+func ( cr *Reactor ) processMapStartWithType(
     me *mgRct.MapStartEvent, 
     typ mg.TypeReference,
     callTyp mg.TypeReference,
@@ -926,7 +924,7 @@ func ( cr *CastReactor ) processMapStartWithType(
     return cr.newTypeInputError( callTyp, typ, me.GetPath() )
 }
 
-func ( cr *CastReactor ) processMapStart(
+func ( cr *Reactor ) processMapStart(
     me *mgRct.MapStartEvent, next mgRct.EventProcessor ) error {
     
     switch v := cr.stack.Peek().( type ) {
@@ -941,7 +939,7 @@ func ( cr *CastReactor ) processMapStart(
     panic( cr.errStackUnrecognized() )
 }
 
-func ( cr *CastReactor ) processFieldStart(
+func ( cr *Reactor ) processFieldStart(
     fs *mgRct.FieldStartEvent, next mgRct.EventProcessor ) error {
 
     fc := cr.stack.Peek().( *fieldCast )
@@ -958,7 +956,7 @@ func ( cr *CastReactor ) processFieldStart(
     return next.ProcessEvent( fs )
 }
 
-func ( cr *CastReactor ) processListEnd() error {
+func ( cr *Reactor ) processListEnd() error {
     lc := cr.stack.Pop().( *listCast )
     if ! ( lc.sawValues || lc.lt.AllowsEmpty ) {
         return mg.NewInputError( lc.startPath, "empty list" )
@@ -966,7 +964,7 @@ func ( cr *CastReactor ) processListEnd() error {
     return nil
 }
 
-func ( cr *CastReactor ) processFieldsEnd( 
+func ( cr *Reactor ) processFieldsEnd( 
     ee *mgRct.EndEvent, next mgRct.EventProcessor ) error {
 
     fc := cr.stack.Pop().( *fieldCast )
@@ -978,7 +976,7 @@ func ( cr *CastReactor ) processFieldsEnd(
     return nil
 }
 
-func ( cr *CastReactor ) processEnd(
+func ( cr *Reactor ) processEnd(
     ee *mgRct.EndEvent, next mgRct.EventProcessor ) error {
 
     switch cr.stack.Peek().( type ) {
@@ -991,7 +989,7 @@ func ( cr *CastReactor ) processEnd(
     return nil
 }
 
-func ( cr *CastReactor ) checkStructWellFormed(
+func ( cr *Reactor ) checkStructWellFormed(
     ss *mgRct.StructStartEvent ) error {
 
     return cr.checkWellFormed( ss, ss.Type, "a struct",
@@ -1002,7 +1000,7 @@ func ( cr *CastReactor ) checkStructWellFormed(
     )
 }
 
-func ( cr *CastReactor ) allowStructStartForType( 
+func ( cr *Reactor ) allowStructStartForType( 
     ss *mgRct.StructStartEvent, expct *mg.QualifiedTypeName ) bool {
 
     if _, ok := cr.dm.GetDefinition( ss.Type ); ! ok { return false }
@@ -1014,7 +1012,7 @@ func ( cr *CastReactor ) allowStructStartForType(
     return canAssignType( expct, ss.Type, cr.dm )
 }
 
-func ( cr *CastReactor ) processStructStartWithAtomicType(
+func ( cr *Reactor ) processStructStartWithAtomicType(
     ss *mgRct.StructStartEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
@@ -1034,7 +1032,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     return cr.newTypeInputError( callTyp, failTyp, ss.GetPath() )
 }
 
-func ( cr *CastReactor ) processStructStartWithType(
+func ( cr *Reactor ) processStructStartWithType(
     ss *mgRct.StructStartEvent,
     typ mg.TypeReference,
     callTyp mg.TypeReference,
@@ -1052,7 +1050,7 @@ func ( cr *CastReactor ) processStructStartWithType(
     return cr.newTypeInputError( typ, callTyp, ss.GetPath() )
 }
 
-func ( cr *CastReactor ) processStructStart(
+func ( cr *Reactor ) processStructStart(
     ss *mgRct.StructStartEvent, next mgRct.EventProcessor ) error {
 
     if err := cr.checkStructWellFormed( ss ); err != nil { return err }
@@ -1068,7 +1066,7 @@ func ( cr *CastReactor ) processStructStart(
     panic( cr.errStackUnrecognized() )
 }
 
-func ( cr *CastReactor ) processListStartWithAtomicType(
+func ( cr *Reactor ) processListStartWithAtomicType(
     le *mgRct.ListStartEvent,
     at *mg.AtomicTypeReference,
     callTyp mg.TypeReference,
@@ -1088,7 +1086,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
     return cr.newTypeInputError( callTyp, le.Type, le.GetPath() )
 }
 
-func ( cr *CastReactor ) processListStartWithListType(
+func ( cr *Reactor ) processListStartWithListType(
     le *mgRct.ListStartEvent,
     lt *mg.ListTypeReference,
     callTyp mg.TypeReference,
@@ -1099,7 +1097,7 @@ func ( cr *CastReactor ) processListStartWithListType(
     return next.ProcessEvent( le )
 }
 
-func ( cr *CastReactor ) processListStartWithType(
+func ( cr *Reactor ) processListStartWithType(
     le *mgRct.ListStartEvent,
     typ mg.TypeReference,
     callTyp mg.TypeReference,
@@ -1118,7 +1116,7 @@ func ( cr *CastReactor ) processListStartWithType(
     panic( libErrorf( "unhandled type: %T", typ ) )
 }
 
-func ( cr *CastReactor ) processListStart( 
+func ( cr *Reactor ) processListStart( 
     le *mgRct.ListStartEvent, next mgRct.EventProcessor ) error {
 
     switch v := cr.stack.Peek().( type ) {
@@ -1132,7 +1130,7 @@ func ( cr *CastReactor ) processListStart(
     panic( cr.errStackUnrecognized() )
 }
 
-func ( cr *CastReactor ) ProcessEvent(
+func ( cr *Reactor ) ProcessEvent(
     ev mgRct.Event, next mgRct.EventProcessor ) ( err error ) {
 
     if cr.passthroughTracker != nil { return cr.processPassthrough( ev, next ) }

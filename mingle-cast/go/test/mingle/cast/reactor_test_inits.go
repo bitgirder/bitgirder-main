@@ -39,7 +39,7 @@ func ( rti *rtInit ) addSucc(
     in, expct interface{}, typ interface{}, dm *types.DefinitionMap ) {
 
     rti.addTests(
-        &CastReactorTest{ 
+        &ReactorTest{ 
             Map: dm,
             In: mg.MustValue( in ), 
             Expect: mg.MustValue( expct ), 
@@ -59,7 +59,7 @@ func ( rti *rtInit ) addError(
     in interface{}, typ interface{}, err error, dm *types.DefinitionMap ) {
 
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             Map: dm,
             In: mg.MustValue( in ),
             Type: asType( typ ),
@@ -84,7 +84,7 @@ func ( rti *rtInit ) addTcError(
     in interface{}, expct, act interface{}, dm *types.DefinitionMap ) {
 
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             Map: dm,
             In: mg.MustValue( in ),
             Type: asType( expct ),
@@ -118,7 +118,7 @@ func ( rti *rtInit ) addMiscTcErrors() {
     dm := builtin.MakeDefMap( types.MakeStructDef( "ns1@v1/S1", nil ) )
     add := func( in interface{}, expct, act interface{} ) {
         rti.addTests(
-            &CastReactorTest{
+            &ReactorTest{
                 Map: dm,
                 In: mg.MustValue( in ),
                 Type: asType( expct ),
@@ -140,7 +140,7 @@ func ( rti *rtInit ) addMiscTcErrors() {
     add( "s", "String*", "String" )
     s1 := parser.MustStruct( "ns1@v1/S1" )
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             Map: dm,
             In: mg.MustList( 1, s1 ),
             Type: asType( "Int32*" ),
@@ -165,7 +165,7 @@ func ( rti *rtInit ) addMiscVcErrors() {
     dm := types.NewDefinitionMap()
     addErr := func( in interface{}, typ interface{}, err error ) {
         rti.addTests(
-            &CastReactorTest{
+            &ReactorTest{
                 Map: dm,
                 Type: asType( typ ),
                 In: mg.MustValue( in ),
@@ -189,14 +189,14 @@ func ( rti *rtInit ) addMiscVcErrors() {
 
 func ( rti *rtInit ) addNonRootPathTestErrors() {
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             Path: pathInVal,
             Map: types.NewDefinitionMap(),
             In: mg.MustValue( true ),
             Type: mg.TypeBuffer,
             Err: newTcErr( mg.TypeBuffer, mg.TypeBoolean, pathInVal ),
         },
-        &CastReactorTest{
+        &ReactorTest{
             Path: pathInVal,
             Map: types.NewDefinitionMap(),
             In: mg.MustList( testValBuf1, true ),
@@ -251,7 +251,7 @@ func ( rti *rtInit ) addStringTests() {
         dm,
     )
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             Map: dm,
             In: mg.MustList( "a", "b" ),
             Type: asType( `String~"^a+$"*` ),
@@ -490,14 +490,14 @@ func ( rti *rtInit ) addListTests() {
         dm,
     )
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             Map: dm,
             In: mg.MustValue( []interface{}{ s1, nil } ),
             Type: asType( "&ns1@v1/S1*" ),
             Err: newVcErr( 
                 objpath.RootedAtList().SetIndex( 1 ), "Value is null" ),
         },
-        &CastReactorTest{
+        &ReactorTest{
             Map: dm,
             In: mg.MustValue( []interface{}{ s1, nil } ),
             Type: asType( "ns1@v1/S1*" ),
@@ -615,7 +615,7 @@ func ( rti *rtInit ) addBaseFieldCastTests() {
             types.MakeStructDef( qn1Str, []*types.FieldDefinition{ fld } ) )
     }
     s1F1Add := func( in, expct interface{}, typ string, err error ) {
-        t := &CastReactorTest{ 
+        t := &ReactorTest{ 
             Type: qn1.AsAtomicType(),
             In: s1F1( in ), 
             Map: s1DefMap( typ ),
@@ -701,7 +701,7 @@ func ( rti *rtInit ) addFieldSetCastTests() {
         ),
     )
     addTest := func( in, expct *mg.Struct, err error ) {
-        t := &CastReactorTest{ Map: dm, In: in, Type: in.Type.AsAtomicType() }
+        t := &ReactorTest{ Map: dm, In: in, Type: in.Type.AsAtomicType() }
         if expct != nil { t.Expect = expct }
         if err != nil { t.Err = err }
         rti.addTests( t )
@@ -757,7 +757,7 @@ func ( rti *rtInit ) addStructValCastTests() {
     t1 := asType( "ns1@v1/S1" )
     addFail := func( val interface{}, err error ) {
         rti.addTests(
-            &CastReactorTest{ 
+            &ReactorTest{ 
                 Map: dm, 
                 In: mg.MustValue( val ), 
                 Type: t1, 
@@ -810,7 +810,7 @@ func ( rti *rtInit ) addInferredStructCastTests() {
     )
     addSucc := func( in, expct mg.Value ) {
         rti.addTests(
-            &CastReactorTest{
+            &ReactorTest{
                 Map: dm,
                 Type: asType( "ns1@v1/S1" ),
                 In: in,
@@ -876,7 +876,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
     )
     addSucc := func( in, expct mg.Value, typ interface{} ) {
         rti.addTests(
-            &CastReactorTest{
+            &ReactorTest{
                 Map: dm,
                 Type: asType( typ ),
                 In: in,
@@ -1008,7 +1008,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
     )
     addFail := func( in mg.Value, typ interface{}, err error ) {
         rti.addTests(
-            &CastReactorTest{ Map: dm, In: in, Type: asType( typ ), Err: err },
+            &ReactorTest{ Map: dm, In: in, Type: asType( typ ), Err: err },
         )
     }
     addFail(
@@ -1069,7 +1069,7 @@ func ( rti *rtInit ) addEnumValCastTests() {
         types.MakeEnumDef( "ns1@v1/E2", "c1", "c2" ),
     )
     addTest := func( in, expct interface{}, typ interface{}, err error ) {
-        t := &CastReactorTest{
+        t := &ReactorTest{
             Map: dm,
             In: mg.MustValue( in ),
             Type: asType( typ ),
@@ -1215,7 +1215,7 @@ func ( rti *rtInit ) addDeepCatchallTests() {
         ),
     )
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             In: in,
             Expect: expct,
             Type: expct.Type.AsAtomicType(),
@@ -1267,7 +1267,7 @@ func ( rti *rtInit ) addDefaultCastTests() {
     )
     addSucc := func( in, expct mg.Value, typ interface{} ) {
         rti.addTests(
-            &CastReactorTest{
+            &ReactorTest{
                 Map: dm,
                 In: in,
                 Expect: expct,
@@ -1321,7 +1321,7 @@ func ( rti *rtInit ) addDefaultCastTests() {
     )
     addFail := func( in interface{}, typ interface{}, err error ) {
         rti.addTests(
-            &CastReactorTest{
+            &ReactorTest{
                 Map: dm,
                 In: mg.MustValue( in ),
                 Type: asType( typ ),
@@ -1372,14 +1372,14 @@ func ( rti *rtInit ) addUnionTests() {
             ),
         },
     )
-    add := func( t *CastReactorTest ) {
+    add := func( t *ReactorTest ) {
         t.Profile = ProfileUnionImpl
         t.Map = dm
         rti.addTests( t )
     }
     addOk := func( in, expct, typ interface{} ) {
         add(
-            &CastReactorTest{
+            &ReactorTest{
                 In: mg.MustValue( in ),
                 Expect: mg.MustValue( expct ),
                 Type: asType( typ ),
@@ -1389,7 +1389,7 @@ func ( rti *rtInit ) addUnionTests() {
     addIdent := func( in, typ interface{} ) { addOk( in, in, typ ) }
     addErr := func( in, typ interface{}, err error ) {
         add(
-            &CastReactorTest{
+            &ReactorTest{
                 In: mg.MustValue( in ),
                 Type: asType( typ ),
                 Err: err,
@@ -1481,13 +1481,13 @@ func ( rti *rtInit ) addCastDisableTests() {
         ),
         types.MakeStructDef( "ns1@v1/S2", nil ),
     )
-    add := func( t *CastReactorTest ) {
+    add := func( t *ReactorTest ) {
         t.Profile = ProfileCastDisable
         t.Map = dm
         rti.addTests( t )
     }
     addOkTyped := func( in mg.Value, typ mg.TypeReference ) {
-        add( &CastReactorTest{ In: in, Type: typ, Expect: in } )
+        add( &ReactorTest{ In: in, Type: typ, Expect: in } )
     }
     addOk := func( in mg.Value ) { addOkTyped( in, mg.TypeOf( in ) ) }
     addOk( mg.Int32( 1 ) )
@@ -1544,7 +1544,7 @@ func ( rti *rtInit ) addCastDisableTests() {
     // we explicitly feed the disabled field first to test that the disabling
     // does not remain in effect when an enabled field follows a disabled field
     add(
-        &CastReactorTest{
+        &ReactorTest{
             Type: asType( "ns1@v1/S1" ),
             Err: newTcErr( "ns1@v1/S2", "ns2@v1/S2", mg.MakeTestIdPath( 2 ) ),
             In: []mgRct.Event{
@@ -1570,17 +1570,17 @@ func ( rti *rtInit ) addCustomFieldSetTests() {
             },
         ),
     )
-    add := func( typ interface{}, t *CastReactorTest ) {
+    add := func( typ interface{}, t *ReactorTest ) {
         t.Map = defs
         t.Type = asType( typ )
         t.Profile = ProfileCustomFieldSet
         rti.addTests( t )
     }
     addOk := func( in interface{}, expct mg.Value, typ interface{} ) {
-        add( typ, &CastReactorTest{ In: in, Expect: expct } )
+        add( typ, &ReactorTest{ In: in, Expect: expct } )
     }
     addErr := func( in interface{}, err error, typ interface{} ) {
-        add( typ, &CastReactorTest{ In: in, Err: err } )
+        add( typ, &ReactorTest{ In: in, Err: err } )
     }
     addOk(
         parser.MustStruct( "ns1@v1/S1",
@@ -1643,7 +1643,7 @@ func ( rti *rtInit ) addCustomFieldSetTests() {
 func ( rti *rtInit ) addCustomErrorFormattingTests() {
     dm := builtin.MakeDefMap()
     rti.addTests(
-        &CastReactorTest{
+        &ReactorTest{
             In: mg.Int32( 1 ),
             Type: mg.TypeBuffer,
             Err: newVcErr( nil, "bad-int32-for-buffer" ),

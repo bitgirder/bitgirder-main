@@ -14,7 +14,7 @@ const (
     ProfileCustomErrorFormatting = "custom-error-formatting"
 )
 
-type CastReactorTest struct {
+type ReactorTest struct {
     Path objpath.PathNode
     Map *types.DefinitionMap
     Type mg.TypeReference
