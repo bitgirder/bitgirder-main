@@ -10,7 +10,6 @@
         "mingle/types/testing",
         "mingle/types/builtin",
         "mingle/tck",
-        "mingle/service",
         "mingle/parser"
     ],
     "test-commands": {
