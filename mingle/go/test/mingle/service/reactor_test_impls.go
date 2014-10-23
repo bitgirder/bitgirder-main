@@ -167,15 +167,13 @@ func ( t *reactorTestCall ) initTypedResponseTest() ResponseReactorInterface {
     t.chkObj = bldr
     opSig := reqDef.Operation.Signature
     retTyp := opSig.Return
-    errTyps := make( []mg.TypeReference, 0, 4 )
-    if ut := opSig.Throws; ut != nil {
-        errTyps = append( errTyps, ut.Types... )
+    errTyps := make( []*types.UnionTypeDefinition, 0, 2 )
+    addErrTyp := func( sig *types.CallSignature ) {
+        if ut := sig.Throws; ut != nil { errTyps = append( errTyps, ut ) }
     }
+    addErrTyp( opSig )
     if secQn := reqDef.Service.Security; secQn != nil {
-        authDef := types.MustPrototypeDefinition( secQn, m.defs )
-        if ut := authDef.Signature.Throws; ut != nil {
-            errTyps = append( errTyps, ut.Types... )
-        }
+        addErrTyp( types.MustPrototypeDefinition( secQn, m.defs ).Signature )
     }
     return AsTypedResponseReactorInterface( bldr, retTyp, errTyps, m.defs )
 }

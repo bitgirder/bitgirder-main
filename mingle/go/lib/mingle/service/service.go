@@ -30,6 +30,9 @@ var (
     qnameRequestParameters *mg.QualifiedTypeName
     typeRequestParameters *mg.AtomicTypeReference
 
+    qnameThrownErrors *mg.QualifiedTypeName
+    typeThrownErrors *mg.AtomicTypeReference
+
     IdNamespace *mg.Identifier
     IdService *mg.Identifier
     IdOperation *mg.Identifier
@@ -39,6 +42,7 @@ var (
     IdError *mg.Identifier
 
     externalErrorTypes = mg.NewQnameMap()
+    externalErrorUnionDef *types.UnionDefinition
 )
 
 type ReactorUserFunc func( rct mgRct.EventProcessor ) error
@@ -74,6 +78,7 @@ func initNames() {
     QnameResponseError, TypeResponseError = initNamePair( "ResponseError" )
     qnameRequestParameters, typeRequestParameters = 
         initNamePair( "RequestParameters" )
+    qnameThrownErrors, typeThrownErrors =   initNamePair( "ThrownErrors" )
     IdNamespace = mkId( "namespace" )
     IdService = mkId( "service" )
     IdOperation = mkId( "operation" )
@@ -118,11 +123,25 @@ func initErrType( qn *mg.QualifiedTypeName ) {
     builtin.MustAddBuiltinType( builtin.NewLocatableErrorDefinition( qn ) )
 }
 
+func initExternalErrorUnionDef() {
+    typs := make( []mg.TypeReference, 0, externalErrorTypes.Len() )
+    externalErrorTypes.EachPair( 
+        func( qn *mg.QualifiedTypeName, _ interface{} ) {
+            typs = append( typs, qn.AsAtomicType() )
+        },
+    )
+    externalErrorUnionDef = &types.UnionDefinition{
+        Name: qnameThrownErrors,
+        Union: types.MustUnionTypeDefinitionTypes( typs... ),
+    }
+}
+
 func initTypes() {
     initReqType()
     initRespType()
     initErrType( QnameRequestError )
     initErrType( QnameResponseError )
+    initExternalErrorUnionDef()
 }
 
 type RequestError struct {

@@ -1058,7 +1058,7 @@ func ( rti *rtInit ) addSchemaCastTests() {
             "f2", int32( 1 ),
         ),
         "ns1@v1/Schema2",
-        newTcErr( "ns1@v1/Schema1", mg.TypeInt32, mg.MakeTestIdPath( 2 ) ),
+        newTcErr( schema1Nil, mg.TypeInt32, mg.MakeTestIdPath( 2 ) ),
     )
 }
 
@@ -1640,6 +1640,19 @@ func ( rti *rtInit ) addCustomFieldSetTests() {
     )
 }
 
+func ( rti *rtInit ) addCustomErrorFormattingTests() {
+    dm := builtin.MakeDefMap()
+    rti.addTests(
+        &CastReactorTest{
+            In: mg.Int32( 1 ),
+            Type: mg.TypeBuffer,
+            Err: newVcErr( nil, "bad-int32-for-buffer" ),
+            Map: dm,
+            Profile: ProfileCustomErrorFormatting,
+        },
+    )
+}
+
 func ( rti *rtInit ) addDefaultPathTests() {
     dm := builtin.MakeDefMap(
         types.MakeStructDef( "ns1@v1/S1",
@@ -1844,6 +1857,7 @@ func GetReactorTests() []mgRct.ReactorTest {
     rti.addDefaultPathTests()
     rti.addCastDisableTests()
     rti.addCustomFieldSetTests()
+    rti.addCustomErrorFormattingTests()
     rti.addBuiltinTypeTests()
     return rti.b.GetTests()
 }

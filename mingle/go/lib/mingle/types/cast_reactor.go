@@ -3,12 +3,15 @@ package types
 import (
     mg "mingle"
     mgRct "mingle/reactor"
+    "mingle/parser"
     "bitgirder/objpath"
     "bitgirder/pipeline"
     "bitgirder/stack"
     "log"
     "fmt"
     "bytes"
+    "strings"
+    "encoding/base64"
 )
 
 func asMapStartEvent( ev mgRct.Event ) *mgRct.MapStartEvent {
@@ -57,6 +60,9 @@ type SymbolMapFieldSetGetter interface {
     GetFieldSet( path objpath.PathNode ) ( *FieldSet, error )
 }
 
+type TypeErrorFormatter func( 
+    expct, act mg.TypeReference, path objpath.PathNode ) ( error, bool )
+
 type CastReactor struct {
 
     dm DefinitionGetter
@@ -70,6 +76,8 @@ type CastReactor struct {
     unionMatchFuncs *mg.QnameMap
 
     FieldSetFactory SymbolMapFieldSetGetter
+
+    FormatTypeError TypeErrorFormatter
 
     SkipPathSetter bool
 }
@@ -87,6 +95,21 @@ func ( cr *CastReactor ) dumpStack( pref string ) {
     })
     fmt.Fprintf( bb, " ]" )
     log.Print( bb.String() )
+}
+
+func ( cr *CastReactor ) newTypeCastError(
+    expct, act mg.TypeReference, path objpath.PathNode ) error {
+
+    if f := cr.FormatTypeError; f != nil {
+        if err, ok := f( expct, act, path ); ok { return err }
+    }
+    return mg.NewTypeCastError( expct, act, path )
+}
+
+func ( cr *CastReactor ) newTypeCastErrorValue(
+    expct mg.TypeReference, val mg.Value, path objpath.PathNode ) error {
+
+    return cr.newTypeCastError( expct, mg.TypeOf( val ), path )
 }
 
 func ( cr *CastReactor ) pushType( typ mg.TypeReference ) {
@@ -220,6 +243,243 @@ type listCast struct {
     startPath objpath.PathNode
 }
 
+type atomicCastCall struct {
+    ve *mgRct.ValueEvent
+    at *mg.AtomicTypeReference
+    callTyp mg.TypeReference
+    cr *CastReactor
+}
+
+func ( c atomicCastCall ) val() mg.Value { return c.ve.Val }
+
+func ( c atomicCastCall ) path() objpath.PathNode {
+    if p := c.ve.GetPath(); p != nil { return p }
+    return nil
+}
+
+func ( c atomicCastCall ) newTypeCastErrorValue() error {
+    valTyp := mgRct.TypeOfEvent( c.ve )
+    return c.cr.newTypeCastError( c.callTyp, valTyp, c.ve.GetPath() )
+}
+
+func strToBool( s mg.String, path objpath.PathNode ) ( mg.Value, error ) {
+    switch lc := strings.ToLower( string( s ) ); lc { 
+    case "true": return mg.Boolean( true ), nil
+    case "false": return mg.Boolean( false ), nil
+    }
+    errTmpl :="Invalid boolean value: %s"
+    errStr := mg.QuoteValue( s )
+    return nil, mg.NewCastErrorf( path, errTmpl, errStr )
+}
+
+func ( c atomicCastCall ) castBoolean() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Boolean: return v, nil
+    case mg.String: return strToBool( v, c.path() )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castBuffer() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Buffer: return v, nil
+    case mg.String: 
+        buf, err := base64.StdEncoding.DecodeString( string( v ) )
+        if err == nil { return mg.Buffer( buf ), nil }
+        msg := "Invalid base64 string: %s"
+        return nil, mg.NewCastErrorf( c.path(), msg, err.Error() )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castString() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.String: return v, nil
+    case mg.Boolean, mg.Int32, mg.Int64, mg.Uint32, mg.Uint64, mg.Float32, 
+         mg.Float64:
+        return mg.String( v.( fmt.Stringer ).String() ), nil
+    case mg.Timestamp: return mg.String( v.Rfc3339Nano() ), nil
+    case mg.Buffer:
+        b64 := base64.StdEncoding.EncodeToString( []byte( v ) ) 
+        return mg.String( b64 ), nil
+    case *mg.Enum: return mg.String( v.Value.ExternalForm() ), nil
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func isDecimalNumString( s mg.String ) bool {
+    return strings.IndexAny( string( s ), "eE." ) >= 0
+}
+
+func ( c atomicCastCall ) parseNumberForCast( 
+    s mg.String ) ( mg.Value, error ) {
+
+    numTyp := c.at.Name()
+    asFloat := mg.IsIntegerTypeName( numTyp ) && isDecimalNumString( s )
+    parseTyp := numTyp
+    if asFloat { parseTyp = mg.QnameFloat64 }
+    val, err := mg.ParseNumber( string( s ), parseTyp )
+    if ne, ok := err.( *mg.NumberFormatError ); ok {
+        err = mg.NewCastError( c.path(), ne.Error() )
+    }
+    if err != nil || ( ! asFloat ) { return val, err }
+    f64 := float64( val.( mg.Float64 ) )
+    switch {
+    case numTyp.Equals( mg.QnameInt32 ): val = mg.Int32( int32( f64 ) )
+    case numTyp.Equals( mg.QnameUint32 ): val = mg.Uint32( uint32( f64 ) )
+    case numTyp.Equals( mg.QnameInt64 ): val = mg.Int64( int64( f64 ) )
+    case numTyp.Equals( mg.QnameUint64 ): val = mg.Uint64( uint64( f64 ) )
+    }
+    return val, nil
+}
+
+func ( c atomicCastCall ) castInt32() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Int32: return v, nil
+    case mg.Int64: return mg.Int32( v ), nil
+    case mg.Uint32: return mg.Int32( int32( v ) ), nil
+    case mg.Uint64: return mg.Int32( int32( v ) ), nil
+    case mg.Float32: return mg.Int32( int32( v ) ), nil
+    case mg.Float64: return mg.Int32( int32( v ) ), nil
+    case mg.String: return c.parseNumberForCast( v )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castInt64() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Int32: return mg.Int64( v ), nil
+    case mg.Int64: return v, nil
+    case mg.Uint32: return mg.Int64( int64( v ) ), nil
+    case mg.Uint64: return mg.Int64( int64( v ) ), nil
+    case mg.Float32: return mg.Int64( int64( v ) ), nil
+    case mg.Float64: return mg.Int64( int64( v ) ), nil
+    case mg.String: return c.parseNumberForCast( v )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castCheckNeg( 
+    isNeg bool, in, ifOk mg.Value ) ( mg.Value, error ) {
+
+    if isNeg { 
+        return nil, mg.NewCastErrorf( c.path(), "value out of range: %s", in )
+    }
+    return ifOk, nil
+}
+
+func ( c atomicCastCall ) castUint32() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Int32: return c.castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ) )
+    case mg.Uint32: return v, nil
+    case mg.Int64: return c.castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ) )
+    case mg.Uint64: return mg.Uint32( uint32( v ) ), nil
+    case mg.Float32: return c.castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ) )
+    case mg.Float64: return c.castCheckNeg( v < 0, v, mg.Uint32( uint32( v ) ) )
+    case mg.String: return c.parseNumberForCast( v )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castUint64() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Int32: return c.castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ) )
+    case mg.Uint32: return mg.Uint64( uint64( v ) ), nil
+    case mg.Int64: return c.castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ) )
+    case mg.Uint64: return v, nil
+    case mg.Float32: return c.castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ) )
+    case mg.Float64: return c.castCheckNeg( v < 0, v, mg.Uint64( uint64( v ) ) )
+    case mg.String: return c.parseNumberForCast( v )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castFloat32() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Int32: return mg.Float32( float32( v ) ), nil
+    case mg.Int64: return mg.Float32( float32( v ) ), nil
+    case mg.Uint32: return mg.Float32( float32( v ) ), nil
+    case mg.Uint64: return mg.Float32( float32( v ) ), nil
+    case mg.Float32: return v, nil
+    case mg.Float64: return mg.Float32( float32( v ) ), nil
+    case mg.String: return c.parseNumberForCast( v )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castFloat64() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Int32: return mg.Float64( float64( v ) ), nil
+    case mg.Int64: return mg.Float64( float64( v ) ), nil
+    case mg.Uint32: return mg.Float64( float64( v ) ), nil
+    case mg.Uint64: return mg.Float64( float64( v ) ), nil
+    case mg.Float32: return mg.Float64( float64( v ) ), nil
+    case mg.Float64: return v, nil
+    case mg.String: return c.parseNumberForCast( v )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castTimestamp() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case mg.Timestamp: return v, nil
+    case mg.String:
+        tm, err := parser.ParseTimestamp( string( v ) )
+        if err == nil { return tm, nil }
+        msg := "Invalid timestamp: %s"
+        return nil, mg.NewCastErrorf( c.path(), msg, err.Error() )
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) castSymbolMap() ( mg.Value, error ) {
+    switch v := c.val().( type ) {
+    case *mg.SymbolMap: return v, nil
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+// switch compares based on qname not at itself since we may be dealing with
+// restriction types, meaning that if at is mingle:core@v1/String~"a", it is a
+// string (has qname mingle:core@v1/String) but will not equal mg.TypeString
+// itself
+func ( c atomicCastCall ) castAtomicUnrestricted() ( mg.Value, error ) {
+    if _, ok := c.val().( *mg.Null ); ok {
+        if c.at.Equals( mg.TypeNull ) { return c.val(), nil }
+        return nil, newNullCastError( c.ve.GetPath() )
+    }
+    switch nm := c.at.Name(); {
+    case nm.Equals( mg.QnameValue ): return c.val(), nil
+    case nm.Equals( mg.QnameBoolean ): return c.castBoolean()
+    case nm.Equals( mg.QnameBuffer ): return c.castBuffer()
+    case nm.Equals( mg.QnameString ): return c.castString()
+    case nm.Equals( mg.QnameInt32 ): return c.castInt32()
+    case nm.Equals( mg.QnameInt64 ): return c.castInt64()
+    case nm.Equals( mg.QnameUint32 ): return c.castUint32()
+    case nm.Equals( mg.QnameUint64 ): return c.castUint64()
+    case nm.Equals( mg.QnameFloat32 ): return c.castFloat32()
+    case nm.Equals( mg.QnameFloat64 ): return c.castFloat64()
+    case nm.Equals( mg.QnameTimestamp ): return c.castTimestamp()
+    case nm.Equals( mg.QnameSymbolMap ): return c.castSymbolMap()
+    }
+    return nil, c.newTypeCastErrorValue()
+}
+
+func ( c atomicCastCall ) checkRestriction( val mg.Value ) error {
+    if c.at.Restriction().AcceptsValue( val ) { return nil }
+    return mg.NewCastErrorf( 
+        c.ve.GetPath(), "Value %s does not satisfy restriction %s",
+        mg.QuoteValue( val ), c.at.Restriction().ExternalForm() )
+}
+
+func ( c atomicCastCall ) call() ( mg.Value, error ) {
+    val, err := c.castAtomicUnrestricted()
+    if err == nil && c.at.Restriction() != nil { 
+        err = c.checkRestriction( val )
+    }
+    return val, err
+}
+
 func ( cr *CastReactor ) errStackUnrecognized() error {
     return libErrorf( "unrecognized stack element: %T", cr.stack.Peek() )
 }
@@ -290,7 +550,44 @@ func ( cr *CastReactor ) castStructConstructor(
     return nil, nil, false
 }
 
-func ( cr *CastReactor ) castAtomic(
+func ( cr *CastReactor ) completeCastEnum(
+    id *mg.Identifier, 
+    ed *EnumDefinition, 
+    path objpath.PathNode ) ( *mg.Enum, error ) {
+
+    if res := ed.GetValue( id ); res != nil { return res, nil }
+    tmpl := "illegal value for enum %s: %s"
+    return nil, mg.NewCastErrorf( path, tmpl, ed.GetName(), id )
+}
+
+func ( cr *CastReactor ) castEnumFromString( 
+    s string, ed *EnumDefinition, path objpath.PathNode ) ( *mg.Enum, error ) {
+
+    id, err := parser.ParseIdentifier( s )
+    if err != nil {
+        tmpl := "invalid enum value %q: %s"
+        return nil, mg.NewCastErrorf( path, tmpl, s, err )
+    }
+    return cr.completeCastEnum( id, ed, path )
+}
+
+func ( cr *CastReactor ) castEnum( 
+    val mg.Value, 
+    ed *EnumDefinition, 
+    path objpath.PathNode ) ( *mg.Enum, error ) {
+
+    switch v := val.( type ) {
+    case mg.String: return cr.castEnumFromString( string( v ), ed, path )
+    case *mg.Enum: 
+        if v.Type.Equals( ed.GetName() ) {
+            return cr.completeCastEnum( v.Value, ed, path )
+        }
+    }
+    t := ed.GetName().AsAtomicType()
+    return nil, cr.newTypeCastErrorValue( t, val, path )
+}
+
+func ( cr *CastReactor ) castAtomicForDefinition(
     v mg.Value,
     at *mg.AtomicTypeReference,
     path objpath.PathNode ) ( mg.Value, error, bool ) {
@@ -298,7 +595,7 @@ func ( cr *CastReactor ) castAtomic(
     if def, ok := cr.dm.GetDefinition( at.Name() ); ok {
         switch td := def.( type ) {
         case *EnumDefinition:
-            res, err := castEnum( v, td, path )
+            res, err := cr.castEnum( v, td, path )
             return res, err, true
         case *StructDefinition: return cr.castStructConstructor( v, td, path )
         } 
@@ -309,16 +606,18 @@ func ( cr *CastReactor ) castAtomic(
 func ( cr *CastReactor ) valueEventForAtomicCast( 
     ve *mgRct.ValueEvent, 
     at *mg.AtomicTypeReference, 
-    callTyp mg.TypeReference ) ( error, *mgRct.ValueEvent ) {
+    callTyp mg.TypeReference ) ( *mgRct.ValueEvent, error ) {
 
-    mv, err, ok := cr.castAtomic( ve.Val, at, ve.GetPath() )
+    mv, err, ok := cr.castAtomicForDefinition( ve.Val, at, ve.GetPath() )
     if ! ok { 
-        mv, err = castAtomicWithCallType( ve.Val, at, callTyp, ve.GetPath() ) 
+        log.Printf( "at: %s, callTyp: %s", at, callTyp )
+        mv, err = atomicCastCall{ ve, at, callTyp, cr }.call()
+//        mv, err = castAtomicWithCallType( ve.Val, at, callTyp, ve.GetPath() ) 
     }
-    if err != nil { return err, nil }
+    if err != nil { return nil, err }
     res := mgRct.CopyEvent( ve, true ).( *mgRct.ValueEvent )
     res.Val = mv
-    return nil, res
+    return res, nil
 }
 
 func ( cr *CastReactor ) processAtomicValue(
@@ -327,7 +626,7 @@ func ( cr *CastReactor ) processAtomicValue(
     callTyp mg.TypeReference,
     next mgRct.EventProcessor ) error {
 
-    err, ve2 := cr.valueEventForAtomicCast( ve, at, callTyp )
+    ve2, err := cr.valueEventForAtomicCast( ve, at, callTyp )
     if err != nil { return err }
     if err = next.ProcessEvent( ve2 ); err != nil { return err }
     return nil
@@ -352,7 +651,7 @@ func ( cr *CastReactor ) processValueForListType(
     if _, ok := ve.Val.( *mg.Null ); ok {
         return newNullCastError( ve.GetPath() )
     }
-    return mg.NewTypeCastErrorValue( callTyp, ve.Val, ve.GetPath() )
+    return cr.newTypeCastErrorValue( callTyp, ve.Val, ve.GetPath() )
 }
 
 func ( cr *CastReactor ) matchUnionDefType(
@@ -539,7 +838,7 @@ func ( cr *CastReactor ) processMapStartWithAtomicType(
 
     if err, ok := cr.inferStructForMap( me, at, next ); ok { return err }
 
-    return mg.NewTypeCastError( callTyp, mg.TypeSymbolMap, me.GetPath() )
+    return cr.newTypeCastError( callTyp, mg.TypeSymbolMap, me.GetPath() )
 }
 
 func ( cr *CastReactor ) processMapStartWithType(
@@ -557,7 +856,7 @@ func ( cr *CastReactor ) processMapStartWithType(
     case *mg.NullableTypeReference:
         return cr.processMapStartWithType( me, v.Type, callTyp, next )
     }
-    return mg.NewTypeCastError( callTyp, typ, me.GetPath() )
+    return cr.newTypeCastError( callTyp, typ, me.GetPath() )
 }
 
 func ( cr *CastReactor ) processMapStart(
@@ -665,7 +964,7 @@ func ( cr *CastReactor ) processStructStartWithAtomicType(
     }
 
     failTyp := mg.NewAtomicTypeReference( ss.Type, nil )
-    return mg.NewTypeCastError( callTyp, failTyp, ss.GetPath() )
+    return cr.newTypeCastError( callTyp, failTyp, ss.GetPath() )
 }
 
 func ( cr *CastReactor ) processStructStartWithType(
@@ -683,7 +982,7 @@ func ( cr *CastReactor ) processStructStartWithType(
     case *mg.NullableTypeReference:
         return cr.processStructStartWithType( ss, v.Type, callTyp, next )
     }
-    return mg.NewTypeCastError( typ, callTyp, ss.GetPath() )
+    return cr.newTypeCastError( typ, callTyp, ss.GetPath() )
 }
 
 func ( cr *CastReactor ) processStructStart(
@@ -719,7 +1018,7 @@ func ( cr *CastReactor ) processListStartWithAtomicType(
             return cr.processListStartWithListType( le, lt, callTyp, next )
         }
     }
-    return mg.NewTypeCastError( callTyp, le.Type, le.GetPath() )
+    return cr.newTypeCastError( callTyp, le.Type, le.GetPath() )
 }
 
 func ( cr *CastReactor ) processListStartWithListType(

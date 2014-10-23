@@ -38,6 +38,19 @@ func matchUnion2Type( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
     return nil, false
 }
 
+func formatTypeErrorCustom( 
+    expct, act mg.TypeReference, path objpath.PathNode ) ( error, bool ) {
+
+    if expct.Equals( mg.TypeBuffer ) && act.Equals( mg.TypeInt32 ) {
+        return mg.NewCastError( path, "bad-int32-for-buffer" ), true
+    }
+    return nil, false
+}
+
+func addCustomErrorFormatting( cr *types.CastReactor ) {
+    cr.FormatTypeError = formatTypeErrorCustom
+}
+
 func ( t *CastReactorTest ) addCastReactor( 
     rcts []interface{}, c *mgRct.ReactorTestCall ) []interface{} {
 
@@ -54,6 +67,7 @@ func ( t *CastReactorTest ) addCastReactor(
     case ProfileUnionImpl:
         cr.SetUnionDefinitionMatcher(
             mkQn( "ns1@v1/Union2" ), matchUnion2Type )
+    case ProfileCustomErrorFormatting: addCustomErrorFormatting( cr )
     }
     return append( rcts, cr )
 }

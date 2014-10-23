@@ -4,6 +4,7 @@ import (
     mg "mingle"
     mgRct "mingle/reactor"
     "mingle/types"
+    "mingle/types/builtin"
     "bitgirder/objpath"
 //    "log"
 )
@@ -128,37 +129,19 @@ func AsTypedRequestReactorInterface(
     return &typedReqIface{ iface: iface, m: m }
 }
 
-type errorTypeChecker struct {
-    errTypes []mg.TypeReference
-    dg types.DefinitionGetter
-    sawTop bool
-}
-
-func ( c *errorTypeChecker ) ProcessEvent( ev mgRct.Event ) error {
-    if c.sawTop { return nil }
-    c.sawTop = true
-    if ss, ok := ev.( *mgRct.StructStartEvent ); ok {
-        if isExternalErrorType( ss.Type ) { return nil }
-        if _, ok = types.CanFailWithError( ss.Type, c.errTypes, c.dg ); ok { 
-            return nil 
-        }
-    }
-    typ := mgRct.TypeOfEvent( ev )
-    return NewResponseErrorf( ev.GetPath(), "unexpected error: %s", typ )
-}
-
 type typedRespIface struct {
     iface ResponseReactorInterface
     returnType mg.TypeReference
-    errTypes []mg.TypeReference
+    errTypes []*types.UnionTypeDefinition
     dg types.DefinitionGetter
 }
 
 func ( i *typedRespIface ) newCastReactor( 
-    typ mg.TypeReference ) *types.CastReactor {
+    typ mg.TypeReference, dg types.DefinitionGetter ) *types.CastReactor {
 
-    res := types.NewCastReactor( typ, i.dg )
+    res := types.NewCastReactor( typ, dg )
     res.SkipPathSetter = true
+    builtin.CastBuiltinTypes( res )
     return res
 }
 
@@ -167,8 +150,40 @@ func ( i *typedRespIface ) StartResult(
 
     rct, err := i.iface.StartResult( path )
     if err != nil { return nil, err }
-    cr := i.newCastReactor( i.returnType )
+    cr := i.newCastReactor( i.returnType, i.dg )
     return mgRct.InitReactorPipeline( cr, rct ), nil
+}
+
+type errorTypeChecker struct {
+    i *typedRespIface
+}
+
+func ( c *errorTypeChecker ) GetDefinition( 
+    qn *mg.QualifiedTypeName ) ( types.Definition, bool ) {
+
+    if qn.Equals( qnameThrownErrors ) { return externalErrorUnionDef, true }
+    return c.i.dg.GetDefinition( qn )
+}
+
+func ( c *errorTypeChecker ) match(
+    in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
+
+    if typ, ok := externalErrorUnionDef.Union.MatchType( in.TypeIn ); ok {
+        return typ, ok
+    }
+    for _, ut := range c.i.errTypes {
+        if typ, ok := ut.MatchType( in.TypeIn ); ok { return typ, ok }
+    }
+    return nil, false
+}
+
+func formatRespErrorTypeError(
+    expct, act mg.TypeReference, path objpath.PathNode ) ( error, bool ) {
+
+    if expct.Equals( typeThrownErrors ) {
+        return NewResponseErrorf( path, "unexpected error: %s", act ), true
+    }
+    return nil, false
 }
 
 func ( i *typedRespIface ) StartError(
@@ -176,15 +191,20 @@ func ( i *typedRespIface ) StartError(
 
     rct, err := i.iface.StartError( path )
     if err != nil { return nil, err }
-    cr := i.newCastReactor( mg.TypeValue )
-    errChk := &errorTypeChecker{ dg: i.dg, errTypes: i.errTypes }
-    return mgRct.InitReactorPipeline( errChk, cr, rct ), nil
+    errChk := &errorTypeChecker{ i }
+    cr := i.newCastReactor( typeThrownErrors, errChk )
+    cr.FormatTypeError = formatRespErrorTypeError
+    mtch := func( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
+        return errChk.match( in )
+    }
+    cr.SetUnionDefinitionMatcher( qnameThrownErrors, mtch )
+    return mgRct.InitReactorPipeline( cr, rct ), nil
 }
 
 func AsTypedResponseReactorInterface(
     iface ResponseReactorInterface,
     returnType mg.TypeReference,
-    errTypes []mg.TypeReference,
+    errTypes []*types.UnionTypeDefinition,
     dg types.DefinitionGetter ) ResponseReactorInterface {
 
     return &typedRespIface{ 
