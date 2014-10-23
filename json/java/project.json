@@ -1,4 +1,0 @@
-{ 
-    "$type": "bitgirder:ops:build:java@v1/JavaProject",
-    "direct-deps": [ "core", "io", "parser" ]
-}
