@@ -91,10 +91,10 @@ func TestCreateListWithType( t *testing.T ) {
     a.Truef( l.Type.Equals( t1 ), "bad type: %s", l.Type )
 }
 
-func TestValueTypeErrorFormatting( t *testing.T ) {
+func TestasValueLocatedErrorFormatting( t *testing.T ) {
     loc := objpath.RootedAt( "f1" )
-    assert.Equal( "f1: Blah", (&ValueTypeError{ loc, "Blah" }).Error() )
-    assert.Equal( "Blah", (&ValueTypeError{ nil, "Blah" }).Error() )
+    assert.Equal( "f1: Blah", (&asValueLocatedError{ loc, "Blah" }).Error() )
+    assert.Equal( "Blah", (&asValueLocatedError{ nil, "Blah" }).Error() )
 }
 
 func TestAsValue( t *testing.T ) {
@@ -120,7 +120,7 @@ func TestAsValueBadValue( t *testing.T ) {
         func( err error ) { 
             assert.Equal(
                 "inVal: Unhandled mingle value {} (mingle.notAMingleValue)",
-                err.( *ValueTypeError ).Error(), 
+                err.( *asValueLocatedError ).Error(), 
             )
         },
     )
@@ -132,7 +132,7 @@ func TestExpectValuePanics( t *testing.T ) {
         func( err interface{} ) {
             assert.Equal(
                 "inVal: Unhandled mingle value {} (mingle.notAMingleValue)",
-                err.( *ValueTypeError ).Error(),
+                err.( *asValueLocatedError ).Error(),
             )
         },
     )
@@ -147,7 +147,7 @@ func TestAsValueNestedListErrorLocation( t *testing.T ) {
             assert.Equal(
                 "inVal[ 1 ]: Unhandled mingle value &{} " +
                     "(*mingle.notAMingleValue)",
-                err.( *ValueTypeError ).Error(),
+                err.( *asValueLocatedError ).Error(),
             )
         },
     )
@@ -230,7 +230,7 @@ func TestAsListError( t *testing.T ) {
     if _, err := CreateList( 1, notAMingleValue{}, "3" ); err != nil {
         assert.Equal(
             "inVal: Unhandled mingle value {} (mingle.notAMingleValue)",
-            err.( *ValueTypeError ).Error(),
+            err.( *asValueLocatedError ).Error(),
         )
     } else { t.Fatalf( "No error returned" ) }
 }
@@ -241,7 +241,7 @@ func TestExpectListPanic( t *testing.T ) {
         func( err interface{} ) {
             assert.Equal( 
                 "inVal: Unhandled mingle value {} (mingle.notAMingleValue)",
-                err.( *ValueTypeError ).Error(),
+                err.( *asValueLocatedError ).Error(),
             )
         },
     )

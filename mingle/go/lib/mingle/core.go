@@ -701,7 +701,7 @@ type goValPath objpath.PathNode // keys are string
 var inValPathRoot objpath.PathNode
 func init() { inValPathRoot = objpath.RootedAt( "inVal" ) }
 
-type ValueTypeError struct { 
+type asValueLocatedError struct { 
     loc goValPath
     msg string 
 }
@@ -717,16 +717,10 @@ func init() {
         )
 }
 
-func ( e *ValueTypeError ) Error() string { 
+func ( e *asValueLocatedError ) Error() string { 
     if e.loc == nil { return e.msg }
     locStr := objpath.Format( e.loc, goValPathFormatter )
     return locStr + ": " + e.msg 
-}
-
-type ValueError interface {
-    Location() objpath.PathNode
-    Message() string 
-    error
 }
 
 // path is an idPath
@@ -984,7 +978,7 @@ func asAtomicValue(
     case *Null: val = v
     default:
         msg := "Unhandled mingle value %v (%T)"
-        err = &ValueTypeError{ path, fmt.Sprintf( msg, inVal, inVal ) }
+        err = &asValueLocatedError{ path, fmt.Sprintf( msg, inVal, inVal ) }
     }
     return
 }
