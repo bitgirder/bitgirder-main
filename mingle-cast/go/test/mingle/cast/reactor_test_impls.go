@@ -3,7 +3,6 @@ package cast
 import ( 
     mg "mingle"
     "mingle/types"
-    "mingle/types/builtin"
     mgRct "mingle/reactor"
     "bitgirder/objpath"
 )
@@ -47,15 +46,14 @@ func formatTypeErrorCustom(
     return nil, false
 }
 
-func addCustomErrorFormatting( cr *types.CastReactor ) {
+func addCustomErrorFormatting( cr *CastReactor ) {
     cr.FormatTypeError = formatTypeErrorCustom
 }
 
 func ( t *CastReactorTest ) addCastReactor( 
     rcts []interface{}, c *mgRct.ReactorTestCall ) []interface{} {
 
-    cr := types.NewCastReactor( t.Type, t.Map )
-    builtin.CastBuiltinTypes( cr )
+    cr := NewReactor( t.Type, t.Map )
     switch t.Profile {
     case ProfileCastDisable: 
         cr.AddPassthroughField( mkQn( "ns1@v1/S1" ), mkId( "f1" ) )

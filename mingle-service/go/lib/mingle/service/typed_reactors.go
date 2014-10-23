@@ -3,8 +3,8 @@ package service
 import (
     mg "mingle"
     mgRct "mingle/reactor"
+    "mingle/cast"
     "mingle/types"
-    "mingle/types/builtin"
     "bitgirder/objpath"
 //    "log"
 )
@@ -78,9 +78,9 @@ func ( i *typedReqIface ) StartRequest(
 }
 
 func ( i *typedReqIface ) newCastReactor( 
-    typ mg.TypeReference ) *types.CastReactor {
+    typ mg.TypeReference ) *cast.CastReactor {
     
-    res := types.NewCastReactor( typ, i.m.defs )
+    res := cast.NewReactor( typ, i.m.defs )
     res.SkipPathSetter = true
     return res
 }
@@ -137,11 +137,10 @@ type typedRespIface struct {
 }
 
 func ( i *typedRespIface ) newCastReactor( 
-    typ mg.TypeReference, dg types.DefinitionGetter ) *types.CastReactor {
+    typ mg.TypeReference, dg types.DefinitionGetter ) *cast.CastReactor {
 
-    res := types.NewCastReactor( typ, dg )
+    res := cast.NewReactor( typ, dg )
     res.SkipPathSetter = true
-    builtin.CastBuiltinTypes( res )
     return res
 }
 

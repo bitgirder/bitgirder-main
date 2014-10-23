@@ -3,7 +3,7 @@ package service
 import (
     mgRct "mingle/reactor"
     mg "mingle"
-    "mingle/types"
+    "mingle/cast"
     "mingle/types/builtin"
     "bitgirder/pipeline"
     "bitgirder/objpath"
@@ -33,7 +33,7 @@ func NewResponseReactor( iface ResponseReactorInterface ) *ResponseReactor {
 }
 
 func ( r *ResponseReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    cr := types.NewCastReactor( TypeResponse, builtin.BuiltinTypes() )
+    cr := cast.NewReactor( TypeResponse, builtin.BuiltinTypes() )
     cr.AddPassthroughField( QnameResponse, IdResult )
     cr.AddPassthroughField( QnameResponse, IdError )
     pip.Add( cr )

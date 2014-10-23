@@ -156,7 +156,25 @@ func ( cr *CastReactor ) pushType( typ mg.TypeReference ) {
     cr.stack.Push( typ )
 }
 
-func NewCastReactor( 
+func matchIdPathPart( in types.UnionMatchInput ) ( mg.TypeReference, bool ) {
+    if typ, ok := in.Union.MatchType( in.TypeIn ); ok { return typ, ok }
+    def, ok := in.Definitions.GetDefinition( mg.QnameIdentifier )
+    if ! ok { panic( libErrorf( "no definition for Identifier" ) ) }
+    sd := def.( *types.StructDefinition )
+    if typ, ok := sd.Constructors.MatchType( in.TypeIn ); ok { return typ, ok }
+    if at, ok := in.TypeIn.( *mg.AtomicTypeReference ); ok {
+        if mg.IsIntegerTypeName( at.Name() ) { return mg.TypeUint64, true }
+    }
+    return nil, false
+}
+
+// for now this is always enabled, but we may later find a need to allow callers
+// to create a CastReactor with no support for builtins
+func ( cr *CastReactor ) castBuiltinTypes() {
+    cr.SetUnionDefinitionMatcher( mg.QnameIdentifierPathPart, matchIdPathPart )
+}
+
+func NewReactor( 
     expct mg.TypeReference, dm types.DefinitionGetter ) *CastReactor {
 
     res := &CastReactor{ 
@@ -166,6 +184,7 @@ func NewCastReactor(
         unionMatchFuncs: mg.NewQnameMap(),
     }
     res.pushType( expct )
+    res.castBuiltinTypes()
     return res
 }
 

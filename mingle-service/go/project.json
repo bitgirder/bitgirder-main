@@ -1,5 +1,5 @@
 {
     "$type": "bitgirder:ops:build:go@v1/GoProject",
-    "direct-deps": [ "mingle" ],
+    "direct-deps": [ "mingle", "mingle-cast" ],
     "packages": [ "mingle/service" ]
 }

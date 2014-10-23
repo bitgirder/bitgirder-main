@@ -3,7 +3,7 @@ package service
 import (
     mgRct "mingle/reactor"
     mg "mingle"
-    "mingle/types"
+    "mingle/cast"
     "mingle/types/builtin"
     "mingle/bind"
     "bitgirder/pipeline"
@@ -85,7 +85,7 @@ func ( r *RequestReactor ) processBuilderEvent( ev mgRct.Event ) error {
 }
 
 func ( r *RequestReactor ) InitializePipeline( pip *pipeline.Pipeline ) {
-    cr := types.NewCastReactor( TypeRequest, builtin.BuiltinTypes() )
+    cr := cast.NewReactor( TypeRequest, builtin.BuiltinTypes() )
     cr.AddPassthroughField( QnameRequest, IdParameters )
     cr.AddPassthroughField( QnameRequest, IdAuthentication )
     pip.Add( cr )
