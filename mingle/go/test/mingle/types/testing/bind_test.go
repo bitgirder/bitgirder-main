@@ -385,12 +385,6 @@ func ( b *bindTestBuilder ) addIdentifierTests() {
         nil,
         "[offset 0]: Expected type code 0x01 but got 0x00",
     )
-    b.addVcErr(
-        makeIdStruct( "part1", "BadPart" ),
-        mg.TypeIdentifier,
-        b.p( "parts" ).StartList().SetIndex( 1 ),
-        "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
-    )
 }
 
 func ( b *bindTestBuilder ) declNm( i int ) *mg.Struct {
@@ -402,12 +396,6 @@ func ( b *bindTestBuilder ) declNm1() *mg.Struct { return b.declNm( 1 ) }
 
 func ( b *bindTestBuilder ) addDeclaredTypeNameTests() {
     b.addRt( b.declNm1(), mg.TypeDeclaredTypeName, "declared-type-name-name1" )
-    b.addVcErr(
-        parser.MustStruct( mg.QnameDeclaredTypeName, "name", "Bad$Name" ),
-        mg.TypeDeclaredTypeName,
-        objpath.RootedAt( mkId( "name" ) ),
-        "Value \"Bad$Name\" does not satisfy restriction \"^([A-Z][a-z0-9]*)+$\"",
-    )
 }
 
 func ( b *bindTestBuilder ) ns1V1() *mg.Struct {
@@ -517,19 +505,6 @@ func ( b *bindTestBuilder ) addIdentifierPathTests() {
         ),
         mg.TypeIdentifierPath,
         "identifier-path-f1-f2-i1-f3",
-    )
-    b.addIn(
-        b.idPathStruct(
-            makeIdStruct( "f1" ),
-            "f2",
-            int32( 1 ),
-            uint32( 2 ),
-            int64( 3 ),
-            uint64( 4 ),
-            b.idBytes( "f3" ),
-        ),
-        mg.TypeIdentifierPath,
-        "identifier-path-f1-f2-i1-i2-i3-i4-f3",
     )
     b.addIn( "f1[ 2 ]", mg.TypeIdentifierPath, "identifier-path-f1-i2" )
     b.addIn(
@@ -871,11 +846,6 @@ func ( b *bindTestBuilder ) addUnionDefinitionTests() {
         "union-def1",
     )
     b.addInErr(
-        b.unionTypeDef( 0 ),
-        builtin.TypeUnionTypeDefinition,
-        mg.NewInputError( objpath.RootedAt( mkId( "types" ) ), "empty list" ),
-    )
-    b.addInErr(
         parser.MustStruct( builtin.QnameUnionTypeDefinition,
             "types", mg.MustList(
                 asType( "mingle:core@v1/TypeReference+" ),
@@ -1089,11 +1059,7 @@ func ( i bindTestCallInterface ) BoundValues() *mg.IdentifierMap {
 func ( i bindTestCallInterface ) CreateReactors( 
     t *bind.BindTest ) []interface{} {
 
-    typ := t.Type
-    if typ == nil { typ = mg.TypeNullableValue }
-    cr := types.NewCastReactor( typ, builtin.BuiltinTypes() )
-    builtin.CastBuiltinTypes( cr )
-    return []interface{}{ cr }
+    return []interface{}{}
 }
 
 type fldDefStructSorter []*mg.Struct

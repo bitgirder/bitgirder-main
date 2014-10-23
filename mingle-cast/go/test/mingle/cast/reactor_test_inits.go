@@ -1748,6 +1748,34 @@ func ( rti *rtInit ) addConstructorCastTests() {
     rti.addTcError( int64( 1 ), s1Typ.Name, mg.TypeInt64, dm )
 }
 
+func ( rti *rtInit ) addIdentifierTests() {
+    dm := builtin.MakeDefMap()
+    rti.addError(
+        parser.MustStruct( mg.QnameIdentifier,
+            "parts", mg.MustList( "part1", "BadPart" ),
+        ),
+        mg.TypeIdentifier,
+        newVcErr(
+            objpath.RootedAt( mkId( "parts" ) ).StartList().SetIndex( 1 ),
+            "Value \"BadPart\" does not satisfy restriction \"^[a-z][a-z0-9]*$\"",
+        ),
+        dm,
+    )
+}
+
+func ( rti *rtInit ) addDeclaredTypeNameTests() {
+    dm := builtin.MakeDefMap()
+    rti.addError(
+        parser.MustStruct( mg.QnameDeclaredTypeName, "name", "Bad$Name" ),
+        mg.TypeDeclaredTypeName,
+        newVcErr(
+            objpath.RootedAt( mkId( "name" ) ),
+            "Value \"Bad$Name\" does not satisfy restriction \"^([A-Z][a-z0-9]*)+$\"",
+        ),
+        dm,
+    )
+}
+
 // successes only test union coverage -- parsing and invalid string/buffer
 // values are checked further by the bind tests which actually process them (the
 // type definition for identifier part doesn't actually dictate the correct
@@ -1829,6 +1857,8 @@ func ( rti *rtInit ) addIdentifierPathTests() {
 }
 
 func ( rti *rtInit ) addBuiltinTypeTests() {
+    rti.addIdentifierTests()
+    rti.addDeclaredTypeNameTests()
     rti.addIdentifierPathTests()
 }
 

@@ -94,7 +94,7 @@ func ( t *CastReactorTest ) Call( c *mgRct.ReactorTestCall ) {
 
 func ( t *EventPathTest ) Call( c *mgRct.ReactorTestCall ) {
     chk := mgRct.NewEventPathCheckReactor( t.Expect, c.PathAsserter )
-    rct := types.NewCastReactor( t.Type, t.Map )
+    rct := NewReactor( t.Type, t.Map )
     pip := mgRct.InitReactorPipeline( rct, chk )
     mgRct.AssertFeedSource( t.Source, pip, c )
     chk.Complete()
