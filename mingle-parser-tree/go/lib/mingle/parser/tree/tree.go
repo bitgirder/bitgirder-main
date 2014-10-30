@@ -20,6 +20,7 @@ const (
     kwdService = parser.KeywordService
     kwdStruct = parser.KeywordStruct
     kwdThrows = parser.KeywordThrows
+    kwdUnion = parser.KeywordUnion
 )
 
 var (
@@ -38,6 +39,7 @@ var (
         kwdService,
         kwdAlias,
         kwdSchema,
+        kwdUnion,
     }
 
     binaryOps = []parser.SpecialToken{
@@ -364,6 +366,16 @@ func ( sd *ServiceDecl ) createKeyedEltsAcc() *mg.IdentifierMap {
 func ( sd *ServiceDecl ) initKeyedElts( ke *mg.IdentifierMap ) {
     sd.SecurityDecls = ke.Get( IdSecurity ).( []*SecurityDecl )
 }
+
+type UnionDecl struct {
+    Start *parser.Location
+    Info *TypeDeclInfo
+    Types []*parser.CompletableTypeReference
+}
+
+func ( ud *UnionDecl ) GetName() *mg.DeclaredTypeName { return ud.Info.Name }
+
+func ( ud *UnionDecl ) Locate() *parser.Location { return ud.Start }
 
 type NsUnit struct {
     SourceName string
@@ -1039,6 +1051,7 @@ func ( p *parse ) collectCallSignature( sd *ServiceDecl ) ( err error ) {
 
 func ( p *parse ) expectServiceDecl(
     start *parser.Location ) ( sd *ServiceDecl, err error ) {
+
     sd = &ServiceDecl{ Start: start }
     sd.Operations = make( []*OperationDecl, 0, 4 )
     ke := sd.createKeyedEltsAcc()
@@ -1062,6 +1075,35 @@ func ( p *parse ) expectServiceDecl(
     return
 }
 
+func ( p *parse ) passUnionTypeElement() ( bool, error ) {
+    tn, err := p.PollSpecial( tkComma )
+    if err != nil { return false, err }
+    tn, err = p.PollSpecial( tkCloseBrace )
+    if err != nil { return false, err }
+    sawEnd := tn != nil
+    if sawEnd {
+        if _, err = p.passStatementEnd(); err != nil { return false, err }
+    }
+    return sawEnd, nil
+}
+
+func ( p *parse ) expectUnionDecl( 
+    start *parser.Location ) ( ud *UnionDecl, err error ) {
+
+    ud = &UnionDecl{ Start: start }
+    ud.Types = make( []*parser.CompletableTypeReference, 0, 4 )
+    if ud.Info, err = p.expectTypeDeclInfo(); err != nil { return }
+    if _, err = p.passOpenBrace(); err != nil { return }
+    for sawClose := false; ! sawClose; {
+        var typ *parser.CompletableTypeReference
+        if typ, err = p.expectTypeReference(); err != nil { 
+            return 
+        } else { ud.Types = append( ud.Types, typ ) }
+        if sawClose, err = p.passUnionTypeElement(); err != nil { return }
+    }
+    return
+}
+
 func ( p *parse ) expectTypeDecl(
     kwd parser.Keyword, start *parser.Location ) ( TypeDecl, error ) {
     switch kwd {
@@ -1071,6 +1113,7 @@ func ( p *parse ) expectTypeDecl(
     case kwdPrototype: return p.expectPrototypeDecl( start )
     case kwdService: return p.expectServiceDecl( start )
     case kwdSchema: return p.expectSchemaDecl( start )
+    case kwdUnion: return p.expectUnionDecl( start )
     }
     panic( libErrorf( "Unimplemented: %s", kwd ) )
 }

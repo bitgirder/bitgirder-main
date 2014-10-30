@@ -38,6 +38,7 @@ const (
     KeywordStruct = Keyword( "struct" )
     KeywordThrows = Keyword( "throws" )
     KeywordTrue = Keyword( "true" )
+    KeywordUnion = Keyword( "union" )
 )
 
 var kwdMap map[ string ]Keyword
@@ -59,6 +60,7 @@ func init() {
     kwdMap[ "struct" ] = KeywordStruct
     kwdMap[ "throws" ] = KeywordThrows
     kwdMap[ "true" ] = KeywordTrue
+    kwdMap[ "union" ] = KeywordUnion
 }
 
 const lxRuneReplChar = rune( '\ufffd' )

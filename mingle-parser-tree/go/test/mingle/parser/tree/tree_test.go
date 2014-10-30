@@ -275,6 +275,16 @@ func ( t *treeCheck ) equalServiceDecl( sd1, sd2 *ServiceDecl ) {
         equalSecurityDecls( sd1.SecurityDecls, sd2.SecurityDecls )
 }
 
+func ( t *treeCheck ) equalUnionDecl( ud1, ud2 *UnionDecl ) {
+    t.descend( "Start" ).Equal( ud1.Start, ud2.Start )
+    t.descend( "Info" ).equalTypeDeclInfo( ud1.Info, ud2.Info )
+    l := t.descend( "Types" ).equalLen( len( ud1.Types ), len( ud2.Types ) )
+    for idx, typ1 := range ud1.Types {
+        l.equalType( typ1, ud2.Types[ idx ] )
+        l = l.next()
+    }
+}
+
 func ( t *treeCheck ) equalTypeDecl( td1, td2 TypeDecl ) {
     switch v := td1.( type ) {
     case *StructDecl: t.equalStructDecl( v, td2.( *StructDecl ) )
@@ -283,6 +293,7 @@ func ( t *treeCheck ) equalTypeDecl( td1, td2 TypeDecl ) {
     case *PrototypeDecl: t.equalPrototypeDecl( v, td2.( *PrototypeDecl ) )
     case *ServiceDecl: t.equalServiceDecl( v, td2.( *ServiceDecl ) )
     case *SchemaDecl: t.equalSchemaDecl( v, td2.( *SchemaDecl ) )
+    case *UnionDecl: t.equalUnionDecl( v, td2.( *UnionDecl ) )
     default: t.Fatalf( "Unhandled type decl type: %T", td1 )
     }
 }    
@@ -349,6 +360,9 @@ import ns1@v1/[ S1 ] - [ S2 ]`,
         },
         { "Unexpected keyed definition @constructor", 1, 42,
             "@version v1; namespace ns1; service S1 { @constructor C1 }",
+        },
+        { "Expected type reference but found: }", 1, 39, 
+            "@version v1; namespace ns1; union U1 {}",
         },
     } {
         if i, err := parseSource( "test-source", tt.src ); err == nil {
@@ -471,6 +485,15 @@ schema Schema3 {
     @schema Schema1
     f2 Int64
 }
+
+union Union1 {
+    Type1,
+    Type2,
+    Type3,
+}
+
+union Union2 { Type1, Type2 } # no trailing comma
+
 `,
     "testSource2":
 `@version v1
@@ -1262,6 +1285,29 @@ func initResultTestSource1() {
                         Name: mgDn( "Schema1" ),
                         NameLoc: lc1( 104, 13 ),
                     },
+                },
+            },
+            &UnionDecl{
+                Start: lc1( 108, 1 ),
+                Info: &TypeDeclInfo{
+                    Name: mgDn( "Union1" ),
+                    NameLoc: lc1( 108, 7 ),
+                },
+                Types: []*parser.CompletableTypeReference{
+                    sxAtomicTyp( mgDn( "Type1" ), nil, lc1( 109, 5 ) ),
+                    sxAtomicTyp( mgDn( "Type2" ), nil, lc1( 110, 5 ) ),
+                    sxAtomicTyp( mgDn( "Type3" ), nil, lc1( 111, 5 ) ),
+                },
+            },
+            &UnionDecl{
+                Start: lc1( 114, 1 ),
+                Info: &TypeDeclInfo{
+                    Name: mgDn( "Union2" ),
+                    NameLoc: lc1( 114, 7 ),
+                },
+                Types: []*parser.CompletableTypeReference{
+                    sxAtomicTyp( mgDn( "Type1" ), nil, lc1( 114, 16 ) ),
+                    sxAtomicTyp( mgDn( "Type2" ), nil, lc1( 114, 23 ) ),
                 },
             },
         },
