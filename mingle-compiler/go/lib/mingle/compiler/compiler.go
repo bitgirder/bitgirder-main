@@ -82,12 +82,15 @@ type schemaMixin struct {
     def types.Definition
 }
 
+type buildCheck interface { check() }
+
 type Compilation struct {
     sources []*tree.NsUnit
     typeDecls *mg.QnameMap
     extTypes *types.DefinitionMap
     scopesByNs *mg.NamespaceMap
     onDefaults []func()
+    buildChecks []buildCheck
     builtTypes *types.DefinitionMap
     errs map[ string ] *Error
     mixedInSchemas []schemaMixin
@@ -104,6 +107,7 @@ func NewCompilation() *Compilation {
         typeDecls: mg.NewQnameMap(),
         scopesByNs: mg.NewNamespaceMap(),
         onDefaults: []func(){},
+        buildChecks: []buildCheck{},
         builtTypes: types.NewDefinitionMap(),
         errs: make( map[ string ] *Error, 4 ),
     }
@@ -125,6 +129,10 @@ func ( c *Compilation ) AddSource( u *tree.NsUnit ) *Compilation {
 
 func ( c *Compilation ) awaitDefaults( f func() ) {
     c.onDefaults = append( c.onDefaults, f )
+}
+
+func ( c *Compilation ) addBuildCheck( bc buildCheck ) {
+    c.buildChecks = append( c.buildChecks, bc )
 }
 
 func ( c *Compilation ) observeSchemaMixin( mx schemaMixin ) {
@@ -167,6 +175,10 @@ func ( c *Compilation ) typeDefForType(
     typ mg.TypeReference ) types.Definition {
     return c.typeDefForQn( qnameIn( typ ) )
 }
+
+type immediateLocatable struct { l *parser.Location }
+
+func ( il immediateLocatable ) Locate() *parser.Location { return il.l }
 
 type Error struct {
     Location *parser.Location
@@ -834,6 +846,136 @@ func ( c *Compilation ) buildAliasedTypes( ctxs []buildContext ) {
     for _, bc := range c.getAliasBuildOrder( ctxs ) { c.buildAliasedType( bc ) }
 }
 
+type typeSelectionCheckInput struct { 
+    typ mg.TypeReference
+    lc tree.Locatable 
+}
+
+type typeSelectionCheck struct {
+
+    c *Compilation
+
+    elts []typeSelectionCheckInput
+
+    // anything that can be passed as first arg to Compilation.addErrorf
+    errTopLoc interface{} 
+
+    // a template string with room for all of the arguments in errArgv (if any)
+    // and a final %s parameter for the selection error
+    errTmpl string
+    errArgv []interface{}
+}
+
+func newTypeSelectionCheck( c *Compilation ) *typeSelectionCheck {
+    return &typeSelectionCheck{ 
+        c: c,
+        elts: make( []typeSelectionCheckInput, 0, 4 ),
+    }
+}
+
+func ( c *typeSelectionCheck ) Len() int { return len( c.elts ) }
+
+func ( c *typeSelectionCheck ) TypeAtIndex( idx int ) mg.TypeReference {
+    return c.elts[ idx ].typ
+}
+
+func ( c *typeSelectionCheck ) addType( 
+    typ mg.TypeReference, lc tree.Locatable ) {
+
+    c.elts = append( c.elts, typeSelectionCheckInput{ typ, lc } )
+}
+
+func ( c *typeSelectionCheck ) implBuild() ( *types.UnionTypeDefinition,
+                                             [][]typeSelectionCheckInput ) {
+
+    if len( c.elts ) == 0 { return nil, nil }
+    ut, err := types.CreateUnionTypeDefinition( c )
+    if err == nil { return ut, nil }
+    grps := err.( *types.UnionTypeDefinitionError ).ErrorGroups
+    res := make( [][]typeSelectionCheckInput, len( grps ) )
+    for i, grp := range grps {
+        inputs := make( []typeSelectionCheckInput, len( grp ) )
+        for j, idx := range grp { inputs[ j ] = c.elts[ idx ] }
+        res[ i ] = inputs
+    }
+    return nil, res
+}
+
+// returned union type may be nil because check is empty, in which case bool
+// result will be true; or union type may be nil because check failed, in which
+// case error will have been reported and bool result will be false
+func ( c *typeSelectionCheck ) build() ( *types.UnionTypeDefinition, bool ) {
+    ut, grps := c.implBuild()
+    if grps == nil { return ut, true }
+    for _, grp := range grps {
+        strs := make( []string, len( grp ) )
+        argv := append( []interface{}{}, c.errArgv... )
+        for i, pair := range grp {
+            strs[ i ] = fmt.Sprintf( "%s (%s)", pair.typ, pair.lc.Locate() )
+        }
+        argv = append( argv, strings.Join( strs, ", " ) )
+        c.c.addErrorf( c.errTopLoc, c.errTmpl, argv... )
+    }
+    return nil, false
+}
+
+type unionTypeBuildCheck struct {
+    c *Compilation
+    ud *tree.UnionDecl
+    typ mg.TypeReference
+    typLoc *parser.Location
+}
+
+func ( c unionTypeBuildCheck ) check() {
+    if _, ok := c.typ.( *mg.ListTypeReference ); ok { return }
+    qn := mg.TypeNameIn( c.typ )
+    def := c.c.typeDefForQn( qn )
+    fail := func( desc string ) {
+        c.c.addErrorf( c.typLoc, "invalid %s in union %s: %s", 
+            desc, c.ud.GetName(), c.typ )
+    }
+    switch def.( type ) {
+    case *types.PrototypeDefinition: fail( "prototype type" )
+    case *types.ServiceDefinition: fail( "service type" )
+    case *types.UnionDefinition: fail( "union type" )
+    case *types.SchemaDefinition: fail( "schema type" )
+    case *types.PrimitiveDefinition:
+        switch {
+        case qn.Equals( mg.QnameSymbolMap ): fail( "map type" )
+        case qn.Equals( mg.QnameNull ): fail( "null type" )
+        case qn.Equals( mg.QnameValue ): fail( "opaque type" )
+        }
+    }
+}
+
+func ( c *Compilation ) buildUnionType( bc buildContext ) {
+    ud := bc.td.( *tree.UnionDecl )
+    chk := newTypeSelectionCheck( c )
+    chk.errTmpl = "ambiguous types in union %s: %s"
+    chk.errArgv = []interface{}{ ud.Info.Name }
+    chk.errTopLoc = bc.td
+    errCount := 0
+    for _, ctr := range ud.Types {
+        ctrLoc := ctr.Location()
+        if typ := bc.scope.resolveType( ctr, ctrLoc ); typ == nil {
+            errCount++
+        } else { 
+            chk.addType( typ, immediateLocatable{ ctrLoc } ) 
+            c.addBuildCheck( unionTypeBuildCheck{ c, ud, typ, ctrLoc } )
+        }
+    }
+    if errCount > 0 { return }
+    ut, ok := chk.build()
+    if ! ok { return }
+    c.putBuiltType( &types.UnionDefinition{ Name: bc.qname(), Union: ut } )
+}
+
+func ( c *Compilation ) buildUnionTypes( ctxs []buildContext ) {
+    for _, bc := range ctxs {
+        if _, ok := bc.td.( *tree.UnionDecl ); ok { c.buildUnionType( bc ) }
+    }
+}
+
 func ( c *Compilation ) buildFieldDefinition(
     fldDecl *tree.FieldDecl, bs *buildScope ) *types.FieldDefinition {
 
@@ -1032,72 +1174,6 @@ func ( c *Compilation ) buildFieldSet(
         def: def,
     }
     return fsb.build()
-}
-
-type typeSelectionCheckInput struct { 
-    typ mg.TypeReference
-    lc tree.Locatable 
-}
-
-type typeSelectionCheck struct {
-    c *Compilation
-    elts []typeSelectionCheckInput
-    errTopLoc interface{}
-    errTmpl string
-    errArgv []interface{}
-}
-
-func newTypeSelectionCheck( c *Compilation ) *typeSelectionCheck {
-    return &typeSelectionCheck{ 
-        c: c,
-        elts: make( []typeSelectionCheckInput, 0, 4 ),
-    }
-}
-
-func ( c *typeSelectionCheck ) Len() int { return len( c.elts ) }
-
-func ( c *typeSelectionCheck ) TypeAtIndex( idx int ) mg.TypeReference {
-    return c.elts[ idx ].typ
-}
-
-func ( c *typeSelectionCheck ) addType( 
-    typ mg.TypeReference, lc tree.Locatable ) {
-
-    c.elts = append( c.elts, typeSelectionCheckInput{ typ, lc } )
-}
-
-func ( c *typeSelectionCheck ) implBuild() ( *types.UnionTypeDefinition,
-                                             [][]typeSelectionCheckInput ) {
-
-    if len( c.elts ) == 0 { return nil, nil }
-    ut, err := types.CreateUnionTypeDefinition( c )
-    if err == nil { return ut, nil }
-    grps := err.( *types.UnionTypeDefinitionError ).ErrorGroups
-    res := make( [][]typeSelectionCheckInput, len( grps ) )
-    for i, grp := range grps {
-        inputs := make( []typeSelectionCheckInput, len( grp ) )
-        for j, idx := range grp { inputs[ j ] = c.elts[ idx ] }
-        res[ i ] = inputs
-    }
-    return nil, res
-}
-
-// returned union type may be nil because check is empty, in which case bool
-// result will be true; or union type may be nil because check failed, in which
-// case error will have been reported and bool result will be false
-func ( c *typeSelectionCheck ) build() ( *types.UnionTypeDefinition, bool ) {
-    ut, grps := c.implBuild()
-    if grps == nil { return ut, true }
-    for _, grp := range grps {
-        strs := make( []string, len( grp ) )
-        argv := append( []interface{}{}, c.errArgv... )
-        for i, pair := range grp {
-            strs[ i ] = fmt.Sprintf( "%s (%s)", pair.typ, pair.lc.Locate() )
-        }
-        argv = append( argv, strings.Join( strs, ", " ) )
-        c.c.addErrorf( c.errTopLoc, c.errTmpl, argv... )
-    }
-    return nil, false
 }
 
 func ( c *Compilation ) checkConstructorType(
@@ -2039,6 +2115,10 @@ func ( c *Compilation ) setDefFieldDefaults( ctxs []buildContext ) {
     for _, f := range c.onDefaults { f() }
 }
 
+func ( c *Compilation ) runBuildChecks() {
+    for _, bc := range c.buildChecks { bc.check() }
+}
+
 func ( c *Compilation ) buildResult() *CompilationResult {
     errs := make( []*Error, 0, len( c.errs ) )
     for _, err := range c.errs { errs = append( errs, err ) }
@@ -2065,11 +2145,13 @@ func ( c *Compilation ) Execute() ( cr *CompilationResult, err error ) {
     ctxs := c.initBuildContexts()
     c.buildAliasedTypes( ctxs )
     c.buildEnumTypes( ctxs )
+    c.buildUnionTypes( ctxs )
     c.buildSchemaTypes( ctxs )
     c.buildStructTypes( ctxs )
     c.buildPrototypeTypes( ctxs )
     c.buildServiceTypes( ctxs )
     c.checkNsUnitCycles()
     c.setDefFieldDefaults( ctxs )
+    c.runBuildChecks()
     return c.buildResult(), nil
 }

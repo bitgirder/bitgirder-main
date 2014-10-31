@@ -669,11 +669,7 @@ func ( cr *Reactor ) valueEventForAtomicCast(
     callTyp mg.TypeReference ) ( *mgRct.ValueEvent, error ) {
 
     mv, err, ok := cr.castAtomicForDefinition( ve.Val, at, ve.GetPath() )
-    if ! ok { 
-        log.Printf( "at: %s, callTyp: %s", at, callTyp )
-        mv, err = atomicCastCall{ ve, at, callTyp, cr }.call()
-//        mv, err = castAtomicWithCallType( ve.Val, at, callTyp, ve.GetPath() ) 
-    }
+    if ! ok { mv, err = atomicCastCall{ ve, at, callTyp, cr }.call() }
     if err != nil { return nil, err }
     res := mgRct.CopyEvent( ve, true ).( *mgRct.ValueEvent )
     res.Val = mv

@@ -1,5 +1,0 @@
-- (compiler) move mingle-interpreter into mingle-compiler as an internal const
-  evaluator
-
-- (compiler) union types should not allow schemas, unions, or mg.TypeValue, and
-  should not include aliases 

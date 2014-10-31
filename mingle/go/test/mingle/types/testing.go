@@ -72,6 +72,15 @@ func MakeEnumDef( qn string, vals ...string ) *EnumDefinition {
     return res
 }
 
+func MakeUnionDef( qn string, typs ...interface{} ) *UnionDefinition {
+    mgTyps := make( []mg.TypeReference, len( typs ) )
+    for i, typ := range typs { mgTyps[ i ] = asType( typ ) }
+    return &UnionDefinition{
+        Name: mkQn( qn ),
+        Union: MustUnionTypeDefinitionTypes( mgTyps... ),
+    }
+}
+
 func MakeCallSig( 
     flds []*FieldDefinition, retType string, throws []string ) *CallSignature {
 
@@ -192,8 +201,15 @@ func ( a *DefAsserter ) assertUnionType( ut1, ut2 *UnionTypeDefinition ) {
     }
 }
 
+func ( a *DefAsserter ) assertUnionDef( ud1 *UnionDefinition, d2 Definition ) {
+    ud2 := a.equalType( ud1, d2 ).( *UnionDefinition )
+    a.descend( "(Name)" ).Equal( ud1.Name, ud2.Name )
+    a.descend( "(Union)" ).assertUnionType( ud1.Union, ud2.Union )
+}
+
 func ( a *DefAsserter ) assertStructDef(
     s1 *StructDefinition, d2 Definition ) {
+
     s2 := a.equalType( s1, d2 ).( *StructDefinition )
     a.descend( "(Fields)" ).assertFieldSets( s1.Fields, s2.Fields )
     a.descend( "(Constructors)" ).
@@ -257,6 +273,7 @@ func ( a *DefAsserter ) AssertDef( d1, d2 Definition ) {
     case *StructDefinition: a.assertStructDef( v, d2 )
     case *SchemaDefinition: a.assertSchemaDef( v, d2 )
     case *EnumDefinition: a.assertEnumDef( v, d2 )
+    case *UnionDefinition: a.assertUnionDef( v, d2 )
     case *PrototypeDefinition: a.assertProtoDef( v, d2 )
     case *ServiceDefinition: a.assertServiceDef( v, d2 )
     default: a.Fatalf( "Unhandled def: %T", d1 )

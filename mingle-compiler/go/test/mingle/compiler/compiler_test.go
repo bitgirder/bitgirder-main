@@ -269,6 +269,98 @@ func TestCompiler( t *testing.T ) {
             types.MakeEnumDef( "ns1@v1/Enum1", "red", "green", "lightGrey" ),
         ),
 
+        newCompilerTest( "union-basic" ).
+        addSource( "f1", `
+            @version v1
+            namespace ns1
+
+            struct S1 {}
+            enum E1 { e1 }
+            alias A1 S1
+            union U1 { Int32, Int64*, &Float32, S1, S1+, &E1? }
+            union U2 { Int32, A1, SymbolMap* }
+
+            struct S2 {
+                f1 U1
+                f2 &U2
+            }
+
+            schema Schema1 { f1 U1 }
+
+            service Service1 {
+                op op1( f1 U1 ): U2+
+            }
+
+            prototype P1( f1 U1 ): U2+
+        ` ).
+        expectDef( types.MakeStructDef( "ns1@v1/S1", nil ) ).
+        expectDef(
+            &types.AliasedTypeDefinition{
+                Name: mkQn( "ns1@v1/A1" ),
+                AliasedType: mkTyp( "ns1@v1/S1" ),
+            },
+        ).
+        expectDef( types.MakeEnumDef( "ns1@v1/E1", "e1" ) ).
+        expectDef( 
+            types.MakeUnionDef( "ns1@v1/U1",
+                "Int32", 
+                "Int64*", 
+                "&Float32", 
+                "ns1@v1/S1", 
+                "ns1@v1/S1+", 
+                "&ns1@v1/E1?",
+            ),
+        ).
+        expectDef( 
+            types.MakeUnionDef( "ns1@v1/U2", 
+                "Int32", 
+                "ns1@v1/S1",
+                "mingle:core@v1/SymbolMap*",
+            ),
+        ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S2",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "ns1@v1/U1", nil ),
+                    types.MakeFieldDef( "f2", "&ns1@v1/U2", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeSchemaDef( "ns1@v1/Schema1",
+                []*types.FieldDefinition{
+                    types.MakeFieldDef( "f1", "ns1@v1/U1", nil ),
+                },
+            ),
+        ).
+        expectDef(
+            types.MakeServiceDef(
+                "ns1@v1/Service1",
+                "",
+                types.MakeOpDef( "op1",
+                    types.MakeCallSig(
+                        []*types.FieldDefinition{
+                            types.MakeFieldDef( "f1", "ns1@v1/U1", nil ),
+                        },
+                        "ns1@v1/U2+",
+                        []string{},
+                    ),
+                ),
+            ),
+        ).
+        expectDef(
+            &types.PrototypeDefinition{
+                Name: mkQn( "ns1@v1/P1" ),
+                Signature: types.MakeCallSig(
+                    []*types.FieldDefinition{
+                        types.MakeFieldDef( "f1", "ns1@v1/U1", nil ),
+                    },
+                    "ns1@v1/U2+",
+                    []string{},
+                ),
+            },
+        ),
+
         newCompilerTest( "schema-variations" ).
         addLib( "lib1", 
             `@version v1; namespace ns2; schema Schema1 { g1 Int32 }` ).
@@ -1865,6 +1957,50 @@ func TestCompiler( t *testing.T ) {
         expectError( 4, 39, "Unresolved type: Blah" ).
         expectError( 5, 49,
             "Duplicate constructor signature for type mingle:core@v1/String" ),
+        
+        newCompilerTest( "union-errors" ).
+        setSource( `
+            @version v1
+            namespace ns1
+
+            struct S1 {}
+            schema Schema1 {}
+            service Service1 {}
+            prototype P1(): Null
+            union UnionOk { Int32, Int64, S1 }
+            alias T1 S1
+
+            union U1 { S1, &S1, S1+, &S1* }
+            union U2 { S1, Schema1 }
+            union U3 { S1, SymbolMap }
+            union U4 { S1, &SymbolMap? }
+            union U5 { S1, Service1 }
+            union U6 { S1, P1 }
+            union U7 { S1, UnionOk }
+            union U8 { S1, T1 }
+            union U9 { S1, Null }
+            union U10 { S1, Value }
+        ` ).
+        expectError( 12, 13, `ambiguous types in union U1: ns1@v1/S1 ([<>, line 12, col 24]), &(ns1@v1/S1) ([<>, line 12, col 28])` ).
+        expectError( 12, 13, `ambiguous types in union U1: ns1@v1/S1+ ([<>, line 12, col 33]), &(ns1@v1/S1)* ([<>, line 12, col 38])` ).
+        expectError( 13, 28, 
+            `invalid schema type in union U2: ns1@v1/Schema1` ).
+        expectError( 14, 28, 
+            `invalid map type in union U3: mingle:core@v1/SymbolMap` ).
+        expectError( 15, 28, 
+            `invalid map type in union U4: &(mingle:core@v1/SymbolMap)?` ).
+        expectError( 16, 28, 
+            `invalid service type in union U5: ns1@v1/Service1` ).
+        expectError( 17, 28, 
+            `invalid prototype type in union U6: ns1@v1/P1` ).
+        expectError( 18, 28, 
+            `invalid union type in union U7: ns1@v1/UnionOk` ).
+        expectError( 19, 13, 
+            `ambiguous types in union U8: ns1@v1/S1 ([<>, line 19, col 24]), ns1@v1/S1 ([<>, line 19, col 28])` ).
+        expectError( 20, 28,
+            `invalid null type in union U9: mingle:core@v1/Null` ).
+        expectError( 21, 29,
+            `invalid opaque type in union U10: mingle:core@v1/Value` ),
 
         newCompilerTest( "ambiguous-type-selector-errors" ).
         setSource( `
