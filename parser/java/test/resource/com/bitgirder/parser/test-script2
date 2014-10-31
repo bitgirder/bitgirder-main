@@ -1,7 +1,0 @@
-# Test script with a lexical error (malformed identifier ), used to test error
-# location reporting
-a = 2;
-b = 3;
-c = c + a_malformed_identifier_; # <-- error should start at line 5, col 31 
-d = 9;
-e = "Not getting here bucko";

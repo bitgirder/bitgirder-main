@@ -10,10 +10,9 @@ import (
     "bitgirder/objpath"
     "mingle/parser/tree"
     "mingle/parser"
-    "mingle/code"
     "mingle/cast"
     mgRct "mingle/reactor"
-    interp "mingle/interpreter"
+    "mingle/compiler/interp"
     "mingle/types"
     mg "mingle"
 )
@@ -1704,7 +1703,7 @@ func ( c *Compilation ) checkNsUnitCycles() {
 }
 
 type compiledExpression struct {
-    exp code.Expression
+    exp interp.Expression
     typ mg.TypeReference
 }
 
@@ -1751,10 +1750,12 @@ func asIntExpression(
         } else { sInt, err = n.Int64() }
         if err == nil {
             switch {
-            case resType.Equals( mg.TypeInt32 ): res.exp = code.Int32( sInt )
-            case resType.Equals( mg.TypeInt64 ): res.exp = code.Int64( sInt )
-            case resType.Equals( mg.TypeUint32 ): res.exp = code.Uint32( uInt )
-            case resType.Equals( mg.TypeUint64 ): res.exp = code.Uint64( uInt )
+            case resType.Equals( mg.TypeInt32 ): res.exp = interp.Int32( sInt )
+            case resType.Equals( mg.TypeInt64 ): res.exp = interp.Int64( sInt )
+            case resType.Equals( mg.TypeUint32 ): 
+                res.exp = interp.Uint32( uInt )
+            case resType.Equals( mg.TypeUint64 ): 
+                res.exp = interp.Uint64( uInt )
             default: panic( libErrorf( "Unhandled int type: %s", resType ) )
             }
             return res
@@ -1773,8 +1774,8 @@ func asFloatExpression(
     f, err := n.Float64(); 
     if err == nil { 
         if resType.Equals( mg.TypeFloat32 ) {
-            res.exp = code.Float32( f )
-        } else { res.exp = code.Float64( f ) }
+            res.exp = interp.Float32( f )
+        } else { res.exp = interp.Float64( f ) }
         return res
     }
     panic( implErrorf( "Couldn't process float: %s", err ) )
@@ -1799,12 +1800,12 @@ func asStringExpression(
     resType := expctType
     if expctType == nil || qnameIn( expctType ).Equals( mg.QnameString ) {
         if expctType == nil { resType = mg.TypeString }
-        return &compiledExpression{ code.String( str ), resType }
+        return &compiledExpression{ interp.String( str ), resType }
     } else if qnameIn( expctType ).Equals( mg.QnameTimestamp ) {
         if expctType == nil { resType = mg.TypeTimestamp }
         if tm, ok := bs.parseTimestamp( str, strLoc ); ok {
             return &compiledExpression{ 
-                &code.Timestamp{ tm }, mg.TypeTimestamp }
+                &interp.Timestamp{ tm }, mg.TypeTimestamp }
         }
         return nil
     }
@@ -1830,8 +1831,8 @@ func asBooleanExpression(
         }
     }
     switch kwd {
-    case parser.KeywordTrue: res.exp = code.Boolean( true )
-    case parser.KeywordFalse: res.exp = code.Boolean( false )
+    case parser.KeywordTrue: res.exp = interp.Boolean( true )
+    case parser.KeywordFalse: res.exp = interp.Boolean( false )
     default:
         panic( implErrorf( "Invalid keyword as primary expression: %s", kwd ) )
     }
@@ -1843,7 +1844,7 @@ func asIdReferenceExpression(
     errLoc *parser.Location,
     typ mg.TypeReference,
     bs *buildScope ) *compiledExpression {
-    return &compiledExpression{ &code.IdentifierReference{ id }, typ }
+    return &compiledExpression{ &interp.IdentifierReference{ id }, typ }
 }
 
 func ( l *prefixLeaf ) compilePrimary(
@@ -1869,7 +1870,7 @@ func ( l *prefixLeaf ) compileNegation(
     errLoc *parser.Location, 
     bs *buildScope ) *compiledExpression {
     if baseTypeIsNum( exp.typ ) {
-        return &compiledExpression{ &code.Negation{ exp.exp }, exp.typ }
+        return &compiledExpression{ &interp.Negation{ exp.exp }, exp.typ }
     }
     bs.c.addErrorf( errLoc, "Cannot negate values of type %s", exp.typ )
     return nil
@@ -1896,7 +1897,7 @@ func ( l *prefixLeaf ) compileEnumAccess(
     idLoc *parser.Location,
     bs *buildScope ) *compiledExpression {
     if enVal := enDef.GetValue( id ); enVal != nil {
-        return &compiledExpression{ &code.EnumValue{ enVal }, expType }
+        return &compiledExpression{ &interp.EnumValue{ enVal }, expType }
     }
     bs.c.addErrorf( idLoc, "Invalid value for enum %s: %s", 
         enDef.GetName(), id )
@@ -1933,7 +1934,7 @@ func ( l *prefixLeaf ) compileListExpression(
     bs *buildScope ) *compiledExpression {
     if expctType == nil { expctType = typeValList }
     if lt, ok := expctType.( *mg.ListTypeReference ); ok {
-        valExp := code.NewListValue()
+        valExp := interp.NewListValue()
         for _, elt := range le.Elements {
             eltComp := bs.c.buildExpression( elt, lt.ElementType, bs )
             if eltComp == nil {

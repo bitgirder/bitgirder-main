@@ -52,6 +52,7 @@
             "mingle",
             "mingle-parser-tree",
             "mingle-compiler",
+            "mingle-cast",
             "mingle-service"
         ]
     }

@@ -3,9 +3,7 @@
     "direct-deps": [ 
         "mingle", 
         "mingle-cast",
-        "mingle-parser-tree", 
-        "mingle-interpreter",
-        "mingle-code" 
+        "mingle-parser-tree"
     ],
     "commands": { "mingle": {} },
     "packages": [ "mingle/compiler" ]
