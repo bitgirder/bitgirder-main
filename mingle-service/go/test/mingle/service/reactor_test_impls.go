@@ -13,8 +13,8 @@ func newTestOperationMap() *OperationMap {
         qn := mkQn( qnStr )
         res.MustAddServiceInstance( qn.Namespace, mkId( svc ), qn )
     }
-    add( "svc1", "mingle:tck@v1/Service1" )
-    add( "svc2", "mingle:tck@v1/Service2" )
+    add( "svc1", "mingle:tck:service@v1/Service1" )
+    add( "svc2", "mingle:tck:service@v1/Service2" )
     add( "svc1", "mingle:service:fail@v1/Service1" )
     add( "svc1", "mingle:service@v1/Service1" )
     return res

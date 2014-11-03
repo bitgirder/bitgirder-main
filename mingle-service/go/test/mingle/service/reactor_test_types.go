@@ -47,8 +47,6 @@ type testError struct {
 
 func ( t *testError ) Error() string { return mg.FormatError( t.path, t.msg ) }
 
-// adds to mingle:tck@v1 types those corresponding to:
-//
 // ---------------------------------------------------
 //
 //  @version v1
