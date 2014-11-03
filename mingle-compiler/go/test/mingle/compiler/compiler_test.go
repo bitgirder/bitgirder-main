@@ -277,7 +277,7 @@ func TestCompiler( t *testing.T ) {
             struct S1 {}
             enum E1 { e1 }
             alias A1 S1
-            union U1 { Int32, Int64*, &Float32, S1, S1+, &E1? }
+            union U1 { Int32, Int64*, &Float32, S1, S1+, &E1 }
             union U2 { Int32, A1, SymbolMap* }
 
             struct S2 {
@@ -308,7 +308,7 @@ func TestCompiler( t *testing.T ) {
                 "&Float32", 
                 "ns1@v1/S1", 
                 "ns1@v1/S1+", 
-                "&ns1@v1/E1?",
+                "&ns1@v1/E1",
             ),
         ).
         expectDef( 
@@ -1973,13 +1973,15 @@ func TestCompiler( t *testing.T ) {
             union U1 { S1, &S1, S1+, &S1* }
             union U2 { S1, Schema1 }
             union U3 { S1, SymbolMap }
-            union U4 { S1, &SymbolMap? }
+            union U4 { S1, &SymbolMap }
             union U5 { S1, Service1 }
             union U6 { S1, P1 }
             union U7 { S1, UnionOk }
             union U8 { S1, T1 }
             union U9 { S1, Null }
             union U10 { S1, Value }
+            union U11 { S1, &Int32? }
+            union U12 { S1, &(Int32*?) }
         ` ).
         expectError( 12, 13, `ambiguous types in union U1: ns1@v1/S1 ([<>, line 12, col 24]), &(ns1@v1/S1) ([<>, line 12, col 28])` ).
         expectError( 12, 13, `ambiguous types in union U1: ns1@v1/S1+ ([<>, line 12, col 33]), &(ns1@v1/S1)* ([<>, line 12, col 38])` ).
@@ -1988,7 +1990,7 @@ func TestCompiler( t *testing.T ) {
         expectError( 14, 28, 
             `invalid map type in union U3: mingle:core@v1/SymbolMap` ).
         expectError( 15, 28, 
-            `invalid map type in union U4: &(mingle:core@v1/SymbolMap)?` ).
+            `invalid map type in union U4: &(mingle:core@v1/SymbolMap)` ).
         expectError( 16, 28, 
             `invalid service type in union U5: ns1@v1/Service1` ).
         expectError( 17, 28, 
@@ -2000,7 +2002,11 @@ func TestCompiler( t *testing.T ) {
         expectError( 20, 28,
             `invalid null type in union U9: mingle:core@v1/Null` ).
         expectError( 21, 29,
-            `invalid opaque type in union U10: mingle:core@v1/Value` ),
+            `invalid opaque type in union U10: mingle:core@v1/Value` ).
+        expectError( 22, 29,
+            `invalid nullable type in union U11: &(mingle:core@v1/Int32)?` ).
+        expectError( 23, 29,
+            `invalid nullable type in union U12: &(mingle:core@v1/Int32*?)` ),
 
         newCompilerTest( "ambiguous-type-selector-errors" ).
         setSource( `

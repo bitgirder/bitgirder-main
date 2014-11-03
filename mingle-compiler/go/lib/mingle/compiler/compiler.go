@@ -925,24 +925,39 @@ type unionTypeBuildCheck struct {
     typLoc *parser.Location
 }
 
+// false result means that further checks need not continue, but don't
+// necessarily mean that an error was found
+func ( c unionTypeBuildCheck ) checkTopType( typ mg.TypeReference ) bool {
+    switch v := typ.( type ) {
+    case *mg.ListTypeReference: return false
+    case *mg.AtomicTypeReference: return true
+    case *mg.NullableTypeReference:
+        c.fail( "nullable type" )
+        return false
+    case *mg.PointerTypeReference: return c.checkTopType( v.Type )
+    }
+    panic( libErrorf( "unhandled type: %T", typ ) )
+}
+
+func ( c unionTypeBuildCheck ) fail( desc string ) {
+    c.c.addErrorf( c.typLoc, "invalid %s in union %s: %s", 
+        desc, c.ud.GetName(), c.typ )
+}
+
 func ( c unionTypeBuildCheck ) check() {
-    if _, ok := c.typ.( *mg.ListTypeReference ); ok { return }
+    if ! c.checkTopType( c.typ ) { return }
     qn := mg.TypeNameIn( c.typ )
     def := c.c.typeDefForQn( qn )
-    fail := func( desc string ) {
-        c.c.addErrorf( c.typLoc, "invalid %s in union %s: %s", 
-            desc, c.ud.GetName(), c.typ )
-    }
     switch def.( type ) {
-    case *types.PrototypeDefinition: fail( "prototype type" )
-    case *types.ServiceDefinition: fail( "service type" )
-    case *types.UnionDefinition: fail( "union type" )
-    case *types.SchemaDefinition: fail( "schema type" )
+    case *types.PrototypeDefinition: c.fail( "prototype type" )
+    case *types.ServiceDefinition: c.fail( "service type" )
+    case *types.UnionDefinition: c.fail( "union type" )
+    case *types.SchemaDefinition: c.fail( "schema type" )
     case *types.PrimitiveDefinition:
         switch {
-        case qn.Equals( mg.QnameSymbolMap ): fail( "map type" )
-        case qn.Equals( mg.QnameNull ): fail( "null type" )
-        case qn.Equals( mg.QnameValue ): fail( "opaque type" )
+        case qn.Equals( mg.QnameSymbolMap ): c.fail( "map type" )
+        case qn.Equals( mg.QnameNull ): c.fail( "null type" )
+        case qn.Equals( mg.QnameValue ): c.fail( "opaque type" )
         }
     }
 }
