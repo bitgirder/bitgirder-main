@@ -214,8 +214,16 @@ class GoModBuilder < StandardModTask
 
     public
     def get_direct_dependencies
-        code( "getting deps for #{mod} in #{proj}" )
-        get_go_build_dependencies( mod )
+
+        res = get_go_build_dependencies( mod )
+
+        # Special cased, but will move out of here when we get more
+        # sophisticated in terms of code gen selection
+        if mod == MOD_TEST && proj.external_form == "mingle-codegen-go"
+            res << TaskTarget.create( :go, :gen_tck_test_impls )
+        end
+        
+        res
     end
 
     private
@@ -293,6 +301,21 @@ class GoModBuilder < StandardModTask
 end
 
 TaskRegistry.instance.register_path( GoModBuilder, :go, :build )
+
+class GenTckTestImpls < StandardModTask
+
+    public
+    def get_direct_dependencies
+        []
+    end
+
+    public
+    def execute( chain )
+        code( "Calling #{target}" )
+    end
+end
+
+TaskRegistry.instance.register_path( GenTckTestImpls, :go, :gen_tck_test_impls )
 
 class GoModTestRunner < StandardModTask
     
