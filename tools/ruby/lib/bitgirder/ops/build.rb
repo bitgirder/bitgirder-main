@@ -45,6 +45,7 @@ class TreeLinker < BitGirderClass
 
         Dir.chdir( src_dir ) do
  
+            code( "selecting targets in #{src_dir}" )
             select_targets( sel ).each do |f|
 
                 targ = "#{src_dir}/#{f}"

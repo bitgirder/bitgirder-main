@@ -3,6 +3,8 @@ require 'bitgirder/core'
 require 'bitgirder/ops/build'
 require 'bitgirder/ops/build/distro'
 
+require 'mingle'
+
 require 'forwardable'
 require 'set'
 
@@ -302,20 +304,81 @@ end
 
 TaskRegistry.instance.register_path( GoModBuilder, :go, :build )
 
-class GenTckTestImpls < StandardModTask
+MOD_TCK_TEST_GEN = MingleIdentifier.parse( "tck-test-gen" )
+MOD_TCK_TEST_GEN_GENERATED = MingleIdentifier.parse( "tck-test-gen-generated" )
+
+class TckTestGenTask < StandardModTask
+
+    include GoEnvMixin
+    
+    public
+    def mod
+        MOD_TCK_TEST_GEN
+    end
+
+    public
+    def proj
+        "mingle-codegen-go"
+    end
 
     public
     def get_direct_dependencies
-        []
+
+        pd = ws_ctx.proj_def#( proj: :"mingle-codegen-go" )
+        deps = pd[ :direct_deps ]
+
+        deps.map { |proj| TaskTarget.create( :go, :build, proj, :test ) }
+    end
+
+    private
+    def link_mod_src( proj_dir, linker, mods )
+        
+        mods.each do |mod|
+            
+            link_src = "#{proj_dir}/#{mod}"
+            next unless File.exist?( link_src )
+
+            linker.update_from( :src => link_src, :selector => "**/*.go" )
+        end
+    end
+
+    private
+    def build_linked_src( chain )
+        
+        linker = TreeLinker.new( :dest => "#{ws_ctx.mod_build_dir}/src" )
+
+        BuildChains.tasks( chain, GoModBuilder ).each do |tsk|
+            link_mod_src( tsk.ws_ctx.proj_dir, linker, [ MOD_LIB, MOD_TEST ] )
+        end
+
+        link_mod_src( ws_ctx.proj_dir, linker, [ MOD_LIB, mod() ] )
+        
+        linker.build
+    end
+
+    private
+    def gen_dest_dir
+        
+        ws_ctx.mod_build_dir( mod: MOD_TCK_TEST_GEN_GENERATED )
     end
 
     public
     def execute( chain )
-        code( "Calling #{target}" )
+        
+        src_dir = build_linked_src( chain )
+
+        cmd = go_cmd( "go" )
+
+        env = { ENV_GOPATH => File.dirname( src_dir ) }
+
+        argv = [ "run" ]
+        argv << "#{src_dir}/gen-tck.go" << "-out-dir" << gen_dest_dir
+
+        UnixProcessBuilder.system( cmd: cmd, argv: argv, env: env )
     end
 end
 
-TaskRegistry.instance.register_path( GenTckTestImpls, :go, :gen_tck_test_impls )
+TaskRegistry.instance.register_path( TckTestGenTask, :go, :tck_test_gen )
 
 class GoModTestRunner < StandardModTask
     
