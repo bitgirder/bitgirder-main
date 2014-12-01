@@ -47,9 +47,9 @@ import (
 //      mapF2 SymbolMap?
 //  }
 //
-//  union Union1 { Int32, ScalarsRestrict, &EnumHolder, &Map }
+//  union Union1 { Int32, ScalarsRestrict, &EnumHolder, &SymbolMap }
 //
-//  struct UnionHolder { mapF1 Union1 }
+//  struct UnionHolder { union1F1 Union1 }
 //
 //  struct ValueHolder { valF1 Value }
 //
@@ -93,9 +93,9 @@ import (
 //      mapListF1 SymbolMap*?
 //      union1ListF1 &Union1?*
 //      schema1ListF1 Schema1*
-//      struct1List1 Struct1*
+//      struct1List1F1 Struct1*
 //      enum1ListF1 Enum1+
-//      int64PtrList &Int64*
+//      int64PtrListF1 &Int64*
 //      valueListF1 Value*
 //      nullValueListF1 Value?*
 //      valPtrListF1 &Value*
