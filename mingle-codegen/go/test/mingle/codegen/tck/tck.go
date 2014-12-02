@@ -468,6 +468,23 @@ func ( b *testsBuilder ) addListDefaultsTests() {
     )
 }
 
+func ( b *testsBuilder ) addData2Tests() {
+    b.addTests(
+        &ValueTest{
+            Mingle: parser.MustStruct( "mingle:tck:data2@v1/Struct2",
+                "f1", parser.MustStruct( "mingle:tck:data@v1/Struct1",
+                    "f1", int32( 1 ),
+                    "f2", "abc",
+                ),
+                "f2", parser.MustStruct( "mingle:tck:data2@v1/Struct1",
+                    "f1", int32( 2 ),
+                ),
+            ),
+            Name: "data2-struct2-inst1",
+        },
+    )
+}
+
 func GetTckTests() []interface{} {
     b := &testsBuilder{ tests: make( []interface{}, 0, 256 ) }
     b.addScalarsBasic()
@@ -482,6 +499,7 @@ func GetTckTests() []interface{} {
     b.addNullablesTests()
     b.addLists1Tests()
     b.addListDefaultsTests()
+    b.addData2Tests()
     b.addMissingFieldTests()
     return b.tests
 }
