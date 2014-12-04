@@ -10,6 +10,7 @@ import (
     "bytes"
     "fmt"
     "strings"
+    "strconv"
     "go/ast"
     "go/printer"
     "go/token"
@@ -66,6 +67,7 @@ type pkgGen struct {
     file *ast.File
     pathIds []*mg.Identifier
     imports map[ string ] *ast.ImportSpec
+    decls []ast.Decl
     idSeq int
 }
 
@@ -167,7 +169,7 @@ func ( pg *pkgGen ) setFileName() {
 
 func ( pg *pkgGen ) initPackage() error {
     pg.file = &ast.File{}
-    pg.file.Decls = make( []ast.Decl, 0, len( pg.defs ) )
+    pg.decls = make( []ast.Decl, 0, len( pg.defs ) )
     pg.imports = make( map[ string ] *ast.ImportSpec, 8 )
     if err := pg.setPathIds(); err != nil { return err }
     pg.setFileName()
@@ -178,11 +180,12 @@ func ( pg *pkgGen ) importForGoPath( path string ) *ast.ImportSpec {
     res, ok := pg.imports[ path ]
     if ! ok {
         res = &ast.ImportSpec{
-            Path: &ast.BasicLit{ Kind: token.STRING, Value: path },
+            Path: &ast.BasicLit{ 
+                Kind: token.STRING, 
+                Value: strconv.Quote( path ),
+            },
             Name: pg.nextPkgImportId(),
         }
-        gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ res } }
-        pg.file.Decls = append( pg.file.Decls, gd )
         pg.imports[ path ] = res
     }
     return res
@@ -272,32 +275,68 @@ func ( pg *pkgGen ) addFields(
     })
 }
 
-func ( pg *pkgGen ) newStructDecl( sd *types.StructDefinition ) ast.Decl {
+func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) error {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( sd.GetName() )
     flds := &ast.FieldList{ List: make( []*ast.Field, 0, sd.Fields.Len() ) }
     pg.addFields( flds, sd.Fields, sd )
     typ.Type = &ast.StructType{ Fields: flds }
-    return &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
+    decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
+    pg.decls = append( pg.decls, decl )
+    return nil
 }
 
-func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) error {
-    decl := pg.newStructDecl( sd )
-    pg.file.Decls = append( pg.file.Decls, decl )
+func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) error {
+    typ := &ast.TypeSpec{}
+    typ.Name = pg.identForTypeName( ed.GetName() )
+    typ.Type = ast.NewIdent( "int" )
+    decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
+    pg.decls = append( pg.decls, decl )
+    return nil
+}
+
+func ( pg *pkgGen ) generateUnion( ud *types.UnionDefinition ) error {
+    typ := &ast.TypeSpec{}
+    typ.Name = pg.identForTypeName( ud.GetName() )
+    typ.Type = &ast.InterfaceType{ Methods: &ast.FieldList{} }
+    decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
+    pg.decls = append( pg.decls, decl )
+    return nil
+}
+
+func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) error {
+    typ := &ast.TypeSpec{}
+    typ.Name = pg.identForTypeName( sd.GetName() )
+    typ.Type = &ast.InterfaceType{ Methods: &ast.FieldList{} }
+    decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
+    pg.decls = append( pg.decls, decl )
     return nil
 }
 
 func ( pg *pkgGen ) generateDef( def types.Definition ) error {
     switch v := def.( type ) {
     case *types.StructDefinition: return pg.generateStruct( v )
+    case *types.EnumDefinition: return pg.generateEnum( v )
+    case *types.UnionDefinition: return pg.generateUnion( v )
+    case *types.SchemaDefinition: return pg.generateSchema( v )
     }
     return nil
+}
+
+func ( pg *pkgGen ) assembleDecls() {
+    pg.file.Decls = make( []ast.Decl, 0, len( pg.imports ) + len( pg.decls ) )
+    for _, spec := range pg.imports {
+        gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ spec } }
+        pg.file.Decls = append( pg.file.Decls, gd )
+    }
+    pg.file.Decls = append( pg.file.Decls, pg.decls... )
 }
 
 func ( pg *pkgGen ) generatePackage() error {
     for _, def := range pg.defs {
         if err := pg.generateDef( def ); err != nil { return err }
     }
+    pg.assembleDecls()
     return nil
 }
 

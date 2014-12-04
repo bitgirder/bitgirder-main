@@ -4,6 +4,8 @@ import (
     "bitgirder/assert"
     "testing"
     cgTck "mingle/codegen/tck"
+    _ "mingle/v1/tck/data"
+    _ "mingle/v1/tck/data2"
 )
 
 func TestTck( t *testing.T ) {
