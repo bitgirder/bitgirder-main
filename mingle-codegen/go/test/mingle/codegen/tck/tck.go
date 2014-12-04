@@ -42,6 +42,15 @@ func ( b *testsBuilder ) addTests( tests... interface{} ) {
     b.tests = append( b.tests, tests... )
 }
 
+func ( b *testsBuilder ) addEmptyStruct() {
+    b.addTests(
+        &ValueTest{
+            Mingle: dataStruct( "EmptyStruct" ),
+            Name: "empty-struct-inst1",
+        },
+    )
+}
+
 func ( b *testsBuilder ) addScalarsBasic() {
     b.addTests( 
         &ValueTest{
@@ -487,6 +496,7 @@ func ( b *testsBuilder ) addData2Tests() {
 
 func GetTckTests() []interface{} {
     b := &testsBuilder{ tests: make( []interface{}, 0, 256 ) }
+    b.addEmptyStruct()
     b.addScalarsBasic()
     b.addScalarsRestrict()
     b.addEnum1Tests()

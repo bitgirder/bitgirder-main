@@ -184,3 +184,13 @@ func ( m *NamespaceMap ) EachPair( f func( ns *Namespace, val interface{} ) ) {
         func( k mapImplKey, v interface{} ) { f( k.( *Namespace ), v ) },
     )
 }
+
+func ( m *NamespaceMap ) EachPairError( 
+    f func( ns *Namespace, val interface{} ) error ) error {
+
+    return m.implEachPairError(
+        func( k mapImplKey, val interface{} ) error {
+            return f( k.( *Namespace ), val )
+        },
+    )
+}

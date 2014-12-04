@@ -19,6 +19,8 @@ var (
 //
 //  namespace mingle:tck:data
 //
+//  struct EmptyStruct {}
+//
 //  struct ScalarsBasic {
 //      stringF1 String
 //      boolF1 Boolean1
@@ -177,6 +179,7 @@ var (
 //  }
 //
 func addTckDefs( m *types.DefinitionMap ) {
+    m.MustAdd( types.MakeStructDef( "mingle:tck:data@v1/EmptyStruct", nil ) )
     m.MustAdd(
         types.MakeStructDef( "mingle:tck:data@v1/ScalarsBasic",
             []*types.FieldDefinition{
