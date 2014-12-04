@@ -11,10 +11,21 @@ import (
     "fmt"
     "strings"
     "strconv"
+//    "unicode"
     "go/ast"
     "go/printer"
     "go/token"
 )
+
+func starExpr( expr ast.Expr ) *ast.StarExpr { return &ast.StarExpr{ X: expr } }
+
+func selExpr( x ast.Expr, sel *ast.Ident ) *ast.SelectorExpr {
+    return &ast.SelectorExpr{ x, sel }
+}
+
+func callExpr( fun ast.Expr, args... ast.Expr ) *ast.CallExpr {
+    return &ast.CallExpr{ Fun: fun, Args: args }
+}
 
 type builtinTypeExpr struct {
     goPath string
@@ -149,6 +160,10 @@ func ( pg *pkgGen ) nextId() *ast.Ident {
 
 func ( pg *pkgGen ) nextPkgImportId() *ast.Ident { return pg.nextId() }
 
+func ( pg *pkgGen ) addDecl( decl ast.Decl ) {
+    pg.decls = append( pg.decls, decl )
+}
+
 // eventually we'll look in here for a path mapper specific to pg.ns, and then
 // would look for a path mapper in pg.g, and then finally use the default.
 func ( pg *pkgGen ) setPathIds() ( err error ) {
@@ -198,7 +213,7 @@ func ( pg *pkgGen ) pkgSelectorForGoPath( path string ) *ast.Ident {
 func ( pg *pkgGen ) qualifiedTypeExpressionForGoPath(
     gp string, typNm *ast.Ident ) *ast.SelectorExpr {
 
-    return &ast.SelectorExpr{ X: pg.pkgSelectorForGoPath( gp ), Sel: typNm }
+    return selExpr( pg.pkgSelectorForGoPath( gp ), typNm )
 }
 
 func ( pg *pkgGen ) qualifiedTypeExpressionForNs(
@@ -215,16 +230,33 @@ func ( pg *pkgGen ) identForTypeName( qn *mg.QualifiedTypeName ) *ast.Ident {
 }
 
 // if we later allow custom per-field renaming, this is where it will happen
+func ( pg *pkgGen ) mgIdentForField( 
+    nm *mg.Identifier, encl types.Definition ) *mg.Identifier {
+
+    return nm
+}
+
 func ( pg *pkgGen ) identForField( 
     nm *mg.Identifier, encl types.Definition ) *ast.Ident {
 
+    nm = pg.mgIdentForField( nm, encl )
     return ast.NewIdent( nm.Format( mg.LcCamelCapped ) )
+}
+
+func ( pg *pkgGen ) accessorIdentForField( 
+    nm *mg.Identifier, prefix string, encl types.Definition ) *ast.Ident {
+
+    bb := &bytes.Buffer{}
+    bb.WriteString( prefix )
+    str := pg.mgIdentForField( nm, encl ).Format( mg.LcCamelCapped )
+    bb.WriteString( strings.ToUpper( str[ 0 : 1 ] ) )
+    bb.WriteString( str[ 1 : ] )
+    return ast.NewIdent( bb.String() )
 }
 
 func ( pg *pkgGen ) atomicTypeExpressionFor( 
     at *mg.AtomicTypeReference ) ast.Expr {
 
-//    if expr, ok := pg.g.builtinTypeExpressionFor( at.Name() ); ok { 
     if bi := pg.g.builtinTypeExpressionFor( at.Name() ); bi != nil { 
         if bi.goPath == "" { return bi.typExpr }
         typNm := bi.typExpr.( *ast.Ident )
@@ -243,7 +275,7 @@ func ( pg *pkgGen ) listTypeExpressionFor( lt *mg.ListTypeReference ) ast.Expr {
 func ( pg *pkgGen ) pointerTypeExpressionFor( 
     pt *mg.PointerTypeReference ) ast.Expr {
 
-    return &ast.StarExpr{ X: pg.typeExpressionFor( pt.Type ) }
+    return starExpr( pg.typeExpressionFor( pt.Type ) )
 }
 
 func ( pg *pkgGen ) typeExpressionFor( typ mg.TypeReference ) ast.Expr {
@@ -254,6 +286,115 @@ func ( pg *pkgGen ) typeExpressionFor( typ mg.TypeReference ) ast.Expr {
     case *mg.NullableTypeReference: return pg.typeExpressionFor( v.Type )
     }
     panic( libErrorf( "unhandled type reference: %T", typ ) )
+}
+
+type bodyBuilder struct {
+    block *ast.BlockStmt
+}
+
+func ( bb *bodyBuilder ) addStatement( stmt ast.Stmt ) {
+    bb.block.List = append( bb.block.List, stmt )
+}
+
+func ( bb *bodyBuilder ) addAssignment1( lhs, rhs ast.Expr, tok token.Token ) {
+    bb.addStatement(
+        &ast.AssignStmt{
+            Lhs: []ast.Expr{ lhs },
+            Rhs: []ast.Expr{ rhs },
+            Tok: tok,
+        },
+    )
+}
+
+func ( bb *bodyBuilder ) addAssign1( lhs, rhs ast.Expr ) {
+    bb.addAssignment1( lhs, rhs, token.ASSIGN )
+}
+
+func ( bb *bodyBuilder ) addDefine1( lhs, rhs ast.Expr ) {
+    bb.addAssignment1( lhs, rhs, token.DEFINE )
+}
+
+func ( bb *bodyBuilder ) addReturn( exprs... ast.Expr ) {
+    bb.addStatement( &ast.ReturnStmt{ Results: exprs } )
+}
+
+func ( pg *pkgGen ) newBodyBuilder() *bodyBuilder {
+    return &bodyBuilder{ 
+        block: &ast.BlockStmt{ List: make( []ast.Stmt, 0, 4 ) },
+    }
+}
+
+type fieldListBuilder struct {
+    fl *ast.FieldList
+}
+
+func ( pg *pkgGen ) newFieldListBuilder() *fieldListBuilder {
+    return &fieldListBuilder{ fl: &ast.FieldList{} }
+}
+
+func ( flb *fieldListBuilder ) addField( fld *ast.Field ) {
+    if flb.fl.List == nil { flb.fl.List = make( []*ast.Field, 0, 4 ) }
+    flb.fl.List = append( flb.fl.List, fld )
+}
+
+func ( flb *fieldListBuilder ) addNamed( nm *ast.Ident, typ ast.Expr ) {
+    flb.addField( &ast.Field{ Names: []*ast.Ident{ nm }, Type: typ } )
+}
+
+func ( flb *fieldListBuilder ) addAnon( typ ast.Expr ) {
+    flb.addField( &ast.Field{ Type: typ } )
+}
+
+type funcTypeBuilder struct {
+    funcType *ast.FuncType
+    res *fieldListBuilder
+    params *fieldListBuilder
+}
+
+func ( pg *pkgGen ) newFuncTypeBuilder() *funcTypeBuilder {
+    res := &funcTypeBuilder{
+        funcType: &ast.FuncType{
+            Params: &ast.FieldList{},
+            Results: &ast.FieldList{},
+        },
+    }
+    res.res = &fieldListBuilder{ res.funcType.Results }
+    res.params = &fieldListBuilder{ res.funcType.Params }
+    return res
+}
+
+type funcDeclBuilder struct {
+    pg *pkgGen
+    funcDecl *ast.FuncDecl
+    recvIdent *ast.Ident
+    ftb *funcTypeBuilder
+    bbInst *bodyBuilder
+}
+
+func ( fdb *funcDeclBuilder ) setPtrReceiver( varNm string, typ ast.Expr ) {
+    fdb.recvIdent = ast.NewIdent( varNm )
+    flb := fdb.pg.newFieldListBuilder()
+    flb.addNamed( fdb.recvIdent, starExpr( typ ) )
+    fdb.funcDecl.Recv = flb.fl
+}
+
+func ( fdb *funcDeclBuilder ) bb() *bodyBuilder {
+    if fdb.bbInst == nil { fdb.bbInst = fdb.pg.newBodyBuilder() }
+    return fdb.bbInst
+}
+
+func ( fdb *funcDeclBuilder ) build() *ast.FuncDecl {
+    fdb.funcDecl.Type = fdb.ftb.funcType
+    if fdb.bbInst != nil { fdb.funcDecl.Body = fdb.bbInst.block }
+    return fdb.funcDecl
+}
+
+func ( pg *pkgGen ) newFuncDeclBuilder() *funcDeclBuilder {
+    return &funcDeclBuilder{
+        funcDecl: &ast.FuncDecl{},
+        ftb: pg.newFuncTypeBuilder(),
+        pg: pg,
+    }
 }
 
 func ( pg *pkgGen ) addField( 
@@ -275,52 +416,98 @@ func ( pg *pkgGen ) addFields(
     })
 }
 
-func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) error {
+func ( pg *pkgGen ) addStructFieldGetter(
+    typ *ast.TypeSpec, fd *types.FieldDefinition, sd *types.StructDefinition ) {
+
+    fdb := pg.newFuncDeclBuilder()
+    fdb.setPtrReceiver( "s", typ.Name )
+    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, "Get", sd )
+    fdb.ftb.res.addAnon( pg.typeExpressionFor( fd.Type ) )
+    fldIdent := pg.identForField( fd.Name, sd )
+    fdb.bb().addReturn( selExpr( fdb.recvIdent, fldIdent ) )
+    pg.addDecl( fdb.build() )
+}
+
+func ( pg *pkgGen ) addStructFieldSetter(
+    typ *ast.TypeSpec, fd *types.FieldDefinition, sd *types.StructDefinition ) {
+
+    fdb := pg.newFuncDeclBuilder()
+    fdb.setPtrReceiver( "s", typ.Name )
+    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, "Set", sd )
+    fldTypExpr := pg.typeExpressionFor( fd.Type )
+    valIdent := ast.NewIdent( "val" )
+    fdb.ftb.params.addNamed( valIdent, fldTypExpr )
+    fldIdent := pg.identForField( fd.Name, sd )
+    fdb.bb().addAssign1( selExpr( fdb.recvIdent, fldIdent ), valIdent )
+    pg.addDecl( fdb.build() )
+}
+
+func ( pg *pkgGen ) addStructFieldAccessors( 
+    typ *ast.TypeSpec, sd *types.StructDefinition ) {
+
+    sd.Fields.EachDefinition( func( fd *types.FieldDefinition ) {
+        pg.addStructFieldGetter( typ, fd, sd )
+        pg.addStructFieldSetter( typ, fd, sd )
+    })
+}
+
+func ( pg *pkgGen ) addStructFactory(
+    typ *ast.TypeSpec, sd *types.StructDefinition ) {
+
+    fdb := pg.newFuncDeclBuilder()
+    fdb.funcDecl.Name = ast.NewIdent( "New" + typ.Name.String() )
+    resTyp := starExpr( typ.Name )
+    fdb.ftb.res.addAnon( resTyp )
+    resIdent := ast.NewIdent( "res" )
+    newCall := callExpr( ast.NewIdent( "new" ), typ.Name )
+    fdb.bb().addDefine1( resIdent, newCall )
+    fdb.bb().addReturn( resIdent )
+    pg.addDecl( fdb.build() )
+}
+
+func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( sd.GetName() )
     flds := &ast.FieldList{ List: make( []*ast.Field, 0, sd.Fields.Len() ) }
     pg.addFields( flds, sd.Fields, sd )
     typ.Type = &ast.StructType{ Fields: flds }
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
-    pg.decls = append( pg.decls, decl )
-    return nil
+    pg.addDecl( decl )
+    pg.addStructFactory( typ, sd )
+    pg.addStructFieldAccessors( typ, sd )
 }
 
-func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) error {
+func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( ed.GetName() )
     typ.Type = ast.NewIdent( "int" )
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
-    pg.decls = append( pg.decls, decl )
-    return nil
+    pg.addDecl( decl )
 }
 
-func ( pg *pkgGen ) generateUnion( ud *types.UnionDefinition ) error {
+func ( pg *pkgGen ) generateUnion( ud *types.UnionDefinition ) {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( ud.GetName() )
     typ.Type = &ast.InterfaceType{ Methods: &ast.FieldList{} }
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
-    pg.decls = append( pg.decls, decl )
-    return nil
+    pg.addDecl( decl )
 }
 
-func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) error {
+func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( sd.GetName() )
     typ.Type = &ast.InterfaceType{ Methods: &ast.FieldList{} }
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
-    pg.decls = append( pg.decls, decl )
-    return nil
+    pg.addDecl( decl )
 }
 
-func ( pg *pkgGen ) generateDef( def types.Definition ) error {
+func ( pg *pkgGen ) generateDef( def types.Definition ) {
     switch v := def.( type ) {
-    case *types.StructDefinition: return pg.generateStruct( v )
-    case *types.EnumDefinition: return pg.generateEnum( v )
-    case *types.UnionDefinition: return pg.generateUnion( v )
-    case *types.SchemaDefinition: return pg.generateSchema( v )
+    case *types.StructDefinition: pg.generateStruct( v )
+    case *types.EnumDefinition: pg.generateEnum( v )
+    case *types.UnionDefinition: pg.generateUnion( v )
+    case *types.SchemaDefinition: pg.generateSchema( v )
     }
-    return nil
 }
 
 func ( pg *pkgGen ) assembleDecls() {
@@ -332,17 +519,15 @@ func ( pg *pkgGen ) assembleDecls() {
     pg.file.Decls = append( pg.file.Decls, pg.decls... )
 }
 
-func ( pg *pkgGen ) generatePackage() error {
-    for _, def := range pg.defs {
-        if err := pg.generateDef( def ); err != nil { return err }
-    }
+func ( pg *pkgGen ) generatePackage() {
+    for _, def := range pg.defs { pg.generateDef( def ) }
     pg.assembleDecls()
-    return nil
 }
 
 func ( g *Generator ) generatePackages() error {
     return g.eachPkgGen( func( pg *pkgGen ) error { 
-        return pg.generatePackage()
+        pg.generatePackage()
+        return nil
     })
 }
 

@@ -79,6 +79,11 @@ var (
 //      f2 String
 //  }
 //
+//  struct PointerStruct1 {
+//      struct1F1 &&&Struct1
+//      int32F1 &&&&int32
+//  }
+//
 //  schema Schema1 { f1 Int32 }
 //
 //  struct Struct2 {
@@ -291,6 +296,15 @@ func addTckDefs( m *types.DefinitionMap ) {
             []*types.FieldDefinition{
                 types.MakeFieldDef( "f1", "Int32", nil ),
                 types.MakeFieldDef( "f2", "String", nil ),
+            },
+        ),
+    )
+    m.MustAdd(
+        types.MakeStructDef( "mingle:tck:data@v1/PointerStruct1",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( 
+                    "struct1F1", "&&&mingle:tck:data@v1/Struct1", nil ),
+                types.MakeFieldDef( "int32F1", "&&&&Int32", nil ),
             },
         ),
     )

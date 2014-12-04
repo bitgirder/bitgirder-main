@@ -271,6 +271,21 @@ func ( b *testsBuilder ) addSchema1Tests() {
     )
 }
 
+func ( b *testsBuilder ) addPointerStruct1Tests() {
+    b.addTests(
+        &ValueTest{
+            Mingle: dataStruct( "PointerStruct1",
+                "struct1F1", dataStruct( "Struct1",
+                    "f1", int32( 1 ),
+                    "f2", "abc",
+                ),
+                "int32F1", int32( 2 ),
+            ),
+            Name: "pointer-struct1-inst1",
+        },
+    )
+}
+
 func ( b *testsBuilder ) addNullablesTests() {
     b.addTests(
         &ValueTest{
@@ -506,6 +521,7 @@ func GetTckTests() []interface{} {
     b.addValueHolderTests()
     b.addScalarFieldDefaults()
     b.addSchema1Tests()
+    b.addPointerStruct1Tests()
     b.addNullablesTests()
     b.addLists1Tests()
     b.addListDefaultsTests()
