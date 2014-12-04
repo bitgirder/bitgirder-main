@@ -1,5 +1,6 @@
 {
     "$type": "bitgirder:ops:build:go@v1/GoProject",
     "direct-deps": [ "mingle", "mingle-codegen" ],
-    "packages": [ "mingle/codegen/golang" ]
+    "packages": [ "mingle/codegen/golang" ],
+    "test-packages": [ "mingle/codegen/golang/tck" ]
 }

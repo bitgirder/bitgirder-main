@@ -323,7 +323,7 @@ func ( b *testsBuilder ) addLists1Tests() {
                     dataStruct( "Struct2", "f1", int32( 2 ), "f2", "def" ),
                 ),
                 "struct1List1F1", mg.MustList(
-                    asType( "mingle:tck:data@v1/Struct1" ),
+                    asType( "mingle:tck:data@v1/Struct1*" ),
                     dataStruct( "Struct1", "f1", int32( 1 ), "f2", "abc" ),
                     dataStruct( "Struct1", "f1", int32( 2 ), "f2", "def" ),
                 ),
@@ -434,7 +434,7 @@ func ( b *testsBuilder ) addListDefaultsTests() {
                     mg.MustTimestamp( "2014-10-21T00:00:00Z" ),
                 ),
                 "enum1ListF1", mg.MustList(
-                    asType( "mingle:tck:data@v1/Enum1" ),
+                    asType( "mingle:tck:data@v1/Enum1*" ),
                     dataEnum1( "const1" ),
                     dataEnum1( "const2" ),
                     dataEnum1( "const1" ),
@@ -467,7 +467,7 @@ func ( b *testsBuilder ) addListDefaultsTests() {
                     mg.MustTimestamp( "2015-10-20T00:00:00Z" ),
                 ),
                 "enum1ListF1", mg.MustList(
-                    asType( "mingle:tck:data@v1/Enum1" ),
+                    asType( "mingle:tck:data@v1/Enum1*" ),
                     dataEnum1( "const2" ),
                     dataEnum1( "const3" ),
                 ),

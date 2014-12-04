@@ -28,6 +28,24 @@ TYPE_GO_COMMAND_RUN =
 
 # Meant to be mixed into a StandardProjTask
 module GoEnvMixin
+    
+    def add_src_links_from_dir( links, src )
+        
+        Dir.chdir( src ) do
+ 
+            Dir.glob( "**/*.go" ).each do |f|
+
+                targ = "#{src}/#{f}"
+
+                if prev = links[ f ]
+                    raise "Linking #{targ} would conflict with " \
+                          "previously linked #{prev}"
+                else
+                    links[ f ] = targ
+                end
+            end
+        end
+    end
 
     def add_src_links( mod, links )
         
@@ -35,19 +53,12 @@ module GoEnvMixin
 
         return unless File.exists?( mod_src )
 
-        Dir.chdir( mod_src ) do
- 
-            Dir.glob( "**/*.go" ).each do |f|
+        add_src_links_from_dir( links, mod_src )
 
-                    targ = "#{mod_src}/#{f}"
+        mod_gen = "#{ws_ctx.mod_build_dir( :mod => mod )}/gen"
 
-                    if prev = links[ f ]
-                        raise "Linking #{targ} would conflict with " \
-                              "previously linked #{prev}"
-                    else
-                        links[ f ] = targ
-                    end
-                end
+        Dir.glob( "#{mod_gen}/*" ).each do |dir|
+            add_src_links_from_dir( links, dir )
         end
     end
 
@@ -222,7 +233,7 @@ class GoModBuilder < StandardModTask
         # Special cased, but will move out of here when we get more
         # sophisticated in terms of code gen selection
         if mod == MOD_TEST && proj.external_form == "mingle-codegen-go"
-            res << TaskTarget.create( :go, :gen_tck_test_impls )
+            res << TaskTarget.create( :go, :tck_test_gen )
         end
         
         res
@@ -359,7 +370,7 @@ class TckTestGenTask < StandardModTask
     private
     def gen_dest_dir
         
-        ws_ctx.mod_build_dir( mod: MOD_TCK_TEST_GEN_GENERATED )
+        "#{ws_ctx.mod_build_dir( mod: MOD_TEST )}/gen/tck-test-gen"
     end
 
     public
@@ -372,7 +383,9 @@ class TckTestGenTask < StandardModTask
         env = { ENV_GOPATH => File.dirname( src_dir ) }
 
         argv = [ "run" ]
-        argv << "#{src_dir}/gen-tck.go" << "-out-dir" << gen_dest_dir
+
+        ensure_wiped( gen_dest_dir )
+        argv << "#{src_dir}/gen-tck.go" << "-dest-dir" << gen_dest_dir
 
         UnixProcessBuilder.system( cmd: cmd, argv: argv, env: env )
     end

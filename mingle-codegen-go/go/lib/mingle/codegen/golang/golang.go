@@ -5,6 +5,7 @@ import (
     "mingle/types"
     "mingle/codegen"
 //    "bitgirder/stub"
+    "os"
     "log"
     "bytes"
     "fmt"
@@ -14,25 +15,48 @@ import (
     "go/token"
 )
 
-var (
-    identBool = ast.NewIdent( "bool" )
-    identBuffer = &ast.ArrayType{ Elt: ast.NewIdent( "byte" ) }
-    identString = ast.NewIdent( "string" )
-    identInt32 = ast.NewIdent( "int32" )
-    identUint32 = ast.NewIdent( "uint32" )
-    identFloat32 = ast.NewIdent( "float32" )
-    identInt64 = ast.NewIdent( "int64" )
-    identUint64 = ast.NewIdent( "uint64" )
-    identFloat64 = ast.NewIdent( "float64" )
+type builtinTypeExpr struct {
+    goPath string
+    typExpr ast.Expr
+}
 
-    identTimeTime = &ast.SelectorExpr{
-        X: ast.NewIdent( "time" ),
-        Sel: ast.NewIdent( "Time" ),
+var (
+    
+    identBool = &builtinTypeExpr{ typExpr: ast.NewIdent( "bool" ) }
+
+    identBuffer = &builtinTypeExpr{ 
+        typExpr: &ast.ArrayType{ Elt: ast.NewIdent( "byte" ) },
     }
 
-    identValue = &ast.InterfaceType{ Methods: &ast.FieldList{} }
+    identString = &builtinTypeExpr{ typExpr: ast.NewIdent( "string" ) }
 
-    identSymbolMap = &ast.MapType{ Key: identString, Value: identValue }
+    identInt32 = &builtinTypeExpr{ typExpr: ast.NewIdent( "int32" ) }
+    
+    identUint32 = &builtinTypeExpr{ typExpr: ast.NewIdent( "uint32" ) }
+    
+    identFloat32 = &builtinTypeExpr{ typExpr: ast.NewIdent( "float32" ) }
+
+    identInt64 = &builtinTypeExpr{ typExpr: ast.NewIdent( "int64" ) }
+    
+    identUint64 = &builtinTypeExpr{ typExpr: ast.NewIdent( "uint64" ) }
+    
+    identFloat64 = &builtinTypeExpr{ typExpr: ast.NewIdent( "float64" ) }
+    
+    identTimeTime = &builtinTypeExpr{
+        goPath: "time",
+        typExpr: ast.NewIdent( "Time" ),
+    }
+
+    identValue = &builtinTypeExpr{
+        typExpr: &ast.InterfaceType{ Methods: &ast.FieldList{} },
+    }
+
+    identSymbolMap = &builtinTypeExpr{
+        typExpr: &ast.MapType{ 
+            Key: ast.NewIdent( "string" ), 
+            Value: identValue.typExpr,
+        },
+    }
 )
 
 type pkgGen struct {
@@ -41,13 +65,14 @@ type pkgGen struct {
     defs []types.Definition
     file *ast.File
     pathIds []*mg.Identifier
-    imports *mg.NamespaceMap // vals are *ast.ImportSpec
+    imports map[ string ] *ast.ImportSpec
     idSeq int
 }
 
 // Instances are only good for a single call to Generate()
 type Generator struct {
     Definitions *types.DefinitionMap
+    DestDir string
     pkgGens *mg.NamespaceMap
 }
 
@@ -61,26 +86,23 @@ func ( g *Generator ) pkgPathStringFor( ns *mg.Namespace ) string {
 }
 
 func ( g *Generator ) builtinTypeExpressionFor( 
-    qn *mg.QualifiedTypeName ) ( ast.Expr, bool ) {
+    qn *mg.QualifiedTypeName ) *builtinTypeExpr {
 
     switch {
-    case qn.Equals( mg.QnameBoolean ): return identBool, true
-    case qn.Equals( mg.QnameBuffer ): return identBuffer, true 
-    case qn.Equals( mg.QnameString ): return identString, true
-    case qn.Equals( mg.QnameInt32 ): return identInt32, true 
-    case qn.Equals( mg.QnameUint32 ): return identUint32, true
-    case qn.Equals( mg.QnameFloat32 ): return identFloat32, true
-    case qn.Equals( mg.QnameInt64 ): return identInt64, true 
-    case qn.Equals( mg.QnameUint64 ): return identUint64, true
-    case qn.Equals( mg.QnameFloat64 ): return identFloat64, true
-    case qn.Equals( mg.QnameTimestamp ): return identTimeTime, true
-    case qn.Equals( mg.QnameValue ): return identValue, true
-    case qn.Equals( mg.QnameSymbolMap ): return identSymbolMap, true
+    case qn.Equals( mg.QnameBoolean ): return identBool
+    case qn.Equals( mg.QnameBuffer ): return identBuffer 
+    case qn.Equals( mg.QnameString ): return identString
+    case qn.Equals( mg.QnameInt32 ): return identInt32 
+    case qn.Equals( mg.QnameUint32 ): return identUint32
+    case qn.Equals( mg.QnameFloat32 ): return identFloat32
+    case qn.Equals( mg.QnameInt64 ): return identInt64 
+    case qn.Equals( mg.QnameUint64 ): return identUint64
+    case qn.Equals( mg.QnameFloat64 ): return identFloat64
+    case qn.Equals( mg.QnameTimestamp ): return identTimeTime
+    case qn.Equals( mg.QnameValue ): return identValue
+    case qn.Equals( mg.QnameSymbolMap ): return identSymbolMap
     }
-    if qn.Namespace.Equals( mg.CoreNsV1 ) {
-        return ast.NewIdent( "stub" ), true
-    }
-    return nil, false
+    return nil
 }
 
 func ( g *Generator ) setPackageMap() {
@@ -146,32 +168,41 @@ func ( pg *pkgGen ) setFileName() {
 func ( pg *pkgGen ) initPackage() error {
     pg.file = &ast.File{}
     pg.file.Decls = make( []ast.Decl, 0, len( pg.defs ) )
-    pg.imports = mg.NewNamespaceMap()
+    pg.imports = make( map[ string ] *ast.ImportSpec, 8 )
     if err := pg.setPathIds(); err != nil { return err }
     pg.setFileName()
     return nil
 }
 
-func ( pg *pkgGen ) importForNs( ns *mg.Namespace ) *ast.ImportSpec {
-    val, ok := pg.imports.GetOk( ns )
+func ( pg *pkgGen ) importForGoPath( path string ) *ast.ImportSpec {
+    res, ok := pg.imports[ path ]
     if ! ok {
-        spec := &ast.ImportSpec{
-            Path: &ast.BasicLit{ 
-                Kind: token.STRING,
-                Value: pg.g.pkgPathStringFor( ns ),
-            },
+        res = &ast.ImportSpec{
+            Path: &ast.BasicLit{ Kind: token.STRING, Value: path },
             Name: pg.nextPkgImportId(),
         }
-        gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ spec } }
+        gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ res } }
         pg.file.Decls = append( pg.file.Decls, gd )
-        pg.imports.Put( ns, spec )
-        val = spec
+        pg.imports[ path ] = res
     }
-    return val.( *ast.ImportSpec )
+    return res
 }
 
-func ( pg *pkgGen ) pkgSelectorFor( ns *mg.Namespace ) *ast.Ident {
-    return pg.importForNs( ns ).Name
+func ( pg *pkgGen ) pkgSelectorForGoPath( path string ) *ast.Ident {
+    return pg.importForGoPath( path ).Name
+}
+
+func ( pg *pkgGen ) qualifiedTypeExpressionForGoPath(
+    gp string, typNm *ast.Ident ) *ast.SelectorExpr {
+
+    return &ast.SelectorExpr{ X: pg.pkgSelectorForGoPath( gp ), Sel: typNm }
+}
+
+func ( pg *pkgGen ) qualifiedTypeExpressionForNs(
+    ns *mg.Namespace, typNm *ast.Ident ) *ast.SelectorExpr {
+    
+    gp := pg.g.pkgPathStringFor( ns )
+    return pg.qualifiedTypeExpressionForGoPath( gp, typNm )
 }
 
 // if we later have a way for callers to customize name mappings, this is where
@@ -190,13 +221,16 @@ func ( pg *pkgGen ) identForField(
 func ( pg *pkgGen ) atomicTypeExpressionFor( 
     at *mg.AtomicTypeReference ) ast.Expr {
 
-    if expr, ok := pg.g.builtinTypeExpressionFor( at.Name() ); ok { 
-        return expr 
+//    if expr, ok := pg.g.builtinTypeExpressionFor( at.Name() ); ok { 
+    if bi := pg.g.builtinTypeExpressionFor( at.Name() ); bi != nil { 
+        if bi.goPath == "" { return bi.typExpr }
+        typNm := bi.typExpr.( *ast.Ident )
+        return pg.qualifiedTypeExpressionForGoPath( bi.goPath, typNm )
     }
     typNm := pg.identForTypeName( at.Name() )
     ns := at.Name().Namespace
     if ns.Equals( pg.ns ) { return typNm }
-    return &ast.SelectorExpr{ X: pg.pkgSelectorFor( ns ), Sel: typNm }
+    return pg.qualifiedTypeExpressionForNs( ns, typNm )
 }
 
 func ( pg *pkgGen ) listTypeExpressionFor( lt *mg.ListTypeReference ) ast.Expr {
@@ -275,11 +309,18 @@ func ( g *Generator ) generatePackages() error {
 
 func ( g *Generator ) writeOutput( pg *pkgGen ) error {
     cfg := &printer.Config{ Tabwidth: 4, Mode: printer.UseSpaces, Indent: 1 }
-    bb := &bytes.Buffer{}
     fs := token.NewFileSet()
+    bb := &bytes.Buffer{}
     if err := cfg.Fprint( bb, fs, pg.file ); err != nil { return err }
     log.Printf( "for %s:\n%s", pg.ns, bb )
-    return nil
+    dir := fmt.Sprintf( "%s/%s", g.DestDir, pg.goPackagePath() )
+    if err := os.MkdirAll( dir, os.ModeDir | 0777 ); err != nil { return err }
+    fname := fmt.Sprintf( "%s/%s.go", dir, "mingle_generated" )
+    file, err := os.Create( fname )
+    if err != nil { return err }
+    defer file.Close()
+    log.Printf( "writing to %s", fname )
+    return cfg.Fprint( file, fs, pg.file )
 }
 
 func ( g *Generator ) writeOutputs() error {
@@ -289,6 +330,7 @@ func ( g *Generator ) writeOutputs() error {
 }
 
 func ( g *Generator ) Generate() error {
+    if g.DestDir == "" { panic( libError( "no dest dir for generator" ) ) }
     g.setPackageMap()
     g.initPackages()
     if err := g.generatePackages(); err != nil { return err }
