@@ -100,13 +100,18 @@ func ( t *bindTestCall ) call() {
     if t.t.Direction.Includes( BindTestDirectionIn ) { t.bindBindTest() }
 }
 
+func AssertBindTest( 
+    test *BindTest, cc *BindTestCallControl, a *assert.PathAsserter ) {
+
+    ( &bindTestCall{ t: test, cc: cc, PathAsserter: a } ).call()
+}
+
 func AssertBindTests( 
     tests []*BindTest, cc *BindTestCallControl, a *assert.PathAsserter ) {
 
     la := a.StartList()
     for _, test := range tests {
-        btc := &bindTestCall{ t: test, cc: cc, PathAsserter: la } 
-        btc.call()
+        AssertBindTest( test, cc, la )
         la = la.Next()
     }
 }
