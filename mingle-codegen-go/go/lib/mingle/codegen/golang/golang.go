@@ -163,14 +163,6 @@ func ( g *Generator ) newPkgGen( ns *mg.Namespace ) *pkgGen {
     }
 }
 
-func ( pg *pkgGen ) nextId() *ast.Ident {
-    res := ast.NewIdent( fmt.Sprintf( "mgCodegenId%d", pg.idSeq ) )
-    pg.idSeq++
-    return res
-}
-
-func ( pg *pkgGen ) nextPkgImportId() *ast.Ident { return pg.nextId() }
-
 func ( pg *pkgGen ) addDecl( decl ast.Decl ) {
     pg.decls = append( pg.decls, decl )
 }
