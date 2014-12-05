@@ -81,14 +81,18 @@ var (
     )
 )
 
+type imports struct {
+    ids importIdMap
+    specs []*ast.ImportSpec
+}
+
 type pkgGen struct {
     g *Generator
     ns *mg.Namespace
     defs []types.Definition
     file *ast.File
     pathIds []*mg.Identifier
-    importIds importIdMap
-    importSpecs []*ast.ImportSpec
+    imports *imports
     decls []ast.Decl
     idSeq int
 }
@@ -231,27 +235,33 @@ func ( c *importCollector ) collectDefImports( def types.Definition ) {
     }
 }
 
-func ( c *importCollector ) buildImports() {
-    c.pg.importIds = make( map[ string ] *ast.Ident, len( c.m ) )
-    c.pg.importSpecs = make( []*ast.ImportSpec, 0, len( c.m ) )
-    for gp, alias := range c.m {
-        spec := &ast.ImportSpec{
-            Path: &ast.BasicLit{ 
-                Kind: token.STRING, 
-                Value: strconv.Quote( gp ),
-            },
-        }
-        var importId *ast.Ident
-        if alias == gp { 
-            strs := strings.Split( alias, "/" )
-            importId = ast.NewIdent( strs[ len( strs ) - 1 ] )
-        } else {
-            spec.Name = ast.NewIdent( alias ) 
-            importId = spec.Name
-        }
-        c.pg.importIds[ gp ] = importId
-        c.pg.importSpecs = append( c.pg.importSpecs, spec )
+func ( c *importCollector ) buildImport(
+    imports *imports, goPath string, alias string ) {
+        
+    spec := &ast.ImportSpec{
+        Path: &ast.BasicLit{ 
+            Kind: token.STRING, 
+            Value: strconv.Quote( goPath ),
+        },
     }
+    var importId *ast.Ident
+    if alias == goPath { 
+        strs := strings.Split( goPath, "/" )
+        importId = ast.NewIdent( strs[ len( strs ) - 1 ] )
+    } else {
+        spec.Name = ast.NewIdent( alias ) 
+        importId = spec.Name
+    }
+    imports.ids[ goPath ] = importId
+    imports.specs = append( imports.specs, spec )
+}
+
+func ( c *importCollector ) buildImports() {
+    c.pg.imports = &imports{
+        ids: make( map[ string ] *ast.Ident, len( c.m ) ),
+        specs: make( []*ast.ImportSpec, 0, len( c.m ) ),
+    }
+    for gp, alias := range c.m { c.buildImport( c.pg.imports, gp, alias ) }
 }
 
 func ( pg *pkgGen ) collectImports() {
@@ -301,7 +311,7 @@ func ( pg *pkgGen ) atomicTypeExpressionFor(
     ns := at.Name().Namespace
     if ns.Equals( pg.ns ) { return typNm }
     gp := pg.g.pkgPathStringFor( ns )
-    return selExpr( pg.importIds[ gp ], typNm )
+    return selExpr( pg.imports.ids[ gp ], typNm )
 }
 
 func ( pg *pkgGen ) listTypeExpressionFor( lt *mg.ListTypeReference ) ast.Expr {
@@ -320,7 +330,7 @@ func ( pg *pkgGen ) typeExpressionFor( typ interface{} ) ast.Expr {
     case *mg.ListTypeReference: return pg.listTypeExpressionFor( v )
     case *mg.PointerTypeReference: return pg.pointerTypeExpressionFor( v )
     case *mg.NullableTypeReference: return pg.typeExpressionFor( v.Type )
-    case *builtinTypeExpr: return v.typExpr( pg.importIds )
+    case *builtinTypeExpr: return v.typExpr( pg.imports.ids )
     }
     panic( libErrorf( "unhandled type reference: %T", typ ) )
 }
@@ -562,9 +572,9 @@ func ( pg *pkgGen ) generateDef( def types.Definition ) {
 }
 
 func ( pg *pkgGen ) assembleDecls() {
-    declLen := len( pg.importSpecs ) + len( pg.decls )
+    declLen := len( pg.imports.specs ) + len( pg.decls )
     pg.file.Decls = make( []ast.Decl, 0, declLen )
-    for _, spec := range pg.importSpecs {
+    for _, spec := range pg.imports.specs {
         gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ spec } }
         pg.file.Decls = append( pg.file.Decls, gd )
     }
