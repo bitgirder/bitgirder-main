@@ -17,6 +17,11 @@ import (
     "go/token"
 )
 
+const (
+    prefixGet = "Get"
+    prefixSet = "Set"
+)
+
 func starExpr( expr ast.Expr ) *ast.StarExpr { return &ast.StarExpr{ X: expr } }
 
 func selExpr( x ast.Expr, sel *ast.Ident ) *ast.SelectorExpr {
@@ -421,7 +426,7 @@ func ( pg *pkgGen ) addStructFieldGetter(
 
     fdb := pg.newFuncDeclBuilder()
     fdb.setPtrReceiver( "s", typ.Name )
-    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, "Get", sd )
+    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, prefixGet, sd )
     fdb.ftb.res.addAnon( pg.typeExpressionFor( fd.Type ) )
     fldIdent := pg.identForField( fd.Name, sd )
     fdb.bb().addReturn( selExpr( fdb.recvIdent, fldIdent ) )
@@ -433,7 +438,7 @@ func ( pg *pkgGen ) addStructFieldSetter(
 
     fdb := pg.newFuncDeclBuilder()
     fdb.setPtrReceiver( "s", typ.Name )
-    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, "Set", sd )
+    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, prefixSet, sd )
     fldTypExpr := pg.typeExpressionFor( fd.Type )
     valIdent := ast.NewIdent( "val" )
     fdb.ftb.params.addNamed( valIdent, fldTypExpr )
@@ -493,10 +498,24 @@ func ( pg *pkgGen ) generateUnion( ud *types.UnionDefinition ) {
     pg.addDecl( decl )
 }
 
+func ( pg *pkgGen ) getSchemaMethods( 
+    sd *types.SchemaDefinition ) *ast.FieldList {
+    
+    flb := pg.newFieldListBuilder()
+    sd.Fields.EachDefinition( func( fd *types.FieldDefinition ) {
+        ftb := pg.newFuncTypeBuilder()
+        ftb.res.addAnon( pg.typeExpressionFor( fd.Type ) )
+        nm := pg.accessorIdentForField( fd.Name, prefixGet, sd )
+        flb.addNamed( nm, ftb.funcType )
+    })
+    return flb.fl
+}
+
 func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( sd.GetName() )
-    typ.Type = &ast.InterfaceType{ Methods: &ast.FieldList{} }
+    methods := pg.getSchemaMethods( sd )
+    typ.Type = &ast.InterfaceType{ Methods: methods }
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
     pg.addDecl( decl )
 }
