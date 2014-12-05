@@ -34,8 +34,8 @@ func callExpr( fun ast.Expr, args... ast.Expr ) *ast.CallExpr {
 type importIdMap map[ string ] *ast.Ident
 
 type builtinTypeExpr struct {
-    goPaths []string
-    typExpr func( importIdMap ) ast.Expr
+    goPaths []string // go paths that need to be imported for this builtin | nil
+    typExpr func( m importIdMap ) ast.Expr // resolves this type using m
 }
 
 func newStaticBuiltinTypeExpr( e ast.Expr ) *builtinTypeExpr {
