@@ -64,9 +64,9 @@ var (
         typExpr: ast.NewIdent( "Time" ),
     }
 
-    identValue = &builtinTypeExpr{
-        typExpr: &ast.InterfaceType{ Methods: &ast.FieldList{} },
-    }
+    goTypInterface = &ast.CompositeLit{ Type: ast.NewIdent( "interface" ) }
+
+    identValue = &builtinTypeExpr{ typExpr: goTypInterface }
 
     identSymbolMap = &builtinTypeExpr{
         typExpr: &ast.MapType{ 
