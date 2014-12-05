@@ -26,10 +26,6 @@ type bindTestCall struct {
     bt *bind.BindTest
 }
 
-func ( c *bindTestCall ) CreateReactors( t *bind.BindTest ) []interface{} {
-    return []interface{}{}
-}
-
 func ( c *bindTestCall ) BoundValues() *mg.IdentifierMap {
     return boundValuesById
 }

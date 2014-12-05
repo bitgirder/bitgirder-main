@@ -12,7 +12,6 @@ var mkQn = parser.MustQualifiedTypeName
 var asType = parser.AsTypeReference
 
 type BindTestCallInterface interface {
-    CreateReactors( t *BindTest ) []interface{}
     BoundValues() *mg.IdentifierMap
 }
 
@@ -63,7 +62,6 @@ func ( t *bindTestCall ) bindBindTest() {
     if p := t.t.StartPath; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
-    rcts = append( rcts, t.iface().CreateReactors( t.t )... )
     rcts = append( rcts, br )
     pip := mgRct.InitReactorPipeline( rcts... )
     if err := mgRct.VisitValue( t.t.Mingle, pip ); err == nil {

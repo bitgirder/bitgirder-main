@@ -306,12 +306,6 @@ func ( c defaultBindTestCallInterface ) BoundValues() *mg.IdentifierMap {
     return c.boundVals
 }
 
-func ( c defaultBindTestCallInterface ) CreateReactors( 
-    _ *BindTest ) []interface{} {
-
-    return []interface{}{}
-}
-
 func TestBind( t *testing.T ) {
     ensureTestBuilderFactories()
     iface := defaultBindTestCallInterface{ getDefaultValBindTestValues() }

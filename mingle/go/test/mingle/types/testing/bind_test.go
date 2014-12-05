@@ -1056,12 +1056,6 @@ func ( i bindTestCallInterface ) BoundValues() *mg.IdentifierMap {
     return i.boundVals
 }
 
-func ( i bindTestCallInterface ) CreateReactors( 
-    t *bind.BindTest ) []interface{} {
-
-    return []interface{}{}
-}
-
 type fldDefStructSorter []*mg.Struct
 
 func ( s fldDefStructSorter ) Len() int { return len( s ) }
