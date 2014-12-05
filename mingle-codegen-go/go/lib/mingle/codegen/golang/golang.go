@@ -4,7 +4,6 @@ import (
     mg "mingle"
     "mingle/types"
     "mingle/codegen"
-//    "bitgirder/stub"
     "os"
     "log"
     "bytes"
@@ -32,48 +31,54 @@ func callExpr( fun ast.Expr, args... ast.Expr ) *ast.CallExpr {
     return &ast.CallExpr{ Fun: fun, Args: args }
 }
 
+type importIdMap map[ string ] *ast.Ident
+
 type builtinTypeExpr struct {
-    goPath string
-    typExpr ast.Expr
+    goPaths []string
+    typExpr func( importIdMap ) ast.Expr
+}
+
+func newStaticBuiltinTypeExpr( e ast.Expr ) *builtinTypeExpr {
+    return &builtinTypeExpr{
+        typExpr: func( _ importIdMap ) ast.Expr { return e },
+    }
 }
 
 var (
     
-    identBool = &builtinTypeExpr{ typExpr: ast.NewIdent( "bool" ) }
+    identBool = newStaticBuiltinTypeExpr( ast.NewIdent( "bool" ) )
 
-    identBuffer = &builtinTypeExpr{ 
-        typExpr: &ast.ArrayType{ Elt: ast.NewIdent( "byte" ) },
-    }
+    identBuffer = newStaticBuiltinTypeExpr( 
+        &ast.ArrayType{ Elt: ast.NewIdent( "byte" ) } )
 
-    identString = &builtinTypeExpr{ typExpr: ast.NewIdent( "string" ) }
+    identString = newStaticBuiltinTypeExpr( ast.NewIdent( "string" ) )
 
-    identInt32 = &builtinTypeExpr{ typExpr: ast.NewIdent( "int32" ) }
+    identInt32 = newStaticBuiltinTypeExpr( ast.NewIdent( "int32" ) )
     
-    identUint32 = &builtinTypeExpr{ typExpr: ast.NewIdent( "uint32" ) }
+    identUint32 = newStaticBuiltinTypeExpr( ast.NewIdent( "uint32" ) )
     
-    identFloat32 = &builtinTypeExpr{ typExpr: ast.NewIdent( "float32" ) }
+    identFloat32 = newStaticBuiltinTypeExpr( ast.NewIdent( "float32" ) )
 
-    identInt64 = &builtinTypeExpr{ typExpr: ast.NewIdent( "int64" ) }
+    identInt64 = newStaticBuiltinTypeExpr( ast.NewIdent( "int64" ) )
     
-    identUint64 = &builtinTypeExpr{ typExpr: ast.NewIdent( "uint64" ) }
+    identUint64 = newStaticBuiltinTypeExpr( ast.NewIdent( "uint64" ) )
     
-    identFloat64 = &builtinTypeExpr{ typExpr: ast.NewIdent( "float64" ) }
+    identFloat64 = newStaticBuiltinTypeExpr( ast.NewIdent( "float64" ) )
     
     identTimeTime = &builtinTypeExpr{
-        goPath: "time",
-        typExpr: ast.NewIdent( "Time" ),
+        goPaths: []string{ "time" },
+        typExpr: func( ids importIdMap ) ast.Expr {
+            return selExpr( ids[ "time" ], ast.NewIdent( "Time" ) )
+        },
     }
 
     goTypInterface = &ast.CompositeLit{ Type: ast.NewIdent( "interface" ) }
 
-    identValue = &builtinTypeExpr{ typExpr: goTypInterface }
+    identValue = newStaticBuiltinTypeExpr( goTypInterface )
 
-    identSymbolMap = &builtinTypeExpr{
-        typExpr: &ast.MapType{ 
-            Key: ast.NewIdent( "string" ), 
-            Value: identValue.typExpr,
-        },
-    }
+    identSymbolMap = newStaticBuiltinTypeExpr(
+        &ast.MapType{ Key: ast.NewIdent( "string" ), Value: goTypInterface },
+    )
 )
 
 type pkgGen struct {
@@ -82,7 +87,8 @@ type pkgGen struct {
     defs []types.Definition
     file *ast.File
     pathIds []*mg.Identifier
-    imports map[ string ] *ast.ImportSpec
+    importIds importIdMap
+    importSpecs []*ast.ImportSpec
     decls []ast.Decl
     idSeq int
 }
@@ -190,42 +196,76 @@ func ( pg *pkgGen ) setFileName() {
 func ( pg *pkgGen ) initPackage() error {
     pg.file = &ast.File{}
     pg.decls = make( []ast.Decl, 0, len( pg.defs ) )
-    pg.imports = make( map[ string ] *ast.ImportSpec, 8 )
     if err := pg.setPathIds(); err != nil { return err }
     pg.setFileName()
     return nil
 }
 
-func ( pg *pkgGen ) importForGoPath( path string ) *ast.ImportSpec {
-    res, ok := pg.imports[ path ]
-    if ! ok {
-        res = &ast.ImportSpec{
+type importCollector struct {
+    m map[ string ] string
+    pg *pkgGen
+}
+
+func ( c *importCollector ) collectGoPath( gp string ) {
+    c.m[ gp ] = gp
+}
+
+func ( c *importCollector ) collectQnameImport( qn *mg.QualifiedTypeName ) {
+    if ns := qn.Namespace; ! ns.Equals( c.pg.ns ) {
+        c.collectGoPath( c.pg.g.pkgPathStringFor( ns ) )
+    }
+}
+
+func ( c *importCollector ) collectTypeImport( typ mg.TypeReference ) {
+    qn := mg.TypeNameIn( typ )
+    bi := c.pg.g.builtinTypeExpressionFor( qn )
+    if bi == nil { 
+        c.collectQnameImport( qn ) 
+        return
+    } 
+    for _, gp := range bi.goPaths { c.collectGoPath( gp ) }
+}
+
+func ( c *importCollector ) collectFieldImports( fs *types.FieldSet ) {
+    fs.EachDefinition( func( fd *types.FieldDefinition ) {
+        c.collectTypeImport( fd.Type )
+    })
+}
+
+func ( c *importCollector ) collectDefImports( def types.Definition ) {
+    switch v := def.( type ) {
+    case *types.StructDefinition: c.collectFieldImports( v.Fields )
+    case *types.SchemaDefinition: c.collectFieldImports( v.Fields )
+    }
+}
+
+func ( c *importCollector ) buildImports() {
+    c.pg.importIds = make( map[ string ] *ast.Ident, len( c.m ) )
+    c.pg.importSpecs = make( []*ast.ImportSpec, 0, len( c.m ) )
+    for gp, alias := range c.m {
+        spec := &ast.ImportSpec{
             Path: &ast.BasicLit{ 
                 Kind: token.STRING, 
-                Value: strconv.Quote( path ),
+                Value: strconv.Quote( gp ),
             },
-            Name: pg.nextPkgImportId(),
         }
-        pg.imports[ path ] = res
+        var importId *ast.Ident
+        if alias == gp { 
+            strs := strings.Split( alias, "/" )
+            importId = ast.NewIdent( strs[ len( strs ) - 1 ] )
+        } else {
+            spec.Name = ast.NewIdent( alias ) 
+            importId = spec.Name
+        }
+        c.pg.importIds[ gp ] = importId
+        c.pg.importSpecs = append( c.pg.importSpecs, spec )
     }
-    return res
 }
 
-func ( pg *pkgGen ) pkgSelectorForGoPath( path string ) *ast.Ident {
-    return pg.importForGoPath( path ).Name
-}
-
-func ( pg *pkgGen ) qualifiedTypeExpressionForGoPath(
-    gp string, typNm *ast.Ident ) *ast.SelectorExpr {
-
-    return selExpr( pg.pkgSelectorForGoPath( gp ), typNm )
-}
-
-func ( pg *pkgGen ) qualifiedTypeExpressionForNs(
-    ns *mg.Namespace, typNm *ast.Ident ) *ast.SelectorExpr {
-    
-    gp := pg.g.pkgPathStringFor( ns )
-    return pg.qualifiedTypeExpressionForGoPath( gp, typNm )
+func ( pg *pkgGen ) collectImports() {
+    c := importCollector{ pg: pg, m: make( map[ string ] string, 8 ) }
+    for _, def := range pg.defs { c.collectDefImports( def ) }
+    c.buildImports()
 }
 
 // if we later have a way for callers to customize name mappings, this is where
@@ -263,14 +303,13 @@ func ( pg *pkgGen ) atomicTypeExpressionFor(
     at *mg.AtomicTypeReference ) ast.Expr {
 
     if bi := pg.g.builtinTypeExpressionFor( at.Name() ); bi != nil { 
-        if bi.goPath == "" { return bi.typExpr }
-        typNm := bi.typExpr.( *ast.Ident )
-        return pg.qualifiedTypeExpressionForGoPath( bi.goPath, typNm )
+        return pg.typeExpressionFor( bi )
     }
     typNm := pg.identForTypeName( at.Name() )
     ns := at.Name().Namespace
     if ns.Equals( pg.ns ) { return typNm }
-    return pg.qualifiedTypeExpressionForNs( ns, typNm )
+    gp := pg.g.pkgPathStringFor( ns )
+    return selExpr( pg.importIds[ gp ], typNm )
 }
 
 func ( pg *pkgGen ) listTypeExpressionFor( lt *mg.ListTypeReference ) ast.Expr {
@@ -283,12 +322,13 @@ func ( pg *pkgGen ) pointerTypeExpressionFor(
     return starExpr( pg.typeExpressionFor( pt.Type ) )
 }
 
-func ( pg *pkgGen ) typeExpressionFor( typ mg.TypeReference ) ast.Expr {
+func ( pg *pkgGen ) typeExpressionFor( typ interface{} ) ast.Expr {
     switch v := typ.( type ) {
     case *mg.AtomicTypeReference: return pg.atomicTypeExpressionFor( v )
     case *mg.ListTypeReference: return pg.listTypeExpressionFor( v )
     case *mg.PointerTypeReference: return pg.pointerTypeExpressionFor( v )
     case *mg.NullableTypeReference: return pg.typeExpressionFor( v.Type )
+    case *builtinTypeExpr: return v.typExpr( pg.importIds )
     }
     panic( libErrorf( "unhandled type reference: %T", typ ) )
 }
@@ -530,8 +570,9 @@ func ( pg *pkgGen ) generateDef( def types.Definition ) {
 }
 
 func ( pg *pkgGen ) assembleDecls() {
-    pg.file.Decls = make( []ast.Decl, 0, len( pg.imports ) + len( pg.decls ) )
-    for _, spec := range pg.imports {
+    declLen := len( pg.importSpecs ) + len( pg.decls )
+    pg.file.Decls = make( []ast.Decl, 0, declLen )
+    for _, spec := range pg.importSpecs {
         gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ spec } }
         pg.file.Decls = append( pg.file.Decls, gd )
     }
@@ -539,6 +580,7 @@ func ( pg *pkgGen ) assembleDecls() {
 }
 
 func ( pg *pkgGen ) generatePackage() {
+    pg.collectImports()
     for _, def := range pg.defs { pg.generateDef( def ) }
     pg.assembleDecls()
 }
