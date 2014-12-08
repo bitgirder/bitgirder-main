@@ -92,9 +92,18 @@ var (
 //  }
 //
 //  struct Nullables {
+//      boolF1 Boolean1?
+//      bufferF1 Buffer?
+//      int32F1 Int32?
+//      int64F1 Int64?
+//      uint32F1 Uint32?
+//      uint64F1 Uint64?
+//      float32F1 Float32?
+//      float64F1 Float64?
+//      timeF1 Timestamp?
+//      stringF1 String?
 //      mapF1 SymbolMap?
 //      valF1 Value?
-//      stringF1 String?
 //      enum1PtrF1 &Enum1?
 //      union1PtrF1 &Union1?
 //      struct1F1 &Struct1?
@@ -326,9 +335,18 @@ func addTckDefs( m *types.DefinitionMap ) {
     m.MustAdd(
         types.MakeStructDef( "mingle:tck:data@v1/Nullables",
             []*types.FieldDefinition{
+                types.MakeFieldDef( "boolF1", "Boolean1?", nil ),
+                types.MakeFieldDef( "bufferF1", "Buffer?", nil ),
+                types.MakeFieldDef( "int32F1", "Int32?", nil ),
+                types.MakeFieldDef( "int64F1", "Int64?", nil ),
+                types.MakeFieldDef( "uint32F1", "Uint32?", nil ),
+                types.MakeFieldDef( "uint64F1", "Uint64?", nil ),
+                types.MakeFieldDef( "float32F1", "Float32?", nil ),
+                types.MakeFieldDef( "float64F1", "Float64?", nil ),
+                types.MakeFieldDef( "timeF1", "Timestamp?", nil ),
+                types.MakeFieldDef( "stringF1", "String?", nil ),
                 types.MakeFieldDef( "mapF1", "SymbolMap?", nil ),
                 types.MakeFieldDef( "valF1", "Value?", nil ),
-                types.MakeFieldDef( "stringF1", "String?", nil ),
                 types.MakeFieldDef( 
                     "enum1PtrF1", "&mingle:tck:data@v1/Enum1?", nil ),
                 types.MakeFieldDef(
