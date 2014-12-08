@@ -622,17 +622,8 @@ func NewNullableTypeError( typ TypeReference ) *NullableTypeError {
 }
 
 func IsNullableType( typ TypeReference ) bool {
-    switch v := typ.( type ) {
-    case *ListTypeReference: return true;
-    case *NullableTypeReference: return false;
-    case *PointerTypeReference: return true;
-    case *AtomicTypeReference:
-        if ! v.Name().Namespace.Equals( CoreNsV1 ) { return false }
-        return ! ( v.Name().Equals( QnameBoolean ) || 
-                   v.Name().Equals( QnameTimestamp ) || 
-                   IsNumericTypeName( v.Name() ) )
-    }
-    panic( libErrorf( "unhandled type: %T", typ ) )
+    if _, ok := typ.( *NullableTypeReference ); ok { return false }
+    return true
 }
 
 func MustNullableTypeReference( typ TypeReference ) *NullableTypeReference {
