@@ -212,6 +212,20 @@ func ( b *testsBuilder ) addValueHolderTests() {
     )
 }
 
+func ( b *testsBuilder ) addStructWithScalarStructField() {
+    b.addTests(
+        valueTest(
+            dataStruct( "StructWithScalarStructField",
+                "f1", dataStruct( "Struct1",
+                    "f1", int32( 1 ),
+                    "f2", "hello",
+                ),
+            ),
+            "struct-with-scalar-struct-field-inst1",
+        ),
+    )
+}
+
 func ( b *testsBuilder ) addMissingFieldTests() {
     b.addTests(
         &ValidationErrorTest{
@@ -289,18 +303,9 @@ func ( b *testsBuilder ) addNullablesTests() {
         valueTest( dataStruct( "Nullables" ), "nullables-inst1" ),
         valueTest(
             dataStruct( "Nullables",
-                "boolF1", true,
-                "bufferF1", []byte{ 0 },
-                "int32F1", int32( 1 ),
-                "int64F1", int64( 2 ),
-                "uint32F1", uint32( 3 ),
-                "uint64F1", uint64( 4 ),
-                "float32F1", float32( 5 ),
-                "float64F1", float64( 6 ),
-                "timeF1", mg.MustTimestamp( "2013-10-20T00:00:00Z" ),
-                "stringF1", "abc",
                 "mapF1", parser.MustSymbolMap( "f1", int32( 1 ) ),
                 "valF1", int32( 1 ),
+                "stringF1", "abc",
                 "enum1PtrF1", dataEnum1( "const1" ),
                 "union1PtrF1", int32( 2 ),
                 "struct1F1", dataStruct( "Struct1",
@@ -523,6 +528,7 @@ func GetTckTests() []interface{} {
     b.addMapHolderTests()
     b.addUnionHolderTests()
     b.addValueHolderTests()
+    b.addStructWithScalarStructField()
     b.addScalarFieldDefaults()
     b.addSchema1Tests()
     b.addPointerStruct1Tests()

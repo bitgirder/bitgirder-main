@@ -96,9 +96,6 @@ func ( rti *rtInit ) addTcError(
 func ( rti *rtInit ) addBaseTypeTests() {
     dm := types.NewDefinitionMap()
     rti.addIdent( mg.Boolean( true ), mg.TypeBoolean, dm )
-    rti.addSucc( nil, nil, mg.MustNullableTypeReference( mg.TypeBoolean ), dm )
-    rti.addSucc( 
-        true, true, mg.MustNullableTypeReference( mg.TypeBoolean ), dm )
     rti.addIdent( testValBuf1, mg.TypeBuffer, dm )
     rti.addIdent( "s", mg.TypeString, dm )
     rti.addIdent( mg.Int32( 1 ), mg.TypeInt32, dm )
@@ -297,9 +294,6 @@ func ( rti *rtInit ) addIdentityNumTests() {
         rti.addSucc( numCtx.val, numCtx.val, numCtx.typ, dm )
         rti.addSucc( numCtx.val, numCtx.str, mg.TypeString, dm )
         rti.addSucc( numCtx.str, numCtx.val, numCtx.typ, dm )
-        nullTyp := mg.MustNullableTypeReference( numCtx.typ )
-        rti.addSucc( numCtx.val, numCtx.val, nullTyp, dm )
-        rti.addSucc( nil, nil, nullTyp, dm )
         ptrTyp := mg.NewPointerTypeReference( numCtx.typ )
         rti.addSucc( numCtx.val, numCtx.val, ptrTyp, dm )
         rti.addSucc( numCtx.str, numCtx.val, ptrTyp, dm )
@@ -400,9 +394,6 @@ func ( rti *rtInit ) addNumTests() {
 
 func ( rti *rtInit ) addBufferTests() {
     dm := types.NewDefinitionMap()
-    nullTyp := mg.MustNullableTypeReference( mg.TypeBuffer )
-    rti.addSucc( testValBuf1, testValBuf1, nullTyp, dm )
-    rti.addSucc( nil, nil, nullTyp, dm )
     buf1B64 := mg.String( base64.StdEncoding.EncodeToString( testValBuf1 ) )
     rti.addSucc( testValBuf1, buf1B64, mg.TypeString, dm )
     rti.addSucc( testValBuf1, buf1B64,
@@ -419,9 +410,6 @@ func ( rti *rtInit ) addTimeTests() {
     dm := types.NewDefinitionMap()
     rti.addIdent( mg.Now(),
         `Timestamp~["1970-01-01T00:00:00Z","2200-01-01T00:00:00Z"]`, dm )
-    nullTyp := mg.MustNullableTypeReference( mg.TypeTimestamp )
-    rti.addSucc( testValTm1, testValTm1, nullTyp, dm )
-    rti.addSucc( nil, nil, nullTyp, dm )
     rti.addSucc( testValTm1, testValTm1.Rfc3339Nano(), mg.TypeString, dm )
     rti.addSucc( testValTm1.Rfc3339Nano(), testValTm1, mg.TypeTimestamp, dm )
     rti.addVcError(
@@ -529,7 +517,6 @@ func ( rti *rtInit ) addListTests() {
         "&Value?*",
         dm,
     )
-    rti.addIdent( []interface{}{ int32( 1 ), nil, int32( 3 ) }, "Int32?*", dm )
     rti.addSucc( mg.MustList(), mg.MustList(), mg.TypeValue, dm )
     intList1 := mg.MustList( int32( 1 ), int32( 2 ), int32( 3 ) )
     rti.addSucc( intList1, intList1, mg.TypeValue, dm )
@@ -849,7 +836,7 @@ func ( rti *rtInit ) addStructTests() {
 }
 
 func ( rti *rtInit ) addSchemaCastTests() {
-    schema1Nil := mg.MustNullableTypeReference( mkTyp( "ns1@v1/Schema1" ) )
+    schema1Nil := &mg.NullableTypeReference{ mkTyp( "ns1@v1/Schema1" ) }
     mgId := parser.MustIdentifier
     dm := builtin.MakeDefMap(
         types.MakeSchemaDef( 

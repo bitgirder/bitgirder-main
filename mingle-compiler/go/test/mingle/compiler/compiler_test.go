@@ -137,21 +137,6 @@ func TestCompiler( t *testing.T ) {
                 inst1 ns1/Struct1 # Unnecessary but legal fqname reference
                 inst2 Struct1*
             }
-
-            # nullable scalars
-            struct Struct3 {
-                f1 Boolean?
-                f2 Int32?
-                f3 Uint32?
-                f4 Int64?
-                f5 Uint64?
-                f6 Float32?
-                f7 Float64?
-                f8 Timestamp?
-                f9 Buffer?
-                f10 Int32?*
-                f11 Struct1?
-            }
         ` ).
         expectDef(
             types.MakeStructDef(
@@ -229,24 +214,6 @@ func TestCompiler( t *testing.T ) {
                 []*types.FieldDefinition{
                     types.MakeFieldDef( "inst1", "ns1@v1/Struct1", nil ),
                     types.MakeFieldDef( "inst2", "ns1@v1/Struct1*", nil ),
-                },
-            ),
-        ).
-        expectDef(
-            types.MakeStructDef(
-                "ns1@v1/Struct3",
-                []*types.FieldDefinition{
-                    types.MakeFieldDef( "f1", "Boolean?", nil ),
-                    types.MakeFieldDef( "f2", "Int32?", nil ),
-                    types.MakeFieldDef( "f3", "Uint32?", nil ),
-                    types.MakeFieldDef( "f4", "Int64?", nil ),
-                    types.MakeFieldDef( "f5", "Uint64?", nil ),
-                    types.MakeFieldDef( "f6", "Float32?", nil ),
-                    types.MakeFieldDef( "f7", "Float64?", nil ),
-                    types.MakeFieldDef( "f8", "Timestamp?", nil ),
-                    types.MakeFieldDef( "f9", "Buffer?", nil ),
-                    types.MakeFieldDef( "f10", "Int32?*", nil ),
-                    types.MakeFieldDef( "f11", "ns1@v1/Struct1?", nil ),
                 },
             ),
         ),
@@ -1561,6 +1528,52 @@ func TestCompiler( t *testing.T ) {
                     fldDef( "f11", "mingle:core@v1/SymbolMap", nil ),
                     fldDef( "f12", "mingle:core@v1/Int32*+", nil ),
                     fldDef( "f13", "&mingle:core@v1/Int32", nil ),
+                },
+            ),
+        ),
+
+        newCompilerTest( "nullable-type-handling" ).
+        setSource( `
+            @version v1
+            namespace ns1
+            struct S1 {}
+            enum E1 { c1 }
+            struct S2 {
+                f1 Boolean?
+                f2 Int32?
+                f3 Uint32?
+                f4 Int64?
+                f5 Uint64?
+                f6 Float32?
+                f7 Float64?
+                f8 Timestamp?
+                f9 E1?
+                f10 S1?
+            }
+            struct S3 {
+                f1 String?
+                f2 Buffer?
+                f3 SymbolMap?
+                f4 Int32*?
+            }
+        ` ).
+        expectError( 7, 20, "not a nullable type" ).
+        expectError( 8, 20, "not a nullable type" ).
+        expectError( 9, 20, "not a nullable type" ).
+        expectError( 10, 20, "not a nullable type" ).
+        expectError( 11, 20, "not a nullable type" ).
+        expectError( 12, 20, "not a nullable type" ).
+        expectError( 13, 20, "not a nullable type" ).
+        expectError( 14, 20, "not a nullable type" ).
+        expectError( 15, 20, "not a nullable type" ).
+        expectError( 16, 21, "not a nullable type" ).
+        expectDef(
+            types.MakeStructDef( "ns1@v1/S3",
+                []*types.FieldDefinition{
+                    fldDef( "f1", "mingle:core@v1/String?", nil ),
+                    fldDef( "f2", "mingle:core@v1/Buffer?", nil ),
+                    fldDef( "f3", "mingle:core@v1/SymbolMap?", nil ),
+                    fldDef( "f4", "mingle:core@v1/Int32*?", nil ),
                 },
             ),
         ),
