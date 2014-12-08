@@ -79,6 +79,10 @@ var (
 //      f2 String
 //  }
 //
+//  struct StructWithScalarStructField {
+//      f1 Struct1
+//  }
+//
 //  struct PointerStruct1 {
 //      struct1F1 &&&Struct1
 //      int32F1 &&&&int32
@@ -296,6 +300,13 @@ func addTckDefs( m *types.DefinitionMap ) {
             []*types.FieldDefinition{
                 types.MakeFieldDef( "f1", "Int32", nil ),
                 types.MakeFieldDef( "f2", "String", nil ),
+            },
+        ),
+    )
+    m.MustAdd(
+        types.MakeStructDef( "mingle:tck:data@v1/StructWithScalarStructField",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "f1", "mingle:tck:data@v1/Struct1", nil ),
             },
         ),
     )

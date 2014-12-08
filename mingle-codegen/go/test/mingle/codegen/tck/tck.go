@@ -212,6 +212,20 @@ func ( b *testsBuilder ) addValueHolderTests() {
     )
 }
 
+func ( b *testsBuilder ) addStructWithScalarStructField() {
+    b.addTests(
+        valueTest(
+            dataStruct( "StructWithScalarStructField",
+                "f1", dataStruct( "Struct1",
+                    "f1", int32( 1 ),
+                    "f2", "hello",
+                ),
+            ),
+            "struct-with-scalar-struct-field-inst1",
+        ),
+    )
+}
+
 func ( b *testsBuilder ) addMissingFieldTests() {
     b.addTests(
         &ValidationErrorTest{
@@ -514,6 +528,7 @@ func GetTckTests() []interface{} {
     b.addMapHolderTests()
     b.addUnionHolderTests()
     b.addValueHolderTests()
+    b.addStructWithScalarStructField()
     b.addScalarFieldDefaults()
     b.addSchema1Tests()
     b.addPointerStruct1Tests()
