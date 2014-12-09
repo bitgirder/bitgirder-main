@@ -17,6 +17,8 @@ import (
 )
 
 const (
+    tmplGetter = "Get%s"
+    tmplSetter = "Set%s"
     prefixGet = "Get"
     prefixSet = "Set"
 )
@@ -29,6 +31,10 @@ func selExpr( x ast.Expr, sel *ast.Ident ) *ast.SelectorExpr {
 
 func callExpr( fun ast.Expr, args... ast.Expr ) *ast.CallExpr {
     return &ast.CallExpr{ Fun: fun, Args: args }
+}
+
+func astField( nm *ast.Ident, typ ast.Expr ) *ast.Field {
+    return &ast.Field{ Names: []*ast.Ident{ nm }, Type: typ }
 }
 
 type importIdMap map[ string ] *ast.Ident
@@ -266,31 +272,6 @@ func ( pg *pkgGen ) identForTypeName( qn *mg.QualifiedTypeName ) *ast.Ident {
     return ast.NewIdent( qn.Name.ExternalForm() )
 }
 
-// if we later allow custom per-field renaming, this is where it will happen
-func ( pg *pkgGen ) mgIdentForField( 
-    nm *mg.Identifier, encl types.Definition ) *mg.Identifier {
-
-    return nm
-}
-
-func ( pg *pkgGen ) identForField( 
-    nm *mg.Identifier, encl types.Definition ) *ast.Ident {
-
-    nm = pg.mgIdentForField( nm, encl )
-    return ast.NewIdent( nm.Format( mg.LcCamelCapped ) )
-}
-
-func ( pg *pkgGen ) accessorIdentForField( 
-    nm *mg.Identifier, prefix string, encl types.Definition ) *ast.Ident {
-
-    bb := &bytes.Buffer{}
-    bb.WriteString( prefix )
-    str := pg.mgIdentForField( nm, encl ).Format( mg.LcCamelCapped )
-    bb.WriteString( strings.ToUpper( str[ 0 : 1 ] ) )
-    bb.WriteString( str[ 1 : ] )
-    return ast.NewIdent( bb.String() )
-}
-
 func ( pg *pkgGen ) atomicTypeExpressionFor( 
     at *mg.AtomicTypeReference ) ast.Expr {
 
@@ -323,6 +304,12 @@ func ( pg *pkgGen ) typeExpressionFor( typ interface{} ) ast.Expr {
     case *builtinTypeExpr: return v.typExpr( pg.importIds )
     }
     panic( libErrorf( "unhandled type reference: %T", typ ) )
+}
+
+func ( pg *pkgGen ) createTypeSpecForDef( def types.Definition ) *ast.TypeSpec {
+    res := &ast.TypeSpec{}
+    res.Name = pg.identForTypeName( def.GetName() )
+    return res
 }
 
 type bodyBuilder struct {
@@ -433,85 +420,113 @@ func ( pg *pkgGen ) newFuncDeclBuilder() *funcDeclBuilder {
         pg: pg,
     }
 }
-
-func ( pg *pkgGen ) addField( 
-    flds *ast.FieldList, 
-    fldDef *types.FieldDefinition,
-    encl types.Definition ) {
-
-    fld := &ast.Field{}
-    fld.Names = []*ast.Ident{ pg.identForField( fldDef.Name, encl ) }
-    fld.Type = pg.typeExpressionFor( fldDef.Type )
-    flds.List = append( flds.List, fld )
+type fieldGen struct {
+    fd *types.FieldDefinition
+    goId *ast.Ident
+    mgId *mg.Identifier
+    typeExpr ast.Expr
 }
 
-func ( pg *pkgGen ) addFields( 
-    flds *ast.FieldList, fs *types.FieldSet, encl types.Definition ) {
+func ( pg *pkgGen ) generateField( 
+    fd *types.FieldDefinition, encl types.Definition ) *fieldGen {
 
-    fs.EachDefinition( func( fldDef *types.FieldDefinition ) {
-        pg.addField( flds, fldDef, encl )
+    return &fieldGen{
+        fd: fd,
+        mgId: fd.Name,
+        goId: ast.NewIdent( fd.Name.Format( mg.LcCamelCapped ) ),
+        typeExpr: pg.typeExpressionFor( fd.Type ),
+    }
+}
+
+func ( fg *fieldGen ) astField() *ast.Field {
+    return astField( fg.goId, fg.typeExpr )
+}
+
+func ( fg *fieldGen ) accessorIdent( tmpl string ) *ast.Ident { 
+    lcId := fg.mgId.Format( mg.LcCamelCapped )
+    ucId := &bytes.Buffer{}
+    ucId.WriteString( strings.ToUpper( lcId[ 0 : 1 ] ) )
+    ucId.WriteString( lcId[ 1 : ] )
+    return ast.NewIdent( fmt.Sprintf( tmpl, ucId.String() ) )
+}
+
+func ( pg *pkgGen ) generateFields( 
+    fs *types.FieldSet, encl types.Definition ) []*fieldGen {
+
+    res := make( []*fieldGen, 0, fs.Len() )
+    fs.EachDefinition( func( fd *types.FieldDefinition ) {
+        res = append( res, pg.generateField( fd, encl ) )
     })
+    return res
 }
 
-func ( pg *pkgGen ) addStructFieldGetter(
-    typ *ast.TypeSpec, fd *types.FieldDefinition, sd *types.StructDefinition ) {
-
-    fdb := pg.newFuncDeclBuilder()
-    fdb.setPtrReceiver( "s", typ.Name )
-    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, prefixGet, sd )
-    fdb.ftb.res.addAnon( pg.typeExpressionFor( fd.Type ) )
-    fldIdent := pg.identForField( fd.Name, sd )
-    fdb.bb().addReturn( selExpr( fdb.recvIdent, fldIdent ) )
-    pg.addDecl( fdb.build() )
+func newAstFieldList( flds []*fieldGen ) *ast.FieldList {
+    res := &ast.FieldList{ List: make( []*ast.Field, len( flds ) ) }
+    for i, fld := range flds { res.List[ i ] = fld.astField() }
+    return res
 }
 
-func ( pg *pkgGen ) addStructFieldSetter(
-    typ *ast.TypeSpec, fd *types.FieldDefinition, sd *types.StructDefinition ) {
+type structGen struct {
+    pg *pkgGen
+    sd *types.StructDefinition
+    typ *ast.TypeSpec
+    flds []*fieldGen
+}
 
-    fdb := pg.newFuncDeclBuilder()
-    fdb.setPtrReceiver( "s", typ.Name )
-    fdb.funcDecl.Name = pg.accessorIdentForField( fd.Name, prefixSet, sd )
-    fldTypExpr := pg.typeExpressionFor( fd.Type )
+func ( sg *structGen ) setFields() {
+    sg.flds = sg.pg.generateFields( sg.sd.Fields, sg.sd )
+}
+
+func ( sg *structGen ) addDecl() {
+    sg.typ.Type = &ast.StructType{ Fields: newAstFieldList( sg.flds ) }
+    decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ sg.typ } }
+    sg.pg.addDecl( decl )
+}
+
+func ( sg *structGen ) addGetter( fg *fieldGen ) {
+    fdb := sg.pg.newFuncDeclBuilder()
+    fdb.setPtrReceiver( "s", sg.typ.Name )
+    fdb.funcDecl.Name = fg.accessorIdent( tmplGetter )
+    fdb.ftb.res.addAnon( fg.typeExpr )
+    fdb.bb().addReturn( selExpr( fdb.recvIdent, fg.goId ) )
+    sg.pg.addDecl( fdb.build() )
+}
+
+func ( sg *structGen ) addSetter( fg *fieldGen ) {
+    fdb := sg.pg.newFuncDeclBuilder()
+    fdb.setPtrReceiver( "s", sg.typ.Name )
+    fdb.funcDecl.Name = fg.accessorIdent( tmplSetter )
     valIdent := ast.NewIdent( "val" )
-    fdb.ftb.params.addNamed( valIdent, fldTypExpr )
-    fldIdent := pg.identForField( fd.Name, sd )
-    fdb.bb().addAssign1( selExpr( fdb.recvIdent, fldIdent ), valIdent )
-    pg.addDecl( fdb.build() )
+    fdb.ftb.params.addNamed( valIdent, fg.typeExpr )
+    fdb.bb().addAssign1( selExpr( fdb.recvIdent, fg.goId ), valIdent )
+    sg.pg.addDecl( fdb.build() )
 }
 
-func ( pg *pkgGen ) addStructFieldAccessors( 
-    typ *ast.TypeSpec, sd *types.StructDefinition ) {
-
-    sd.Fields.EachDefinition( func( fd *types.FieldDefinition ) {
-        pg.addStructFieldGetter( typ, fd, sd )
-        pg.addStructFieldSetter( typ, fd, sd )
-    })
+func ( sg *structGen ) addAccessors() {
+    for _, fg := range sg.flds {
+        sg.addGetter( fg )
+        sg.addSetter( fg )
+    }
 }
 
-func ( pg *pkgGen ) addStructFactory(
-    typ *ast.TypeSpec, sd *types.StructDefinition ) {
-
-    fdb := pg.newFuncDeclBuilder()
-    fdb.funcDecl.Name = ast.NewIdent( "New" + typ.Name.String() )
-    resTyp := starExpr( typ.Name )
+func ( sg *structGen ) addFactories() {
+    fdb := sg.pg.newFuncDeclBuilder()
+    fdb.funcDecl.Name = ast.NewIdent( "New" + sg.typ.Name.String() )
+    resTyp := starExpr( sg.typ.Name )
     fdb.ftb.res.addAnon( resTyp )
     resIdent := ast.NewIdent( "res" )
-    newCall := callExpr( ast.NewIdent( "new" ), typ.Name )
+    newCall := callExpr( ast.NewIdent( "new" ), sg.typ.Name )
     fdb.bb().addDefine1( resIdent, newCall )
     fdb.bb().addReturn( resIdent )
-    pg.addDecl( fdb.build() )
+    sg.pg.addDecl( fdb.build() )
 }
 
 func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
-    typ := &ast.TypeSpec{}
-    typ.Name = pg.identForTypeName( sd.GetName() )
-    flds := &ast.FieldList{ List: make( []*ast.Field, 0, sd.Fields.Len() ) }
-    pg.addFields( flds, sd.Fields, sd )
-    typ.Type = &ast.StructType{ Fields: flds }
-    decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
-    pg.addDecl( decl )
-    pg.addStructFactory( typ, sd )
-    pg.addStructFieldAccessors( typ, sd )
+    sg := &structGen{ pg: pg, sd: sd, typ: pg.createTypeSpecForDef( sd ) }
+    sg.setFields()
+    sg.addDecl()
+    sg.addFactories()
+    sg.addAccessors()
 }
 
 func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) {
@@ -532,20 +547,18 @@ func ( pg *pkgGen ) generateUnion( ud *types.UnionDefinition ) {
 
 func ( pg *pkgGen ) getSchemaMethods( 
     sd *types.SchemaDefinition ) *ast.FieldList {
-    
+ 
     flb := pg.newFieldListBuilder()
-    sd.Fields.EachDefinition( func( fd *types.FieldDefinition ) {
+    for _, fld := range pg.generateFields( sd.Fields, sd ) {
         ftb := pg.newFuncTypeBuilder()
-        ftb.res.addAnon( pg.typeExpressionFor( fd.Type ) )
-        nm := pg.accessorIdentForField( fd.Name, prefixGet, sd )
-        flb.addNamed( nm, ftb.funcType )
-    })
+        ftb.res.addAnon( fld.typeExpr )
+        flb.addNamed( fld.accessorIdent( tmplGetter ), ftb.funcType )
+    }
     return flb.fl
 }
 
 func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) {
-    typ := &ast.TypeSpec{}
-    typ.Name = pg.identForTypeName( sd.GetName() )
+    typ := pg.createTypeSpecForDef( sd )
     methods := pg.getSchemaMethods( sd )
     typ.Type = &ast.InterfaceType{ Methods: methods }
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
@@ -584,12 +597,18 @@ func ( g *Generator ) generatePackages() error {
     })
 }
 
-func ( g *Generator ) writeOutput( pg *pkgGen ) error {
+func ( g *Generator ) dumpGeneratedSource( pg *pkgGen ) error {
     cfg := &printer.Config{ Tabwidth: 4, Mode: printer.UseSpaces, Indent: 1 }
     fs := token.NewFileSet()
     bb := &bytes.Buffer{}
     if err := cfg.Fprint( bb, fs, pg.file ); err != nil { return err }
     log.Printf( "for %s:\n%s", pg.ns, bb )
+    return nil
+}
+
+func ( g *Generator ) writeOutput( pg *pkgGen ) error {
+    if err := g.dumpGeneratedSource( pg ); err != nil { return err }
+    cfg := &printer.Config{ Tabwidth: 4, Mode: printer.UseSpaces }
     dir := fmt.Sprintf( "%s/%s", g.DestDir, pg.goPackagePath() )
     if err := os.MkdirAll( dir, os.ModeDir | 0777 ); err != nil { return err }
     fname := fmt.Sprintf( "%s/%s.go", dir, "mingle_generated" )
@@ -597,6 +616,7 @@ func ( g *Generator ) writeOutput( pg *pkgGen ) error {
     if err != nil { return err }
     defer file.Close()
     log.Printf( "writing to %s", fname )
+    fs := token.NewFileSet()
     return cfg.Fprint( file, fs, pg.file )
 }
 
