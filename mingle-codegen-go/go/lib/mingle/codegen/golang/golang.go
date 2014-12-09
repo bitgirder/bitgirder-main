@@ -37,13 +37,28 @@ func astField( nm *ast.Ident, typ ast.Expr ) *ast.Field {
     return &ast.Field{ Names: []*ast.Ident{ nm }, Type: typ }
 }
 
+func strLit( s string ) *ast.BasicLit {
+    return &ast.BasicLit{ Kind: token.STRING, Value: strconv.Quote( s ) }
+}
+
+func fmtImplIdString( key string, idx int ) string {
+    return fmt.Sprintf( "_mg%s%d", key, idx )
+}
+
 var (
     goKwdNil = ast.NewIdent( "nil" )
     goLcError = ast.NewIdent( "error" )
+    goLcInt = ast.NewIdent( "int" )
+    goLcNew = ast.NewIdent( "new" )
+    goLcRes = ast.NewIdent( "res" )
+    goLcVal = ast.NewIdent( "val" )
     goLcVc = ast.NewIdent( "vc" )
     goPkgBind = "mingle/bind"
+    goPkgParser = "mingle/parser"
     goUcVisitContext = ast.NewIdent( "VisitContext" )
+    goUcVisitStruct = ast.NewIdent( "VisitStruct" )
     goUcVisitValue = ast.NewIdent( "VisitValue" )
+    goUcMustQn = ast.NewIdent( "MustQualifiedTypeName" )
 )
 
 type importIdMap map[ string ] *ast.Ident
@@ -105,7 +120,7 @@ type pkgGen struct {
     importIds importIdMap
     importSpecs []*ast.ImportSpec
     decls []ast.Decl
-    idSeq int
+    qnVars *mg.QnameMap
 }
 
 // Instances are only good for a single call to Generate()
@@ -175,6 +190,7 @@ func ( g *Generator ) newPkgGen( ns *mg.Namespace ) *pkgGen {
         g: g,
         ns: ns,
         defs: make( []types.Definition, 0, 16 ),
+        qnVars: mg.NewQnameMap(),
     }
 }
 
@@ -211,10 +227,22 @@ func ( pg *pkgGen ) initPackage() error {
 type importCollector struct {
     m map[ string ] string
     pg *pkgGen
+    nextPrivId int
 }
 
 func ( c *importCollector ) collectGoPath( gp string ) {
     c.m[ gp ] = gp
+}
+
+func ( c *importCollector ) collectPkgPrivGoPath( gp string ) {
+    c.m[ gp ] = fmtImplIdString( "Pkg", c.nextPrivId )
+    c.nextPrivId++
+}
+
+func ( c *importCollector ) collectCodegenImplImports() {
+    if len( c.pg.defs ) == 0 { return }
+    c.collectGoPath( goPkgBind )
+    c.collectPkgPrivGoPath( goPkgParser )
 }
 
 func ( c *importCollector ) collectQnameImport( qn *mg.QualifiedTypeName ) {
@@ -234,7 +262,6 @@ func ( c *importCollector ) collectTypeImport( typ mg.TypeReference ) {
 }
 
 func ( c *importCollector ) collectFieldImports( fs *types.FieldSet ) {
-    c.collectGoPath( goPkgBind )
     fs.EachDefinition( func( fd *types.FieldDefinition ) {
         c.collectTypeImport( fd.Type )
     })
@@ -251,12 +278,7 @@ func ( c *importCollector ) buildImports() {
     c.pg.importIds = make( map[ string ] *ast.Ident, len( c.m ) )
     c.pg.importSpecs = make( []*ast.ImportSpec, 0, len( c.m ) )
     for gp, alias := range c.m {
-        spec := &ast.ImportSpec{
-            Path: &ast.BasicLit{ 
-                Kind: token.STRING, 
-                Value: strconv.Quote( gp ),
-            },
-        }
+        spec := &ast.ImportSpec{ Path: strLit( gp ) }
         var importId *ast.Ident
         if alias == gp { 
             strs := strings.Split( alias, "/" )
@@ -272,8 +294,16 @@ func ( c *importCollector ) buildImports() {
 
 func ( pg *pkgGen ) collectImports() {
     c := importCollector{ pg: pg, m: make( map[ string ] string, 8 ) }
+    c.collectCodegenImplImports()
     for _, def := range pg.defs { c.collectDefImports( def ) }
     c.buildImports()
+}
+
+func ( pg *pkgGen ) pkgQnVar( qn *mg.QualifiedTypeName ) *ast.Ident {
+    if res, ok := pg.qnVars.GetOk( qn ); ok { return res.( *ast.Ident ) }
+    res := ast.NewIdent( fmtImplIdString( "Qn", pg.qnVars.Len() ) )
+    pg.qnVars.Put( qn, res )
+    return res
 }
 
 // if we later have a way for callers to customize name mappings, this is where
@@ -438,6 +468,10 @@ func ( fdb *funcDeclBuilder ) build() *ast.FuncDecl {
     return fdb.funcDecl
 }
 
+func ( fdb *funcDeclBuilder ) buildLiteral() *ast.FuncLit {
+    return &ast.FuncLit{ Type: fdb.ftb.funcType, Body: fdb.bbInst.block }
+}
+
 func ( pg *pkgGen ) newFuncDeclBuilder() *funcDeclBuilder {
     return &funcDeclBuilder{
         funcDecl: &ast.FuncDecl{},
@@ -521,9 +555,8 @@ func ( sg *structGen ) addSetter( fg *fieldGen ) {
     fdb := sg.pg.newFuncDeclBuilder()
     fdb.setPtrReceiver( "s", sg.typ.Name )
     fdb.funcDecl.Name = fg.accessorIdent( tmplSetter )
-    valIdent := ast.NewIdent( "val" )
-    fdb.ftb.params.addNamed( valIdent, fg.typeExpr )
-    fdb.bb().addAssign1( selExpr( fdb.recvIdent, fg.goId ), valIdent )
+    fdb.ftb.params.addNamed( goLcVal, fg.typeExpr )
+    fdb.bb().addAssign1( selExpr( fdb.recvIdent, fg.goId ), goLcVal )
     sg.pg.addDecl( fdb.build() )
 }
 
@@ -539,21 +572,35 @@ func ( sg *structGen ) addFactories() {
     fdb.funcDecl.Name = ast.NewIdent( "New" + sg.typ.Name.String() )
     resTyp := starExpr( sg.typ.Name )
     fdb.ftb.res.addAnon( resTyp )
-    resIdent := ast.NewIdent( "res" )
-    newCall := callExpr( ast.NewIdent( "new" ), sg.typ.Name )
-    fdb.bb().addDefine1( resIdent, newCall )
-    fdb.bb().addReturn( resIdent )
+    fdb.bb().addDefine1( goLcRes, callExpr( goLcNew, sg.typ.Name ) )
+    fdb.bb().addReturn( goLcRes )
     sg.pg.addDecl( fdb.build() )
+}
+
+func ( sg *structGen ) addFieldVisitStatements( bb *bodyBuilder ) {
+}
+
+func ( sg *structGen ) createVisitReturnStmt() ast.Expr {
+    visitLit := sg.pg.newFuncDeclBuilder()
+    visitLit.ftb.res.addAnon( goLcError )
+    sg.addFieldVisitStatements( visitLit.bb() )
+    visitLit.bb().addReturn( goKwdNil )
+    return callExpr(
+        sg.pg.pkgSel( goPkgBind, goUcVisitStruct ),
+        goLcVc,
+        sg.pg.pkgQnVar( sg.sd.GetName() ),
+        visitLit.buildLiteral(),
+    )
 }
 
 func ( sg *structGen ) addVisitor() {
     fdb := sg.pg.newFuncDeclBuilder()
     fdb.funcDecl.Name = goUcVisitValue
     fdb.setPtrReceiver( "s", sg.typ.Name )
-    vcType := sg.pg.pkgSelStar( goPkgBind, goUcVisitContext )
+    vcType := sg.pg.pkgSel( goPkgBind, goUcVisitContext )
     fdb.ftb.params.addNamed( goLcVc, vcType )
     fdb.ftb.res.addAnon( goLcError )
-    fdb.bb().addReturn( goKwdNil )
+    fdb.bb().addReturn( sg.createVisitReturnStmt() )
     sg.pg.addDecl( fdb.build() )
 }
 
@@ -569,7 +616,7 @@ func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
 func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) {
     typ := &ast.TypeSpec{}
     typ.Name = pg.identForTypeName( ed.GetName() )
-    typ.Type = ast.NewIdent( "int" )
+    typ.Type = goLcInt
     decl := &ast.GenDecl{ Tok: token.TYPE, Specs: []ast.Spec{ typ } }
     pg.addDecl( decl )
 }
@@ -611,13 +658,42 @@ func ( pg *pkgGen ) generateDef( def types.Definition ) {
     }
 }
 
-func ( pg *pkgGen ) assembleDecls() {
-    declLen := len( pg.importSpecs ) + len( pg.decls )
-    pg.file.Decls = make( []ast.Decl, 0, declLen )
-    for _, spec := range pg.importSpecs {
-        gd := &ast.GenDecl{ Tok: token.IMPORT, Specs: []ast.Spec{ spec } }
-        pg.file.Decls = append( pg.file.Decls, gd )
+func ( pg *pkgGen ) addGenDecl( tok token.Token, spec ast.Spec ) {
+    gd := &ast.GenDecl{ Tok: tok, Specs: []ast.Spec{ spec } }
+    pg.file.Decls = append( pg.file.Decls, gd )
+}
+
+func ( pg *pkgGen ) assembleImportSpecs() {
+    for _, spec := range pg.importSpecs { pg.addGenDecl( token.IMPORT, spec ) }
+}
+
+func ( pg *pkgGen ) valExprForVarObj( varObj interface{} ) ast.Expr {
+    switch v := varObj.( type ) {
+    case *mg.QualifiedTypeName:
+        sel := pg.pkgSel( goPkgParser, goUcMustQn )
+        return callExpr( sel, strLit( v.ExternalForm() ) )
     }
+    panic( libErrorf( "unhandled varObj: %T", varObj ) )
+}
+
+func ( pg *pkgGen ) addVarDecl( varNm *ast.Ident, varObj interface{} ) {
+    valSpec := &ast.ValueSpec{ 
+        Names: []*ast.Ident{ varNm },
+        Values: []ast.Expr{ pg.valExprForVarObj( varObj ) },
+    }
+    pg.addGenDecl( token.VAR, valSpec )
+}
+
+func ( pg *pkgGen ) assembleVarDecls() {
+    pg.qnVars.EachPair( func( qn *mg.QualifiedTypeName, val interface{} ) {
+        pg.addVarDecl( val.( *ast.Ident ), qn )
+    })
+}
+
+func ( pg *pkgGen ) assembleDecls() {
+    pg.file.Decls = make( []ast.Decl, 0, 16 )
+    pg.assembleImportSpecs()
+    pg.assembleVarDecls()
     pg.file.Decls = append( pg.file.Decls, pg.decls... )
 }
 
