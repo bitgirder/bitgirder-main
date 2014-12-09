@@ -37,6 +37,15 @@ func astField( nm *ast.Ident, typ ast.Expr ) *ast.Field {
     return &ast.Field{ Names: []*ast.Ident{ nm }, Type: typ }
 }
 
+var (
+    goKwdNil = ast.NewIdent( "nil" )
+    goLcError = ast.NewIdent( "error" )
+    goLcVc = ast.NewIdent( "vc" )
+    goPkgBind = "mingle/bind"
+    goUcVisitContext = ast.NewIdent( "VisitContext" )
+    goUcVisitValue = ast.NewIdent( "VisitValue" )
+)
+
 type importIdMap map[ string ] *ast.Ident
 
 type builtinTypeExpr struct {
@@ -225,6 +234,7 @@ func ( c *importCollector ) collectTypeImport( typ mg.TypeReference ) {
 }
 
 func ( c *importCollector ) collectFieldImports( fs *types.FieldSet ) {
+    c.collectGoPath( goPkgBind )
     fs.EachDefinition( func( fd *types.FieldDefinition ) {
         c.collectTypeImport( fd.Type )
     })
@@ -312,6 +322,17 @@ func ( pg *pkgGen ) createTypeSpecForDef( def types.Definition ) *ast.TypeSpec {
     return res
 }
 
+// must be called after collectImports()
+func ( pg *pkgGen ) pkgSel( pkgPath string, sel *ast.Ident ) *ast.SelectorExpr {
+    if pkgId, ok := pg.importIds[ pkgPath ]; ok { return selExpr( pkgId, sel ) }
+    panic( libErrorf( "pkgGen for %s has no id for go package %s",
+        pg.ns, pkgPath ) )
+}
+
+func ( pg *pkgGen ) pkgSelStar( pkgPath string, sel *ast.Ident ) *ast.StarExpr {
+    return starExpr( pg.pkgSel( pkgPath, sel ) )
+}
+
 type bodyBuilder struct {
     block *ast.BlockStmt
 }
@@ -395,11 +416,15 @@ type funcDeclBuilder struct {
     bbInst *bodyBuilder
 }
 
-func ( fdb *funcDeclBuilder ) setPtrReceiver( varNm string, typ ast.Expr ) {
+func ( fdb *funcDeclBuilder ) setReceiver( varNm string, typ ast.Expr ) {
     fdb.recvIdent = ast.NewIdent( varNm )
     flb := fdb.pg.newFieldListBuilder()
-    flb.addNamed( fdb.recvIdent, starExpr( typ ) )
+    flb.addNamed( fdb.recvIdent, typ )
     fdb.funcDecl.Recv = flb.fl
+}
+
+func ( fdb *funcDeclBuilder ) setPtrReceiver( varNm string, typ ast.Expr ) {
+    fdb.setReceiver( varNm, starExpr( typ ) )
 }
 
 func ( fdb *funcDeclBuilder ) bb() *bodyBuilder {
@@ -521,12 +546,24 @@ func ( sg *structGen ) addFactories() {
     sg.pg.addDecl( fdb.build() )
 }
 
+func ( sg *structGen ) addVisitor() {
+    fdb := sg.pg.newFuncDeclBuilder()
+    fdb.funcDecl.Name = goUcVisitValue
+    fdb.setPtrReceiver( "s", sg.typ.Name )
+    vcType := sg.pg.pkgSelStar( goPkgBind, goUcVisitContext )
+    fdb.ftb.params.addNamed( goLcVc, vcType )
+    fdb.ftb.res.addAnon( goLcError )
+    fdb.bb().addReturn( goKwdNil )
+    sg.pg.addDecl( fdb.build() )
+}
+
 func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
     sg := &structGen{ pg: pg, sd: sd, typ: pg.createTypeSpecForDef( sd ) }
     sg.setFields()
     sg.addDecl()
     sg.addFactories()
     sg.addAccessors()
+    sg.addVisitor()
 }
 
 func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) {
