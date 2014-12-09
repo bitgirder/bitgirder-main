@@ -41,8 +41,16 @@ func strLit( s string ) *ast.BasicLit {
     return &ast.BasicLit{ Kind: token.STRING, Value: strconv.Quote( s ) }
 }
 
-func fmtImplIdString( key string, idx int ) string {
-    return fmt.Sprintf( "_mg%s%d", key, idx )
+func fmtImplIdString( key string ) string {
+    return fmt.Sprintf( "_mg%s", key )
+}
+
+func fmtImplIdStringf( tmpl string, argv ...interface{} ) string {
+    return fmtImplIdString( fmt.Sprintf( tmpl, argv... ) )
+}
+
+func fmtImplIdSeq( key string, idx int ) string {
+    return fmtImplIdString( fmt.Sprintf( "%s%d", key, idx ) )
 }
 
 var (
@@ -50,15 +58,22 @@ var (
     goLcError = ast.NewIdent( "error" )
     goLcInt = ast.NewIdent( "int" )
     goLcNew = ast.NewIdent( "new" )
+    goLcReg = ast.NewIdent( "reg" )
     goLcRes = ast.NewIdent( "res" )
     goLcVal = ast.NewIdent( "val" )
     goLcVc = ast.NewIdent( "vc" )
     goPkgBind = "mingle/bind"
     goPkgParser = "mingle/parser"
+    goUcCheckedStructFactory = ast.NewIdent( "CheckedStructFactory" )
+    goUcMustAddValue = ast.NewIdent( "MustAddValue" )
+    goUcMustQn = ast.NewIdent( "MustQualifiedTypeName" )
+    goUcRegistry = ast.NewIdent( "Registry" )
     goUcVisitContext = ast.NewIdent( "VisitContext" )
     goUcVisitStruct = ast.NewIdent( "VisitStruct" )
     goUcVisitValue = ast.NewIdent( "VisitValue" )
-    goUcMustQn = ast.NewIdent( "MustQualifiedTypeName" )
+    goUcMustRegistryForDomain = ast.NewIdent( "MustRegistryForDomain" )
+    goUcDomainDefault = ast.NewIdent( "DomainDefault" )
+    goLcInit = ast.NewIdent( "init" )
 )
 
 type importIdMap map[ string ] *ast.Ident
@@ -121,6 +136,7 @@ type pkgGen struct {
     importSpecs []*ast.ImportSpec
     decls []ast.Decl
     qnVars *mg.QnameMap
+    regInitIds []*ast.Ident
 }
 
 // Instances are only good for a single call to Generate()
@@ -191,11 +207,16 @@ func ( g *Generator ) newPkgGen( ns *mg.Namespace ) *pkgGen {
         ns: ns,
         defs: make( []types.Definition, 0, 16 ),
         qnVars: mg.NewQnameMap(),
+        regInitIds: make( []*ast.Ident, 0, 16 ),
     }
 }
 
 func ( pg *pkgGen ) addDecl( decl ast.Decl ) {
     pg.decls = append( pg.decls, decl )
+}
+
+func ( pg *pkgGen ) addRegInitId( nm *ast.Ident ) {
+    pg.regInitIds = append( pg.regInitIds, nm )
 }
 
 // eventually we'll look in here for a path mapper specific to pg.ns, and then
@@ -235,7 +256,7 @@ func ( c *importCollector ) collectGoPath( gp string ) {
 }
 
 func ( c *importCollector ) collectPkgPrivGoPath( gp string ) {
-    c.m[ gp ] = fmtImplIdString( "Pkg", c.nextPrivId )
+    c.m[ gp ] = fmtImplIdSeq( "Pkg", c.nextPrivId )
     c.nextPrivId++
 }
 
@@ -301,7 +322,7 @@ func ( pg *pkgGen ) collectImports() {
 
 func ( pg *pkgGen ) pkgQnVar( qn *mg.QualifiedTypeName ) *ast.Ident {
     if res, ok := pg.qnVars.GetOk( qn ); ok { return res.( *ast.Ident ) }
-    res := ast.NewIdent( fmtImplIdString( "Qn", pg.qnVars.Len() ) )
+    res := ast.NewIdent( fmtImplIdSeq( "Qn", pg.qnVars.Len() ) )
     pg.qnVars.Put( qn, res )
     return res
 }
@@ -367,12 +388,16 @@ type bodyBuilder struct {
     block *ast.BlockStmt
 }
 
-func ( bb *bodyBuilder ) addStatement( stmt ast.Stmt ) {
+func ( bb *bodyBuilder ) addStmt( stmt ast.Stmt ) {
     bb.block.List = append( bb.block.List, stmt )
 }
 
+func ( bb *bodyBuilder ) addExprStmt( expr ast.Expr ) {
+    bb.addStmt( &ast.ExprStmt{ X: expr } )
+}
+
 func ( bb *bodyBuilder ) addAssignment1( lhs, rhs ast.Expr, tok token.Token ) {
-    bb.addStatement(
+    bb.addStmt(
         &ast.AssignStmt{
             Lhs: []ast.Expr{ lhs },
             Rhs: []ast.Expr{ rhs },
@@ -390,7 +415,7 @@ func ( bb *bodyBuilder ) addDefine1( lhs, rhs ast.Expr ) {
 }
 
 func ( bb *bodyBuilder ) addReturn( exprs... ast.Expr ) {
-    bb.addStatement( &ast.ReturnStmt{ Results: exprs } )
+    bb.addStmt( &ast.ReturnStmt{ Results: exprs } )
 }
 
 func ( pg *pkgGen ) newBodyBuilder() *bodyBuilder {
@@ -530,6 +555,7 @@ type structGen struct {
     sd *types.StructDefinition
     typ *ast.TypeSpec
     flds []*fieldGen
+    constructorName *ast.Ident
 }
 
 func ( sg *structGen ) setFields() {
@@ -567,9 +593,11 @@ func ( sg *structGen ) addAccessors() {
     }
 }
 
+// side effect: sets sg.constructorName
 func ( sg *structGen ) addFactories() {
     fdb := sg.pg.newFuncDeclBuilder()
-    fdb.funcDecl.Name = ast.NewIdent( "New" + sg.typ.Name.String() )
+    sg.constructorName = ast.NewIdent( "New" + sg.typ.Name.String() )
+    fdb.funcDecl.Name = sg.constructorName
     resTyp := starExpr( sg.typ.Name )
     fdb.ftb.res.addAnon( resTyp )
     fdb.bb().addDefine1( goLcRes, callExpr( goLcNew, sg.typ.Name ) )
@@ -604,6 +632,39 @@ func ( sg *structGen ) addVisitor() {
     sg.pg.addDecl( fdb.build() )
 }
 
+func ( sg *structGen ) bindingInstFactLit() ast.Expr {
+    fdb := sg.pg.newFuncDeclBuilder()
+    fdb.ftb.res.addAnon( goTypInterface )
+    fdb.bb().addReturn( callExpr( sg.constructorName ) )
+    return fdb.buildLiteral()
+}
+
+func ( sg *structGen ) bindingMustAddValueStmt() ast.Stmt {
+    return &ast.ExprStmt{
+        callExpr( 
+            selExpr( goLcReg, goUcMustAddValue ),
+            sg.pg.pkgQnVar( sg.sd.GetName() ), 
+            callExpr( 
+                sg.pg.pkgSel( goPkgBind, goUcCheckedStructFactory ),
+                goLcReg,
+                sg.bindingInstFactLit(),
+                goKwdNil,
+            ),
+        ),
+    }
+}
+
+func ( sg *structGen ) addBinding() {
+    fdb := sg.pg.newFuncDeclBuilder()
+    nm := fmtImplIdStringf( "AddBindingFor%s", sg.sd.GetName().Name )
+    fdb.funcDecl.Name = ast.NewIdent( nm )
+    fdb.ftb.params.addNamed( 
+        goLcReg, sg.pg.pkgSelStar( goPkgBind, goUcRegistry ) )
+    fdb.bb().addStmt( sg.bindingMustAddValueStmt() )
+    sg.pg.addDecl( fdb.build() )
+    sg.pg.addRegInitId( fdb.funcDecl.Name )
+}
+
 func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
     sg := &structGen{ pg: pg, sd: sd, typ: pg.createTypeSpecForDef( sd ) }
     sg.setFields()
@@ -611,6 +672,7 @@ func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
     sg.addFactories()
     sg.addAccessors()
     sg.addVisitor()
+    sg.addBinding()
 }
 
 func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) {
@@ -690,10 +752,27 @@ func ( pg *pkgGen ) assembleVarDecls() {
     })
 }
 
+func ( pg *pkgGen ) addInitFunc() {
+    fdb := pg.newFuncDeclBuilder()
+    fdb.funcDecl.Name = goLcInit
+    fdb.bb().addDefine1( 
+        goLcReg, 
+        callExpr( 
+            pg.pkgSel( goPkgBind, goUcMustRegistryForDomain ),
+            pg.pkgSel( goPkgBind, goUcDomainDefault ),
+        ),
+    )
+    for _, regInitId := range pg.regInitIds {
+        fdb.bb().addExprStmt( callExpr( regInitId, goLcReg ) )
+    }
+    pg.decls = append( pg.decls, fdb.build() )
+}
+
 func ( pg *pkgGen ) assembleDecls() {
     pg.file.Decls = make( []ast.Decl, 0, 16 )
     pg.assembleImportSpecs()
     pg.assembleVarDecls()
+    pg.addInitFunc()
     pg.file.Decls = append( pg.file.Decls, pg.decls... )
 }
 

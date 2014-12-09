@@ -39,7 +39,7 @@ func ( c *bindTestCall ) call() {
 func TestTck( t *testing.T ) {
     la := assert.NewListPathAsserter( t )
     tests := cgTck.GetTckTests()
-    for _, test := range tests {
+    for _, test := range tests[ 0 : 1 ] {
         switch v := test.( type ) {
         case *bind.BindTest: ( &bindTestCall{ bt: v, PathAsserter: la } ).call()
         default: la.Logf( "skipping: %T", test )
