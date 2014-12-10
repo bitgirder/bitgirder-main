@@ -205,7 +205,8 @@ type pkgGen struct {
 
 // Instances are only good for a single call to Generate()
 type Generator struct {
-    Definitions *types.DefinitionMap
+    Types *types.DefinitionMap
+    Input []types.Definition
     DestDir string
     pkgGens *mg.NamespaceMap
 }
@@ -241,7 +242,7 @@ func ( g *Generator ) builtinTypeExpressionFor(
 
 func ( g *Generator ) setPackageMap() {
     g.pkgGens = mg.NewNamespaceMap()
-    g.Definitions.EachDefinition( func( def types.Definition ) {
+    for _, def := range g.Input {
         var pg *pkgGen
         ns := def.GetName().Namespace
         if v, ok := g.pkgGens.GetOk( ns ); ok { 
@@ -251,7 +252,7 @@ func ( g *Generator ) setPackageMap() {
             g.pkgGens.Put( ns, pg )
         }
         pg.defs = append( pg.defs, def )
-    })
+    }
 }
 
 func ( g *Generator ) eachPkgGen( f func( *pkgGen ) error ) error {
@@ -342,7 +343,6 @@ func ( c *importCollector ) collectQnameImport( qn *mg.QualifiedTypeName ) {
 }
 
 func ( c *importCollector ) collectTypeImport( typ mg.TypeReference ) {
-    log.Printf( "collecting import for %s", typ )
     qn := mg.TypeNameIn( typ )
     bi := c.pg.g.builtinTypeExpressionFor( qn )
     if bi == nil { 
@@ -711,9 +711,8 @@ func ( sg *structGen ) fieldVisitExprForPointerType(
     val ast.Expr ) ( ast.Expr, error ) {
 
     if at, ok := baseTyp.( *mg.AtomicTypeReference ); ok {
-        def, ok := sg.pg.g.Definitions.GetDefinition( at.Name() )
+        def, ok := sg.pg.g.Types.GetDefinition( at.Name() )
         if ! ok { return nil, libErrorf( "no definition for %s", at.Name() ) }
-        log.Printf( "baseTyp %s, def: %T", baseTyp, def )
         if _, ok := def.( *types.StructDefinition ); ! ok {
             return sg.fieldVisitExprForType( fg, baseTyp, derefExpr( val ) )
         }
@@ -734,8 +733,6 @@ func ( sg *structGen ) fieldVisitExprForType(
 func ( sg *structGen ) fieldVisitExprForField( 
     fg *fieldGen, valId *ast.Ident ) ( ast.Expr, error ) {
 
-    log.Printf( "generating field visit for %s.%s, %s",
-        sg.sd.GetName(), fg.mgId, fg.fd.Type )
     return sg.fieldVisitExprForType( fg, fg.fd.Type, selExpr( valId, fg.goId ) )
 }
 
@@ -1056,7 +1053,7 @@ func ( g *Generator ) dumpGeneratedSource( pg *pkgGen ) error {
 }
 
 func ( g *Generator ) writeOutput( pg *pkgGen ) error {
-    if err := g.dumpGeneratedSource( pg ); err != nil { return err }
+//    if err := g.dumpGeneratedSource( pg ); err != nil { return err }
     cfg := &printer.Config{ Tabwidth: 4, Mode: printer.UseSpaces }
     dir := fmt.Sprintf( "%s/%s", g.DestDir, pg.goPackagePath() )
     if err := os.MkdirAll( dir, os.ModeDir | 0777 ); err != nil { return err }
