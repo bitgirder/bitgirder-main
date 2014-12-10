@@ -64,8 +64,8 @@ func ( b *testsBuilder ) addScalarsBasic() {
         valueTest(
             dataStruct( "ScalarsBasic",
                 "stringF1", "hello",
-                "bool1", true,
-                "buffer1", []byte{ 0, 1, 2 },
+                "boolF1", true,
+                "bufferF1", []byte{ 0, 1, 2 },
                 "int32F1", int32( 1 ),
                 "int64F1", int64( 2 ),
                 "uint32F1", uint32( 3 ),

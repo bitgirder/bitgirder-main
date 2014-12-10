@@ -84,6 +84,7 @@ func ( t *bindTestCall ) visitBindTest() bool {
         return false
     }
     act := vb.GetValue().( mg.Value )
+    t.Logf( "generated %s", mg.QuoteValue( act ) )
     if f := t.cc.MingleValueForAssert; f != nil { act = f( act ) }
     mg.AssertEqualValues( t.t.Mingle, act, t.PathAsserter )
     return true
