@@ -33,7 +33,20 @@ var (
 //      float64F1 Float64
 //      timeF1 Timestamp
 //  }
-//      
+//
+//  struct CoreSimplePointers {
+//      boolF1 &Bool
+//      bufferF1 &Buffer
+//      int32F1 &Int32
+//      int64F1 &Int64
+//      uint32F1 &Uint32
+//      uint64F1 &Uint64
+//      float32F1 &Float32
+//      float64F1 &Float64
+//      stringF1 &String
+//      timeF1 &Timestamp
+//  }
+//
 //  struct ScalarsRestrict {
 //      stringF1 String~"^a+$"
 //      stringF2 String~[ "aaa", "abb" ]
@@ -48,11 +61,15 @@ var (
 //
 //  enum Enum1 { const1, const2, const3 }
 //
-//  struct EnumHolder { enumF1 Enum1 }
+//  struct EnumHolder {
+//      enumF1 Enum1 
+//      enumF2 &Enum1
+//  }
 //
 //  struct MapHolder {
 //      mapF1 SymbolMap
 //      mapF2 SymbolMap?
+//      mapF3 &SymbolMap?
 //  }
 //
 //  union Union1 { Int32, ScalarsRestrict, &EnumHolder, &SymbolMap }
@@ -83,7 +100,7 @@ var (
 //      f1 Struct1
 //  }
 //
-//  struct PointerStruct1 {
+//  struct NestedPointerStruct1 {
 //      struct1F1 &&&Struct1
 //      int32F1 &&&&int32
 //  }
@@ -149,9 +166,16 @@ var (
 //
 //  struct Struct1 { f1 Int32 }
 //
-//  struct Struct2 {
-//      f1 mingle:tck:data@v1/Struct1 
-//      f2 mingle:tck:data2@v1/Struct1 
+//  struct ImportUser {
+//      s1 mingle:tck:data@v1/Struct1 
+//      s2 &mingle:tck:data@v1/Struct1
+//      s3 mingle:tck:data@v1/Struct1*
+//      s4 &mingle:tck:data@v1/Struct1*
+//      e1 mingle:tck:data@v1/Enum1
+//      e2 &mingle:tck:data@v1/Enum1
+//      e3 mingle:tck:data@v1/Enum1*
+//      e4 &mingle:tck:data@v1/Enum1*
+//      g1 mingle:tck:data2@v1/Struct1 
 //  }
 //
 //  -------------------------------------------
@@ -206,6 +230,22 @@ func addTckDefs( m *types.DefinitionMap ) {
         ),
     )
     m.MustAdd(
+        types.MakeStructDef( "mingle:tck:data@v1/CoreSimplePointers",
+            []*types.FieldDefinition{
+                types.MakeFieldDef( "boolF1", "&Boolean", nil ),
+                types.MakeFieldDef( "bufferF1", "&Buffer", nil ),
+                types.MakeFieldDef( "int32F1", "&Int32", nil ),
+                types.MakeFieldDef( "int64F1", "&Int64", nil ),
+                types.MakeFieldDef( "uint32F1", "&Uint32", nil ),
+                types.MakeFieldDef( "uint64F1", "&Uint64", nil ),
+                types.MakeFieldDef( "float32F1", "&Float32", nil ),
+                types.MakeFieldDef( "float64F1", "&Float64", nil ),
+                types.MakeFieldDef( "stringF1", "&String", nil ),
+                types.MakeFieldDef( "timeF1", "&Timestamp", nil ),
+            },
+        ),
+    )
+    m.MustAdd(
         types.MakeStructDef( "mingle:tck:data@v1/ScalarsRestrict",
             []*types.FieldDefinition{
                 types.MakeFieldDef( "stringF1", `String~"^a+$"`, nil ),
@@ -234,6 +274,8 @@ func addTckDefs( m *types.DefinitionMap ) {
         types.MakeStructDef( "mingle:tck:data@v1/EnumHolder",
             []*types.FieldDefinition{
                 types.MakeFieldDef( "enumF1", "mingle:tck:data@v1/Enum1", nil ),
+                types.MakeFieldDef( 
+                    "enumF2", "&mingle:tck:data@v1/Enum1", nil ),
             },
         ),
     )
@@ -242,6 +284,7 @@ func addTckDefs( m *types.DefinitionMap ) {
             []*types.FieldDefinition{
                 types.MakeFieldDef( "mapF1", "SymbolMap", nil ),
                 types.MakeFieldDef( "mapF2", "SymbolMap?", nil ),
+                types.MakeFieldDef( "mapF3", "&SymbolMap?", nil ),
             },
         ),
     )
@@ -311,7 +354,7 @@ func addTckDefs( m *types.DefinitionMap ) {
         ),
     )
     m.MustAdd(
-        types.MakeStructDef( "mingle:tck:data@v1/PointerStruct1",
+        types.MakeStructDef( "mingle:tck:data@v1/NestedPointerStruct1",
             []*types.FieldDefinition{
                 types.MakeFieldDef( 
                     "struct1F1", "&&&mingle:tck:data@v1/Struct1", nil ),
@@ -472,10 +515,17 @@ func addTckDefs( m *types.DefinitionMap ) {
         ),
     )
     m.MustAdd(
-        types.MakeStructDef( "mingle:tck:data2@v1/Struct2",
+        types.MakeStructDef( "mingle:tck:data2@v1/ImportUser",
             []*types.FieldDefinition{
-                types.MakeFieldDef( "f1", "mingle:tck:data@v1/Struct1", nil ),
-                types.MakeFieldDef( "f2", "mingle:tck:data2@v1/Struct1", nil ),
+                types.MakeFieldDef( "s1", "mingle:tck:data@v1/Struct1 ", nil ),
+                types.MakeFieldDef( "s2", "&mingle:tck:data@v1/Struct1", nil ),
+                types.MakeFieldDef( "s3", "mingle:tck:data@v1/Struct1*", nil ),
+                types.MakeFieldDef( "s4", "&mingle:tck:data@v1/Struct1*", nil ),
+                types.MakeFieldDef( "e1", "mingle:tck:data@v1/Enum1", nil ),
+                types.MakeFieldDef( "e2", "&mingle:tck:data@v1/Enum1", nil ),
+                types.MakeFieldDef( "e3", "mingle:tck:data@v1/Enum1*", nil ),
+                types.MakeFieldDef( "e4", "&mingle:tck:data@v1/Enum1*", nil ),
+                types.MakeFieldDef( "g1", "mingle:tck:data2@v1/Struct1 ", nil ),
             },
         ),
     )

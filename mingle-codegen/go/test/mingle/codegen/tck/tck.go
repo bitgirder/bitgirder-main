@@ -5,6 +5,7 @@ import (
     "mingle/bind"
     "mingle/parser"
     mgTck "mingle/tck"
+    "fmt"
     "bitgirder/objpath"
 )
 
@@ -75,6 +76,26 @@ func ( b *testsBuilder ) addScalarsBasic() {
                 "timeF1", mgTck.Timestamp1,
             ),
             "scalars-basic-inst1",
+        ),
+    )
+}
+
+func ( b *testsBuilder ) addCoreSimplePointers() {
+    b.addTests(
+        valueTest(
+            dataStruct( "CoreSimplePointers",
+                "boolF1", true,
+                "bufferF1", []byte{ 0, 1 },
+                "int32F1", int32( 1 ),
+                "int64F1", int64( 2 ),
+                "uint32F1", uint32( 3 ),
+                "uint64F1", uint64( 4 ),
+                "float32F1", float32( 5.0 ),
+                "float64F1", float64( 6.0 ),
+                "stringF1", "hello",
+                "timeF1", mgTck.Timestamp1,
+            ),
+            "core-simple-pointers-inst1",
         ),
     )
 }
@@ -152,7 +173,10 @@ func ( b *testsBuilder ) addEnum1Tests() {
 func ( b *testsBuilder ) addEnumHolderTests() {
     b.addTests(
         valueTest(
-            dataStruct( "EnumHolder", "enum1", dataEnum1( "const1" ) ),
+            dataStruct( "EnumHolder", 
+                "enumF1", dataEnum1( "const1" ),
+                "enumF2", dataEnum1( "const2" ),
+            ),
             "enum-holder-inst1",
         ),
     )
@@ -170,6 +194,7 @@ func ( b *testsBuilder ) addMapHolderTests() {
             dataStruct( "MapHolder",
                 "mapF1", parser.MustSymbolMap( "f1", int32( 1 ) ),
                 "mapF2", parser.MustSymbolMap( "f2", "string-val" ),
+                "mapF3", parser.MustSymbolMap( "f2", true ),
             ),
             "map-holder-inst2",
         ),
@@ -283,10 +308,10 @@ func ( b *testsBuilder ) addSchema1Tests() {
     )
 }
 
-func ( b *testsBuilder ) addPointerStruct1Tests() {
+func ( b *testsBuilder ) addNestedPointerStruct1Tests() {
     b.addTests(
         valueTest(
-            dataStruct( "PointerStruct1",
+            dataStruct( "NestedPointerStruct1",
                 "struct1F1", dataStruct( "Struct1",
                     "f1", int32( 1 ),
                     "f2", "abc",
@@ -501,19 +526,45 @@ func ( b *testsBuilder ) addListDefaultsTests() {
     )
 }
 
-func ( b *testsBuilder ) addData2Tests() {
+func ( b *testsBuilder ) addImportUserTests() {
+    s1 := func( i int32 ) *mg.Struct {
+        return parser.MustStruct( "mingle:tck:data@v1/Struct1",
+            "f1", i,
+            "f2", fmt.Sprintf( "abc%d", i ),
+        )
+    }
     b.addTests(
         valueTest(
-            parser.MustStruct( "mingle:tck:data2@v1/Struct2",
-                "f1", parser.MustStruct( "mingle:tck:data@v1/Struct1",
-                    "f1", int32( 1 ),
-                    "f2", "abc",
+            parser.MustStruct( "mingle:tck:data2@v1/ImportUser",
+                "s1", s1( 1 ),
+                "s2", s1( 2 ),
+                "s3", mg.MustList(
+                    asType( "mingle:tck:data@v1/Struct1*" ),
+                    s1( 3 ),
+                    s1( 4 ),
                 ),
-                "f2", parser.MustStruct( "mingle:tck:data2@v1/Struct1",
+                "s4", mg.MustList(
+                    asType( "&mingle:tck:data@v1/Struct1*" ),
+                    s1( 5 ),
+                    s1( 6 ),
+                ),
+                "e1", dataEnum1( "const1" ),
+                "e2", dataEnum1( "const2" ),
+                "e3", mg.MustList(
+                    asType( "mingle:tck:data@v1/Enum1*" ),
+                    dataEnum1( "const1" ),
+                    dataEnum1( "const2" ),
+                ),
+                "e4", mg.MustList(
+                    asType( "&mingle:tck:data@v1/Enum1*" ),
+                    dataEnum1( "const1" ),
+                    dataEnum1( "const2" ),
+                ),
+                "g2", parser.MustStruct( "mingle:tck:data2@v1/Struct1",
                     "f1", int32( 2 ),
                 ),
             ),
-            "data2-struct2-inst1",
+            "import-user-inst1",
         ),
     )
 }
@@ -522,6 +573,7 @@ func GetTckTests() []interface{} {
     b := &testsBuilder{ tests: make( []interface{}, 0, 256 ) }
     b.addEmptyStruct()
     b.addScalarsBasic()
+    b.addCoreSimplePointers()
     b.addScalarsRestrict()
     b.addEnum1Tests()
     b.addEnumHolderTests()
@@ -531,11 +583,11 @@ func GetTckTests() []interface{} {
     b.addStructWithScalarStructField()
     b.addScalarFieldDefaults()
     b.addSchema1Tests()
-    b.addPointerStruct1Tests()
+    b.addNestedPointerStruct1Tests()
     b.addNullablesTests()
     b.addLists1Tests()
     b.addListDefaultsTests()
-    b.addData2Tests()
+    b.addImportUserTests()
     b.addMissingFieldTests()
     return b.tests
 }

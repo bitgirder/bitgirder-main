@@ -338,6 +338,7 @@ func ( c *importCollector ) collectQnameImport( qn *mg.QualifiedTypeName ) {
 }
 
 func ( c *importCollector ) collectTypeImport( typ mg.TypeReference ) {
+    log.Printf( "collecting import for %s", typ )
     qn := mg.TypeNameIn( typ )
     bi := c.pg.g.builtinTypeExpressionFor( qn )
     if bi == nil { 
