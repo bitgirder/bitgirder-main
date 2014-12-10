@@ -167,19 +167,17 @@ func initBuildReactorErrorTests( b *ReactorTestSliceBuilder ) {
     addErr( parser.MustStruct( "ns1@v1/BadType" ), testErrForPath( nil ) )
 }
 
-func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
+func addImplErrors( 
+    b *ReactorTestSliceBuilder,
+    f func( *BuildReactorTest ) *BuildReactorTest ) {
+    
     p := mg.MakeTestIdPath
-    add := func( in mg.Value, expct interface{} ) {
-        b.AddTests(
-            &BuildReactorTest{
-                Source: in,
-                Val: expct,
-                Profile: builderTestProfileImpl,
-            },
-        )
+    addTest := func( t *BuildReactorTest ) {
+        if f != nil { t = f( t ) }
+        b.AddTests( t )
     }
     addErr := func( in mg.Value, err error ) {
-        b.AddTests(
+        addTest(
             &BuildReactorTest{
                 Source: in,
                 Error: err,
@@ -187,38 +185,6 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
             },
         )
     }
-    add( mg.Int32( int32( 1 ) ), int32( 1 ) )
-    add( mg.String( "ok" ), "ok" )
-    add( mg.MustList( asType( "Int32*" ) ), []int32{} )
-    add( 
-        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
-        []int32{ 0, 1 },
-    )
-    add(
-        parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
-            "f1", int32( 1 ),
-            "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
-            "f3", parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
-                "f1", int32( 1 ),
-            ),
-        ),
-        &TestStruct1{ F1: 1, F2: []int32{ 0, 1 }, F3: &TestStruct1{ F1: 1 } },
-    )
-    add(
-        parser.MustSymbolMap(
-            "f1", int32( 1 ),
-            "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
-            "f3", parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
-                "f1", int32( 1 ),
-            ),
-        ),
-        map[ string ]interface{}{
-            "f1": int32( 1 ),
-            "f2": []int32{ 0, 1 },
-            "f3": &TestStruct1{ F1: 1 },
-        },
-    )
-    add( parser.MustStruct( "mingle:reactor@v1/TestStruct2" ), TestStruct2{} )
     addErr(
         parser.MustStruct( "mingle:reactor@v1/TestStruct2",
             "f1", buildReactorErrorTestVal,
@@ -270,7 +236,7 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
     // since builderTestProfileImpl successfully handles maps, we use a
     // fail-only profile just to check that custom errors from a map start func
     // are indeed returned
-    b.AddTests(
+    addTest(
         &BuildReactorTest{
             Source: mg.EmptySymbolMap(),
             Error: testErrForPath( nil ),
@@ -279,10 +245,78 @@ func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
     )
 }
 
+func initBuildReactorImplTests( b *ReactorTestSliceBuilder ) {
+    add := func( in mg.Value, expct interface{} ) {
+        b.AddTests(
+            &BuildReactorTest{
+                Source: in,
+                Val: expct,
+                Profile: builderTestProfileImpl,
+            },
+        )
+    }
+    add( mg.Int32( int32( 1 ) ), int32( 1 ) )
+    add( mg.String( "ok" ), "ok" )
+    add( mg.MustList( asType( "Int32*" ) ), []int32{} )
+    add( 
+        mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+        []int32{ 0, 1 },
+    )
+    add(
+        parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
+            "f1", int32( 1 ),
+            "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+            "f3", parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
+                "f1", int32( 1 ),
+            ),
+        ),
+        &TestStruct1{ F1: 1, F2: []int32{ 0, 1 }, F3: &TestStruct1{ F1: 1 } },
+    )
+    add(
+        parser.MustSymbolMap(
+            "f1", int32( 1 ),
+            "f2", mg.MustList( asType( "Int32*" ), int32( 0 ), int32( 1 ) ),
+            "f3", parser.MustStruct( "mingle:reactor@v1/TestStruct1", 
+                "f1", int32( 1 ),
+            ),
+        ),
+        map[ string ]interface{}{
+            "f1": int32( 1 ),
+            "f2": []int32{ 0, 1 },
+            "f3": &TestStruct1{ F1: 1 },
+        },
+    )
+    add( parser.MustStruct( "mingle:reactor@v1/TestStruct2" ), TestStruct2{} )
+    addImplErrors( b, nil )
+}
+
+func initBuildReactorConverterTests( b *ReactorTestSliceBuilder ) {
+    add := func( in mg.Value ) {
+        b.AddTests(
+            &BuildReactorTest{
+                Source: in,
+                Val: convertedVal{ in },
+                Profile: builderTestProfileConverter,
+                BaseProfile: builderTestProfileDefault,
+            },
+        )
+    }
+    add( mg.Int32( 1 ) )
+    add( mg.MustList( int32( 1 ) ) )
+    add( parser.MustSymbolMap( "f1", int32( 1 ) ) )
+    add( parser.MustStruct( "mingle:reactor@v1/TestConv1", "f1", int32( 1 ) ) )
+    addImplErrors( b, func( t *BuildReactorTest ) *BuildReactorTest {
+        t.BaseProfile = t.Profile
+        t.Profile = builderTestProfileConverter
+        return t
+    })
+}
+
 func initBuildReactorTests( b *ReactorTestSliceBuilder ) {
     initBuildReactorValueTests( b )
     initBuildReactorErrorTests( b )
     initBuildReactorImplTests( b )
+    initBuildReactorConverterTests( b )
 }
 
 // we only add here error tests; we assume that a value build reactor sits

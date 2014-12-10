@@ -215,6 +215,8 @@ type TestStruct2 struct {
     F2 *TestStruct2
 }
 
+type convertedVal struct { val interface{} }
+
 func CheckBuiltValue( 
     expct mg.Value, br *BuildReactor, a *assert.PathAsserter ) {
 

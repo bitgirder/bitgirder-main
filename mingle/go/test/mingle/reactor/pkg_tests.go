@@ -16,12 +16,14 @@ const (
     builderTestProfileError = "error"
     builderTestProfileImpl = "impl"
     builderTestProfileImplFailOnly = "impl-fail-only"
+    builderTestProfileConverter = "converter"
 )
 
 type BuildReactorTest struct { 
     Val interface{} 
     Source interface{}
     Profile string
+    BaseProfile string
     Error error
 }
 

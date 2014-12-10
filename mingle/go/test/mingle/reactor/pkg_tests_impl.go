@@ -278,18 +278,26 @@ func init() {
         }
 }
 
-func ( t *BuildReactorTest ) getBuilderFactory() BuilderFactory {
-    switch t.Profile {
+func ( t *BuildReactorTest ) newConvertFactory() BuilderFactory {
+    return NewConverterFactory(
+        t.getBuilderFactory( t.BaseProfile ),
+        func( val interface{} ) interface{} { return convertedVal{ val } },
+    )
+}
+
+func ( t *BuildReactorTest ) getBuilderFactory( prof string ) BuilderFactory {
+    switch prof {
     case builderTestProfileDefault: return ValueBuilderFactory
     case builderTestProfileError: return builderTestErrorFactory( 1 )
     case builderTestProfileImpl: return testBuilderFactory
     case builderTestProfileImplFailOnly: return testBuilderFactoryFailOnly
+    case builderTestProfileConverter: return t.newConvertFactory()
     }
     panic( libErrorf( "unhandled profile: %s", t.Profile ) )
 }
 
 func ( t *BuildReactorTest ) Call( c *ReactorTestCall ) {
-    br := NewBuildReactor( t.getBuilderFactory() )
+    br := NewBuildReactor( t.getBuilderFactory( t.Profile ) )
     br.ErrorFactory = func( path objpath.PathNode, msg string ) error {
         return newTestError( path, msg )
     }
@@ -301,6 +309,9 @@ func ( t *BuildReactorTest ) Call( c *ReactorTestCall ) {
 //        c.Logf( "feeding %s", mg.QuoteValue( mv ) )
 //    }
     if err := FeedSource( src, pip ); err == nil {
+        if err := t.Error; err != nil {
+            c.Fatalf( "expected error %s (%T)", err, err )
+        }
         act := br.GetValue()
         switch v := t.Val.( type ) {
         case mg.Value: 
@@ -315,7 +326,6 @@ func ( t *StructuralReactorErrorTest ) Call( c *ReactorTestCall ) {
 //    pip := InitReactorPipeline( rct )
     pip := InitReactorPipeline( NewDebugReactor( c ), rct )
     src := eventSliceSource( t.Events )
-    c.Logf( "calling structural test, err: %s", t.Error )
     if err := FeedEventSource( src, pip ); err == nil {
         c.Fatalf( "Expected error (%T): %s", t.Error, t.Error ) 
     } else { c.EqualErrors( t.Error, err ) }

@@ -262,3 +262,107 @@ func ( f valBuildFact ) StartList(
 }
 
 var ValueBuilderFactory BuilderFactory = valBuildFact( 1 )
+
+type ValueConverterFunc func( val interface{} ) interface{}
+
+func convertProducedValue(
+    ee *EndEvent, 
+    vp ValueProducer, 
+    cf ValueConverterFunc ) ( interface{}, error ) {
+
+    val, err := vp.ProduceValue( ee )
+    if err != nil { return nil, err }
+    return cf( val ), nil
+}
+
+type converterFieldSetBuilder struct {
+    fsb FieldSetBuilder
+    cf ValueConverterFunc
+}
+
+func ( b converterFieldSetBuilder ) StartField( 
+    fse *FieldStartEvent ) ( BuilderFactory, error ) {
+
+    return b.fsb.StartField( fse )
+}
+
+func ( b converterFieldSetBuilder ) SetValue( 
+    fld *mg.Identifier, val interface{}, path objpath.PathNode ) error {
+
+    return b.fsb.SetValue( fld, val, path )
+}
+
+func ( b converterFieldSetBuilder ) ProduceValue(
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return convertProducedValue( ee, b.fsb, b.cf )
+}
+
+func startConverterFieldSet( 
+    fsb FieldSetBuilder, 
+    err error, 
+    cf ValueConverterFunc ) ( FieldSetBuilder, error ) {
+
+    if fsb == nil || err != nil { return fsb, err }
+    return converterFieldSetBuilder{ fsb, cf }, nil
+}
+
+type converterFact struct {
+    bf BuilderFactory
+    cf ValueConverterFunc
+}
+
+func ( f converterFact ) StartMap( 
+    mse *MapStartEvent ) ( FieldSetBuilder, error ) {
+
+    fsb, err := f.bf.StartMap( mse )
+    return startConverterFieldSet( fsb, err, f.cf )
+}
+
+func( f converterFact ) StartStruct( 
+    sse *StructStartEvent ) ( FieldSetBuilder, error ) {
+
+    fsb, err := f.bf.StartStruct( sse )
+    return startConverterFieldSet( fsb, err, f.cf )
+}
+
+type listConverterBuilder struct {
+    lb ListBuilder
+    cf ValueConverterFunc
+}
+
+func ( lcb listConverterBuilder ) AddValue( 
+    val interface{}, path objpath.PathNode ) error {
+
+    return lcb.lb.AddValue( val, path )
+}
+
+func ( lcb listConverterBuilder ) NextBuilderFactory() BuilderFactory {
+    return lcb.lb.NextBuilderFactory()
+}
+
+func ( lcb listConverterBuilder ) ProduceValue( 
+    ee *EndEvent ) ( interface{}, error ) {
+
+    return convertProducedValue( ee, lcb.lb, lcb.cf )
+}
+    
+func ( f converterFact ) StartList( 
+    lse *ListStartEvent ) ( ListBuilder, error ) {
+
+    lb, err := f.bf.StartList( lse )
+    if err != nil || lb == nil { return lb, err }
+    return listConverterBuilder{ lb, f.cf }, nil
+}
+
+func ( f converterFact ) BuildValue( ve *ValueEvent ) ( interface{}, error ) {
+    val, err := f.bf.BuildValue( ve )
+    if err != nil { return nil, err }
+    return f.cf( val ), nil
+}
+
+func NewConverterFactory( 
+    bf BuilderFactory, cf ValueConverterFunc ) BuilderFactory {
+
+    return converterFact{ bf, cf }
+}
