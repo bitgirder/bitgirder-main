@@ -4,6 +4,7 @@ import (
     mg "mingle"
     "mingle/types"
     "mingle/parser"
+    "mingle/types/builtin"
 )
 
 var (
@@ -623,7 +624,7 @@ func addTckDefs( m *types.DefinitionMap ) {
 }
 
 func GetDefinitions() *types.DefinitionMap {
-    res := types.NewDefinitionMap()
+    res := builtin.BuiltinTypes()
     addTckDefs( res )
     return res
 }

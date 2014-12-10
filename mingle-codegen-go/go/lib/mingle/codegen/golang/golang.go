@@ -66,6 +66,10 @@ func typeAssertExpr( x, typ ast.Expr ) *ast.TypeAssertExpr {
     return &ast.TypeAssertExpr{ X: x, Type: typ }
 }
 
+func derefExpr( x ast.Expr ) ast.Expr { 
+    return starExpr( &ast.ParenExpr{ X: x } )
+}
+
 func fmtImplIdString( key string ) string {
     return fmt.Sprintf( "_mg%s", key )
 }
@@ -690,22 +694,57 @@ func ( sg *structGen ) addFactories() {
     sg.pg.addDecl( fdb.build() )
 }
 
-func( sg *structGen ) fieldVisitExprForField( 
-    fg *fieldGen, valId *ast.Ident ) ast.Expr {
-
+func ( sg *structGen ) fieldVisitValueExprForField(
+    fg *fieldGen, val ast.Expr ) ast.Expr {
+ 
     return callExpr(
         sg.pg.pkgSel( goPkgBind, goUcVisitFieldValue ),
         goLcVc,
         sg.pg.pkgIdVar( fg.mgId ),
-        selExpr( valId, fg.goId ),
+        val,
     )
 }
 
+func ( sg *structGen ) fieldVisitExprForPointerType( 
+    fg *fieldGen, 
+    baseTyp mg.TypeReference, 
+    val ast.Expr ) ( ast.Expr, error ) {
+
+    if at, ok := baseTyp.( *mg.AtomicTypeReference ); ok {
+        def, ok := sg.pg.g.Definitions.GetDefinition( at.Name() )
+        if ! ok { return nil, libErrorf( "no definition for %s", at.Name() ) }
+        log.Printf( "baseTyp %s, def: %T", baseTyp, def )
+        if _, ok := def.( *types.StructDefinition ); ! ok {
+            return sg.fieldVisitExprForType( fg, baseTyp, derefExpr( val ) )
+        }
+    }
+    return sg.fieldVisitValueExprForField( fg, val ), nil
+}
+
+func ( sg *structGen ) fieldVisitExprForType( 
+    fg *fieldGen, typ mg.TypeReference, valExpr ast.Expr ) ( ast.Expr, error ) {
+
+    switch v := typ.( type ) {
+    case *mg.PointerTypeReference: 
+        return sg.fieldVisitExprForPointerType( fg, v.Type, valExpr )
+    }
+    return sg.fieldVisitValueExprForField( fg, valExpr ), nil
+}
+
+func ( sg *structGen ) fieldVisitExprForField( 
+    fg *fieldGen, valId *ast.Ident ) ( ast.Expr, error ) {
+
+    log.Printf( "generating field visit for %s.%s, %s",
+        sg.sd.GetName(), fg.mgId, fg.fd.Type )
+    return sg.fieldVisitExprForType( fg, fg.fd.Type, selExpr( valId, fg.goId ) )
+}
+
 func ( sg *structGen ) addFieldVisitStatements( 
-    valId *ast.Ident, bb *bodyBuilder ) {
+    valId *ast.Ident, bb *bodyBuilder ) error {
 
     for _, fg := range sg.flds {
-        visExpr := sg.fieldVisitExprForField( fg, valId )
+        visExpr, err := sg.fieldVisitExprForField( fg, valId )
+        if err != nil { return err }
         errRetBody := sg.pg.newBodyBuilder()
         errRetBody.addReturn( goLcErr )
         bb.addStmt(
@@ -716,30 +755,39 @@ func ( sg *structGen ) addFieldVisitStatements(
             },
         )
     }
+    return nil
 }
 
-func ( sg *structGen ) createVisitReturnStmt( valId *ast.Ident ) ast.Expr {
+func ( sg *structGen ) createVisitReturnStmt( 
+    valId *ast.Ident ) ( ast.Expr, error ) {
+
     visitLit := sg.pg.newFuncDeclBuilder()
     visitLit.ftb.res.addAnon( goLcError )
-    sg.addFieldVisitStatements( valId, visitLit.bb() )
+    if err := sg.addFieldVisitStatements( valId, visitLit.bb() ); err != nil {
+        return nil, err
+    }
     visitLit.bb().addReturn( goKwdNil )
-    return callExpr(
+    res := callExpr(
         sg.pg.pkgSel( goPkgBind, goUcVisitStruct ),
         goLcVc,
         sg.pg.pkgQnVar( sg.sd.GetName() ),
         visitLit.buildLiteral(),
     )
+    return res, nil
 }
 
-func ( sg *structGen ) addVisitor() {
+func ( sg *structGen ) addVisitor() error {
     fdb := sg.pg.newFuncDeclBuilder()
     fdb.funcDecl.Name = goUcVisitValue
     fdb.setPtrReceiver( "s", sg.typ.Name )
     vcType := sg.pg.pkgSel( goPkgBind, goUcVisitContext )
     fdb.ftb.params.addNamed( goLcVc, vcType )
     fdb.ftb.res.addAnon( goLcError )
-    fdb.bb().addReturn( sg.createVisitReturnStmt( fdb.recvIdent ) )
+    if retExp, err := sg.createVisitReturnStmt( fdb.recvIdent ); err == nil {
+        fdb.bb().addReturn( retExp )
+    } else { return err }
     sg.pg.addDecl( fdb.build() )
+    return nil
 }
 
 func ( sg *structGen ) bindingInstFactLit() ast.Expr {
@@ -824,14 +872,15 @@ func ( sg *structGen ) addBinding() {
     sg.pg.addRegInitId( fdb.funcDecl.Name )
 }
 
-func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
+func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) error {
     sg := &structGen{ pg: pg, sd: sd, typ: pg.createTypeSpecForDef( sd ) }
     sg.setFields()
     sg.addDecl()
     sg.addFactories()
     sg.addAccessors()
-    sg.addVisitor()
+    if err := sg.addVisitor(); err != nil { return err }
     sg.addBinding()
+    return nil
 }
 
 func ( pg *pkgGen ) generateEnum( ed *types.EnumDefinition ) {
@@ -870,13 +919,14 @@ func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) {
     pg.addDecl( decl )
 }
 
-func ( pg *pkgGen ) generateDef( def types.Definition ) {
+func ( pg *pkgGen ) generateDef( def types.Definition ) error {
     switch v := def.( type ) {
-    case *types.StructDefinition: pg.generateStruct( v )
+    case *types.StructDefinition: return pg.generateStruct( v ) 
     case *types.EnumDefinition: pg.generateEnum( v )
     case *types.UnionDefinition: pg.generateUnion( v )
     case *types.SchemaDefinition: pg.generateSchema( v )
     }
+    return nil
 }
 
 func ( pg *pkgGen ) addGenDecl( tok token.Token, spec ast.Spec ) {
@@ -981,16 +1031,18 @@ func ( pg *pkgGen ) assembleDecls() {
     pg.file.Decls = append( pg.file.Decls, pg.decls... )
 }
 
-func ( pg *pkgGen ) generatePackage() {
+func ( pg *pkgGen ) generatePackage() error {
     pg.collectImports()
-    for _, def := range pg.defs { pg.generateDef( def ) }
+    for _, def := range pg.defs { 
+        if err := pg.generateDef( def ); err != nil { return err }
+    }
     pg.assembleDecls()
+    return nil
 }
 
 func ( g *Generator ) generatePackages() error {
     return g.eachPkgGen( func( pg *pkgGen ) error { 
-        pg.generatePackage()
-        return nil
+        return pg.generatePackage()
     })
 }
 
@@ -1024,7 +1076,7 @@ func ( g *Generator ) writeOutputs() error {
 }
 
 func ( g *Generator ) Generate() error {
-    if g.DestDir == "" { panic( libError( "no dest dir for generator" ) ) }
+    if g.DestDir == "" { return libError( "no dest dir for generator" ) }
     g.setPackageMap()
     g.initPackages()
     if err := g.generatePackages(); err != nil { return err }

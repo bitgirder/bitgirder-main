@@ -39,6 +39,40 @@ func init() {
         res.SetTimeF1( time.Time( mgTck.Timestamp1 ) )
         return res
     })
+    putVal( "core-simple-pointers-inst1", func() interface{} {
+        res := v1Data.NewCoreSimplePointers()
+        bl := new( bool )
+        *bl = true
+        res.SetBoolF1( bl )
+        buf := new( []byte )
+        *buf = []byte{ 0, 1 }
+        res.SetBufferF1( buf )
+        i32 := new( int32 )
+        *i32 = 1
+        res.SetInt32F1( i32 )
+        i64 := new( int64 )
+        *i64 = 2
+        res.SetInt64F1( i64 )
+        ui32 := new( uint32 )
+        *ui32 = 3
+        res.SetUint32F1( ui32 )
+        ui64 := new( uint64 )
+        *ui64 = 4
+        res.SetUint64F1( ui64 )
+        fl32 := new( float32 )
+        *fl32 = 5.0
+        res.SetFloat32F1( fl32 )
+        fl64 := new( float64 )
+        *fl64 = 6.0
+        res.SetFloat64F1( fl64 )
+        s := new( string )
+        *s = "hello"
+        res.SetStringF1( s )
+        t := new( time.Time )
+        *t = time.Time( mgTck.Timestamp1 )
+        res.SetTimeF1( t )
+        return res
+    })
 }
 
 type bindTestCall struct {
