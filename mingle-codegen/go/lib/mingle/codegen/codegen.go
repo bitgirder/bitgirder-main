@@ -31,8 +31,3 @@ func MustBuilderFactoryForQname(
     if ! ok { panic( libErrorf( "no builder factory for type: %s", qn ) ) }
     return res
 }
-
-func init() {
-    reg := bind.RegistryForDomain( bind.DomainDefault )
-    reg.AddVisitValueOkFunc( visitIdMapOk )
-}

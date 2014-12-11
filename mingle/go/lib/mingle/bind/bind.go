@@ -325,6 +325,14 @@ func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
     return res
 }
 
+func NewOpaqueValueFactory( reg *Registry ) mgRct.BuilderFactory {
+    return NewBuilderFactory( reg )
+}
+
+func NewOpaqueMapFactory( reg *Registry ) mgRct.BuilderFactory {
+    return NewBuilderFactory( reg )
+}
+
 func NewBuildReactor( bf mgRct.BuilderFactory ) *mgRct.BuildReactor {
     res := mgRct.NewBuildReactor( bf )
     res.ErrorFactory = bindErrorFactory
