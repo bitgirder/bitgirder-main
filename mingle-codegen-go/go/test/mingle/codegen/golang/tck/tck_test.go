@@ -73,6 +73,24 @@ func init() {
         res.SetTimeF1( t )
         return res
     })
+    putVal( "value-holder-int32", func() interface{} {
+        res := v1Data.NewValueHolder()
+        res.SetValF1( int32( 1 ) )
+        return res
+    })
+    putVal( "value-holder-map1", func() interface{} {
+        res := v1Data.NewValueHolder()
+        res.SetValF1( map[ string ]interface{}{ "k1": int32( 1 ) } )
+        return res
+    })
+    putVal( "value-holder-struct1-inst1", func() interface{} {
+        res := v1Data.NewValueHolder()
+        s1 := v1Data.NewStruct1()
+        s1.SetF1( 1 )
+        s1.SetF2( "hello" )
+        res.SetValF1( s1 )
+        return res
+    })
 }
 
 type bindTestCall struct {

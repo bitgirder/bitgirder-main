@@ -234,6 +234,37 @@ func ( b *testsBuilder ) addValueHolderTests() {
             dataStruct( "ValueHolder", "valF1", int32( 1 ) ),
             "value-holder-int32",
         ),
+        valueTest(
+            dataStruct( "ValueHolder",
+                "valF1", parser.MustSymbolMap( "k1", int32( 1 ) ),
+            ),
+            "value-holder-map1",
+        ),
+        valueTest(
+            dataStruct( "ValueHolder",
+                "valF1", dataStruct( "Struct1",
+                    "f1", int32( 1 ),
+                    "f2", "hello",
+                ),
+            ),
+            "value-holder-struct1-inst1",
+        ),
+        valueTest(
+            dataStruct( "ValueHolder", "valF1", dataEnum1( "const1" ) ),
+            "value-holder-enum1-const1",
+        ),
+        valueTest(
+            dataStruct( "ValueHolder", 
+                "valF1", mg.MustList( 
+                    int32( 1 ), 
+                    "hello", 
+                    nil,
+                    dataStruct( "Struct1", "f1", int32( 1 ), "f2", "hello" ),
+                    dataEnum1( "const1" ),
+                ),
+            ),
+            "value-holder-list1",
+        ),
     )
 }
 

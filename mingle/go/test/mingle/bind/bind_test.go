@@ -168,7 +168,9 @@ func getDefaultValBindTestValues() *mg.IdentifierMap {
     return res
 }
 
-func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
+func appendDefaultTestsForProfile(
+    tests []*BindTest, prof string ) []*BindTest {
+    
     p := mg.MakeTestIdPath
     addTest := func( t *BindTest ) {
         t.Domain = domainPackageBindTest
@@ -184,6 +186,7 @@ func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
                 Type: mg.TypeValue,
                 StrictTypeMatching: true,
                 Direction: BindTestDirectionIn,
+                Profile: prof,
             },
         )
     }
@@ -292,6 +295,12 @@ func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
     )
     addVisitErr( "fail-on-visit-type-val1", nil, "test-failure" )
     return tests
+}
+
+func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
+    res := make( []*BindTest, 0, 32 )
+    res = appendDefaultTestsForProfile( res, BindTestProfileDefault )
+    return res
 }
 
 func getBindTests() []*BindTest {

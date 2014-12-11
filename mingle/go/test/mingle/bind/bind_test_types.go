@@ -19,6 +19,11 @@ func ( d BindTestDirection ) Includes( d2 BindTestDirection ) bool {
     return d == d2 || d == BindTestDirectionRoundtrip
 }
 
+const (
+    BindTestProfileDefault = "default"
+    BindTestProfileOpaque = "opaque"
+)
+
 type BindTest struct {
     Mingle mg.Value
     BoundId *mg.Identifier
@@ -28,5 +33,6 @@ type BindTest struct {
     StrictTypeMatching bool
     Domain *mg.Identifier
     SerialOptions *SerialOptions
+    Profile string
     Error error
 }
