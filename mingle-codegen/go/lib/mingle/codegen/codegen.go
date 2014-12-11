@@ -2,6 +2,8 @@ package codegen
 
 import ( 
     mg "mingle"
+    "mingle/bind"
+    mgRct "mingle/reactor"
 )
 
 type PathMapper interface {
@@ -21,3 +23,16 @@ func ( m defaultPathMapper ) MapPath(
 }
 
 var DefaultPathMapper = defaultPathMapper( 1 )
+
+func MustBuilderFactoryForQname( 
+    qn *mg.QualifiedTypeName, reg *bind.Registry ) mgRct.BuilderFactory {
+
+    res, ok := reg.BuilderFactoryForName( qn )
+    if ! ok { panic( libErrorf( "no builder factory for type: %s", qn ) ) }
+    return res
+}
+
+func init() {
+    reg := bind.RegistryForDomain( bind.DomainDefault )
+    reg.AddVisitValueOkFunc( visitIdMapOk )
+}
