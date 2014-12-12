@@ -45,7 +45,7 @@ func ( t *bindTestCall ) debug() {
     )
 }
 
-func ( t *bindTestCall ) getBuilderFactory() mgRct.BuilderFactory {
+func ( t *bindTestCall ) defaultBuilderFactory() mgRct.BuilderFactory {
     typ := t.t.Type
     if typ == nil { typ = mg.TypeOf( t.t.Mingle ) }
     if bf, ok := t.reg.BuilderFactoryForType( typ ); ok { return bf }
@@ -53,6 +53,15 @@ func ( t *bindTestCall ) getBuilderFactory() mgRct.BuilderFactory {
         t.Fatalf( "no builder factory for type: %s", typ )
     }
     return NewBuilderFactory( t.reg )
+}
+
+func ( t *bindTestCall ) getBuilderFactory() mgRct.BuilderFactory {
+    switch t.t.Profile {
+    case BindTestProfileDefault: return t.defaultBuilderFactory()
+    case BindTestProfileOpaque: return NewOpaqueValueFactory( t.reg )
+    }
+    t.Fatalf( "unhandled profile: %s", t.t.Profile )
+    return nil
 }
 
 func ( t *bindTestCall ) bindBindTest() {
@@ -72,6 +81,13 @@ func ( t *bindTestCall ) bindBindTest() {
     }
 }
 
+func ( t *bindTestCall ) visitValue( val interface{}, vc VisitContext ) error {
+    if t.t.Profile == BindTestProfileOpaque {
+        return VisitValueOpaque( val, vc )
+    }
+    return VisitValue( val, vc )
+}
+
 func ( t *bindTestCall ) visitBindTest() bool {
     vb := mgRct.NewBuildReactor( mgRct.ValueBuilderFactory )
     pip := mgRct.InitReactorPipeline( vb )
@@ -79,12 +95,12 @@ func ( t *bindTestCall ) visitBindTest() bool {
     if o := t.t.SerialOptions; o != nil { bc.SerialOptions = o }
     vc := VisitContext{ BindContext: bc, Destination: pip }
     bv := t.boundVal()
-    if err := VisitValue( bv, vc ); err != nil {
+    if err := t.visitValue( bv, vc ); err != nil {
         t.EqualErrors( t.t.Error, err )
         return false
     }
     act := vb.GetValue().( mg.Value )
-    t.Logf( "generated %s", mg.QuoteValue( act ) )
+//    t.Logf( "generated %s", mg.QuoteValue( act ) )
     if f := t.cc.MingleValueForAssert; f != nil { act = f( act ) }
     mg.AssertEqualValues( t.t.Mingle, act, t.PathAsserter )
     return true

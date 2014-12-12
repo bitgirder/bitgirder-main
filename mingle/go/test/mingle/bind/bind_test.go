@@ -157,7 +157,8 @@ func getDefaultValBindTestValues() *mg.IdentifierMap {
     res.Put( mkId( "float32-val1" ), float32( 1.0 ) )
     res.Put( mkId( "float64-val1" ), float64( 1.0 ) )
     res.Put( mkId( "time-val1" ), time.Time( tm1 ) )
-    res.Put( mkId( "s1-val1" ), &S1{ f1: 1, f2: []int32{ 0, 1, 2 } } )
+    s1V1Inst1 := &S1{ f1: 1, f2: []int32{ 0, 1, 2 } }
+    res.Put( mkId( "s1-val1" ), s1V1Inst1 )
     res.Put( mkId( "e1-val1" ), E1V1 )
     res.Put( 
         mkId( "custom-visitable-val1" ), 
@@ -165,8 +166,96 @@ func getDefaultValBindTestValues() *mg.IdentifierMap {
     )
     res.Put( mkId( "unregistered-type-val1" ), unregisteredType( 1 ) )
     res.Put( mkId( "fail-on-visit-type-val1" ), failOnVisitType( 1 ) )
+    res.Put(
+        mkId( "map-inst1" ),
+        map[ string ] interface{} { "an-id1": int32( 1 ) },
+    )
+    res.Put(
+        mkId( "opaque-out-ptr-map-inst1" ),
+        func() interface{} {
+            ip1 := new( *int32 )
+            *ip1 = new( int32 )
+            **ip1 = int32( 1 )
+            m := &( map[ string ] interface{}{ "anId1": ip1 } )
+            return m
+        }(),
+    )
+    res.Put( mkId( "int32-list1" ), []int32{ 0, 1 } )
+    res.Put(
+        mkId( "val-list-inst1" ),
+        []interface{}{
+            int32( 1 ),
+            s1V1Inst1,
+            E1V1,
+            []interface{}{
+                []interface{}{
+                    int32( 1 ),
+                    map[ string ] interface{}{ "k1": true },
+                },
+            },
+            map[ string ] interface{}{
+                "k1": []interface{}{},
+                "k2": "hello",
+                "k3": map[ string ] interface{}{},
+            },
+        },
+    )
+    res.Put(
+        mkId( "opaque-out-ptr-val-list-inst1" ),
+        func() interface{} {
+            res := new( []interface{} )
+            iPtr := new( int32 )
+            *iPtr = int32( 1 )
+            e1Ptr := new( E1 )
+            *e1Ptr = E1V1
+            l2Ptr := new( *[]interface{} )
+            *l2Ptr = new( []interface{} )
+            **l2Ptr = []interface{}{
+                []interface{}{
+                    int32( 1 ),
+                    &( map[ string ] interface{}{ "k1": true } ),
+                },
+            }
+            mp2Ptr := new( map[ string ] interface{} )
+            *mp2Ptr = map[ string ] interface{}{
+                "k1": []interface{}{},
+                "k2": "hello",
+                "k3": map[ string ] interface{}{},
+            }
+            *res = []interface{}{ iPtr, s1V1Inst1, e1Ptr, l2Ptr, mp2Ptr }
+            return res
+        }(),
+    )
+    res.Put( mkId( "bool-val-map" ), map[ bool ] interface{}{ true: true } )
+    res.Put( 
+        mkId( "string-int32-map" ), 
+        map[ string ] int32 { "k1": int32( 1 ) },
+    )
+    res.Put( 
+        mkId( "bool-val-map-at-nested-err-loc" ),
+        map[ string ] interface{} {
+            "p1": []interface{}{ 
+                int32( 0 ), 
+                int32( 1 ),
+                map[ string ] int32 { "k1": int32( 1 ) },
+            },
+        },
+    )
+    res.Put( 
+        mkId( "bad-id-key-map" ),
+        map[ string ] interface{}{ "$bad-id": true }, 
+    )
     return res
 }
+
+var mgS1V1 = parser.MustStruct( "mingle:bind@v1/S1", 
+    "f1", int32( 1 ),
+    "f2", mg.MustList( asType( "Int32*" ), 
+        int32( 0 ), int32( 1 ), int32( 2 ),
+    ),
+)
+
+var mgE1V1 = parser.MustEnum( "mingle:bind@v1/E1", "v1" )
 
 func appendDefaultTestsForProfile(
     tests []*BindTest, prof string ) []*BindTest {
@@ -174,6 +263,7 @@ func appendDefaultTestsForProfile(
     p := mg.MakeTestIdPath
     addTest := func( t *BindTest ) {
         t.Domain = domainPackageBindTest
+        t.Profile = prof
         tests = append( tests, t )
     }
     addOk := func( in mg.Value, id string ) {
@@ -186,7 +276,6 @@ func appendDefaultTestsForProfile(
                 Type: mg.TypeValue,
                 StrictTypeMatching: true,
                 Direction: BindTestDirectionIn,
-                Profile: prof,
             },
         )
     }
@@ -201,15 +290,8 @@ func appendDefaultTestsForProfile(
     addOk( mg.Float32( 1.0 ), "float32-val1" )
     addOk( mg.Float64( 1.0 ), "float64-val1" )
     addOk( tm1, "time-val1" )
-    s1V1 := parser.MustStruct( "mingle:bind@v1/S1", 
-        "f1", int32( 1 ),
-        "f2", mg.MustList( asType( "Int32*" ), 
-            int32( 0 ), int32( 1 ), int32( 2 ),
-        ),
-    )
-    e1V1 := parser.MustEnum( "mingle:bind@v1/E1", "v1" )
-    addOk( s1V1, "s1-val1" )
-    addOk( e1V1, "e1-val1" )
+    addOk( mgS1V1, "s1-val1" )
+    addOk( mgE1V1, "e1-val1" )
     addTest(
         &BindTest{
             Mingle: parser.MustStruct( "mingle:bind@v1/CustomVisitable", 
@@ -274,11 +356,6 @@ func appendDefaultTestsForProfile(
         p( 1 ),
         "unhandled value: mingle:core@v1/SymbolMap",
     )
-    addInErr(
-        mg.MustList( asType( "mingle:bind@v1/Bad*" ) ),
-        nil,
-        "unhandled value: mingle:bind@v1/Bad*",
-    )
     addVisitErr := func( boundId string, path objpath.PathNode, msg string ) {
         addTest(
             &BindTest{
@@ -297,9 +374,105 @@ func appendDefaultTestsForProfile(
     return tests
 }
 
+func appendDefaultTests( tests []*BindTest ) []*BindTest {
+    tests = appendDefaultTestsForProfile( tests, BindTestProfileDefault )
+    tests = append( tests,
+        &BindTest{ 
+            Mingle: mg.MustList( asType( "mingle:bind@v1/Bad*" ) ),
+            Error: NewBindError( nil, "unhandled value: mingle:bind@v1/Bad*" ),
+            Direction: BindTestDirectionIn,
+            Profile: BindTestProfileDefault,
+            Domain: DomainDefault,
+        },
+    )
+    return tests
+}
+
+func appendOpaqueTests( tests []*BindTest ) []*BindTest {
+    tests = appendDefaultTestsForProfile( tests, BindTestProfileOpaque )
+    addTestBase := func( t *BindTest ) {
+        t.Domain = domainPackageBindTest
+        t.Type = mg.TypeValue
+        tests = append( tests, t )
+    }
+    addTest := func( in mg.Value, boundId string, dir BindTestDirection ) {
+        addTestBase(
+            &BindTest{ 
+                Mingle: in, 
+                BoundId: mkId( boundId ),
+                Direction: dir,
+                Profile: BindTestProfileOpaque,
+            },
+        )
+    }
+    addRt := func( in mg.Value, boundId string ) {
+        addTest( in, boundId, BindTestDirectionRoundtrip )
+    }
+    addOut := func( in mg.Value, boundId string ) {
+        addTest( in, boundId, BindTestDirectionOut )
+    }
+    addOk := func( in mg.Value, boundId string ) {
+        addRt( in, boundId )
+        addOut( in, "opaque-out-ptr-" + boundId )
+    }
+    addOutErr := func( boundId string, err error ) {
+        addTestBase(
+            &BindTest{
+                BoundId: mkId( boundId ),
+                Direction: BindTestDirectionOut,
+                Profile: BindTestProfileOpaque,
+                Error: err,
+            },
+        )
+    }
+    mgMapInst1 := parser.MustSymbolMap( "anId1", int32( 1 ) )
+    addOk( mgMapInst1, "map-inst1" )
+    addOk( 
+        mg.MustList( 
+            int32( 1 ), 
+            mgS1V1, 
+            mgE1V1,
+            mg.MustList(
+                mg.MustList( int32( 1 ), parser.MustSymbolMap( "k1", true ) ),
+            ),
+            parser.MustSymbolMap(
+                "k1", mg.MustList(),
+                "k2", "hello",
+                "k3", mg.EmptySymbolMap(),
+            ),
+        ), 
+        "val-list-inst1",
+    )
+    addOut( mg.MustList( int32( 0 ), int32( 1 ) ), "int32-list1" )
+    addOutErr( 
+        "bool-val-map", 
+        NewVisitError( nil, "unknown type for visit: map[bool]interface {}" ),
+    )
+    addOutErr( 
+        "string-int32-map",
+        NewVisitError( nil, "unknown type for visit: map[string]int32" ),
+    )
+    addOutErr( 
+        "bad-id-key-map",
+        NewBindError( 
+            nil, 
+            "[<input>, line 1, col 1]: Illegal start of identifier part: \"$\" (U+0024)",
+        ),
+    )
+    addOutErr(
+        "bool-val-map-at-nested-err-loc",
+        NewVisitError(
+            objpath.RootedAt( mkId( "p1" ) ).StartList().SetIndex( 2 ),
+            "unknown type for visit: map[string]int32",
+        ),
+    )
+    return tests
+}
+
 func getDefaultValBindTests( tests []*BindTest ) []*BindTest {
     res := make( []*BindTest, 0, 32 )
-    res = appendDefaultTestsForProfile( res, BindTestProfileDefault )
+    res = appendDefaultTests( res )
+    res = appendOpaqueTests( res )
     return res
 }
 

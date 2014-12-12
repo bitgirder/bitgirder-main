@@ -3,9 +3,11 @@ package bind
 import (
     "bitgirder/objpath"
     "fmt"
+    "mingle/parser"
     mg "mingle"
     mgRct "mingle/reactor"
     "time"
+    "reflect"
 //    "log"
 )
 
@@ -303,7 +305,7 @@ func MustRegistryForDomain( domain *mg.Identifier ) *Registry {
     panic( libErrorf( "no registry for domain: %s", domain ) )
 }
 
-func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
+func newBuilderFactory( reg *Registry ) *mgRct.FunctionsBuilderFactory {
     res := NewFunctionsBuilderFactory()
     res.ValueFunc = func( ve *mgRct.ValueEvent ) ( interface{}, error, bool ) {
         qn := mg.TypeOf( ve.Val ).( *mg.AtomicTypeReference ).Name()
@@ -325,12 +327,75 @@ func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
     return res
 }
 
-func NewOpaqueValueFactory( reg *Registry ) mgRct.BuilderFactory {
-    return NewBuilderFactory( reg )
+// public frontend to newBuilderFactory that allows us to have the return type
+// be simply mgRct.BuilderFactory while retaining type safety for internal
+// callers of newBuilderFactory
+func NewBuilderFactory( reg *Registry ) mgRct.BuilderFactory {
+    return newBuilderFactory( reg )
 }
 
-func NewOpaqueMapFactory( reg *Registry ) mgRct.BuilderFactory {
-    return NewBuilderFactory( reg )
+type opaqueMapBuilder struct {
+    m map[ string ] interface{}
+    f mgRct.BuilderFactory // the parent opaque builder factory
+}
+
+func ( b opaqueMapBuilder ) ProduceValue( 
+    _ *mgRct.EndEvent ) ( interface{}, error ) {
+
+    return b.m, nil
+}
+
+func ( b opaqueMapBuilder ) StartField( 
+    fse *mgRct.FieldStartEvent ) ( mgRct.BuilderFactory, error ) {
+
+    return b.f, nil
+}
+
+func ( b opaqueMapBuilder ) SetValue( 
+    fld *mg.Identifier, val interface{}, path objpath.PathNode ) error {
+
+    b.m[ fld.ExternalForm() ] = val
+    return nil
+}
+
+type opaqueListBuilder struct {
+    l []interface{}
+    f mgRct.BuilderFactory // parent opaque builder factory
+    reg *Registry
+}
+
+func ( b *opaqueListBuilder ) AddValue( 
+    val interface{}, path objpath.PathNode ) error {
+
+    b.l = append( b.l, val )
+    return nil
+}
+
+func ( b *opaqueListBuilder ) NextBuilderFactory() mgRct.BuilderFactory {
+    return b.f
+}
+
+func ( b *opaqueListBuilder ) ProduceValue(
+    _ *mgRct.EndEvent ) ( interface{}, error ) {
+
+    return b.l, nil
+}
+
+func NewOpaqueValueFactory( reg *Registry ) mgRct.BuilderFactory {
+    res := newBuilderFactory( reg )
+    res.MapFunc = func( 
+        _ *mgRct.MapStartEvent ) ( mgRct.FieldSetBuilder, error ) {
+        
+        m := make( map[ string ] interface{}, 4 )
+        return opaqueMapBuilder{ f: res, m: m }, nil
+    }
+    res.ListFunc = func( 
+        _ *mgRct.ListStartEvent ) ( mgRct.ListBuilder, error ) {
+
+        l := make( []interface{}, 0, 4 )
+        return &opaqueListBuilder{ f: res, l: l }, nil
+    }
+    return res
 }
 
 func NewBuildReactor( bf mgRct.BuilderFactory ) *mgRct.BuildReactor {
@@ -400,11 +465,74 @@ type ValueVisitor interface {
     VisitValue( vc VisitContext ) error
 }
 
-func VisitValue( val interface{}, vc VisitContext ) error {
-
-    if vv, ok := val.( ValueVisitor ); ok { return vv.VisitValue( vc ) }
+// could make this public if needed
+func visitValueOk( val interface{}, vc VisitContext ) ( bool, error ) {
+    if vv, ok := val.( ValueVisitor ); ok { return true, vv.VisitValue( vc ) }
     for _, f := range vc.BindContext.Registry.visitors {
-        if err, ok := f( val, vc ); ok { return err }
+        if err, ok := f( val, vc ); ok { return true, err }
     }
+    return false, nil
+}
+
+func errForUnknownVisitType( val interface{}, vc VisitContext ) error {
     return NewVisitErrorf( vc.Path, "unknown type for visit: %T", val )
+}
+
+func VisitValue( val interface{}, vc VisitContext ) error {
+    if ok, err := visitValueOk( val, vc ); ok { return err }
+    return errForUnknownVisitType( val, vc )
+}
+
+func visitPtrValueOpaque( val interface{}, vc VisitContext ) error {
+    ptrVal := reflect.ValueOf( val )
+    return VisitValueOpaque( ptrVal.Elem().Interface(), vc )
+}
+
+func visitSliceValueOpaque( val interface{}, vc VisitContext ) error {
+    slc := reflect.ValueOf( val )
+    es := vc.EventSender()
+    if err := es.StartList( mg.TypeOpaqueList ); err != nil { return err }
+    lp := objpath.StartList( vc.Path )
+    for i, e := 0, slc.Len(); i < e; i++ {
+        vc2 := vc // shallow copy
+        vc2.Path = lp
+        elt := slc.Index( i ).Interface()
+        if err := VisitValueOpaque( elt, vc2 ); err != nil { return err }
+        lp = lp.Next()
+    }
+    return es.End()
+}
+
+//func visitStructValueOpaque( val interface{}, vc VisitContext ) error {
+//    s := reflect.ValueOf( val )
+//    if ! s.CanAddr() { return errForUnknownVisitType( val, vc ) }
+//    return VisitValue( s.Addr().Interface(), vc )
+//}
+
+func visitMapOpaque( m map[ string ] interface{}, vc VisitContext ) error {
+    es := vc.EventSender()
+    if err := es.StartMap(); err != nil { return err }
+    for k, v := range m {
+        id, err := parser.ParseIdentifier( k )
+        if err != nil { return NewBindError( vc.Path, err.Error() ) }
+        if err = es.StartField( id ); err != nil { return err }
+        vc2 := vc // shallow copy vc
+        vc2.Path = objpath.Descend( vc2.Path, id )
+        if err = VisitValueOpaque( v, vc2 ); err != nil { return err }
+    }
+    return es.End()
+}
+
+func VisitValueOpaque( val interface{}, vc VisitContext ) error {
+    if ok, err := visitValueOk( val, vc ); ok { return err }
+    if val == nil { return VisitValue( mg.NullVal, vc ) }
+    if m, ok := val.( map[ string ] interface{} ); ok {
+        return visitMapOpaque( m, vc )
+    }
+    switch reflect.TypeOf( val ).Kind() {
+    case reflect.Ptr: return visitPtrValueOpaque( val, vc )
+    case reflect.Slice: return visitSliceValueOpaque( val, vc )
+//    case reflect.Struct: return visitStructValueOpaque( val, vc )
+    }
+    return errForUnknownVisitType( val, vc )
 }

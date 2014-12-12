@@ -253,6 +253,7 @@ type bindTestBuilder struct {
 
 func ( b *bindTestBuilder ) addTest( t *bind.BindTest ) {
     t.Domain = bind.DomainDefault
+    t.Profile = bind.BindTestProfileDefault
     b.tests = append( b.tests, t )
 }
 
