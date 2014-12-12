@@ -25,6 +25,7 @@ func valueTestWithType(
         Direction: bind.BindTestDirectionRoundtrip,
         Type: typ,
         Domain: bind.DomainDefault,
+        Profile: bind.BindTestProfileDefault,
     }
 }
 
