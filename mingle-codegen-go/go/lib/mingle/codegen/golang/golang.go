@@ -980,10 +980,12 @@ func ( sg *structGen ) addAccessors() {
     }
 }
 
-// side effect: sets sg.constructorName
+func ( sg *structGen ) setConstructorName() {
+    sg.constructorName = ast.NewIdent( "New" + sg.typ.Name.String() )
+}
+
 func ( sg *structGen ) addFactories() {
     fdb := sg.pg.newFuncDeclBuilder()
-    sg.constructorName = ast.NewIdent( "New" + sg.typ.Name.String() )
     fdb.funcDecl.Name = sg.constructorName
     resTyp := sg.ptrType()
     fdb.ftb.res.addAnon( resTyp )
@@ -1171,6 +1173,7 @@ func ( sg *structGen ) addBuilderFactory() {
 
 func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) error {
     sg := &structGen{ pg: pg, sd: sd, typ: pg.createTypeSpecForDef( sd ) }
+    sg.setConstructorName() // constructorName is used by calls below
     sg.setFields()
     sg.addDecl()
     sg.addFactories()
@@ -1359,14 +1362,9 @@ func ( pg *pkgGen ) getDefaultBuildFactoryAssignRhs(
     qn *mg.QualifiedTypeName ) ast.Expr {
 
     switch {
-    case qn.Equals( mg.QnameValue ):
+    case qn.Equals( mg.QnameValue ) || qn.Equals( mg.QnameSymbolMap ):
         return callExpr(
             pg.pkgSel( goPkgBind, goUcNewOpaqueValueFactory ), 
-            goLcReg,
-        )
-    case qn.Equals( mg.QnameSymbolMap ):
-        return callExpr(
-            pg.pkgSel( goPkgBind, goUcNewOpaqueMapFactory ),
             goLcReg,
         )
     }
