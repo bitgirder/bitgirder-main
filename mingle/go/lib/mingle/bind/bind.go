@@ -59,19 +59,18 @@ func VisitStruct(
 }
 
 func VisitFieldFunc(
-    vc VisitContext, 
-    fld *mg.Identifier, 
-    val interface{},
-    f VisitValueFunc ) error {
+    vc VisitContext, fld *mg.Identifier, f func() error ) error {
 
     if err := vc.EventSender().StartField( fld ); err != nil { return err }
-    return f( val, vc )
+    return f()
 }
 
 func VisitFieldValue( 
     vc VisitContext, fld *mg.Identifier, val interface{} ) error {
 
-    return VisitFieldFunc( vc, fld, val, VisitValue )
+    return VisitFieldFunc( vc, fld, func() error {
+        return VisitValue( val, vc )
+    })
 }
 
 func VisitList( vc VisitContext,
@@ -109,7 +108,6 @@ func VisitListValue(
     })
 }
 
-type VisitValueFunc func( val interface{}, vc VisitContext ) error
 type VisitValueOkFunc func( val interface{}, vc VisitContext ) ( error, bool )
 
 type Registry struct {

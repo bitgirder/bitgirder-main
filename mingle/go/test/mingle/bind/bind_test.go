@@ -27,13 +27,11 @@ func ( s *S1 ) VisitValue( vc VisitContext ) error {
         if err := VisitFieldValue( vc, mkId( "f1" ), s.f1 ); err != nil { 
             return err
         }
-        vf := func( val interface{}, vc VisitContext ) error {
-            s := val.( *S1 )
+        return VisitFieldFunc( vc, mkId( "f2" ), func() error {
             lt := asType( "Int32*" ).( *mg.ListTypeReference )
             elt := func( i int ) interface{} { return s.f2[ i ] }
             return VisitListValue( vc, lt, len( s.f2 ), elt )
-        }
-        return VisitFieldFunc( vc, mkId( "f2" ), s, vf )
+        })
     }
     return VisitStruct( vc, qn, f )
 }
@@ -63,17 +61,16 @@ type customVisitable struct {
 func visitCustomVisitable( cv customVisitable, vc VisitContext ) error {
     qn := mkQn( "mingle:bind@v1/CustomVisitable" )
     return VisitStruct( vc, qn, func() error {
-        if err := VisitFieldValue( vc, mkId( "f1" ), cv.f1 ); err != nil {
-            return err
-        }
-        vf := func( val interface{}, vc VisitContext ) error {
-            cv := val.( customVisitable )
-            lt := asType( "Int32*" ).( *mg.ListTypeReference )
+        err := VisitFieldFunc( vc, mkId( "f1" ), func() error {
+            return vc.EventSender().Value( mg.Int32( int32( cv.f1 ) ) )
+        })
+        if err != nil { return err }
+        lt := asType( "Int32*" ).( *mg.ListTypeReference )
+        return VisitFieldFunc( vc, mkId( "f2" ), func() error {
             return VisitListFunc( vc, lt, len( cv.f2 ), func( i int ) error {
                 return vc.EventSender().Value( mg.Int32( cv.f2[ i ] ) )
             })
-        }
-        return VisitFieldFunc( vc, mkId( "f2" ), cv, vf )
+        })
     })
 }
 

@@ -92,14 +92,12 @@ func newIdBuilderFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 
 func visitIdentifierAsStruct( id *mg.Identifier, vc bind.VisitContext ) error {
     return bind.VisitStruct( vc, mg.QnameIdentifier, func() error {
-        parts := id.GetPartsUnsafe()
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            parts := val.( []string )
+        return bind.VisitFieldFunc( vc, identifierParts, func() error {
+            parts := id.GetPartsUnsafe()
             l := len( parts )
             f := func( i int ) interface{} { return parts[ i ] }
             return bind.VisitListValue( vc, typeIdentifierPartsList, l, f )
-        }
-        return bind.VisitFieldFunc( vc, identifierParts, parts, vf )
+        })
     })
 }
 
@@ -150,10 +148,9 @@ func VisitDeclaredTypeName(
 
 func visitNamespaceAsStruct( ns *mg.Namespace, vc bind.VisitContext ) error {
     return bind.VisitStruct( vc, mg.QnameNamespace, func() ( err error ) {
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            return visitIdentifierList( val.( []*mg.Identifier ), vc )
-        }
-        err = bind.VisitFieldFunc( vc, identifierParts, ns.Parts, vf )
+        err = bind.VisitFieldFunc( vc, identifierParts, func() error {
+            return visitIdentifierList( ns.Parts, vc )
+        })
         if err != nil { return }
         return bind.VisitFieldValue( vc, identifierVersion, ns.Version )
     })
@@ -534,14 +531,12 @@ func ( vis idPathPartsEventSendVisitor ) List( idx uint64 ) error {
 
 func visitIdPathAsStruct( p objpath.PathNode, vc bind.VisitContext ) error {
     return bind.VisitStruct( vc, mg.QnameIdentifierPath, func() error {
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            p := val.( objpath.PathNode )
+        return bind.VisitFieldFunc( vc, identifierParts, func() error {
             body := func() error {
                 return objpath.Visit( p, idPathPartsEventSendVisitor{ vc } )
             }
             return bind.VisitList( vc, typeIdentifierPathPartsList, body )
-        }
-        return bind.VisitFieldFunc( vc, identifierParts, p, vf )
+        })
     })
 }
 
@@ -710,10 +705,9 @@ func VisitMissingFieldsError(
         if err := visitLocatableError( e.Location, e.Message, vc ); err != nil {
             return err
         }
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            return visitIdentifierList( val.( []*mg.Identifier ), vc )
-        }
-        return bind.VisitFieldFunc( vc, identifierFields, e.Fields(), vf )
+        return bind.VisitFieldFunc( vc, identifierFields, func() error {
+            return visitIdentifierList( e.Fields(), vc )
+        })
     })
 }
 
@@ -810,18 +804,16 @@ func newFieldDefFactory( reg *bind.Registry ) mgRct.BuilderFactory {
 
 func VisitFieldSet( fs *types.FieldSet, vc bind.VisitContext ) error {
     return bind.VisitStruct( vc, QnameFieldSet, func() error {
-        vf := func( val interface{}, vc bind.VisitContext ) error {
+        return bind.VisitFieldFunc( vc, identifierFields, func() error {        
             return bind.VisitList( vc, typeFieldDefList, func() error {
                 var err error
-                fs := val.( *types.FieldSet )
                 fs.EachDefinition( func( fd *types.FieldDefinition ) {
                     if err != nil { return }
                     err = VisitFieldDefinition( fd, vc )
                 })
                 return err
             })
-        }
-        return bind.VisitFieldFunc( vc, identifierFields, fs, vf )
+        })
     })
 }
 
@@ -879,13 +871,11 @@ func VisitUnionTypeDefinition(
     utd *types.UnionTypeDefinition, vc bind.VisitContext ) error {
 
     return bind.VisitStruct( vc, QnameUnionTypeDefinition, func() error {
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            utd := val.( *types.UnionTypeDefinition )
-            ln := len( utd.Types )
-            f := func( i int ) interface{} { return utd.Types[ i ] }
+        ln := len( utd.Types )
+        f := func( i int ) interface{} { return utd.Types[ i ] }
+        return bind.VisitFieldFunc( vc, identifierTypes, func() error {
             return bind.VisitListValue( vc, typeUnionTypeTypesList, ln, f )
-        }
-        return bind.VisitFieldFunc( vc, identifierTypes, utd, vf )
+        })
     })
 }
 
@@ -1154,13 +1144,11 @@ func VisitEnumDefinition(
     return bind.VisitStruct( vc, QnameEnumDefinition, func() error {
         err := bind.VisitFieldValue( vc, identifierName, ed.Name )
         if err != nil { return err }
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            ed := val.( *types.EnumDefinition )
+        return bind.VisitFieldFunc( vc, identifierValues, func() error {
             ln := len( ed.Values )
             f := func( i int ) interface{} { return ed.Values[ i ] }
             return bind.VisitListValue( vc, typeIdentifierPointerList, ln, f )
-        }
-        return bind.VisitFieldFunc( vc, identifierValues, ed, vf )
+        })
     })
 }
 
@@ -1231,13 +1219,11 @@ func VisitServiceDefinition(
     return bind.VisitStruct( vc, QnameServiceDefinition, func() error {
         err := bind.VisitFieldValue( vc, identifierName, sd.Name )
         if err != nil { return err }
-        vf := func( val interface{}, vc bind.VisitContext ) error {
-            sd := val.( *types.ServiceDefinition )
+        err = bind.VisitFieldFunc( vc, identifierOperations, func() error {
             ln := len( sd.Operations )
             f := func( i int ) interface{} { return sd.Operations[ i ] }
             return bind.VisitListValue( vc, typeOpDefList, ln, f )
-        }
-        err = bind.VisitFieldFunc( vc, identifierOperations, sd, vf )
+        })
         if err != nil { return err }
         if sec := sd.Security; sec != nil {
             err = bind.VisitFieldValue( vc, identifierSecurity, sec )
