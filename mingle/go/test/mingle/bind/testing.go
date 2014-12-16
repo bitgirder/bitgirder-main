@@ -71,6 +71,7 @@ func ( t *bindTestCall ) bindBindTest() {
     if p := t.t.StartPath; p != nil {
         rcts = append( rcts, mgRct.NewPathSettingProcessorPath( p ) )
     }
+//    rcts = append( rcts, mgRct.NewDebugReactor( t ) )
     rcts = append( rcts, br )
     pip := mgRct.InitReactorPipeline( rcts... )
     if err := mgRct.VisitValue( t.t.Mingle, pip ); err == nil {

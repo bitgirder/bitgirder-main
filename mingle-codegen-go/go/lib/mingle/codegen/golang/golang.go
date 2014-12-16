@@ -70,6 +70,10 @@ func derefExpr( x ast.Expr ) ast.Expr {
     return starExpr( &ast.ParenExpr{ X: x } )
 }
 
+func blockStmt( block ...ast.Stmt ) *ast.BlockStmt {
+    return &ast.BlockStmt{ List: block }
+}
+
 func comment1( text string ) *ast.CommentGroup {
     return &ast.CommentGroup{
         List: []*ast.Comment{
@@ -151,6 +155,8 @@ var (
     goUcStartField = ast.NewIdent( "StartField" )
     goUcVisitContext = ast.NewIdent( "VisitContext" )
     goUcVisitFieldValue = ast.NewIdent( "VisitFieldValue" )
+    goUcVisitFieldFunc = ast.NewIdent( "VisitFieldFunc" )
+    goUcVisitValueOpaque = ast.NewIdent( "VisitValueOpaque" )
     goUcVisitStruct = ast.NewIdent( "VisitStruct" )
     goUcVisitValue = ast.NewIdent( "VisitValue" )
 )
@@ -401,6 +407,9 @@ func ( pg *pkgGen ) atomicTypeUsesDefaultFactory(
     at *mg.AtomicTypeReference ) bool {
 
     qn := at.Name() 
+    if qn.Equals( mg.QnameValue ) || qn.Equals( mg.QnameSymbolMap ) { 
+        return false 
+    }
     return pg.g.isPrimitiveQn( qn ) || pg.g.isEnumQn( qn )
 }
 
@@ -421,6 +430,12 @@ func ( pg *pkgGen ) typeUsesDefaultFactory( typ mg.TypeReference ) bool {
     case *mg.NullableTypeReference: return pg.typeUsesDefaultFactory( v.Type )
     }
     return false
+}
+
+func ( pg *pkgGen ) mustDefForQn( qn *mg.QualifiedTypeName ) types.Definition {
+    def, ok := pg.g.Types.GetDefinition( qn )
+    if ! ok { panic( libErrorf( "no definition for %s", qn ) ) }
+    return def
 }
 
 type importCollector struct {
@@ -787,9 +802,7 @@ func ( pg *pkgGen ) mustBuilderFactoryIdForType(
     return res 
 }
 
-// at the moment, the only builtin types we use have builder factories keyed by
-// qname, so we have a simple codepath here for the moment.
-func ( pg *pkgGen ) defaultBuilderFactoryExprForType( 
+func ( pg *pkgGen ) builderFactoryExprForDefaultType( 
     typ mg.TypeReference ) ast.Expr {
 
     return pg.pkgDefaultFactoryIdVar( mg.TypeNameIn( typ ) )
@@ -797,7 +810,7 @@ func ( pg *pkgGen ) defaultBuilderFactoryExprForType(
 
 func ( pg *pkgGen ) builderFactoryExprForType( typ mg.TypeReference ) ast.Expr {
     if pg.typeUsesDefaultFactory( typ ) {
-        return pg.defaultBuilderFactoryExprForType( typ )
+        return pg.builderFactoryExprForDefaultType( typ )
     }
     return callExpr( pg.mustBuilderFactoryIdForType( typ ), goLcReg )
 }
@@ -812,15 +825,62 @@ func ( pg *pkgGen ) createValueConvertFunc(
     return fdb.buildLiteral()
 }
 
-func ( pg *pkgGen ) addAtomicBuilderFactoryFuncBody(
-    bb *bodyBuilder, at *mg.AtomicTypeReference ) error {
+func ( pg *pkgGen ) addOpaqueValueFactoryFuncBody( bb *bodyBuilder ) {
+    bb.addReturn(
+        callExpr( pg.pkgSel( goPkgBind, goUcNewOpaqueValueFactory ), goLcReg ),
+    )
+}
 
-    bb.addReturn( goKwdNil )
-    return nil
+func ( pg *pkgGen ) addPrimDefBuilderFactoryFuncBody(
+    pd *types.PrimitiveDefinition, bb *bodyBuilder ) {
+    
+    log.Printf( "adding prim bld fact func for %s", pd.GetName() )
+    nm := pd.GetName()
+    if nm.Equals( mg.QnameValue ) || nm.Equals( mg.QnameSymbolMap ) {
+        pg.addOpaqueValueFactoryFuncBody( bb )
+        return
+    }
+    panic( libErrorf( "no builder factory func for type %s", nm ) )
+}
+
+func ( pg *pkgGen ) addSchemaDefBuilderFactFuncBody( 
+    sd *types.SchemaDefinition, bb *bodyBuilder ) {
+
+    pg.addOpaqueValueFactoryFuncBody( bb )
+}
+
+func ( pg *pkgGen ) addUnionDefBuilderFactFuncBody( 
+    ud *types.UnionDefinition, bb *bodyBuilder ) {
+
+    pg.addOpaqueValueFactoryFuncBody( bb )
+}
+
+func ( pg *pkgGen ) addStructScalarBuilderFactFuncBody( 
+    sd *types.StructDefinition, bb *bodyBuilder ) {
+
+    pg.addOpaqueValueFactoryFuncBody( bb )
+}
+
+func ( pg *pkgGen ) addAtomicBuilderFactoryFuncBody(
+    bb *bodyBuilder, at *mg.AtomicTypeReference ) {
+
+    switch v := pg.mustDefForQn( at.Name() ).( type ) {
+    case *types.PrimitiveDefinition:
+        pg.addPrimDefBuilderFactoryFuncBody( v, bb )
+    case *types.SchemaDefinition:
+        pg.addSchemaDefBuilderFactFuncBody( v, bb )
+    case *types.UnionDefinition:
+        pg.addUnionDefBuilderFactFuncBody( v, bb )
+    case *types.StructDefinition:
+        pg.addStructScalarBuilderFactFuncBody( v, bb )
+    default: 
+        panic( libErrorf( "unhandled def for builder factory func: %s (%T)", 
+            v.GetName(), v ) )
+    }
 }
 
 func ( pg *pkgGen ) addPointerBuilderFactoryFuncBody(
-    bb *bodyBuilder, pt *mg.PointerTypeReference ) error {
+    bb *bodyBuilder, pt *mg.PointerTypeReference ) {
 
     retExp := callExpr(
         pg.pkgSel( goPkgReactor, goUcNewConverterFactory ),
@@ -834,47 +894,38 @@ func ( pg *pkgGen ) addPointerBuilderFactoryFuncBody(
         }),
     )
     bb.addReturn( retExp )
-    return nil
 }
 
 func ( pg *pkgGen ) addListBuilderFactoryFuncBody(
-    bb *bodyBuilder, eltTyp mg.TypeReference ) error {
+    bb *bodyBuilder, eltTyp mg.TypeReference ) {
 
     bb.addReturn( goKwdNil )
-    return nil
 }
 
-func ( pg *pkgGen ) addBuilderFactoryFuncBody(
-    bb *bodyBuilder, key typeKey ) error {
-
+func ( pg *pkgGen ) addBuilderFactoryFuncBody( bb *bodyBuilder, key typeKey ) {
     switch v := pg.typeKeys[ key ].( type ) {
-    case *mg.AtomicTypeReference:
-        return pg.addAtomicBuilderFactoryFuncBody( bb, v )
-    case *mg.PointerTypeReference:
-        return pg.addPointerBuilderFactoryFuncBody( bb, v )
+    case *mg.AtomicTypeReference: pg.addAtomicBuilderFactoryFuncBody( bb, v )
+    case *mg.PointerTypeReference: pg.addPointerBuilderFactoryFuncBody( bb, v )
     case *mg.ListTypeReference:
-        return pg.addListBuilderFactoryFuncBody( bb, v.ElementType )
+        pg.addListBuilderFactoryFuncBody( bb, v.ElementType )
+    default: panic( libErrorf( "unexpected builder fact typeKey: %s", key ) )
     }
-    panic( libErrorf( "unexpected typeKey for builder fact: %s", key ) )
 }
 
-func ( pg *pkgGen ) addBuilderFactoryFunc( key typeKey ) error {
+func ( pg *pkgGen ) addBuilderFactoryFunc( key typeKey ) {
     fdb := pg.newFuncDeclBuilder()
     fdb.funcDecl.Name = pg.builderFactoryIds[ key ]
     fdb.funcDecl.Doc = comment1f( "builds %s", key )
     fdb.ftb.res.addAnon( pg.pkgSel( goPkgReactor, goUcBuilderFactory ) )
     regType := pg.pkgSelStar( goPkgBind, goUcRegistry )
     fdb.ftb.params.addNamed( goLcReg, regType )
-    if err := pg.addBuilderFactoryFuncBody( fdb.bb(), key ); err != nil {
-        return err
-    }
+    pg.addBuilderFactoryFuncBody( fdb.bb(), key )
     pg.addDecl( fdb.build() )
-    return nil
 }
 
 // first we declare all initialize all factory func names, then build the actual
 // defs (some of which may refer to others)
-func ( pg *pkgGen ) addBuilderFactoryFuncs() error {
+func ( pg *pkgGen ) addBuilderFactoryFuncs() {
     sz := len( pg.typeKeys )
     pg.builderFactoryIds = make( map[ typeKey ] *ast.Ident, sz )
     seq := &idSequence{ key: "BuilderFactoryFunc" }
@@ -883,10 +934,7 @@ func ( pg *pkgGen ) addBuilderFactoryFuncs() error {
         pg.builderFactoryIds[ key ] = seq.next().goId()
         buildOrder = append( buildOrder, key )
     }
-    for _, key := range buildOrder {
-        if err := pg.addBuilderFactoryFunc( key ); err != nil { return err }
-    }
-    return nil
+    for _, key := range buildOrder { pg.addBuilderFactoryFunc( key ) }
 }
 
 type fieldGen struct {
@@ -1005,86 +1053,131 @@ func ( sg *structGen ) fieldVisitValueExprForField(
     )
 }
 
+func ( sg *structGen ) fieldVisitExprForPrimDef(
+    pd *types.PrimitiveDefinition, fg *fieldGen, val ast.Expr ) ast.Expr {
+
+    if nm := pd.GetName(); 
+       nm.Equals( mg.QnameSymbolMap ) || nm.Equals( mg.QnameValue ) {
+
+        lit := sg.pg.newFuncDeclBuilder()
+        lit.ftb.res.addAnon( goLcError )
+        visMap := sg.pg.pkgSel( goPkgBind, goUcVisitValueOpaque )
+        lit.bb().addReturn( callExpr( visMap, val, goLcVc ) )
+        return callExpr( 
+            sg.pg.pkgSel( goPkgBind, goUcVisitFieldFunc ),
+            goLcVc,
+            sg.pg.pkgIdVar( fg.mgId ),
+            lit.buildLiteral(),
+        )
+    }
+    return sg.fieldVisitValueExprForField( fg, val )
+}
+
+func ( sg *structGen ) fieldVisitExprForAtomicType(
+    fg *fieldGen, at *mg.AtomicTypeReference, val ast.Expr ) ast.Expr {
+
+    switch v := sg.pg.mustDefForQn( at.Name() ).( type ) {
+    case *types.PrimitiveDefinition: 
+        return sg.fieldVisitExprForPrimDef( v, fg, val )
+    }
+    return sg.fieldVisitValueExprForField( fg, val )
+}
+
 func ( sg *structGen ) fieldVisitExprForPointerType( 
-    fg *fieldGen, 
-    baseTyp mg.TypeReference, 
-    val ast.Expr ) ( ast.Expr, error ) {
+    fg *fieldGen, baseTyp mg.TypeReference, val ast.Expr ) ast.Expr {
 
     if at, ok := baseTyp.( *mg.AtomicTypeReference ); ok {
-        def, ok := sg.pg.g.Types.GetDefinition( at.Name() )
-        if ! ok { return nil, libErrorf( "no definition for %s", at.Name() ) }
-        if _, ok := def.( *types.StructDefinition ); ! ok {
-            return sg.fieldVisitExprForType( fg, baseTyp, derefExpr( val ) )
+        def := sg.pg.mustDefForQn( at.Name() )
+        if _, isStruct := def.( *types.StructDefinition ); isStruct {
+            return sg.fieldVisitValueExprForField( fg, val )
         }
     }
-    return sg.fieldVisitValueExprForField( fg, val ), nil
+    return sg.fieldVisitExprForType( fg, baseTyp, derefExpr( val ) )
 }
 
 func ( sg *structGen ) fieldVisitExprForType( 
-    fg *fieldGen, typ mg.TypeReference, valExpr ast.Expr ) ( ast.Expr, error ) {
+    fg *fieldGen, typ mg.TypeReference, valExpr ast.Expr ) ast.Expr {
 
     switch v := typ.( type ) {
+    case *mg.AtomicTypeReference:
+        return sg.fieldVisitExprForAtomicType( fg, v, valExpr )
+    case *mg.NullableTypeReference:
+        return sg.fieldVisitExprForType( fg, v.Type, valExpr )
     case *mg.PointerTypeReference: 
         return sg.fieldVisitExprForPointerType( fg, v.Type, valExpr )
+    case *mg.ListTypeReference:
+        return sg.fieldVisitValueExprForField( fg, valExpr )
     }
-    return sg.fieldVisitValueExprForField( fg, valExpr ), nil
+    panic( libErrorf( "unhandled type ref: %s", typ ) )
 }
 
 func ( sg *structGen ) fieldVisitExprForField( 
-    fg *fieldGen, valId *ast.Ident ) ( ast.Expr, error ) {
+    fg *fieldGen, valId *ast.Ident ) ast.Expr {
 
     return sg.fieldVisitExprForType( fg, fg.fd.Type, selExpr( valId, fg.goId ) )
 }
 
-func ( sg *structGen ) addFieldVisitStatements( 
-    valId *ast.Ident, bb *bodyBuilder ) error {
-
-    for _, fg := range sg.flds {
-        visExpr, err := sg.fieldVisitExprForField( fg, valId )
-        if err != nil { return err }
-        errRetBody := sg.pg.newBodyBuilder()
-        errRetBody.addReturn( goLcErr )
-        bb.addStmt(
-            &ast.IfStmt{
-                Init: defineStmt1( goLcErr, visExpr ),
-                Cond: &ast.BinaryExpr{ X: goLcErr, Op: token.NEQ, Y: goKwdNil },
-                Body: errRetBody.block,
-            },
-        )
+// Some logic here, particularly regarding prims, is a placeholder until we have
+// standalone isSet flags to check
+func ( sg *structGen ) applyFieldVisitCheck(
+    valId *ast.Ident, fg *fieldGen, visStmt ast.Stmt ) ast.Stmt {
+ 
+    if at, atomic := fg.fd.Type.( *mg.AtomicTypeReference ); atomic {
+        nm := at.Name()
+        if ! ( nm.Equals( mg.QnameValue ) || nm.Equals( mg.QnameSymbolMap ) ) {
+            return visStmt
+        }
     }
-    return nil
+    if _, isList := fg.fd.Type.( *mg.ListTypeReference ); ! isList {
+        if mg.TypeNameIn( fg.fd.Type ).Equals( mg.QnameString ) {
+            return visStmt
+        }
+    }
+    acc := selExpr( valId, fg.goId )
+    return &ast.IfStmt{
+        Cond: &ast.BinaryExpr{ X: acc, Op: token.NEQ, Y: goKwdNil },
+        Body: blockStmt( visStmt ),
+    }
 }
 
-func ( sg *structGen ) createVisitReturnStmt( 
-    valId *ast.Ident ) ( ast.Expr, error ) {
+func ( sg *structGen ) addFieldVisitStatements( 
+    valId *ast.Ident, bb *bodyBuilder ) {
 
+    for _, fg := range sg.flds {
+        visExpr := sg.fieldVisitExprForField( fg, valId )
+        errRetBody := sg.pg.newBodyBuilder()
+        errRetBody.addReturn( goLcErr )
+        s := &ast.IfStmt{
+            Init: defineStmt1( goLcErr, visExpr ),
+            Cond: &ast.BinaryExpr{ X: goLcErr, Op: token.NEQ, Y: goKwdNil },
+            Body: errRetBody.block,
+        }
+        bb.addStmt( sg.applyFieldVisitCheck( valId, fg, s ) )
+    }
+}
+
+func ( sg *structGen ) createVisitReturnStmt( valId *ast.Ident ) ast.Expr {
     visitLit := sg.pg.newFuncDeclBuilder()
     visitLit.ftb.res.addAnon( goLcError )
-    if err := sg.addFieldVisitStatements( valId, visitLit.bb() ); err != nil {
-        return nil, err
-    }
+    sg.addFieldVisitStatements( valId, visitLit.bb() )
     visitLit.bb().addReturn( goKwdNil )
-    res := callExpr(
+    return callExpr(
         sg.pg.pkgSel( goPkgBind, goUcVisitStruct ),
         goLcVc,
         sg.pg.pkgQnVar( sg.sd.GetName() ),
         visitLit.buildLiteral(),
     )
-    return res, nil
 }
 
-func ( sg *structGen ) addVisitor() error {
+func ( sg *structGen ) addVisitor() {
     fdb := sg.pg.newFuncDeclBuilder()
     fdb.funcDecl.Name = goUcVisitValue
     fdb.setPtrReceiver( "s", sg.typ.Name )
     vcType := sg.pg.pkgSel( goPkgBind, goUcVisitContext )
     fdb.ftb.params.addNamed( goLcVc, vcType )
     fdb.ftb.res.addAnon( goLcError )
-    if retExp, err := sg.createVisitReturnStmt( fdb.recvIdent ); err == nil {
-        fdb.bb().addReturn( retExp )
-    } else { return err }
+    fdb.bb().addReturn( sg.createVisitReturnStmt( fdb.recvIdent ) )
     sg.pg.addDecl( fdb.build() )
-    return nil
 }
 
 type checkedStructFactAdder struct {
@@ -1109,6 +1202,7 @@ func ( csb *checkedStructFactAdder ) actionExprForField(
         expr := csb.sg.pg.pkgAtomicTypeVar( mg.AtomicTypeIn( typ ) )
         return keyValExpr( goUcType, expr )
     }
+    log.Printf( "type %s (%s) does not use default factory", typ, fg.mgId )
     starter := csb.sg.pg.mustBuilderFactoryIdForType( typ )
     return keyValExpr( goUcStartField, starter )
 }
@@ -1171,16 +1265,15 @@ func ( sg *structGen ) addBuilderFactory() {
     })
 }
 
-func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) error {
+func ( pg *pkgGen ) generateStruct( sd *types.StructDefinition ) {
     sg := &structGen{ pg: pg, sd: sd, typ: pg.createTypeSpecForDef( sd ) }
     sg.setConstructorName() // constructorName is used by calls below
     sg.setFields()
     sg.addDecl()
     sg.addFactories()
     sg.addAccessors()
-    if err := sg.addVisitor(); err != nil { return err }
+    sg.addVisitor()
     sg.addBuilderFactory()
-    return nil
 }
 
 func ( pg *pkgGen ) addEnumBinding( ed *types.EnumDefinition ) {
@@ -1236,14 +1329,13 @@ func ( pg *pkgGen ) generateSchema( sd *types.SchemaDefinition ) {
     pg.addDecl( decl )
 }
 
-func ( pg *pkgGen ) generateDef( def types.Definition ) error {
+func ( pg *pkgGen ) generateDef( def types.Definition ) {
     switch v := def.( type ) {
-    case *types.StructDefinition: return pg.generateStruct( v ) 
+    case *types.StructDefinition: pg.generateStruct( v ) 
     case *types.EnumDefinition: pg.generateEnum( v )
     case *types.UnionDefinition: pg.generateUnion( v )
     case *types.SchemaDefinition: pg.generateSchema( v )
     }
-    return nil
 }
 
 func ( pg *pkgGen ) addGenDecl( tok token.Token, spec ast.Spec ) {
@@ -1410,20 +1502,18 @@ func ( pg *pkgGen ) assembleDecls() {
     pg.file.Decls = append( pg.file.Decls, pg.decls... )
 }
 
-func ( pg *pkgGen ) generatePackage() error {
+func ( pg *pkgGen ) generatePackage() {
     pg.collectImports()
     pg.collectTypeKeys()
-    if err := pg.addBuilderFactoryFuncs(); err != nil { return err }
-    for _, def := range pg.defs { 
-        if err := pg.generateDef( def ); err != nil { return err }
-    }
+    pg.addBuilderFactoryFuncs()
+    for _, def := range pg.defs { pg.generateDef( def ) }
     pg.assembleDecls()
-    return nil
 }
 
 func ( g *Generator ) generatePackages() error {
     return g.eachPkgGen( func( pg *pkgGen ) error { 
-        return pg.generatePackage()
+        pg.generatePackage()
+        return nil
     })
 }
 

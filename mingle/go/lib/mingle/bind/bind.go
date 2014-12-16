@@ -503,13 +503,7 @@ func visitSliceValueOpaque( val interface{}, vc VisitContext ) error {
     return es.End()
 }
 
-//func visitStructValueOpaque( val interface{}, vc VisitContext ) error {
-//    s := reflect.ValueOf( val )
-//    if ! s.CanAddr() { return errForUnknownVisitType( val, vc ) }
-//    return VisitValue( s.Addr().Interface(), vc )
-//}
-
-func visitMapOpaque( m map[ string ] interface{}, vc VisitContext ) error {
+func VisitMapOpaque( m map[ string ] interface{}, vc VisitContext ) error {
     es := vc.EventSender()
     if err := es.StartMap(); err != nil { return err }
     for k, v := range m {
@@ -527,12 +521,11 @@ func VisitValueOpaque( val interface{}, vc VisitContext ) error {
     if ok, err := visitValueOk( val, vc ); ok { return err }
     if val == nil { return VisitValue( mg.NullVal, vc ) }
     if m, ok := val.( map[ string ] interface{} ); ok {
-        return visitMapOpaque( m, vc )
+        return VisitMapOpaque( m, vc )
     }
     switch reflect.TypeOf( val ).Kind() {
     case reflect.Ptr: return visitPtrValueOpaque( val, vc )
     case reflect.Slice: return visitSliceValueOpaque( val, vc )
-//    case reflect.Struct: return visitStructValueOpaque( val, vc )
     }
     return errForUnknownVisitType( val, vc )
 }

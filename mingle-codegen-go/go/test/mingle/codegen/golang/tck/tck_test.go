@@ -91,6 +91,18 @@ func init() {
         res.SetValF1( s1 )
         return res
     })
+    putVal( "map-holder-inst1", func() interface{} {
+        res := v1Data.NewMapHolder()
+        res.SetMapF1( map[ string ] interface{} { "f1": int32( 1 ) } )
+        return res
+    })
+    putVal( "map-holder-inst2", func() interface{} {
+        res := v1Data.NewMapHolder()
+        res.SetMapF1( map[ string ] interface{} { "f1": int32( 1 ) } )
+        res.SetMapF2( map[ string ] interface{} { "f2": "string-val" } )
+        res.SetMapF3( &( map[ string ] interface{} { "f2": true } ) )
+        return res
+    })
 }
 
 type bindTestCall struct {
