@@ -66,8 +66,12 @@ func typeAssertExpr( x, typ ast.Expr ) *ast.TypeAssertExpr {
     return &ast.TypeAssertExpr{ X: x, Type: typ }
 }
 
-func derefExpr( x ast.Expr ) ast.Expr { 
-    return starExpr( &ast.ParenExpr{ X: x } )
+func parenExpr( x ast.Expr ) *ast.ParenExpr { return &ast.ParenExpr{ X: x } }
+
+func derefExpr( x ast.Expr ) ast.Expr { return starExpr( parenExpr( x ) ) }
+
+func addrExpr( x ast.Expr ) ast.Expr {
+    return &ast.UnaryExpr{ Op: token.AND, X: x }
 }
 
 func blockStmt( block ...ast.Stmt ) *ast.BlockStmt {
@@ -262,6 +266,7 @@ type pkgGen struct {
     regInitIds []*ast.Ident
     typeKeys typeKeyMap
     builderFactoryIds map[ typeKey ] *ast.Ident
+    visitFuncIds map[ typeKey ] *ast.Ident
 }
 
 // Instances are only good for a single call to Generate()
@@ -951,6 +956,87 @@ func ( pg *pkgGen ) addBuilderFactoryFuncs() {
     }
 }
 
+type visitFuncBuilder struct {
+    pg *pkgGen
+}
+
+func ( vfb visitFuncBuilder ) addDefaultVisitBody( bb *bodyBuilder ) {
+    bb.addReturn(
+        callExpr(
+            vfb.pg.pkgSel( goPkgBind, goUcVisitValue ),
+            goLcVal,
+            goLcVc,
+        ),
+    )
+}
+
+func ( vfb visitFuncBuilder ) addPrimDefBody(
+    bb *bodyBuilder, pd *types.PrimitiveDefinition ) {
+
+    qn := pd.GetName()
+    if qn.Equals( mg.QnameSymbolMap ) || qn.Equals( mg.QnameValue ) {
+        bb.addReturn(
+            callExpr(
+                vfb.pg.pkgSel( goPkgBind, goUcVisitValueOpaque ),
+                goLcVal,
+                goLcVc,
+            ),
+        )
+        return
+    }
+    vfb.addDefaultVisitBody( bb )
+}
+
+func ( vfb visitFuncBuilder ) addStructValBody ( 
+    bb *bodyBuilder, sd *types.StructDefinition ) {
+
+    bb.addReturn(
+        callExpr(
+            selExpr( parenExpr( addrExpr( goLcVal ) ), goUcVisitValue ),
+            goLcVc,
+        ),
+    )
+}
+
+func ( vfb visitFuncBuilder ) addAtomicBody(
+    bb *bodyBuilder, at *mg.AtomicTypeReference ) {
+
+    switch v := vfb.pg.mustDefForQn( at.Name() ).( type ) {
+    case *types.PrimitiveDefinition: vfb.addPrimDefBody( bb, v )
+    case *types.StructDefinition: vfb.addStructValBody( bb, v )
+    default: vfb.addDefaultVisitBody( bb )
+    }
+}
+
+func ( vfb visitFuncBuilder ) addBody( bb *bodyBuilder, typ mg.TypeReference ) {
+    switch v := typ.( type ) {
+    case *mg.AtomicTypeReference: vfb.addAtomicBody( bb, v )
+    default: bb.addReturn( goKwdNil )
+    }
+}
+
+func ( vfb visitFuncBuilder ) build(
+    key typeKey, typ mg.TypeReference, id *ast.Ident ) {
+    
+    fdb := vfb.pg.newFuncDeclBuilder()
+    fdb.funcDecl.Name = id
+    fdb.ftb.res.addAnon( goLcError )
+    fdb.ftb.params.addNamed( goLcVal, vfb.pg.typeExpressionFor( typ ) )
+    vcTypExpr := vfb.pg.pkgSel( goPkgBind, goUcVisitContext )
+    fdb.ftb.params.addNamed( goLcVc, vcTypExpr )
+    vfb.addBody( fdb.bb(), typ )
+    fdb.funcDecl.Doc = comment1f( "visit %s", typ )
+    vfb.pg.addDecl( fdb.build() )
+}
+
+func ( pg *pkgGen ) addVisitorFuncs() {
+    seq := idSequence{ key: "VisitFunc" }
+    pg.visitFuncIds = make( map[ typeKey ] *ast.Ident, len( pg.typeKeys ) )
+    for key, typ := range pg.typeKeys {
+        ( visitFuncBuilder{ pg: pg } ).build( key, typ, seq.next().goId() )
+    }
+}
+
 type fieldGen struct {
     fd *types.FieldDefinition
     goId *ast.Ident
@@ -1534,6 +1620,7 @@ func ( pg *pkgGen ) generatePackage() {
     pg.collectImports()
     pg.collectTypeKeys()
     pg.addBuilderFactoryFuncs()
+    pg.addVisitorFuncs()
     for _, def := range pg.defs { pg.generateDef( def ) }
     pg.assembleDecls()
 }
