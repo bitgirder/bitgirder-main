@@ -77,13 +77,17 @@ func blockStmt( block ...ast.Stmt ) *ast.BlockStmt {
 func comment1( text string ) *ast.CommentGroup {
     return &ast.CommentGroup{
         List: []*ast.Comment{
-            &ast.Comment{ Text: fmt.Sprintf( "// %s\n", text ) },
+            &ast.Comment{ Text: fmt.Sprintf( "\n// %s\n", text ) },
         },
     }
 }
 
 func comment1f( tmpl string, argv ...interface{} ) *ast.CommentGroup {
     return comment1( fmt.Sprintf( tmpl, argv... ) )
+}
+
+func newGenDecl( tok token.Token, spec ast.Spec ) *ast.GenDecl {
+    return &ast.GenDecl{ Tok: tok, Specs: []ast.Spec{ spec } }
 }
 
 func fmtImplIdString( key string ) string {
@@ -343,6 +347,10 @@ func ( g *Generator ) newPkgGen( ns *mg.Namespace ) *pkgGen {
 
 func ( pg *pkgGen ) addDecl( decl ast.Decl ) {
     pg.decls = append( pg.decls, decl )
+}
+
+func ( pg *pkgGen ) addFileDecl( decl ast.Decl ) {
+    pg.file.Decls = append( pg.file.Decls, decl )
 }
 
 func ( pg *pkgGen ) addRegInitId( nm *ast.Ident ) {
@@ -802,93 +810,98 @@ func ( pg *pkgGen ) mustBuilderFactoryIdForType(
     return res 
 }
 
-func ( pg *pkgGen ) builderFactoryExprForDefaultType( 
+type factoryFuncBuilder struct {
+    pg *pkgGen
+    key typeKey
+}
+
+func ( fb factoryFuncBuilder ) factoryExprForDefaultType( 
     typ mg.TypeReference ) ast.Expr {
 
-    return pg.pkgDefaultFactoryIdVar( mg.TypeNameIn( typ ) )
+    return fb.pg.pkgDefaultFactoryIdVar( mg.TypeNameIn( typ ) )
 }
 
-func ( pg *pkgGen ) builderFactoryExprForType( typ mg.TypeReference ) ast.Expr {
-    if pg.typeUsesDefaultFactory( typ ) {
-        return pg.builderFactoryExprForDefaultType( typ )
+func ( fb factoryFuncBuilder ) factoryExprForType( 
+    typ mg.TypeReference ) ast.Expr {
+
+    if fb.pg.typeUsesDefaultFactory( typ ) {
+        return fb.factoryExprForDefaultType( typ )
     }
-    return callExpr( pg.mustBuilderFactoryIdForType( typ ), goLcReg )
+    return callExpr( fb.pg.mustBuilderFactoryIdForType( typ ), goLcReg )
 }
 
-func ( pg *pkgGen ) createValueConvertFunc(
+func ( fb factoryFuncBuilder ) createValueConvertFunc(
     f func( bb *bodyBuilder ) ) ast.Expr {
 
-    fdb := pg.newFuncDeclBuilder()
+    fdb := fb.pg.newFuncDeclBuilder()
     fdb.ftb.res.addAnon( goTypeInterface )
     fdb.ftb.params.addNamed( goLcVal, goTypeInterface )
     f( fdb.bb() )
     return fdb.buildLiteral()
 }
 
-func ( pg *pkgGen ) addOpaqueValueFactoryFuncBody( bb *bodyBuilder ) {
+func ( fb factoryFuncBuilder ) addOpaqueBody( bb *bodyBuilder ) {
     bb.addReturn(
-        callExpr( pg.pkgSel( goPkgBind, goUcNewOpaqueValueFactory ), goLcReg ),
+        callExpr( 
+            fb.pg.pkgSel( goPkgBind, goUcNewOpaqueValueFactory ), 
+            goLcReg,
+        ),
     )
 }
 
-func ( pg *pkgGen ) addPrimDefBuilderFactoryFuncBody(
+func ( fb factoryFuncBuilder ) addPrimDefBody(
     pd *types.PrimitiveDefinition, bb *bodyBuilder ) {
     
-    log.Printf( "adding prim bld fact func for %s", pd.GetName() )
     nm := pd.GetName()
     if nm.Equals( mg.QnameValue ) || nm.Equals( mg.QnameSymbolMap ) {
-        pg.addOpaqueValueFactoryFuncBody( bb )
+        fb.addOpaqueBody( bb )
         return
     }
     panic( libErrorf( "no builder factory func for type %s", nm ) )
 }
 
-func ( pg *pkgGen ) addSchemaDefBuilderFactFuncBody( 
+func ( fb factoryFuncBuilder ) addSchemaDefBody( 
     sd *types.SchemaDefinition, bb *bodyBuilder ) {
 
-    pg.addOpaqueValueFactoryFuncBody( bb )
+    fb.addOpaqueBody( bb )
 }
 
-func ( pg *pkgGen ) addUnionDefBuilderFactFuncBody( 
+func ( fb factoryFuncBuilder ) addUnionDefBody( 
     ud *types.UnionDefinition, bb *bodyBuilder ) {
 
-    pg.addOpaqueValueFactoryFuncBody( bb )
+    fb.addOpaqueBody( bb )
 }
 
-func ( pg *pkgGen ) addStructScalarBuilderFactFuncBody( 
+func ( fb factoryFuncBuilder ) addStructScalarBody( 
     sd *types.StructDefinition, bb *bodyBuilder ) {
 
-    pg.addOpaqueValueFactoryFuncBody( bb )
+    fb.addOpaqueBody( bb )
 }
 
-func ( pg *pkgGen ) addAtomicBuilderFactoryFuncBody(
+func ( fb factoryFuncBuilder ) addAtomicBody(
     bb *bodyBuilder, at *mg.AtomicTypeReference ) {
 
-    switch v := pg.mustDefForQn( at.Name() ).( type ) {
-    case *types.PrimitiveDefinition:
-        pg.addPrimDefBuilderFactoryFuncBody( v, bb )
-    case *types.SchemaDefinition:
-        pg.addSchemaDefBuilderFactFuncBody( v, bb )
-    case *types.UnionDefinition:
-        pg.addUnionDefBuilderFactFuncBody( v, bb )
-    case *types.StructDefinition:
-        pg.addStructScalarBuilderFactFuncBody( v, bb )
+    switch v := fb.pg.mustDefForQn( at.Name() ).( type ) {
+    case *types.PrimitiveDefinition: fb.addPrimDefBody( v, bb )
+    case *types.SchemaDefinition: fb.addSchemaDefBody( v, bb )
+    case *types.UnionDefinition: fb.addUnionDefBody( v, bb )
+    case *types.StructDefinition: fb.addStructScalarBody( v, bb )
     default: 
         panic( libErrorf( "unhandled def for builder factory func: %s (%T)", 
             v.GetName(), v ) )
     }
 }
 
-func ( pg *pkgGen ) addPointerBuilderFactoryFuncBody(
+func ( fb factoryFuncBuilder ) addPointerBody(
     bb *bodyBuilder, pt *mg.PointerTypeReference ) {
 
     retExp := callExpr(
-        pg.pkgSel( goPkgReactor, goUcNewConverterFactory ),
-        pg.builderFactoryExprForType( pt.Type ),
-        pg.createValueConvertFunc( func( bb *bodyBuilder ) {
-            newTypArg := pg.typeExpressionFor( pt.Type )
+        fb.pg.pkgSel( goPkgReactor, goUcNewConverterFactory ),
+        fb.factoryExprForType( pt.Type ),
+        fb.createValueConvertFunc( func( bb *bodyBuilder ) {
+            newTypArg := fb.pg.typeExpressionFor( pt.Type )
             bb.addDefine1( goLcRes, callExpr( goLcNew, newTypArg ) )
-            typedBaseVal := pg.typeAssertExprForType( goLcVal, pt.Type )
+            typedBaseVal := fb.pg.typeAssertExprForType( goLcVal, pt.Type )
             bb.addAssign1( derefExpr( goLcRes ), typedBaseVal )
             bb.addReturn( goLcRes )
         }),
@@ -896,34 +909,33 @@ func ( pg *pkgGen ) addPointerBuilderFactoryFuncBody(
     bb.addReturn( retExp )
 }
 
-func ( pg *pkgGen ) addListBuilderFactoryFuncBody(
+func ( fb factoryFuncBuilder ) addListBody(
     bb *bodyBuilder, eltTyp mg.TypeReference ) {
 
     bb.addReturn( goKwdNil )
 }
 
-func ( pg *pkgGen ) addBuilderFactoryFuncBody( bb *bodyBuilder, key typeKey ) {
-    switch v := pg.typeKeys[ key ].( type ) {
-    case *mg.AtomicTypeReference: pg.addAtomicBuilderFactoryFuncBody( bb, v )
-    case *mg.PointerTypeReference: pg.addPointerBuilderFactoryFuncBody( bb, v )
-    case *mg.ListTypeReference:
-        pg.addListBuilderFactoryFuncBody( bb, v.ElementType )
-    default: panic( libErrorf( "unexpected builder fact typeKey: %s", key ) )
+func ( fb factoryFuncBuilder ) addBody( bb *bodyBuilder ) {
+    switch v := fb.pg.typeKeys[ fb.key ].( type ) {
+    case *mg.AtomicTypeReference: fb.addAtomicBody( bb, v )
+    case *mg.PointerTypeReference: fb.addPointerBody( bb, v )
+    case *mg.ListTypeReference: fb.addListBody( bb, v.ElementType )
+    default: panic( libErrorf( "unexpected builder fact typeKey: %s", fb.key ) )
     }
 }
 
-func ( pg *pkgGen ) addBuilderFactoryFunc( key typeKey ) {
-    fdb := pg.newFuncDeclBuilder()
-    fdb.funcDecl.Name = pg.builderFactoryIds[ key ]
-    fdb.funcDecl.Doc = comment1f( "builds %s", key )
-    fdb.ftb.res.addAnon( pg.pkgSel( goPkgReactor, goUcBuilderFactory ) )
-    regType := pg.pkgSelStar( goPkgBind, goUcRegistry )
+func ( fb factoryFuncBuilder ) build() {
+    fdb := fb.pg.newFuncDeclBuilder()
+    fdb.funcDecl.Name = fb.pg.builderFactoryIds[ fb.key ]
+    fdb.funcDecl.Doc = comment1f( "builds %s", fb.key )
+    fdb.ftb.res.addAnon( fb.pg.pkgSel( goPkgReactor, goUcBuilderFactory ) )
+    regType := fb.pg.pkgSelStar( goPkgBind, goUcRegistry )
     fdb.ftb.params.addNamed( goLcReg, regType )
-    pg.addBuilderFactoryFuncBody( fdb.bb(), key )
-    pg.addDecl( fdb.build() )
+    fb.addBody( fdb.bb() )
+    fb.pg.addDecl( fdb.build() )
 }
 
-// first we declare all initialize all factory func names, then build the actual
+// first we declare and initialize all factory func names, then build the actual
 // defs (some of which may refer to others)
 func ( pg *pkgGen ) addBuilderFactoryFuncs() {
     sz := len( pg.typeKeys )
@@ -934,7 +946,9 @@ func ( pg *pkgGen ) addBuilderFactoryFuncs() {
         pg.builderFactoryIds[ key ] = seq.next().goId()
         buildOrder = append( buildOrder, key )
     }
-    for _, key := range buildOrder { pg.addBuilderFactoryFunc( key ) }
+    for _, key := range buildOrder { 
+        ( factoryFuncBuilder{ pg: pg, key: key } ).build()
+    }
 }
 
 type fieldGen struct {
@@ -1202,7 +1216,6 @@ func ( csb *checkedStructFactAdder ) actionExprForField(
         expr := csb.sg.pg.pkgAtomicTypeVar( mg.AtomicTypeIn( typ ) )
         return keyValExpr( goUcType, expr )
     }
-    log.Printf( "type %s (%s) does not use default factory", typ, fg.mgId )
     starter := csb.sg.pg.mustBuilderFactoryIdForType( typ )
     return keyValExpr( goUcStartField, starter )
 }
@@ -1339,8 +1352,7 @@ func ( pg *pkgGen ) generateDef( def types.Definition ) {
 }
 
 func ( pg *pkgGen ) addGenDecl( tok token.Token, spec ast.Spec ) {
-    gd := &ast.GenDecl{ Tok: tok, Specs: []ast.Spec{ spec } }
-    pg.file.Decls = append( pg.file.Decls, gd )
+    pg.addFileDecl( newGenDecl( tok, spec ) )
 }
 
 func ( pg *pkgGen ) assembleImportSpecs() {
@@ -1356,6 +1368,7 @@ type atomicVarDecl struct {
 }
 
 type varDeclType struct { 
+    qn *mg.QualifiedTypeName
     typ ast.Expr
 }
 
@@ -1374,6 +1387,16 @@ func ( pg *pkgGen ) valExprForVarObj( varObj interface{} ) ast.Expr {
 func ( pg *pkgGen ) valTypeForVarObj( varObj interface{} ) ast.Expr {
     switch v := varObj.( type ) {
     case varDeclType: return v.typ
+    }
+    return nil
+}
+
+func ( pg *pkgGen ) commentForVarDecl( varObj interface{} ) *ast.CommentGroup {
+    switch v := varObj.( type ) {
+    case *mg.Identifier: return comment1f( "identifier '%s'", v )
+    case *mg.QualifiedTypeName: return comment1f( "qname %s", v )
+    case atomicVarDecl: return comment1f( "atomic type %s", v.qn )
+    case varDeclType: return comment1f( "builder factory for %s", v.qn )
     }
     return nil
 }
@@ -1405,7 +1428,9 @@ func ( pg *pkgGen ) addVarDecls( decls []sequencedVarDecl ) {
         if typ := pg.valTypeForVarObj( decl.varObj ); typ != nil {
             valSpec.Type = typ
         }
-        pg.addGenDecl( token.VAR, valSpec )
+        gd := newGenDecl( token.VAR, valSpec )
+        gd.Doc = pg.commentForVarDecl( decl.varObj )
+        pg.addFileDecl( gd )
     }
 }
 
@@ -1419,10 +1444,13 @@ func ( pg *pkgGen ) defaultFactoryIdVarDecls() []sequencedVarDecl {
     return res
 }
 
+// returns []sequencedVarDecl for default factory ids with qn varObj replaced by
+// varDeclType values
 func ( pg *pkgGen ) assembleDefaultFactoryIdVarDecls() {
     decls := pg.defaultFactoryIdVarDecls()
     for i, decl := range decls {
-        typ := varDeclType{ pg.pkgSel( goPkgReactor, goUcBuilderFactory ) }
+        qn := decl.varObj.( *mg.QualifiedTypeName )
+        typ := varDeclType{ qn, pg.pkgSel( goPkgReactor, goUcBuilderFactory ) }
         decls[ i ] = sequencedVarDecl{ decl.id, typ }
     }
     pg.addVarDecls( decls )
